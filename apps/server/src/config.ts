@@ -1,0 +1,93 @@
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
+
+const bool = z
+  .enum(["true", "false", "1", "0"])
+  .transform((v) => v === "true" || v === "1");
+
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  HOST: z.string().default("0.0.0.0"),
+  PORT: z.coerce.number().int().default(4000),
+  DATABASE_URL: z.string().default("postgres://voidex:voidex@localhost:5432/voidex"),
+
+  /** HMAC key for access tokens (JWT HS256). ≥ 32 random bytes. */
+  AUTH_ACCESS_SECRET: z.string().min(32).optional(),
+  /** HMAC key used to hash OTP codes and one-time secrets at rest. */
+  AUTH_TOKEN_PEPPER: z.string().min(32).optional(),
+
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(15 * 60),
+  SESSION_IDLE_DAYS: z.coerce.number().int().positive().default(30),
+  SESSION_ABSOLUTE_DAYS: z.coerce.number().int().positive().default(180),
+
+  MAIL_DOMAIN: z.string().default("voidex.app"),
+
+  SMS_PROVIDER: z.enum(["console", "twilio", "smsru"]).default("console"),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM: z.string().optional(),
+  SMSRU_API_ID: z.string().optional(),
+
+  /** Set when running behind a reverse proxy so client IPs are correct. */
+  TRUST_PROXY: bool.default(false),
+  COOKIE_SECURE: bool.optional(),
+  /** Extra origins allowed to call the API (native shells, e.g. capacitor://localhost). */
+  ALLOWED_ORIGINS: z.string().default(""),
+  /** Built web client to serve in production (apps/web/dist). */
+  WEB_DIST: z.string().optional(),
+  LOG_LEVEL: z.string().default("info"),
+});
+
+export type Config = ReturnType<typeof loadConfig>;
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
+  const parsed = EnvSchema.safeParse(env);
+  if (!parsed.success) {
+    throw new Error(`Invalid environment configuration:\n${z.prettifyError(parsed.error)}`);
+  }
+  const e = parsed.data;
+  const production = e.NODE_ENV === "production";
+
+  if (production) {
+    const missing: string[] = [];
+    if (!e.AUTH_ACCESS_SECRET) missing.push("AUTH_ACCESS_SECRET");
+    if (!e.AUTH_TOKEN_PEPPER) missing.push("AUTH_TOKEN_PEPPER");
+    if (missing.length) throw new Error(`Missing required production secrets: ${missing.join(", ")}`);
+    // Never pretend to send SMS in production.
+    if (e.SMS_PROVIDER === "console") {
+      throw new Error("SMS_PROVIDER=console is a development provider and cannot be used in production.");
+    }
+  }
+  if (e.SMS_PROVIDER === "twilio" && !(e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && e.TWILIO_FROM)) {
+    throw new Error("SMS_PROVIDER=twilio requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM.");
+  }
+  if (e.SMS_PROVIDER === "smsru" && !e.SMSRU_API_ID) {
+    throw new Error("SMS_PROVIDER=smsru requires SMSRU_API_ID.");
+  }
+
+  return {
+    env: e.NODE_ENV,
+    production,
+    host: e.HOST,
+    port: e.PORT,
+    databaseUrl: e.DATABASE_URL,
+    // Development falls back to per-process random secrets: restarting the
+    // server invalidates access tokens (clients silently refresh) and pending codes.
+    accessSecret: e.AUTH_ACCESS_SECRET ?? randomBytes(48).toString("base64url"),
+    tokenPepper: e.AUTH_TOKEN_PEPPER ?? randomBytes(48).toString("base64url"),
+    accessTokenTtlSeconds: e.ACCESS_TOKEN_TTL_SECONDS,
+    sessionIdleMs: e.SESSION_IDLE_DAYS * 86_400_000,
+    sessionAbsoluteMs: e.SESSION_ABSOLUTE_DAYS * 86_400_000,
+    mailDomain: e.MAIL_DOMAIN.toLowerCase(),
+    sms: {
+      provider: e.SMS_PROVIDER,
+      twilio: { accountSid: e.TWILIO_ACCOUNT_SID, authToken: e.TWILIO_AUTH_TOKEN, from: e.TWILIO_FROM },
+      smsru: { apiId: e.SMSRU_API_ID },
+    },
+    trustProxy: e.TRUST_PROXY,
+    cookieSecure: e.COOKIE_SECURE ?? production,
+    allowedOrigins: e.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
+    webDist: e.WEB_DIST,
+    logLevel: e.LOG_LEVEL,
+  };
+}
