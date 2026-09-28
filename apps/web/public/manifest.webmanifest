@@ -1,0 +1,13 @@
+{
+  "name": "VOIDEX",
+  "short_name": "VOIDEX",
+  "description": "Your unified digital space.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ececed",
+  "theme_color": "#ececed",
+  "icons": [
+    { "src": "/brand/app-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

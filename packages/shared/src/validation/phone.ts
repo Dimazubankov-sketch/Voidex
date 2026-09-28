@@ -1,4 +1,4 @@
-import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/max";
+import { AsYouType, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js/max";
 
 export interface ParsedPhone {
   /** E.164, e.g. +79161234567 — the only form ever stored. */
@@ -46,4 +46,9 @@ export function maskPhone(e164: string): string {
     if (seen <= ccLen + 1 || seen > total - 2) return d;
     return "•";
   });
+}
+
+/** Formats a partially typed number for display while the user types. */
+export function formatPhoneInput(input: string, country?: CountryCode): string {
+  return new AsYouType(country).input(input);
 }

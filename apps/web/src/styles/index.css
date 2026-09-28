@@ -1,0 +1,220 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   VOIDEX design tokens
+   Grey = free / inactive space. White = working surface. Violet = accent only.
+   =========================================================================== */
+:root {
+  --background: #ececed;         /* the "desk": free, inactive space */
+  --background-deep: #e3e3e6;    /* recessed areas (window gutters, rails) */
+  --surface: #ffffff;            /* interactive working surfaces */
+  --surface-secondary: #f5f5f7;  /* inputs, insets, grouped rows */
+  --surface-hover: #efeff2;
+  --primary: #6c5cff;            /* VOIDEX violet */
+  --primary-hover: #5b4af0;
+  --primary-soft: #efedff;
+  --primary-strong: #4b3ce0;
+  --brand-from: #9a7cff;         /* brand gradient (logo) */
+  --brand-to: #3f55f0;
+  --text: #17171b;
+  --text-secondary: #6a6a73;
+  --text-tertiary: #9a9aa3;
+  --border: #e4e4e8;
+  --border-strong: #d4d4da;
+  --danger: #e5484d;
+  --danger-soft: #fdecec;
+  --success: #1fa971;
+  --success-soft: #e6f6ef;
+  --warning: #d98a00;
+  --warning-soft: #fff4e0;
+
+  --shadow-tile: 0 1px 1px rgba(20, 20, 40, 0.03), 0 6px 16px rgba(20, 20, 40, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-surface: 0 1px 2px rgba(16, 16, 22, 0.04), 0 10px 30px rgba(16, 16, 22, 0.06);
+  --shadow-window: 0 2px 6px rgba(16, 16, 22, 0.06), 0 24px 64px rgba(16, 16, 22, 0.16);
+  --shadow-float: 0 12px 40px rgba(16, 16, 22, 0.18);
+  --glow-primary: 0 8px 24px rgba(108, 92, 255, 0.35);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-deep: var(--background-deep);
+  --color-surface: var(--surface);
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-hover: var(--surface-hover);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-strong: var(--primary-strong);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --shadow-tile: var(--shadow-tile);
+  --shadow-surface: var(--shadow-surface);
+  --shadow-window: var(--shadow-window);
+  --shadow-float: var(--shadow-float);
+  --shadow-glow: var(--glow-primary);
+
+  --ease-out-soft: var(--ease-out);
+}
+
+@layer base {
+* {
+  border-color: var(--border);
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+html {
+  /* The OS owns scrolling; pages never scroll as a whole. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* Content people read or copy stays selectable. */
+input,
+textarea,
+[data-selectable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+}
+
+.scroll-area {
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-area::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-area::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, var(--brand-from), var(--primary) 45%, var(--brand-to));
+}
+
+/* ---------------------------------------------------------------------------
+   Motion primitives (CSS for micro-interactions; motion/react for layout)
+--------------------------------------------------------------------------- */
+.pressable {
+  transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out), box-shadow 200ms var(--ease-out),
+    color 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+.pressable:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+@keyframes vx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes vx-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+@keyframes vx-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes vx-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes vx-check {
+  from { stroke-dashoffset: 30; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes vx-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes vx-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+.animate-shake { animation: vx-shake 380ms var(--ease-out); }
+.animate-fade-up { animation: vx-fade-up 260ms var(--ease-out) both; }
+.animate-pop { animation: vx-pop 420ms var(--ease-spring) both; }
+.animate-glow { animation: vx-glow 3.2s ease-in-out infinite; }
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-secondary) 25%, var(--surface-hover) 37%, var(--surface-secondary) 63%);
+  background-size: 400% 100%;
+  animation: vx-shimmer 1.4s ease infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
