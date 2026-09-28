@@ -20,7 +20,7 @@ const EnvSchema = z.object({
   SESSION_IDLE_DAYS: z.coerce.number().int().positive().default(30),
   SESSION_ABSOLUTE_DAYS: z.coerce.number().int().positive().default(180),
 
-  MAIL_DOMAIN: z.string().default("voidex.app"),
+  MAIL_DOMAIN: z.string().default("voidops.ru"),
 
   SMS_PROVIDER: z.enum(["console", "twilio", "smsru"]).default("console"),
   TWILIO_ACCOUNT_SID: z.string().optional(),

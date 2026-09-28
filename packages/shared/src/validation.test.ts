@@ -99,8 +99,8 @@ describe("mail helpers", () => {
     expect(subjectWithPrefix("Hello", "Fwd")).toBe("Fwd: Hello");
   });
   it("parses addresses with a default domain", () => {
-    expect(parseAddress("Anna", "voidex.app")).toEqual({ local: "anna", domain: "voidex.app" });
-    expect(parseAddress("anna@voidex.app", "voidex.app")).toEqual({ local: "anna", domain: "voidex.app" });
-    expect(parseAddress("anna@", "voidex.app")).toBeNull();
+    expect(parseAddress("Anna", "voidops.ru")).toEqual({ local: "anna", domain: "voidops.ru" });
+    expect(parseAddress("anna@voidops.ru", "voidops.ru")).toEqual({ local: "anna", domain: "voidops.ru" });
+    expect(parseAddress("anna@", "voidops.ru")).toBeNull();
   });
 });

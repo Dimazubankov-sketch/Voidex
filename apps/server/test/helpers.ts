@@ -15,7 +15,7 @@ export async function createTestEnv(): Promise<TestEnv> {
   const config = loadConfig({
     NODE_ENV: "test",
     DATABASE_URL: TEST_DATABASE_URL,
-    MAIL_DOMAIN: "voidex.app",
+    MAIL_DOMAIN: "voidops.ru",
     SMS_PROVIDER: "console",
   } as NodeJS.ProcessEnv);
   const sms = new ConsoleSmsProvider(() => {});
@@ -123,5 +123,5 @@ export async function signUp(device: Device, overrides: Partial<{ username: stri
     consents: CONSENTS,
   });
   if (reg.status !== 201) throw new Error(`register failed: ${JSON.stringify(reg.body)}`);
-  return { phone, username, address: `${username}@voidex.app`, user: reg.body.user, sessionId: reg.body.sessionId as string };
+  return { phone, username, address: `${username}@voidops.ru`, user: reg.body.user, sessionId: reg.body.sessionId as string };
 }

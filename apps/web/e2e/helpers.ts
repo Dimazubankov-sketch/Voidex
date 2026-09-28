@@ -54,7 +54,7 @@ export async function signUpViaUi(page: Page, opts: { first?: string; last?: str
   await next(page);
   await page.getByTestId("enter-workspace").click();
   await expect(page.getByTestId("workspace")).toBeVisible();
-  return { username, address: `${username}@voidex.app` };
+  return { username, address: `${username}@voidops.ru` };
 }
 
 /** Fast sign-up through the API (still real SMS verification via the dev provider). */
@@ -76,7 +76,7 @@ export async function signUpViaApi(page: Page, first = "Борис", last = "О�
   expect(res.user).toBeTruthy();
   await page.reload();
   await expect(page.getByTestId("workspace")).toBeVisible();
-  return { username, address: `${username}@voidex.app` };
+  return { username, address: `${username}@voidops.ru` };
 }
 
 export async function newPage(browser: Browser, mobile: boolean) {

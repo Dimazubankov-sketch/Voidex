@@ -118,7 +118,7 @@ describe("internal mail", () => {
 
   it("rejects unknown and external recipients, keeping the draft", async () => {
     const a = await user();
-    const r = await send(a.d, { to: ["nobody-exists-here@voidex.app"], subject: "x", body: "y" });
+    const r = await send(a.d, { to: ["nobody-exists-here@voidops.ru"], subject: "x", body: "y" });
     expect(r.status).toBe(422);
     expect(r.body.error.code).toBe("recipient_not_found");
     const ext = await send(a.d, { to: ["someone@gmail.com"], subject: "x", body: "y" });

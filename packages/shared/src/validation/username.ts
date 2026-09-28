@@ -14,7 +14,7 @@ export const RESERVED_USERNAMES = new Set([
   "bot", "contact", "daemon", "dev", "help", "hostmaster", "info", "mail", "mailer-daemon",
   "market", "moderator", "no-reply", "noc", "noreply", "official", "owner", "postmaster",
   "privacy", "root", "security", "settings", "staff", "support", "system", "team", "test",
-  "voidex", "webmaster", "www", "legal", "notifications", "service", "store",
+  "voidex", "voidops", "webmaster", "www", "legal", "notifications", "service", "store",
 ]);
 
 export type UsernameError = "required" | "too_short" | "too_long" | "invalid" | "reserved";
@@ -29,7 +29,7 @@ export function validateUsername(raw: string): UsernameError | null {
   if (value.length < USERNAME_MIN) return "too_short";
   if (value.length > USERNAME_MAX) return "too_long";
   if (!USERNAME_RE.test(value)) return "invalid";
-  if (RESERVED_USERNAMES.has(value) || value.startsWith("voidex")) return "reserved";
+  if (RESERVED_USERNAMES.has(value) || value.startsWith("voidex") || value.startsWith("voidops")) return "reserved";
   return null;
 }
 

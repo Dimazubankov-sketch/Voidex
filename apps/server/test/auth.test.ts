@@ -183,7 +183,7 @@ describe("sign-in", () => {
     const r = await d.post("/api/auth/login", { identifier: address, password: "Wrong-Password-1" });
     expect(r.status).toBe(401);
     expect(r.body.error.code).toBe("invalid_credentials");
-    const unknown = await d.post("/api/auth/login", { identifier: "nobody-here@voidex.app", password: "Wrong-Password-1" });
+    const unknown = await d.post("/api/auth/login", { identifier: "nobody-here@voidops.ru", password: "Wrong-Password-1" });
     expect(unknown.body.error.code).toBe("invalid_credentials");
   });
 
@@ -394,7 +394,7 @@ describe("recovery", () => {
   });
 
   it("reports unknown accounts", async () => {
-    const r = await new Device(env.app).post("/api/auth/recovery/start", { identifier: "ghost-user@voidex.app" });
+    const r = await new Device(env.app).post("/api/auth/recovery/start", { identifier: "ghost-user@voidops.ru" });
     expect(r.body.error.code).toBe("account_not_found");
   });
 
@@ -487,7 +487,7 @@ describe("request protection", () => {
   it("rate-limits sign-in attempts per client", async () => {
     const d = new Device(env.app);
     let last;
-    for (let i = 0; i < 11; i++) last = await d.post("/api/auth/login", { identifier: `ghost${i}@voidex.app`, password: "Whatever-123" });
+    for (let i = 0; i < 11; i++) last = await d.post("/api/auth/login", { identifier: `ghost${i}@voidops.ru`, password: "Whatever-123" });
     expect(last!.status).toBe(429);
     expect(last!.body.error.code).toBe("rate_limited");
   });

@@ -13,7 +13,7 @@ export function useSystemInfo() {
 }
 
 export function useMailDomain() {
-  return useSystemInfo().data?.mailDomain ?? "voidex.app";
+  return useSystemInfo().data?.mailDomain ?? "voidops.ru";
 }
 
 export function useLegalDocument(key: string | null) {
