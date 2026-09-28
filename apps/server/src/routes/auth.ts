@@ -19,12 +19,12 @@ import { clearSessionCookie, parse, readRefreshToken, requestMeta, sendSession }
 import { sha256 as sha256Hex } from "../lib/crypto.js";
 import { fail } from "../lib/errors.js";
 
-const limit = (max: number) => ({ rateLimit: { max, timeWindow: "1 minute" } });
 const idParam = z.object({ id: z.string().uuid() });
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   const { accounts, sessions, verification, challenges } = app.services;
   const { config } = app.ctx;
+  const limit = (max: number) => ({ rateLimit: { max: max * config.rateLimitScale, timeWindow: "1 minute" } });
 
   // ---------------------------------------------------------------- sign-up
 

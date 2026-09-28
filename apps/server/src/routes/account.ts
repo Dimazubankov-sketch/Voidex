@@ -66,22 +66,22 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
     return reply.type(avatar.mimeType).send(avatar.data);
   });
 
-  app.post("/account/password", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req) =>
+  app.post("/account/password", { config: { rateLimit: { max: 5 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) =>
     accounts.changePassword(req.auth!.userId, req.auth!.sessionId, parse(PasswordChangeSchema, req.body), requestMeta(req)),
   );
 
-  app.post("/account/phone/start", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req) =>
+  app.post("/account/phone/start", { config: { rateLimit: { max: 5 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) =>
     accounts.startPhoneChange(req.auth!.userId, parse(PhoneChangeStartSchema, req.body), requestMeta(req)),
   );
 
-  app.post("/account/phone/confirm", { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } }, async (req) =>
+  app.post("/account/phone/confirm", { config: { rateLimit: { max: 15 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) =>
     accounts.confirmPhoneChange(req.auth!.userId, req.auth!.sessionId, parse(PhoneChangeConfirmSchema, req.body), requestMeta(req)),
   );
 
   app.get("/account/consents", async (req) => accounts.consents(req.auth!.userId));
 
   /** Machine-readable copy of the account's data (privacy right of access). */
-  app.get("/account/export", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req, reply) => {
+  app.get("/account/export", { config: { rateLimit: { max: 5 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req, reply) => {
     const userId = req.auth!.userId;
     const [me, consentsList, sessionList, mail] = await Promise.all([
       accounts.me(userId),

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import type { MeDto, ServerEvent } from "@voidex/shared";
+import { isSigningOut } from "@/lib/account";
 import { accessToken, api, refreshSession } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
@@ -39,6 +40,8 @@ async function refreshMe() {
   queryClient.setQueryData(qk.me, me);
 }
 
+const seenMessages = new Set<string>();
+
 function handle(event: ServerEvent) {
   const session = useSession.getState();
   switch (event.type) {
@@ -47,6 +50,9 @@ function handle(event: ServerEvent) {
       break;
     case "mail.received": {
       void queryClient.invalidateQueries({ queryKey: qk.mail });
+      // One banner per message even if several streams were briefly open.
+      if (seenMessages.has(event.messageId)) break;
+      seenMessages.add(event.messageId);
       const prefs = session.user?.preferences.notifications;
       if (prefs?.newMailBanner) {
         toast({
@@ -74,7 +80,7 @@ function handle(event: ServerEvent) {
       void queryClient.invalidateQueries({ queryKey: qk.approvals });
       break;
     case "session.revoked":
-      if (event.sessionId === session.sessionId) session.signOutLocal("revoked");
+      if (event.sessionId === session.sessionId && !isSigningOut()) session.signOutLocal("revoked");
       break;
     case "hello":
       break;
@@ -102,7 +108,7 @@ export function useServerEvents() {
       let first = true;
       while (!stopped && useSession.getState().status === "signedIn") {
         const token = await accessToken();
-        if (!token) break;
+        if (!token || stopped) break;
         controller = new AbortController();
         try {
           const res = await fetch("/api/events", {

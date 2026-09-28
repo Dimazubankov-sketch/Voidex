@@ -4,19 +4,30 @@ import { api } from "./api";
 import { qk, queryClient } from "./query";
 import { useSession } from "./session";
 
+let signingOut = false;
+/** True while this device is signing itself out (its own "revoked" event is expected). */
+export const isSigningOut = () => signingOut;
+
 /** Signs this device out (server revokes the session, cookie is cleared). */
 export async function signOut() {
+  signingOut = true;
   try {
     await api.post("/api/auth/logout");
   } finally {
     useSession.getState().signOutLocal("signed_out");
+    signingOut = false;
   }
 }
 
 /** Signs out of VOIDEX everywhere, this device included. */
 export async function signOutEverywhere() {
-  await api.post("/api/auth/logout-all");
-  useSession.getState().signOutLocal("signed_out");
+  signingOut = true;
+  try {
+    await api.post("/api/auth/logout-all");
+    useSession.getState().signOutLocal("signed_out");
+  } finally {
+    signingOut = false;
+  }
 }
 
 function applyMe(me: MeDto) {

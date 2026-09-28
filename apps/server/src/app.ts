@@ -99,6 +99,17 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
     app.log.warn("SMS provider: development console — codes are logged, NOT delivered. Not allowed in production.");
   }
 
+  // Accept an empty JSON body as {} (e.g. POST /drafts/:id/send with no payload).
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    const text = typeof body === "string" ? body : body.toString("utf8");
+    if (!text.trim()) return done(null, {});
+    try {
+      done(null, JSON.parse(text));
+    } catch {
+      done(new AppError(ErrorCode.ValidationFailed, "Malformed JSON body.", { status: 400 }), undefined);
+    }
+  });
+
   await app.register(cookie);
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -119,7 +130,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
   });
   await app.register(rateLimit, {
     global: true,
-    max: 600,
+    max: 600 * config.rateLimitScale,
     timeWindow: "1 minute",
     // Tests simulate many devices from one IP; each simulated device gets its own bucket.
     keyGenerator: (req) =>

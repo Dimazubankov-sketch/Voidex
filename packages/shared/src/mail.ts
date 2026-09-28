@@ -42,12 +42,37 @@ export function subjectWithPrefix(subject: string, prefix: "Re" | "Fwd"): string
   return `${prefix}: ${s}`.slice(0, MAIL_SUBJECT_MAX);
 }
 
+/** Index of the first line of quoted/forwarded content, or -1. */
+export function quoteStartLine(lines: string[]): number {
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]!;
+    if (/^-{5,}/.test(l)) return i;
+    if (l.startsWith(">")) {
+      // Include the "On …, X wrote:" header right above the quote.
+      let j = i - 1;
+      while (j >= 0 && !lines[j]!.trim()) j--;
+      return j >= 0 && lines[j]!.trim().endsWith(":") ? j : i;
+    }
+  }
+  return -1;
+}
+
 export function makeSnippet(body: string, max = 140): string {
-  const s = body
-    .split("\n")
-    .filter((line) => !line.startsWith(">"))
+  const lines = body.split("\n");
+  const q = quoteStartLine(lines);
+  let s = (q === -1 ? lines : lines.slice(0, q))
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
+  // A forward without a comment: preview the forwarded text itself.
+  if (!s && q !== -1) {
+    s = lines
+      .slice(q)
+      .filter((l) => !/^-{5,}/.test(l) && !/^[A-Za-zА-Яа-яЁё]+:\s/.test(l))
+      .map((l) => l.replace(/^>\s?/, ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }

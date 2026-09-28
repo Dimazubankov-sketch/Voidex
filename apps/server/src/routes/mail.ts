@@ -39,11 +39,18 @@ export const mailRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/messages/:id/compose", async (req) => {
     const { id } = parse(idParam, req.params);
-    const { mode } = parse(z.object({ mode: z.enum(["reply", "reply_all", "forward"]) }), req.query);
-    return mail.composeDefaults(req.auth!.userId, id, mode);
+    const q = parse(
+      z.object({
+        mode: z.enum(["reply", "reply_all", "forward"]),
+        lang: z.enum(["en", "ru"]).default("en"),
+        tz: z.string().max(64).regex(/^[A-Za-z_+\-/0-9]+$/).optional(),
+      }),
+      req.query,
+    );
+    return mail.composeDefaults(req.auth!.userId, id, q.mode, { lang: q.lang, tz: q.tz });
   });
 
-  app.post("/drafts", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+  app.post("/drafts", { config: { rateLimit: { max: 60 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req, reply) => {
     reply.status(201);
     return mail.createDraft(req.auth!.userId, parse(DraftCreateSchema, req.body));
   });
@@ -63,12 +70,12 @@ export const mailRoutes: FastifyPluginAsync = async (app) => {
     return mail.deleteDraft(req.auth!.userId, id);
   });
 
-  app.post("/drafts/:id/send", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req) => {
+  app.post("/drafts/:id/send", { config: { rateLimit: { max: 30 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) => {
     const { id } = parse(idParam, req.params);
     return mail.sendDraft(req.auth!.userId, id);
   });
 
-  app.get("/resolve", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req) => {
+  app.get("/resolve", { config: { rateLimit: { max: 120 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) => {
     const { address } = parse(z.object({ address: z.string().min(1).max(254) }), req.query);
     return mail.resolveAddress(address);
   });

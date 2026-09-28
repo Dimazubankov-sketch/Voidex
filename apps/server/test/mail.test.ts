@@ -305,3 +305,24 @@ describe("realtime", () => {
     expect(got.some((g) => g.user === "eve")).toBe(false);
   });
 });
+
+describe("request bodies", () => {
+  it("accepts an empty JSON body on action endpoints and rejects malformed JSON", async () => {
+    const a = await user();
+    const b = await user();
+    const d = await a.d.post("/api/mail/drafts", { to: [b.address], subject: "x", body: "y" });
+    const r = await env.app.inject({
+      method: "POST",
+      url: `/api/mail/drafts/${d.body.id}/send`,
+      headers: { "content-type": "application/json", "x-voidex-client": "web", authorization: `Bearer ${a.d.accessToken}`, "x-test-client": a.d.testClientId },
+    });
+    expect(r.statusCode).toBe(200);
+    const bad = await env.app.inject({
+      method: "POST",
+      url: "/api/auth/login",
+      payload: "{not json",
+      headers: { "content-type": "application/json", "x-voidex-client": "web" },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+});

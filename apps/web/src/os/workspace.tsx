@@ -9,6 +9,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, useLanguage, useT } from "@/lib/i18n";
 import { qk } from "@/lib/query";
 import { useSession } from "@/lib/session";
+import { useMailSummary } from "@/lib/mail-summary";
 import { AppTile } from "@/brand/brand";
 import { IconButton } from "@/ui/controls";
 import { Popover, Sheet, usePopover } from "@/ui/overlays";
@@ -133,10 +134,6 @@ function HomeSurface({ receded, hidden, launcherBtn }: { receded: boolean; hidde
       <Launcher open={launcherOpen} onClose={() => setLauncherOpen(false)} anchor={launcherBtn} />
     </motion.main>
   );
-}
-
-export function useMailSummary(enabled = true) {
-  return useQuery({ queryKey: qk.mailSummary, queryFn: () => api.get<MailSummaryDto>("/api/mail/summary"), enabled });
 }
 
 function AppCaption({ appId }: { appId: AppId }) {

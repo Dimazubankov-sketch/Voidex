@@ -36,6 +36,8 @@ const EnvSchema = z.object({
   /** Built web client to serve in production (apps/web/dist). */
   WEB_DIST: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
+  /** Multiplies per-route IP rate limits. Development/e2e only (many fake users from one IP). */
+  RATE_LIMIT_SCALE: z.coerce.number().min(1).max(1000).default(1),
 });
 
 export type Config = ReturnType<typeof loadConfig>;
@@ -52,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     const missing: string[] = [];
     if (!e.AUTH_ACCESS_SECRET) missing.push("AUTH_ACCESS_SECRET");
     if (!e.AUTH_TOKEN_PEPPER) missing.push("AUTH_TOKEN_PEPPER");
+    if (e.RATE_LIMIT_SCALE !== 1) throw new Error("RATE_LIMIT_SCALE must be 1 in production.");
     if (missing.length) throw new Error(`Missing required production secrets: ${missing.join(", ")}`);
     // Never pretend to send SMS in production.
     if (e.SMS_PROVIDER === "console") {
@@ -89,5 +92,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     allowedOrigins: e.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     webDist: e.WEB_DIST,
     logLevel: e.LOG_LEVEL,
+    rateLimitScale: e.RATE_LIMIT_SCALE,
   };
 }

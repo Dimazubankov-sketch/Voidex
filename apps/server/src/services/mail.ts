@@ -660,42 +660,52 @@ export class MailService {
     }
   }
 
-  /** Reply/forward helpers compute defaults server-side so every client behaves the same. */
-  async composeDefaults(userId: string, messageId: string, mode: "reply" | "reply_all" | "forward") {
+  /**
+   * Reply/forward defaults, computed server-side so every client behaves the
+   * same. The quote header is localised to the caller's language and time zone.
+   */
+  async composeDefaults(
+    userId: string,
+    messageId: string,
+    mode: "reply" | "reply_all" | "forward",
+    locale: { lang: "en" | "ru"; tz?: string } = { lang: "en" },
+  ) {
     const acc = await this.accountFor(userId);
     const m = await this.visibleMessage(this.ctx.db, acc, messageId);
     const recips = (await this.recipientsOf([m.id])).get(m.id) ?? [];
     const own = m.senderAccountId === acc.id;
     const visible = own ? recips : recips.filter((r) => r.kind !== "bcc");
-    const when = (m.sentAt ?? m.createdAt).toISOString();
+    let when: string;
+    try {
+      when = new Intl.DateTimeFormat(locale.lang, { dateStyle: "long", timeStyle: "short", timeZone: locale.tz }).format(m.sentAt ?? m.createdAt);
+    } catch {
+      when = new Intl.DateTimeFormat(locale.lang, { dateStyle: "long", timeStyle: "short", timeZone: "UTC" }).format(m.sentAt ?? m.createdAt);
+    }
+    const L =
+      locale.lang === "ru"
+        ? { wrote: (w: string, who: string) => `${w}, ${who} пишет:`, fwd: "---------- Пересланное сообщение ----------", from: "От", date: "Дата", subject: "Тема", to: "Кому" }
+        : { wrote: (w: string, who: string) => `On ${w}, ${who} wrote:`, fwd: "---------- Forwarded message ----------", from: "From", date: "Date", subject: "Subject", to: "To" };
+    const who = `${m.senderName} <${m.senderAddress}>`;
+    if (mode === "forward") {
+      const header = [
+        L.fwd,
+        `${L.from}: ${who}`,
+        `${L.date}: ${when}`,
+        `${L.subject}: ${m.subject}`,
+        `${L.to}: ${visible.filter((r) => r.kind === "to").map((r) => r.address).join(", ")}`,
+      ].join("\n");
+      return { to: [], cc: [], subject: subjectWithPrefix(m.subject, "Fwd"), body: `\n\n${header}\n\n${m.body}`, forwardOfMessageId: m.id };
+    }
     const quoted = m.body
       .split("\n")
       .map((l) => `> ${l}`)
       .join("\n");
-    if (mode === "forward") {
-      const header = [
-        "---------- Forwarded message ----------",
-        `From: ${m.senderName} <${m.senderAddress}>`,
-        `Date: ${when}`,
-        `Subject: ${m.subject}`,
-        `To: ${visible.filter((r) => r.kind === "to").map((r) => r.address).join(", ")}`,
-      ].join("\n");
-      return { to: [], cc: [], subject: subjectWithPrefix(m.subject, "Fwd"), body: `\n\n${header}\n\n${m.body}`, forwardOfMessageId: m.id };
-    }
     const to = own ? visible.filter((r) => r.kind === "to").map((r) => r.address) : [m.senderAddress];
     const cc =
       mode === "reply_all"
-        ? [...new Set([...visible.filter((r) => (own ? r.kind === "cc" : true)).map((r) => r.address)])].filter(
-            (a) => a !== acc.address && !to.includes(a),
-          )
+        ? [...new Set(visible.filter((r) => (own ? r.kind === "cc" : true)).map((r) => r.address))].filter((a) => a !== acc.address && !to.includes(a))
         : [];
-    return {
-      to,
-      cc,
-      subject: subjectWithPrefix(m.subject, "Re"),
-      body: `\n\nOn ${when}, ${m.senderName} <${m.senderAddress}> wrote:\n${quoted}`,
-      replyToMessageId: m.id,
-    };
+    return { to, cc, subject: subjectWithPrefix(m.subject, "Re"), body: `\n\n${L.wrote(when, who)}\n${quoted}`, replyToMessageId: m.id };
   }
 
   async exportAll(userId: string) {

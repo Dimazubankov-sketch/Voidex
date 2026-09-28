@@ -32,28 +32,30 @@ export function App() {
 
   return (
     <>
-      <AnimatePresence mode="wait">
-        {status === "booting" && <BootScreen key="boot" />}
-        {status === "signedOut" && (
-          <motion.div key="auth" className="h-dvh" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25 }}>
-            <AuthRoot />
-          </motion.div>
-        )}
-        {status === "signedIn" && (
-          <motion.div
-            key={`ws-${userId}`}
-            className="h-dvh"
-            initial={{ opacity: 0, scale: 1.03 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <Suspense fallback={<BootScreen />}>
-              <Workspace />
-            </Suspense>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {status === "signedIn" ? (
+        // Unmounted immediately on sign-out: nothing of the previous account may
+        // keep rendering (or crash) while an exit animation plays.
+        <motion.div
+          key={`ws-${userId}`}
+          className="h-dvh"
+          initial={{ opacity: 0, scale: 1.03 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Suspense fallback={<BootScreen />}>
+            <Workspace />
+          </Suspense>
+        </motion.div>
+      ) : (
+        <AnimatePresence mode="wait">
+          {status === "booting" && <BootScreen key="boot" />}
+          {status === "signedOut" && (
+            <motion.div key="auth" className="h-dvh" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25 }}>
+              <AuthRoot />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
       <ToastViewport />
     </>
   );
