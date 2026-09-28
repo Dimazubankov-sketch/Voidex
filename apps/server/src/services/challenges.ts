@@ -1,12 +1,12 @@
 import { and, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import {
   ErrorCode,
-  maskPhone,
   type ApprovalRequestDto,
   type ChallengeDto,
   type ChallengeMethod,
   type ChallengeStatusDto,
 } from "@voidex/shared";
+import { maskPhone } from "@voidex/shared/phone";
 import { authChallenges, devices, securityEvents, sessions, users } from "../db/schema.js";
 import { hmac, randomToken, safeEqualHex } from "../lib/crypto.js";
 import { describeDevice } from "../lib/device.js";

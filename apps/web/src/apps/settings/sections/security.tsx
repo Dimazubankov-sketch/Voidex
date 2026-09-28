@@ -11,7 +11,8 @@ import {
   RiSmartphoneLine,
   RiTabletLine,
 } from "@remixicon/react";
-import { formatPhone, isPasswordAcceptable, parsePhone, type CountryCode, type MeDto, type SessionDto, type VerificationStartedDto } from "@voidex/shared";
+import { isPasswordAcceptable, type MeDto, type SessionDto, type VerificationStartedDto } from "@voidex/shared";
+import { formatPhone, parsePhone, type CountryCode } from "@voidex/shared/phone";
 import { ApiError, api } from "@/lib/api";
 import { applyMe, signOutEverywhere } from "@/lib/account";
 import { errorMessage } from "@/lib/errors";

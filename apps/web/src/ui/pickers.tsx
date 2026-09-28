@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { RiCheckLine, RiSearchLine } from "@remixicon/react";
-import { COUNTRY_CODES, LANGUAGES, callingCode, formatPhoneInput, type CountryCode, type LanguageCode } from "@voidex/shared";
+import { LANGUAGES, type LanguageCode } from "@voidex/shared";
+import { COUNTRY_CODES, callingCode, formatPhoneInput, type CountryCode } from "@voidex/shared/phone";
 import { cx } from "@/lib/cx";
 import { countryName, flagEmoji, monthNames, useLanguage, useT } from "@/lib/i18n";
 import { TextField } from "./controls";

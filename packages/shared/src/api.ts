@@ -2,7 +2,7 @@ import { z } from "zod";
 import { APP_IDS } from "./apps.js";
 import { LEGAL_KEYS } from "./legal.js";
 import { MAIL_BODY_MAX, MAIL_RECIPIENTS_MAX, MAIL_SUBJECT_MAX, MAIL_VIEWS } from "./mail.js";
-import { COUNTRY_CODES, LANGUAGE_CODES } from "./regions.js";
+import { LANGUAGE_CODES } from "./regions.js";
 import { PASSWORD_MAX } from "./validation/password.js";
 
 /**
@@ -13,7 +13,8 @@ import { PASSWORD_MAX } from "./validation/password.js";
 
 const id = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
-const country = z.string().refine((v) => (COUNTRY_CODES as readonly string[]).includes(v), "invalid_country");
+// Existence of the region is checked by the server with isCountryCode (@voidex/shared/phone).
+const country = z.string().regex(/^[A-Z]{2}$/);
 const language = z.enum(LANGUAGE_CODES);
 const password = z.string().min(1).max(PASSWORD_MAX);
 const secret = z.string().min(20).max(200);

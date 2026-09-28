@@ -6,6 +6,5 @@ export * from "./mail.js";
 export * from "./api.js";
 export * from "./dto.js";
 export * from "./validation/person.js";
-export * from "./validation/phone.js";
 export * from "./validation/username.js";
 export * from "./validation/password.js";

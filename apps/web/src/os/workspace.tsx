@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
 import { RiCloseLine, RiMoreFill, RiWifiOffLine } from "@remixicon/react";
-import { APP_REGISTRY, type AppId, type InstalledAppDto, type MailSummaryDto } from "@voidex/shared";
+import { APP_REGISTRY, type AppId, type InstalledAppDto } from "@voidex/shared";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";

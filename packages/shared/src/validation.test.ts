@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   checkPassword,
   isPasswordAcceptable,
-  maskPhone,
-  parsePhone,
   usernameCandidates,
   validateBirthDate,
   validateName,
@@ -11,6 +9,7 @@ import {
   subjectWithPrefix,
   parseAddress,
 } from "./index.js";
+import { maskPhone, parsePhone } from "./phone.js";
 
 const NOW = new Date(Date.UTC(2026, 8, 28));
 

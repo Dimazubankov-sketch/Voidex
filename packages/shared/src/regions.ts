@@ -1,4 +1,4 @@
-import { getCountries, getCountryCallingCode, type CountryCode } from "libphonenumber-js/max";
+import type { CountryCode } from "libphonenumber-js/max";
 
 /**
  * Languages the VOIDEX interface ships with. Adding a language means:
@@ -20,17 +20,6 @@ export const DEFAULT_LANGUAGE: LanguageCode = "en";
 
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === "string" && (LANGUAGE_CODES as string[]).includes(value);
-}
-
-/** All ISO-3166 alpha-2 regions that have a phone numbering plan. */
-export const COUNTRY_CODES: readonly CountryCode[] = getCountries();
-
-export function isCountryCode(value: unknown): value is CountryCode {
-  return typeof value === "string" && (COUNTRY_CODES as string[]).includes(value);
-}
-
-export function callingCode(country: CountryCode): string {
-  return getCountryCallingCode(country);
 }
 
 /**

@@ -12,14 +12,13 @@ import {
   normalizeName,
   normalizeUsername,
   parseIsoDate,
-  parsePhone,
   usernameCandidates,
   validateBirthDate,
   validateName,
   validateUsername,
-  type CountryCode,
   type LanguageCode,
 } from "@voidex/shared";
+import { isCountryCode, parsePhone, type CountryCode } from "@voidex/shared/phone";
 import type { z } from "zod";
 import type { RegisterSchema, ProfileUpdateSchema } from "@voidex/shared";
 import type { Tx } from "../db/client.js";
@@ -163,6 +162,7 @@ export class AccountService {
     if (fnErr) fields.firstName = fnErr;
     if (lnErr) fields.lastName = lnErr;
 
+    if (!isCountryCode(input.country)) fields.country = "invalid";
     const birth = parseIsoDate(input.birthDate);
     const birthErr = birth ? validateBirthDate(birth, input.country as CountryCode, this.ctx.now()) : "invalid";
     if (birthErr) fields.birthDate = birthErr;
@@ -327,7 +327,10 @@ export class AccountService {
       if (e) fields.lastName = e;
       else patch.lastName = v;
     }
-    if (input.country !== undefined) patch.country = input.country;
+    if (input.country !== undefined) {
+      if (isCountryCode(input.country)) patch.country = input.country;
+      else fields.country = "invalid";
+    }
     if (input.language !== undefined) patch.language = input.language;
     if (input.birthDate !== undefined || input.country !== undefined) {
       const birthIso = input.birthDate ?? user.birthDate;

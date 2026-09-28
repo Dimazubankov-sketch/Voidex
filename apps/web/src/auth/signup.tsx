@@ -6,19 +6,18 @@ import {
   checkPassword,
   isPasswordAcceptable,
   normalizeUsername,
-  parsePhone,
   passwordScore,
   regionPolicy,
   validateBirthDate,
   validateName,
   validateUsername,
-  type CountryCode,
   type LanguageCode,
   type LegalDocumentKey,
   type SessionResponse,
   type UsernameCheckDto,
   type VerificationStartedDto,
 } from "@voidex/shared";
+import { parsePhone, type CountryCode } from "@voidex/shared/phone";
 import { ApiError, api, qs } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { errorMessage, fieldMessage } from "@/lib/errors";

@@ -116,14 +116,15 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        fontSrc: ["'self'", "data:"],
         imgSrc: ["'self'", "data:", "blob:"],
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
+        upgradeInsecureRequests: config.cookieSecure ? [] : null,
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -201,7 +202,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
   if (webDist && existsSync(resolve(webDist, "index.html"))) {
     await app.register(fastifyStatic, { root: webDist, wildcard: false, index: ["index.html"] });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === "GET" && !req.url.startsWith("/api/")) return reply.sendFile("index.html");
+      if ((req.method === "GET" || req.method === "HEAD") && !req.url.startsWith("/api/")) return reply.sendFile("index.html");
       return reply.status(404).send({ error: { code: ErrorCode.NotFound, message: "Not found." } });
     });
   } else {

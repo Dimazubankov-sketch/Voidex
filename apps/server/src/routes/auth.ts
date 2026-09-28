@@ -10,10 +10,9 @@ import {
   RecoveryStartSchema,
   RegisterSchema,
   UsernameCheckSchema,
-  parsePhone,
-  type CountryCode,
   type LoginResponse,
 } from "@voidex/shared";
+import { parsePhone, type CountryCode } from "@voidex/shared/phone";
 import { z } from "zod";
 import { clearSessionCookie, parse, readRefreshToken, requestMeta, sendSession } from "../http.js";
 import { sha256 as sha256Hex } from "../lib/crypto.js";

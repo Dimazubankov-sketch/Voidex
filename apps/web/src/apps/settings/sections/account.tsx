@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { RiCameraLine, RiDeleteBinLine, RiKeyLine, RiLogoutBoxRLine, RiMailLine, RiPhoneLine, RiShieldCheckLine, RiDeviceLine } from "@remixicon/react";
-import { formatPhone, validateBirthDate, validateName, type CountryCode, type MeDto } from "@voidex/shared";
+import { validateBirthDate, validateName, type MeDto } from "@voidex/shared";
+import { formatPhone, type CountryCode } from "@voidex/shared/phone";
 import { api } from "@/lib/api";
 import { applyMe, prepareAvatar, signOut, signOutEverywhere, useUpdateProfile } from "@/lib/account";
 import { ApiError } from "@/lib/api";

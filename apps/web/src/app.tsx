@@ -6,8 +6,8 @@ import { useT } from "@/lib/i18n";
 import { queryClient } from "@/lib/query";
 import { VoidexMark } from "@/brand/brand";
 import { ToastViewport } from "@/ui/overlays";
-import { AuthRoot } from "@/auth/auth-root";
 
+const AuthRoot = lazy(() => import("@/auth/auth-root").then((m) => ({ default: m.AuthRoot })));
 const Workspace = lazy(() => import("@/os/workspace").then((m) => ({ default: m.Workspace })));
 
 /**
@@ -51,7 +51,9 @@ export function App() {
           {status === "booting" && <BootScreen key="boot" />}
           {status === "signedOut" && (
             <motion.div key="auth" className="h-dvh" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25 }}>
-              <AuthRoot />
+              <Suspense fallback={<BootScreen />}>
+                <AuthRoot />
+              </Suspense>
             </motion.div>
           )}
         </AnimatePresence>

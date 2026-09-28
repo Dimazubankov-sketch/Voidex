@@ -9,5 +9,5 @@ export default defineConfig({
   target: "node22",
   sourcemap: true,
   clean: true,
-  noExternal: ["@voidex/shared"],
+  noExternal: [/^@voidex\/shared/],
 });
