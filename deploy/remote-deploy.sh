@@ -25,7 +25,13 @@ KEEP_BACKUPS=10
 COMPOSE_FILE="$BASE/repo/deploy/docker-compose.prod.yml"
 
 export VOIDEX_ENV_FILE="$ENV_FILE"
-compose() { docker compose -p voidex --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
+# Compose interpolates the whole file on every call, so the app image must
+# always be known: callers that switch versions pass VOIDEX_IMAGE, every other
+# call (db, caddy, exec, logs) keeps whatever version is currently deployed.
+compose() {
+  VOIDEX_IMAGE="${VOIDEX_IMAGE:-$IMAGE_REPO:$(cat "$STATE/current" 2>/dev/null || echo none)}" \
+    docker compose -p voidex --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
 
 log() { printf '\n[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 ok() { printf '  ✔ %s\n' "$*"; }
