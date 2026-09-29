@@ -8,6 +8,8 @@ export interface SmsProvider {
   readonly name: string;
   /** True only for the development provider that does not really send anything. */
   readonly isDevelopment: boolean;
+  /** False when no gateway is configured: verification must be refused, not faked. */
+  readonly enabled: boolean;
   send(toE164: string, text: string): Promise<void>;
 }
 
@@ -21,6 +23,7 @@ export class SmsDeliveryError extends Error {}
 export class ConsoleSmsProvider implements SmsProvider {
   readonly name = "console";
   readonly isDevelopment = true;
+  readonly enabled = true;
   readonly outbox: { to: string; text: string; at: Date }[] = [];
   constructor(private readonly log: (msg: string) => void = console.log) {}
   async send(to: string, text: string) {
@@ -34,6 +37,7 @@ export class ConsoleSmsProvider implements SmsProvider {
 export class TwilioSmsProvider implements SmsProvider {
   readonly name = "twilio";
   readonly isDevelopment = false;
+  readonly enabled = true;
   constructor(private readonly cfg: { accountSid: string; authToken: string; from: string }) {}
   async send(to: string, text: string) {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(this.cfg.accountSid)}/Messages.json`;
@@ -54,6 +58,7 @@ export class TwilioSmsProvider implements SmsProvider {
 export class SmsRuProvider implements SmsProvider {
   readonly name = "smsru";
   readonly isDevelopment = false;
+  readonly enabled = true;
   constructor(private readonly cfg: { apiId: string }) {}
   async send(to: string, text: string) {
     const res = await fetch("https://sms.ru/sms/send", {
@@ -70,6 +75,19 @@ export class SmsRuProvider implements SmsProvider {
   }
 }
 
+/**
+ * Production without an SMS gateway. Nothing is ever "sent" and no code is
+ * ever issued; VerificationService refuses before creating a code.
+ */
+export class DisabledSmsProvider implements SmsProvider {
+  readonly name = "disabled";
+  readonly isDevelopment = false;
+  readonly enabled = false;
+  async send(): Promise<void> {
+    throw new SmsDeliveryError("SMS delivery is not configured.");
+  }
+}
+
 export function createSmsProvider(config: Config, log?: (msg: string) => void): SmsProvider {
   switch (config.sms.provider) {
     case "twilio":
@@ -78,5 +96,7 @@ export function createSmsProvider(config: Config, log?: (msg: string) => void): 
       return new SmsRuProvider(config.sms.smsru as { apiId: string });
     case "console":
       return new ConsoleSmsProvider(log);
+    case "disabled":
+      return new DisabledSmsProvider();
   }
 }

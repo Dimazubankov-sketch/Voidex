@@ -57,7 +57,8 @@ export class ChallengeService {
       expiresAt,
       createdAt: now,
     });
-    const methods: ChallengeMethod[] = ["sms"];
+    // Offer only methods that can really work right now.
+    const methods: ChallengeMethod[] = this.ctx.sms.enabled ? ["sms"] : [];
     if ((await this.sessions.trustedSessionCount(user.id)) > 0) methods.push("device");
     return { id, secret, kind, methods, phoneMasked: maskPhone(user.phone), expiresAt: expiresAt.toISOString() };
   }

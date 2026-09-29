@@ -1,8 +1,14 @@
 name: CI
 
 on:
+  # main is tested by the Deploy workflow (which calls this one) before release.
   push:
+    branches-ignore: [main]
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:

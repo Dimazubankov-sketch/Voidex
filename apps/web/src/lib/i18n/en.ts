@@ -39,6 +39,10 @@ export const en = {
   "welcome.subtitle": "Create your digital space.",
   "welcome.create": "Create account",
   "welcome.signin": "Sign in",
+  "welcome.signupClosed": "Registration opens soon: phone verification by SMS isn't connected yet. Existing accounts can sign in.",
+  "challenge.noMethodsLogin": "Confirmation by SMS isn't available yet, and you're not signed in on another device. Sign in on a device you've used before.",
+  "challenge.noMethodsRecovery": "Recovery by SMS isn't available yet. You can recover access by approving it on a device where you're signed in.",
+  "settings.about.smsDisabled": "Not connected yet",
   "welcome.devBuild": "Development build",
 
   // sign-up steps

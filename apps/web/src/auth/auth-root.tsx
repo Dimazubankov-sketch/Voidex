@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useSystemInfo } from "@/lib/system";
 import { VoidexMark } from "@/brand/brand";
-import { Button } from "@/ui/controls";
+import { Button, Notice } from "@/ui/controls";
 import { FlowShell, StepStage } from "./flow-shell";
 import { LoginFlow } from "./login";
 import { RecoveryFlow } from "./recovery";
@@ -65,7 +65,18 @@ function Welcome({ onCreate, onSignIn }: { onCreate: () => void; onSignIn: () =>
           </motion.p>
         </div>
         <motion.div className="w-full max-w-sm space-y-3" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
-          <Button size="lg" block onClick={onCreate} data-testid="welcome-create">
+          {info.data && !info.data.smsAvailable && (
+            <Notice tone="info" className="text-left" data-testid="signup-closed">
+              {t("welcome.signupClosed")}
+            </Notice>
+          )}
+          <Button
+            size="lg"
+            block
+            onClick={onCreate}
+            disabled={info.data ? !info.data.smsAvailable : false}
+            data-testid="welcome-create"
+          >
             {t("welcome.create")}
           </Button>
           <Button size="lg" variant="secondary" block onClick={onSignIn} data-testid="welcome-signin">

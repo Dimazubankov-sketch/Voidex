@@ -120,6 +120,10 @@ export interface ServerInfoDto {
   mailDomain: string;
   smsProvider: string;
   smsDevMode: boolean;
+  /** False until a real SMS gateway is connected: registration is closed. */
+  smsAvailable: boolean;
+  /** Git commit of the running server build ("dev" locally). */
+  revision: string;
 }
 
 // ---- mail -----------------------------------------------------------------

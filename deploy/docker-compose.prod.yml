@@ -1,0 +1,76 @@
+# VOIDEX production stack on voidex-01.
+#
+#   internet ──:80/:443──▶ caddy ──▶ app:4000 ──▶ db:5432
+#
+# Only Caddy publishes ports. PostgreSQL lives on an internal-only network:
+# it has no published port and no route to the internet.
+#
+# Managed by /opt/voidex/bin/voidex-deploy — do not run by hand unless you
+# know what you're doing; see docs/DEPLOYMENT.md.
+#   VOIDEX_IMAGE    image to run, e.g. ghcr.io/dimazubankov-sketch/voidex:<commit>
+#   VOIDEX_ENV_FILE production secrets (/opt/voidex/.env, never in git or images)
+name: voidex
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: voidex
+      POSTGRES_DB: voidex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing from /opt/voidex/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voidex -d voidex"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    image: ${VOIDEX_IMAGE:?VOIDEX_IMAGE not set}
+    restart: unless-stopped
+    env_file:
+      - ${VOIDEX_ENV_FILE:-/opt/voidex/.env}
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "4000"
+      # Only Caddy can reach the app, so X-Forwarded-For from it is trusted.
+      TRUST_PROXY: "true"
+      NODE_OPTIONS: --max-old-space-size=384
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [backend, web]
+    # Health check is defined in the image (GET /api/health → app + PostgreSQL).
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    networks: [web]
+
+networks:
+  # No internet access, no published ports: database traffic only.
+  backend:
+    internal: true
+  web: {}
+
+volumes:
+  # Named explicitly so the data survives any container or compose change.
+  pgdata:
+    name: voidex_pgdata
+  caddy_data:
+    name: voidex_caddy_data
+  caddy_config:
+    name: voidex_caddy_config

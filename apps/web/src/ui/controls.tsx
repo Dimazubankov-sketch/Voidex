@@ -377,14 +377,14 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
 // ---------------------------------------------------------------------------
 // Misc
 
-export function Notice({ tone = "info", children, className }: { tone?: "info" | "warning" | "danger" | "success"; children: ReactNode; className?: string }) {
+export function Notice({ tone = "info", children, className, "data-testid": testId }: { tone?: "info" | "warning" | "danger" | "success"; children: ReactNode; className?: string; "data-testid"?: string }) {
   const tones = {
     info: "bg-primary-soft text-primary-strong",
     warning: "bg-warning-soft text-[#8a5a00]",
     danger: "bg-danger-soft text-danger",
     success: "bg-success-soft text-success",
   };
-  return <div className={cx("rounded-2xl px-4 py-3 text-[14px] leading-snug animate-fade-up", tones[tone], className)} role={tone === "danger" ? "alert" : "status"}>{children}</div>;
+  return <div className={cx("rounded-2xl px-4 py-3 text-[14px] leading-snug animate-fade-up", tones[tone], className)} role={tone === "danger" ? "alert" : "status"} data-testid={testId}>{children}</div>;
 }
 
 export function Skeleton({ className }: { className?: string }) {

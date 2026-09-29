@@ -29,6 +29,11 @@ export function ChallengeChoose({ challenge, onPick, error }: { challenge: Chall
   );
   return (
     <StepBody title={t("challenge.title")} subtitle={challenge.kind === "login" ? t("challenge.subtitle") : t("challenge.recoverySubtitle")}>
+      {challenge.methods.length === 0 && (
+        <Notice tone="info" className="mb-3" data-testid="no-challenge-methods">
+          {challenge.kind === "login" ? t("challenge.noMethodsLogin") : t("challenge.noMethodsRecovery")}
+        </Notice>
+      )}
       <div className="space-y-2.5">
         {option("sms", <RiMessage2Line className="size-5" />, t("challenge.sms", { phone: challenge.phoneMasked }), t("challenge.smsHint"))}
         {challenge.methods.includes("device") &&

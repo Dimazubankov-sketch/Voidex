@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Forced command for the GitHub Actions deploy key (see authorized_keys of the
+# `deploy` user). Whatever the SSH client asks for, only these requests run:
+#
+#   deploy <40-hex commit>      rollback [<40-hex commit>|previous]
+#   status                      logs
+#
+# Installed by bootstrap.sh as /opt/voidex/bin/voidex-deploy (root-owned,
+# not writable by the deploy user).
+set -Eeuo pipefail
+
+REPO_DIR=/opt/voidex/repo
+BRANCH=main
+read -r -a ARGS <<<"${SSH_ORIGINAL_COMMAND:-status}"
+CMD="${ARGS[0]:-}"
+ARG="${ARGS[1]:-}"
+[[ ${#ARGS[@]} -le 2 ]] || { echo "Too many arguments." >&2; exit 2; }
+
+is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+
+case "$CMD" in
+  deploy)
+    is_sha "$ARG" || { echo "deploy needs a full 40-character commit id." >&2; exit 2; }
+    # Bring the deploy configuration (compose file, Caddyfile, scripts) to that commit.
+    git -C "$REPO_DIR" fetch --quiet --prune origin "$BRANCH"
+    git -C "$REPO_DIR" cat-file -e "$ARG^{commit}" 2>/dev/null || { echo "Commit $ARG is not on $BRANCH." >&2; exit 2; }
+    git -C "$REPO_DIR" merge-base --is-ancestor "$ARG" "origin/$BRANCH" || { echo "Commit $ARG is not on $BRANCH." >&2; exit 2; }
+    git -C "$REPO_DIR" checkout --quiet --force --detach "$ARG"
+    ;;
+  rollback)
+    [[ -z "$ARG" || "$ARG" == previous ]] && ARG=previous || is_sha "$ARG" || { echo "rollback takes a 40-character commit id or 'previous'." >&2; exit 2; }
+    ;;
+  status | logs)
+    [[ -z "$ARG" ]] || { echo "$CMD takes no arguments." >&2; exit 2; }
+    ;;
+  *)
+    echo "Allowed: deploy <commit> | rollback [<commit>|previous] | status | logs" >&2
+    exit 2
+    ;;
+esac
+
+exec bash "$REPO_DIR/deploy/remote-deploy.sh" "$CMD" ${ARG:+"$ARG"}

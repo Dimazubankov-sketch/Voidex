@@ -36,6 +36,9 @@ export class VerificationService {
     ip: string | null;
     language?: string;
   }): Promise<VerificationStartedDto> {
+    if (!this.ctx.sms.enabled) {
+      throw fail(ErrorCode.SmsNotConfigured, "Phone verification by SMS is not available yet.");
+    }
     const { db } = this.ctx;
     const now = this.ctx.now();
 

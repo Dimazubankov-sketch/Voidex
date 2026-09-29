@@ -22,7 +22,12 @@ const EnvSchema = z.object({
 
   MAIL_DOMAIN: z.string().default("voidops.ru"),
 
-  SMS_PROVIDER: z.enum(["console", "twilio", "smsru"]).default("console"),
+  /**
+   * console  — development only: codes are logged/shown, nothing is sent.
+   * disabled — no SMS gateway yet: phone verification is refused (503), never faked.
+   * twilio / smsru — real delivery.
+   */
+  SMS_PROVIDER: z.enum(["console", "disabled", "twilio", "smsru"]).default("console"),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
@@ -38,6 +43,8 @@ const EnvSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   /** Multiplies per-route IP rate limits. Development/e2e only (many fake users from one IP). */
   RATE_LIMIT_SCALE: z.coerce.number().min(1).max(1000).default(1),
+  /** Git commit of the running build (set by the Docker image). */
+  VOIDEX_VERSION: z.string().max(64).default("dev"),
 });
 
 export type Config = ReturnType<typeof loadConfig>;
@@ -93,5 +100,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     webDist: e.WEB_DIST,
     logLevel: e.LOG_LEVEL,
     rateLimitScale: e.RATE_LIMIT_SCALE,
+    revision: e.VOIDEX_VERSION,
   };
 }

@@ -115,7 +115,16 @@ export function AboutSection() {
         <Row label={t("settings.about.mailDomain")} value={info.data ? `@${info.data.mailDomain}` : "…"} />
         <Row
           label={t("settings.about.sms")}
-          right={info.data && (info.data.smsDevMode ? <Badge tone="warning">{t("settings.about.smsDev")}</Badge> : <Badge tone="success">{info.data.smsProvider}</Badge>)}
+          right={
+            info.data &&
+            (info.data.smsDevMode ? (
+              <Badge tone="warning">{t("settings.about.smsDev")}</Badge>
+            ) : !info.data.smsAvailable ? (
+              <Badge>{t("settings.about.smsDisabled")}</Badge>
+            ) : (
+              <Badge tone="success">{info.data.smsProvider}</Badge>
+            ))
+          }
         />
         <Row label={t("settings.about.device")} value={device} />
       </Group>

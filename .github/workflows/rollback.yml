@@ -1,0 +1,80 @@
+name: Production (rollback · status · logs)
+
+# Manual controls for the production server, run from the GitHub website:
+# Actions → "Production (rollback · status · logs)" → Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "What to do"
+        type: choice
+        options: [status, rollback, logs]
+        default: status
+      version:
+        description: "Rollback only: full commit id to return to (leave empty = the previous working version)"
+        required: false
+        default: ""
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  DEPLOY_HOST: 161.35.135.122
+  DEPLOY_USER: deploy
+
+jobs:
+  run:
+    name: ${{ inputs.action }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://voidex.su
+    steps:
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "::error::Secrets DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS are not set."; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          if printf '%s' "$DEPLOY_SSH_KEY" | grep -q "BEGIN OPENSSH PRIVATE KEY"; then
+            printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          else
+            printf '%s' "$DEPLOY_SSH_KEY" | tr -d ' \r\n' | base64 -d > ~/.ssh/deploy_key
+          fi
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<CFG
+          Host voidex
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          CFG
+
+      - name: Validate input
+        if: inputs.action == 'rollback' && inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          echo "$VERSION" | grep -qE '^[0-9a-f]{40}$' || { echo "::error::version must be a full 40-character commit id"; exit 1; }
+
+      - name: ${{ inputs.action }}
+        env:
+          ACTION: ${{ inputs.action }}
+          VERSION: ${{ inputs.version }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          case "$ACTION" in
+            rollback) printf '%s' "$REGISTRY_TOKEN" | ssh voidex "rollback ${VERSION:-previous}" ;;
+            status)   ssh voidex status ;;
+            logs)     ssh voidex logs ;;
+          esac

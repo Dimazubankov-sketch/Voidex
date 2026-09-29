@@ -1,0 +1,20 @@
+# VOIDEX reverse proxy. Caddy obtains and renews Let's Encrypt certificates
+# automatically and redirects HTTP → HTTPS on its own.
+
+voidex.su {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=15552000"
+		-Server
+	}
+
+	# One origin for the web client and the API (/api/*), exactly as the app
+	# is built: same-site cookies, strict CSP, no CORS needed.
+	reverse_proxy app:4000
+}
+
+# www.voidex.su → https://voidex.su (permanent)
+www.voidex.su {
+	redir https://voidex.su{uri} permanent
+}
