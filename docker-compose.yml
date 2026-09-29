@@ -1,3 +1,5 @@
+# Local production-like stack (no HTTPS). The real server uses
+# deploy/docker-compose.prod.yml — see docs/DEPLOYMENT.md.
 services:
   db:
     image: postgres:16
@@ -22,7 +24,7 @@ services:
       # Replace before deploying anywhere real:
       AUTH_ACCESS_SECRET: ${AUTH_ACCESS_SECRET:?set AUTH_ACCESS_SECRET}
       AUTH_TOKEN_PEPPER: ${AUTH_TOKEN_PEPPER:?set AUTH_TOKEN_PEPPER}
-      SMS_PROVIDER: ${SMS_PROVIDER:?set SMS_PROVIDER (twilio or smsru)}
+      SMS_PROVIDER: ${SMS_PROVIDER:-disabled}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM: ${TWILIO_FROM:-}

@@ -32,7 +32,7 @@ ok() { printf '  ✔ %s\n' "$*"; }
 bad() { printf '  ✘ %s\n' "$*" >&2; }
 die() { bad "$*"; exit 1; }
 
-short() { echo "${1:0:7}"; }
+short() { if [[ -n "${1:-}" ]]; then echo "${1:0:7}"; else echo none; fi; }
 
 current_version() { cat "$STATE/current" 2>/dev/null || true; }
 
@@ -218,7 +218,7 @@ restore() {
 cmd_deploy() {
   local tag=$1 prev
   prev=$(current_version)
-  log "Deploying $(short "$tag") (current: ${prev:+$(short "$prev")}${prev:-none})"
+  log "Deploying $(short "$tag") (current: $(short "$prev"))"
   preflight
   pull_image "$tag"
   wait_db
@@ -244,7 +244,7 @@ cmd_rollback() {
     target=$(awk '{print $2}' "$STATE/history" 2>/dev/null | tac | awk -v cur="$cur" '$0 != cur && !seen[$0]++' | head -1)
     [[ -n "$target" ]] || die "There is no earlier successful version to roll back to."
   fi
-  log "Rolling back from ${cur:+$(short "$cur")}${cur:-none} to $(short "$target")"
+  log "Rolling back from $(short "$cur") to $(short "$target")"
   printf '  • Database schema is left as is (migrations are additive and backward compatible).\n'
   pull_image "$target"
   wait_db

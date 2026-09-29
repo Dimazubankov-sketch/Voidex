@@ -46,9 +46,7 @@ from one IP; must stay `1` in production).
 
 ## Production
 
-```bash
-docker compose up --build   # PostgreSQL + VOIDEX (API + web on one origin, :4000)
-```
-
-Required secrets: `AUTH_ACCESS_SECRET`, `AUTH_TOKEN_PEPPER` (≥32 random chars
-each), an SMS provider, and HTTPS in front (cookies are `Secure`).
+Live at **https://voidex.su**. Every push to `main` is tested, built into a
+Docker image on GitHub and released to the server automatically, with health
+checks and automatic rollback. Operations (status, logs, rollback) run from the
+GitHub Actions tab. Details: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
