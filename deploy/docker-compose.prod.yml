@@ -9,6 +9,11 @@
 # know what you're doing; see docs/DEPLOYMENT.md.
 #   VOIDEX_IMAGE    image to run, e.g. ghcr.io/dimazubankov-sketch/voidex:<commit>
 #   VOIDEX_ENV_FILE production secrets (/opt/voidex/.env, never in git or images)
+#   VOIDEX_SECRETS_FILE  secrets delivered by the deploy pipeline from GitHub
+#                   Secrets (/opt/voidex/state/secrets.env: OTP_API_KEY), mode 600
+#   VOIDEX_SMS_PROVIDER  chosen per release by the deploy script: otpcom when
+#                   OTP_API_KEY is on the server and the image supports it,
+#                   otherwise SMS_PROVIDER from /opt/voidex/.env
 name: voidex
 
 services:
@@ -32,9 +37,12 @@ services:
     image: ${VOIDEX_IMAGE:?VOIDEX_IMAGE not set}
     restart: unless-stopped
     env_file:
-      - ${VOIDEX_ENV_FILE:-/opt/voidex/.env}
+      - path: ${VOIDEX_ENV_FILE:-/opt/voidex/.env}
+      - path: ${VOIDEX_SECRETS_FILE:-/opt/voidex/state/secrets.env}
+        required: false
     environment:
       NODE_ENV: production
+      SMS_PROVIDER: ${VOIDEX_SMS_PROVIDER:-disabled}
       HOST: 0.0.0.0
       PORT: "4000"
       # Only Caddy can reach the app, so X-Forwarded-For from it is trusted.

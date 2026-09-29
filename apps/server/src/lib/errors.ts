@@ -21,6 +21,8 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.CodeAttemptsExceeded]: 429,
   [ErrorCode.SmsNotConfigured]: 503,
   [ErrorCode.SmsSendFailed]: 502,
+  [ErrorCode.SmsCountryUnsupported]: 422,
+  [ErrorCode.SmsNetworkBlocked]: 403,
   [ErrorCode.ChallengePending]: 409,
   [ErrorCode.ChallengeDenied]: 403,
   [ErrorCode.ChallengeExpired]: 410,

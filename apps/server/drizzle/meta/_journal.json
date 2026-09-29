@@ -15,6 +15,13 @@
       "when": 1790621882270,
       "tag": "0001_mail_domain_voidops",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790700000000,
+      "tag": "0002_hosted_otp",
+      "breakpoints": true
     }
   ]
 }

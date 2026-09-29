@@ -11,8 +11,13 @@
 #   remote-deploy.sh status
 #   remote-deploy.sh logs
 #
-# A registry token (GitHub Actions GITHUB_TOKEN, short-lived) may be passed on
-# stdin to pull images; it is used once with a throwaway Docker config.
+# Secrets arrive on stdin from GitHub Actions, one per line, and are never
+# printed:
+#   line 1  registry token (short-lived GITHUB_TOKEN) — used once to pull images
+#           with a throwaway Docker config;
+#   line 2  OTP_API_KEY (otp.com live server key), optional — saved to
+#           $STATE/secrets.env (mode 600, owner deploy) for the app container.
+#           When the line is empty, the key already on the server is kept.
 set -Eeuo pipefail
 
 BASE=/opt/voidex
@@ -23,13 +28,39 @@ IMAGE_REPO=ghcr.io/dimazubankov-sketch/voidex
 KEEP_IMAGES=5
 KEEP_BACKUPS=10
 COMPOSE_FILE="$BASE/repo/deploy/docker-compose.prod.yml"
+SECRETS_FILE="$STATE/secrets.env"
 
-export VOIDEX_ENV_FILE="$ENV_FILE"
+export VOIDEX_ENV_FILE="$ENV_FILE" VOIDEX_SECRETS_FILE="$SECRETS_FILE"
+
+REGISTRY_TOKEN=""
+OTP_API_KEY_IN=""
+# Read all piped secrets up front, before any docker command can consume stdin.
+read_secrets() {
+  [[ -t 0 ]] && return 0
+  IFS= read -r REGISTRY_TOKEN || true
+  IFS= read -r OTP_API_KEY_IN || true
+  OTP_API_KEY_IN="${OTP_API_KEY_IN//[[:space:]]/}"
+}
+
+# SMS provider for a given app image: otp.com when its key is on the server
+# and the build supports it (image label); otherwise what /opt/voidex/.env says.
+sms_provider_for() {
+  local image=$1 fallback
+  fallback=$(sed -n 's/^[[:space:]]*SMS_PROVIDER[[:space:]]*=[[:space:]]*//p' "$ENV_FILE" 2>/dev/null | tail -1 | tr -d "\"' \r")
+  if [[ -s "$SECRETS_FILE" ]] &&
+    [[ "$(docker image inspect -f '{{index .Config.Labels "su.voidex.otpcom"}}' "$image" 2>/dev/null)" == 1 ]]; then
+    echo otpcom
+  else
+    echo "${fallback:-disabled}"
+  fi
+}
+
 # Compose interpolates the whole file on every call, so the app image must
 # always be known: callers that switch versions pass VOIDEX_IMAGE, every other
 # call (db, caddy, exec, logs) keeps whatever version is currently deployed.
 compose() {
-  VOIDEX_IMAGE="${VOIDEX_IMAGE:-$IMAGE_REPO:$(cat "$STATE/current" 2>/dev/null || echo none)}" \
+  local image="${VOIDEX_IMAGE:-$IMAGE_REPO:$(cat "$STATE/current" 2>/dev/null || echo none)}"
+  VOIDEX_IMAGE="$image" VOIDEX_SMS_PROVIDER="$(sms_provider_for "$image")" \
     docker compose -p voidex --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -58,13 +89,37 @@ preflight() {
   mkdir -p "$STATE" "$BACKUPS"
 }
 
+# Saves OTP_API_KEY for the app (never printed). Empty input keeps the saved key.
+store_secrets() {
+  log "Secrets"
+  if [[ -z "$OTP_API_KEY_IN" ]]; then
+    if [[ -s "$SECRETS_FILE" ]]; then
+      ok "OTP_API_KEY: kept the key already saved on the server"
+    else
+      printf '  • OTP_API_KEY not provided — SMS stays as set in %s\n' "$ENV_FILE"
+    fi
+    return 0
+  fi
+  [[ "$OTP_API_KEY_IN" =~ ^otp_live_[A-Za-z0-9._~+/=-]+$ ]] ||
+    die "OTP_API_KEY is not an otp.com live server key (must start with otp_live_). Nothing was changed."
+  local tmp
+  tmp=$(umask 077 && mktemp "$STATE/.secrets.XXXXXX")
+  {
+    echo "# Managed by the deploy pipeline from GitHub Secrets — do not edit by hand."
+    echo "OTP_API_KEY=$OTP_API_KEY_IN"
+  } >"$tmp"
+  chmod 600 "$tmp"
+  mv -f "$tmp" "$SECRETS_FILE"
+  OTP_API_KEY_IN=""
+  ok "OTP_API_KEY saved to $SECRETS_FILE (mode 600, value not shown)"
+}
+
 pull_image() {
-  local tag=$1 image="$IMAGE_REPO:$1" token=""
+  local tag=$1 image="$IMAGE_REPO:$1" token="$REGISTRY_TOKEN"
   if docker image inspect "$image" >/dev/null 2>&1; then
     ok "Image $(short "$tag") already on server"
     return
   fi
-  if [[ ! -t 0 ]]; then IFS= read -r token || true; fi
   log "Pulling $IMAGE_REPO:$(short "$tag")"
   local cfg
   cfg=$(mktemp -d)
@@ -173,6 +228,17 @@ health_check() {
   app_fetch "$asset" >/dev/null || { bad "frontend script $asset not served"; return 1; }
   ok "Frontend loads ($asset)"
 
+  # SMS provider as the running app reports it (informational).
+  body=$(app_fetch /api/system/info 2>/dev/null) || body=""
+  if [[ "$body" == *'"smsAvailable":true'* ]]; then
+    ok "SMS provider: $(grep -oE '"smsProvider":"[a-z]+"' <<<"$body" | cut -d'"' -f4) (available)"
+  else
+    printf '  • SMS provider: %s (phone verification unavailable)\n' "$(grep -oE '"smsProvider":"[a-z]+"' <<<"$body" | cut -d'"' -f4)"
+  fi
+  sleep 1
+  body=$(compose logs --no-log-prefix --since 10m app 2>/dev/null | grep -oE 'SMS provider: otp\.com[^"]*' | tail -1) || true
+  [[ -n "$body" ]] && printf '  • %s\n' "$body"
+
   # 6. Through Caddy (HTTPS). Informational: before DNS points here there is no certificate yet.
   if curl -fsS --max-time 10 --resolve voidex.su:443:127.0.0.1 https://voidex.su/api/health >/dev/null 2>&1; then
     ok "HTTPS through Caddy: https://voidex.su/api/health"
@@ -226,6 +292,7 @@ cmd_deploy() {
   prev=$(current_version)
   log "Deploying $(short "$tag") (current: $(short "$prev"))"
   preflight
+  store_secrets
   pull_image "$tag"
   wait_db
   backup_db "before-$(short "$tag")"
@@ -284,6 +351,7 @@ cmd_logs() {
   compose logs --tail 150 --timestamps app caddy db
 }
 
+read_secrets
 case "${1:-}" in
   deploy) cmd_deploy "$2" ;;
   rollback) cmd_rollback "${2:-previous}" ;;

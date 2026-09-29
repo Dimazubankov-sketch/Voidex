@@ -25,9 +25,12 @@ const EnvSchema = z.object({
   /**
    * console  — development only: codes are logged/shown, nothing is sent.
    * disabled — no SMS gateway yet: phone verification is refused (503), never faked.
-   * twilio / smsru — real delivery.
+   * otpcom   — otp.com hosted OTP (production default): it makes, sends and checks the code.
+   * twilio / smsru — real delivery of a code made by VOIDEX.
    */
-  SMS_PROVIDER: z.enum(["console", "disabled", "twilio", "smsru"]).default("console"),
+  SMS_PROVIDER: z.enum(["console", "disabled", "otpcom", "twilio", "smsru"]).default("console"),
+  /** otp.com server key (otp_live_… in production). Server-side only; never logged. */
+  OTP_API_KEY: z.string().optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
@@ -68,6 +71,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       throw new Error("SMS_PROVIDER=console is a development provider and cannot be used in production.");
     }
   }
+  if (e.SMS_PROVIDER === "otpcom") {
+    // Messages never quote the key itself.
+    const key = e.OTP_API_KEY?.trim() ?? "";
+    if (!key) throw new Error("SMS_PROVIDER=otpcom requires OTP_API_KEY.");
+    if (!/^otp_(live|test)_\S+$/.test(key)) {
+      throw new Error("OTP_API_KEY is not an otp.com server key (expected otp_live_… or otp_test_…; publishable otp_pk_ keys cannot be used).");
+    }
+    // A sandbox key accepts the fixed code 123456 — that would be a fake OTP.
+    if (production && !key.startsWith("otp_live_")) {
+      throw new Error("OTP_API_KEY must be a live key (otp_live_…) in production; sandbox keys accept a fixed code.");
+    }
+  }
   if (e.SMS_PROVIDER === "twilio" && !(e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && e.TWILIO_FROM)) {
     throw new Error("SMS_PROVIDER=twilio requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM.");
   }
@@ -93,6 +108,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       provider: e.SMS_PROVIDER,
       twilio: { accountSid: e.TWILIO_ACCOUNT_SID, authToken: e.TWILIO_AUTH_TOKEN, from: e.TWILIO_FROM },
       smsru: { apiId: e.SMSRU_API_ID },
+      otpcom: { apiKey: e.OTP_API_KEY?.trim() },
     },
     trustProxy: e.TRUST_PROXY,
     cookieSecure: e.COOKIE_SECURE ?? production,

@@ -87,13 +87,22 @@ jobs:
           CFG
 
       - name: Release ${{ github.sha }} on the server
-        # The deploy key can only run the deploy command. The short-lived
-        # GITHUB_TOKEN is passed on stdin so the server can pull the image.
+        # The deploy key can only run the deploy command. Secrets travel on
+        # stdin (never in the command line, never echoed; GitHub masks them):
+        #   line 1: short-lived GITHUB_TOKEN so the server can pull the image
+        #   line 2: OTP_API_KEY → /opt/voidex/state/secrets.env (mode 600)
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$REGISTRY_TOKEN" | ssh voidex "deploy $GITHUB_SHA"
+          OTP_API_KEY: ${{ secrets.OTP_API_KEY }}
+        run: |
+          if [ -z "$OTP_API_KEY" ]; then
+            echo "::warning::Secret OTP_API_KEY is not set: the server keeps its current SMS configuration."
+          fi
+          printf '%s\n%s\n' "$REGISTRY_TOKEN" "$OTP_API_KEY" | ssh voidex "deploy $GITHUB_SHA"
 
       - name: Verify https://voidex.su
+        env:
+          OTP_KEY_SET: ${{ secrets.OTP_API_KEY != '' }}
         run: |
           set -u
           fail() { echo "::error::$1"; exit 1; }
@@ -113,6 +122,16 @@ jobs:
           [ -n "$asset" ] || fail "Front page references no script"
           curl -fsS --max-time 10 -o /dev/null "$SITE$asset" || fail "Frontend script $asset did not load"
           echo "✔ Frontend loads ($asset)"
+          info=$(curl -fsS --max-time 10 "$SITE/api/system/info") || fail "/api/system/info did not answer"
+          sms=$(printf '%s' "$info" | grep -oE '"smsProvider":"[a-z]+"' | cut -d'"' -f4)
+          if [ "$OTP_KEY_SET" = "true" ]; then
+            case "$info" in
+              *'"smsProvider":"otpcom"'*'"smsDevMode":false'*'"smsAvailable":true'*) echo "✔ SMS provider: otp.com (phone verification available)" ;;
+              *) fail "SMS provider is '$sms', expected otpcom — see the server log (Production → logs)." ;;
+            esac
+          else
+            echo "• SMS provider: $sms"
+          fi
           code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://voidex.su/)
           case "$code" in 30[18]\ https://voidex.su/*) echo "✔ HTTP → HTTPS ($code)" ;; *) fail "HTTP is not redirected to HTTPS: $code" ;; esac
           code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' https://www.voidex.su/)

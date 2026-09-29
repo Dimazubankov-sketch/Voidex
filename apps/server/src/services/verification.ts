@@ -3,7 +3,7 @@ import { ErrorCode, type VerificationStartedDto } from "@voidex/shared";
 import { phoneVerifications, type verificationPurposes } from "../db/schema.js";
 import { hmac, otpCode, randomToken, safeEqualHex } from "../lib/crypto.js";
 import { fail } from "../lib/errors.js";
-import { SmsDeliveryError } from "./sms/index.js";
+import { OtpProviderError, SmsDeliveryError } from "./sms/index.js";
 import type { Ctx } from "./context.js";
 import type { Tx } from "../db/client.js";
 
@@ -20,7 +20,13 @@ const SMS_TEXT: Record<string, (code: string) => string> = {
   ru: (c) => `${c} — ваш код подтверждения VOIDEX. Никому его не сообщайте.`,
 };
 
-/** Phone verification: generate → deliver via SmsProvider → verify → (optional) proof. */
+type VerificationRow = typeof phoneVerifications.$inferSelect;
+
+/**
+ * Phone verification: generate → deliver via SmsProvider → verify → (optional) proof.
+ * With a hosted-OTP gateway (otp.com) the gateway generates and checks the code;
+ * everything else — throttling, attempts, expiry, proofs — stays the same.
+ */
 export class VerificationService {
   constructor(private readonly ctx: Ctx) {}
 
@@ -61,35 +67,44 @@ export class VerificationService {
       });
     }
 
-    const code = otpCode();
+    const hosted = this.ctx.sms.hosted;
+    const code = hosted ? null : otpCode();
     const id = crypto.randomUUID();
     await db.insert(phoneVerifications).values({
       id,
       purpose: input.purpose,
       phone: input.phone,
       userId: input.userId ?? null,
-      codeHash: this.codeHash(id, code),
+      codeHash: code ? this.codeHash(id, code) : null,
+      provider: this.ctx.sms.name,
       expiresAt: new Date(now.getTime() + CODE_TTL_MS),
       ipAddress: input.ip,
       createdAt: now,
     });
 
-    const text = (SMS_TEXT[input.language ?? "en"] ?? SMS_TEXT.en!)(code);
     try {
-      await this.ctx.sms.send(input.phone, text);
+      if (hosted) {
+        // One key per verification: a retry after a timeout never sends a second code.
+        const sent = await hosted.start({
+          to: input.phone,
+          clientIp: input.ip,
+          locale: input.language,
+          idempotencyKey: `voidex:${input.purpose}:${id}`,
+        });
+        await db.update(phoneVerifications).set({ providerRef: sent.ref }).where(eq(phoneVerifications.id, id));
+      } else {
+        await this.ctx.sms.send(input.phone, (SMS_TEXT[input.language ?? "en"] ?? SMS_TEXT.en!)(code!));
+      }
     } catch (err) {
       await db.delete(phoneVerifications).where(eq(phoneVerifications.id, id));
-      if (err instanceof SmsDeliveryError) {
-        throw fail(ErrorCode.SmsSendFailed, "We couldn't send an SMS to this number. Please try again later.");
-      }
-      throw err;
+      throw sendFailure(err);
     }
 
     return {
       verificationId: id,
       expiresAt: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
       resendAfterSeconds: RESEND_AFTER_MS / 1000,
-      ...(this.ctx.sms.isDevelopment && !this.ctx.config.production ? { devCode: code } : {}),
+      ...(code && this.ctx.sms.isDevelopment && !this.ctx.config.production ? { devCode: code } : {}),
     };
   }
 
@@ -113,17 +128,10 @@ export class VerificationService {
       throw fail(ErrorCode.CodeAttemptsExceeded, "Too many incorrect attempts. Request a new code.");
     }
 
-    if (!safeEqualHex(this.codeHash(row.id, input.code), row.codeHash)) {
-      const [updated] = await db
-        .update(phoneVerifications)
-        .set({ attempts: sql`${phoneVerifications.attempts} + 1` })
-        .where(eq(phoneVerifications.id, row.id))
-        .returning({ attempts: phoneVerifications.attempts });
-      const attemptsLeft = Math.max(0, row.maxAttempts - (updated?.attempts ?? row.maxAttempts));
-      if (attemptsLeft === 0) {
-        throw fail(ErrorCode.CodeAttemptsExceeded, "Too many incorrect attempts. Request a new code.");
-      }
-      throw fail(ErrorCode.CodeInvalid, "Incorrect verification code.", { details: { attemptsLeft } });
+    if (row.codeHash === null) {
+      await this.checkHosted(row, input.code);
+    } else if (!safeEqualHex(this.codeHash(row.id, input.code), row.codeHash)) {
+      await this.wrongCode(row);
     }
 
     const proof = randomToken();
@@ -136,6 +144,58 @@ export class VerificationService {
     if (!won) throw fail(ErrorCode.CodeExpired, "This code has already been used. Request a new one.");
 
     return { phone: row.phone, proof };
+  }
+
+  private async wrongCode(row: VerificationRow): Promise<never> {
+    const [updated] = await this.ctx.db
+      .update(phoneVerifications)
+      .set({ attempts: sql`${phoneVerifications.attempts} + 1` })
+      .where(eq(phoneVerifications.id, row.id))
+      .returning({ attempts: phoneVerifications.attempts });
+    const attemptsLeft = Math.max(0, row.maxAttempts - (updated?.attempts ?? row.maxAttempts));
+    if (attemptsLeft === 0) {
+      throw fail(ErrorCode.CodeAttemptsExceeded, "Too many incorrect attempts. Request a new code.");
+    }
+    throw fail(ErrorCode.CodeInvalid, "Incorrect verification code.", { details: { attemptsLeft } });
+  }
+
+  /**
+   * Asks the gateway that issued the code. The phone counts as verified only
+   * when it answers matched=true AND status=approved; any other answer is a miss.
+   */
+  private async checkHosted(row: VerificationRow, code: string): Promise<void> {
+    const hosted = this.ctx.sms.hosted;
+    if (!hosted || !row.providerRef || row.provider !== this.ctx.sms.name) {
+      throw fail(ErrorCode.CodeExpired, "This code is no longer valid. Request a new one.");
+    }
+    let result;
+    try {
+      result = await hosted.check(row.providerRef, code);
+    } catch (err) {
+      if (err instanceof OtpProviderError && err.kind === "not_found") {
+        throw fail(ErrorCode.CodeExpired, "This code is no longer valid. Request a new one.");
+      }
+      if (err instanceof OtpProviderError && err.kind === "rate_limited") {
+        throw fail(ErrorCode.RateLimited, "Too many attempts. Please wait a moment.", {
+          details: { retryAfterSeconds: err.info.retryAfterSeconds ?? 60 },
+        });
+      }
+      // Gateway down, timed out or misconfigured: no attempt is burned.
+      if (err instanceof SmsDeliveryError) {
+        throw fail(ErrorCode.ServiceUnavailable, "Code verification is temporarily unavailable. Please try again in a minute.");
+      }
+      throw err;
+    }
+    if (result.matched && result.status === "approved") return;
+    if (result.status === "expired") {
+      await this.ctx.db.update(phoneVerifications).set({ expiresAt: this.ctx.now() }).where(eq(phoneVerifications.id, row.id));
+      throw fail(ErrorCode.CodeExpired, "This code has expired. Request a new one.");
+    }
+    if (result.status === "failed") {
+      await this.ctx.db.update(phoneVerifications).set({ attempts: row.maxAttempts }).where(eq(phoneVerifications.id, row.id));
+      throw fail(ErrorCode.CodeAttemptsExceeded, "Too many incorrect attempts. Request a new code.");
+    }
+    await this.wrongCode(row);
   }
 
   /** Redeems a proof of a verified phone exactly once (used by registration). */
@@ -161,4 +221,29 @@ export class VerificationService {
     if (!won) throw fail(ErrorCode.PhoneNotVerified, "Phone number verification has already been used.");
     return row.phone;
   }
+}
+
+/** Maps a delivery failure to what the user sees. Never falls back to another gateway. */
+function sendFailure(err: unknown) {
+  if (err instanceof OtpProviderError) {
+    switch (err.kind) {
+      case "invalid_recipient":
+        return fail(ErrorCode.PhoneInvalid, "Enter a valid mobile phone number.", { fields: { phone: "invalid" } });
+      case "rate_limited":
+        return fail(ErrorCode.RateLimited, "Too many codes requested. Please try again later.", {
+          details: { retryAfterSeconds: err.info.retryAfterSeconds ?? 60 },
+        });
+      case "geo_blocked":
+        return fail(ErrorCode.SmsCountryUnsupported, "SMS codes can't be sent to numbers in this country yet.");
+      case "ip_blocked":
+        return fail(ErrorCode.SmsNetworkBlocked, "We can't send a code from this network. Turn off VPN or proxy and try again.");
+      default:
+        // Key rejected, no balance, gateway down or timed out: details are in the server log.
+        return fail(ErrorCode.SmsSendFailed, "We couldn't send an SMS to this number. Please try again later.");
+    }
+  }
+  if (err instanceof SmsDeliveryError) {
+    return fail(ErrorCode.SmsSendFailed, "We couldn't send an SMS to this number. Please try again later.");
+  }
+  return err;
 }

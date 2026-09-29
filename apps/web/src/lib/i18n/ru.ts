@@ -338,6 +338,8 @@ export const ru: Record<MessageKey, string> = {
   "error.code_resend_too_soon": "Подождите, прежде чем запрашивать новый код.",
   "error.sms_not_configured": "Отправка SMS не настроена на этом сервере.",
   "error.sms_send_failed": "Не удалось отправить SMS на этот номер. Попробуйте позже.",
+  "error.sms_country_unsupported": "Отправка SMS на номера этой страны пока недоступна.",
+  "error.sms_network_blocked": "Не можем отправить код из этой сети. Отключите VPN или прокси и попробуйте снова.",
   "error.challenge_invalid": "Запрос больше не действителен. Начните заново.",
   "error.challenge_expired": "Срок запроса истёк. Начните заново.",
   "error.challenge_pending": "Ещё не подтверждено.",

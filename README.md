@@ -30,8 +30,9 @@ pnpm dev                                      # API on :4000, web on http://loca
 ```
 
 In development SMS codes are **not sent**: the dev provider logs them and the UI
-shows them in a yellow "development mode" notice. Configure Twilio or SMS.ru for
-real delivery — production refuses to start with the dev provider.
+shows them in a yellow "development mode" notice. Production uses otp.com
+(`SMS_PROVIDER=otpcom`, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); Twilio and
+SMS.ru adapters remain available. Production refuses to start with the dev provider.
 
 ## Tests
 

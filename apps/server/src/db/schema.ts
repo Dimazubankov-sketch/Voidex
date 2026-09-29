@@ -152,7 +152,11 @@ export const sessions = pgTable(
 
 export const verificationPurposes = ["signup", "login", "recovery", "change_phone"] as const;
 
-/** One-time codes sent over SMS. The code itself is stored only as an HMAC. */
+/**
+ * One-time codes sent over SMS. A code made by VOIDEX is stored only as an
+ * HMAC (`codeHash`). With a hosted-OTP gateway (otp.com) the gateway makes and
+ * checks the code: `codeHash` is null and `providerRef` holds its otp_id.
+ */
 export const phoneVerifications = pgTable(
   "phone_verifications",
   {
@@ -160,7 +164,11 @@ export const phoneVerifications = pgTable(
     purpose: text("purpose", { enum: verificationPurposes }).notNull(),
     phone: text("phone").notNull(),
     userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
-    codeHash: text("code_hash").notNull(),
+    codeHash: text("code_hash"),
+    /** SMS provider that issued the code (e.g. "otpcom"). */
+    provider: text("provider"),
+    /** The hosted-OTP gateway's id for this verification. */
+    providerRef: text("provider_ref"),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(5),
     expiresAt: ts("expires_at").notNull(),

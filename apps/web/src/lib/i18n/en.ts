@@ -353,6 +353,8 @@ export const en = {
   "error.code_resend_too_soon": "Please wait before requesting another code.",
   "error.sms_not_configured": "SMS delivery isn't configured on this server.",
   "error.sms_send_failed": "We couldn't send an SMS to this number. Try again later.",
+  "error.sms_country_unsupported": "SMS codes can't be sent to numbers in this country yet.",
+  "error.sms_network_blocked": "We can't send a code from this network. Turn off VPN or proxy and try again.",
   "error.challenge_invalid": "This request is no longer valid. Please start again.",
   "error.challenge_expired": "This request has expired. Please start again.",
   "error.challenge_pending": "Not confirmed yet.",

@@ -30,8 +30,11 @@ COPY --from=build --chown=node:node /app/apps/server/drizzle ./drizzle
 COPY --from=build --chown=node:node /app/apps/server/legal ./legal
 COPY --from=build --chown=node:node /app/apps/web/dist /app/web
 ARG VOIDEX_VERSION=dev
+# su.voidex.otpcom tells the deploy script this build supports SMS_PROVIDER=otpcom
+# (older builds refuse that value, so a rollback to them keeps SMS off instead).
 LABEL org.opencontainers.image.source="https://github.com/Dimazubankov-sketch/Voidex" \
-      org.opencontainers.image.revision="${VOIDEX_VERSION}"
+      org.opencontainers.image.revision="${VOIDEX_VERSION}" \
+      su.voidex.otpcom="1"
 ENV VOIDEX_VERSION=${VOIDEX_VERSION}
 USER node
 EXPOSE 4000

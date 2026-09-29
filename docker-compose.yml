@@ -29,6 +29,7 @@ services:
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
       TWILIO_FROM: ${TWILIO_FROM:-}
       SMSRU_API_ID: ${SMSRU_API_ID:-}
+      OTP_API_KEY: ${OTP_API_KEY:-}
       MAIL_DOMAIN: ${MAIL_DOMAIN:-voidops.ru}
       TRUST_PROXY: "true"
 

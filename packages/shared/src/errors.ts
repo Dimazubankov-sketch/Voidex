@@ -45,6 +45,8 @@ export const ErrorCode = {
   CodeResendTooSoon: "code_resend_too_soon",
   SmsNotConfigured: "sms_not_configured",
   SmsSendFailed: "sms_send_failed",
+  SmsCountryUnsupported: "sms_country_unsupported",
+  SmsNetworkBlocked: "sms_network_blocked",
 
   // challenges (new device / recovery)
   ChallengeInvalid: "challenge_invalid",

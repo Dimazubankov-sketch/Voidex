@@ -31,6 +31,7 @@ tests never touch the running version.
 | Path | What |
 |---|---|
 | `/opt/voidex/.env` | Production secrets (root:deploy, 640). Never in git or images. |
+| `/opt/voidex/state/secrets.env` | `OTP_API_KEY`, written by each deploy from GitHub Secrets (deploy, 600). |
 | `/opt/voidex/repo` | Checkout of `main` at the deployed commit (compose file, Caddyfile, scripts). |
 | `/opt/voidex/bin/voidex-deploy` | The only command the GitHub deploy key may run (root-owned). |
 | `/opt/voidex/state/current`, `history` | Deployed version and release history. |
@@ -53,7 +54,8 @@ All are read in `apps/server/src/config.ts`. Production values live in `/opt/voi
 | `AUTH_ACCESS_SECRET` | random hex (96) | signs access tokens (JWT HS256) |
 | `AUTH_TOKEN_PEPPER` | random hex (96) | HMAC for one-time codes, challenge & recovery secrets |
 | `MAIL_DOMAIN` | `voidops.ru` | addresses `name@voidops.ru` |
-| `SMS_PROVIDER` | `disabled` | see "SMS" below |
+| `SMS_PROVIDER` | `otpcom` | chosen per release by the deploy script, see "SMS" below |
+| `OTP_API_KEY` | `otp_live_…` | from GitHub Secret `OTP_API_KEY` → `state/secrets.env` |
 | `TRUST_PROXY` | `true` (set in compose) | only Caddy can reach the app |
 | `LOG_LEVEL` | `info` | |
 | `VOIDEX_VERSION` | commit (set in image) | shown by `/api/health` |
@@ -72,8 +74,12 @@ Repository → Settings → Secrets and variables → Actions:
 |---|---|
 | `DEPLOY_SSH_KEY` | private deploy key (printed once by `bootstrap.sh`, base64 line) |
 | `DEPLOY_KNOWN_HOSTS` | `161.35.135.122 ssh-ed25519 …` (printed by `bootstrap.sh`) |
+| `OTP_API_KEY` | otp.com **live server** key (`otp_live_…`) |
 
-The registry token is the workflow's own short-lived `GITHUB_TOKEN`.
+The registry token is the workflow's own short-lived `GITHUB_TOKEN`. Secrets go
+to the server on the SSH connection's stdin (never on a command line, never
+printed): `OTP_API_KEY` is saved to `/opt/voidex/state/secrets.env` (mode 600).
+If the secret is empty, the key already on the server is kept.
 
 ## DNS (Рег.ру)
 
@@ -103,7 +109,7 @@ Health: `https://voidex.su/api/health` → `{"ok":true,"revision":"<commit>"}`
 
 ```bash
 cd /opt/voidex && sudo -u deploy SSH_ORIGINAL_COMMAND=status bin/voidex-deploy
-docker compose -p voidex --env-file .env -f repo/deploy/docker-compose.prod.yml logs -f app
+docker logs -f --tail 100 voidex-app-1
 ```
 
 Restore a backup (asks nothing, overwrites current data — only on purpose):
@@ -121,23 +127,53 @@ still running. Rolling back switches the app image only — schema changes are
 kept additive so older versions keep working. A `pg_dump` is taken before every
 migration.
 
-## SMS (deferred)
+## SMS — otp.com
 
-`SMS_PROVIDER=disabled`: phone verification answers `503 sms_not_configured`,
-no code is created, sent or shown. Consequences until SMS is connected:
-registration is closed (the welcome screen says so), sign-in from a new device
-and password recovery work only by approval from an already signed-in device.
+Phone codes (sign-up, sign-in from a new device, password recovery, phone
+change) go through **otp.com** (`SMS_PROVIDER=otpcom`). otp.com generates,
+delivers and checks the code; VOIDEX stores only its `otp_id`
+(`phone_verifications.provider_ref`), never the code. The channel comes from the
+app routing in the otp.com dashboard (SMS first); the API takes no channel.
 
-To connect SMS later: put `SMS_PROVIDER=smsru` + `SMSRU_API_ID=…` (or
-`twilio` + `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`) into
-`/opt/voidex/.env`, then redeploy (Actions → Deploy → Run workflow).
+* **Send** `POST /otp/send` — E.164 number, the end user's IP as `client_ip`
+  (from `X-Forwarded-For` set by Caddy), `locale`, and an `idempotency-key`
+  `voidex:<purpose>:<verification id>`: a timeout / 5xx is retried once with the
+  same key, so the user never gets two codes for one request.
+* **Verify** `POST /otp/verify` — the phone is verified only on
+  `matched: true` + `status: approved`. `pending` = wrong code, `failed` = too
+  many attempts, `expired` = new code needed. Never retried.
+* **Resend** in VOIDEX = a new send with a new key after the 60 s cooldown
+  (`/otp/resend` would move the code to another channel).
+* VOIDEX's own limits stay on top: 60 s between codes, 8 per number per hour,
+  5 attempts, 10 minutes.
+* Errors: 401 key rejected / 402 no balance / 5xx / timeout → "couldn't send SMS"
+  (details in the server log); 429 → "too many attempts"; VPN/proxy IP → "turn off
+  VPN"; blocked country → "not available in this country". There is **no
+  fallback** to another SMS provider.
+* Logs carry the masked number, `otp_id`, channel and otp.com's error type /
+  message — never the key, a code or a full number. At startup the app checks
+  the key for free (`GET /otp/<nonexistent id>`: 404 = accepted, 401 = rejected)
+  and logs `SMS provider: otp.com — API key accepted`.
+
+Production accepts only `otp_live_…` keys: sandbox keys accept a fixed code.
+
+Which provider a release runs with is decided by the deploy script: `otpcom`
+when `state/secrets.env` holds the key and the image supports it (label
+`su.voidex.otpcom`), otherwise `SMS_PROVIDER` from `/opt/voidex/.env`
+(`disabled`). So a rollback to a build from before otp.com starts with SMS off
+instead of failing.
+
+Change the key: update the GitHub Secret, then Actions → Deploy → Run workflow.
+Turn otp.com off: on the server `rm /opt/voidex/state/secrets.env`, delete the
+GitHub Secret, redeploy — phone verification is then refused (503), never faked.
 
 ## First-time setup (done once)
 
 1. DNS records above in Рег.ру.
 2. DigitalOcean → voidex-01 → Console, as root:
    `curl -fsSL https://raw.githubusercontent.com/Dimazubankov-sketch/Voidex/main/deploy/bootstrap.sh -o /root/voidex-bootstrap.sh && bash /root/voidex-bootstrap.sh`
-3. The two printed values → GitHub Secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`.
+3. The two printed values → GitHub Secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`;
+   the otp.com live server key → GitHub Secret `OTP_API_KEY`.
 4. Actions → Deploy → Run workflow.
 
 `bootstrap.sh` is safe to re-run; `ROTATE_KEY=1 bash /root/voidex-bootstrap.sh`

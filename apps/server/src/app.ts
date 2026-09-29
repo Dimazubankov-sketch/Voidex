@@ -18,7 +18,7 @@ import { EventHub } from "./services/events.js";
 import { LegalService } from "./services/legal.js";
 import { MailService } from "./services/mail.js";
 import { SessionService, type AuthContext } from "./services/sessions.js";
-import { createSmsProvider, type SmsProvider } from "./services/sms/index.js";
+import { OtpComSmsProvider, createSmsProvider, type SmsProvider } from "./services/sms/index.js";
 import { VerificationService } from "./services/verification.js";
 import { accountRoutes } from "./routes/account.js";
 import { authRoutes } from "./routes/auth.js";
@@ -75,7 +75,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
   const ctx: Ctx = {
     db,
     config,
-    sms: sms ?? createSmsProvider(config, (m) => app.log.warn(m)),
+    sms: sms ?? createSmsProvider(config, app.log),
     events: new EventHub(),
     now: now ?? (() => new Date()),
   };
@@ -95,6 +95,17 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);
 
+  if (ctx.sms instanceof OtpComSmsProvider) {
+    // Free check (sends nothing): tells the operator right away if the key was rejected.
+    const provider = ctx.sms;
+    app.addHook("onReady", async () => {
+      void provider.probe().then((r) => {
+        if (r === "ok") app.log.info({ provider: "otpcom" }, "SMS provider: otp.com — API key accepted");
+        else if (r === "unauthorized") app.log.error({ provider: "otpcom" }, "SMS provider: otp.com rejected the API key (401) — check OTP_API_KEY");
+        else app.log.warn({ provider: "otpcom" }, "SMS provider: otp.com is not reachable right now");
+      });
+    });
+  }
   if (config.sms.provider === "console") {
     app.log.warn("SMS provider: development console — codes are logged, NOT delivered. Not allowed in production.");
   }

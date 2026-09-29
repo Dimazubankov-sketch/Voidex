@@ -1,19 +1,9 @@
 import type { Config } from "../../config.js";
+import { OtpComSmsProvider } from "./otpcom.js";
+import { SmsDeliveryError, type OtpLog, type SmsProvider } from "./types.js";
 
-/**
- * SMS delivery abstraction. The verification service never talks to a vendor
- * directly — swapping Twilio for another gateway means one new class here.
- */
-export interface SmsProvider {
-  readonly name: string;
-  /** True only for the development provider that does not really send anything. */
-  readonly isDevelopment: boolean;
-  /** False when no gateway is configured: verification must be refused, not faked. */
-  readonly enabled: boolean;
-  send(toE164: string, text: string): Promise<void>;
-}
-
-export class SmsDeliveryError extends Error {}
+export * from "./types.js";
+export { OtpComSmsProvider, OtpProviderError, type OtpProviderErrorKind } from "./otpcom.js";
 
 /**
  * Development provider: writes the message to the server log. The API also
@@ -88,14 +78,16 @@ export class DisabledSmsProvider implements SmsProvider {
   }
 }
 
-export function createSmsProvider(config: Config, log?: (msg: string) => void): SmsProvider {
+export function createSmsProvider(config: Config, log?: OtpLog): SmsProvider {
   switch (config.sms.provider) {
+    case "otpcom":
+      return new OtpComSmsProvider({ apiKey: config.sms.otpcom.apiKey as string, log });
     case "twilio":
       return new TwilioSmsProvider(config.sms.twilio as { accountSid: string; authToken: string; from: string });
     case "smsru":
       return new SmsRuProvider(config.sms.smsru as { apiId: string });
     case "console":
-      return new ConsoleSmsProvider(log);
+      return new ConsoleSmsProvider(log && ((m) => log.warn({}, m)));
     case "disabled":
       return new DisabledSmsProvider();
   }

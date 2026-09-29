@@ -135,8 +135,9 @@ AUTH_TOKEN_PEPPER=$(openssl rand -hex 48)
 # Internal mail addresses: name@voidops.ru
 MAIL_DOMAIN=voidops.ru
 
-# SMS is not connected yet: phone verification is refused (never faked).
-# To connect later: SMS_PROVIDER=smsru + SMSRU_API_ID=…  (or twilio + TWILIO_*).
+# Used only while no otp.com key has been delivered: phone verification is
+# refused (never faked). Once the GitHub secret OTP_API_KEY reaches the server
+# (on deploy), releases run with SMS_PROVIDER=otpcom automatically.
 SMS_PROVIDER=disabled
 
 LOG_LEVEL=info
