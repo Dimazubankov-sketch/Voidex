@@ -383,12 +383,15 @@ cmd_rollback() {
 sms_aero_diag() {
   local fam w
   log "SMS Aero connectivity (host, no credentials)"
-  getent ahosts gate.smsaero.ru | awk '$2 == "STREAM" {print "  DNS: " $1}' | sort -u || echo "  DNS: no answer"
   w='ip=%{remote_ip} dns=%{time_namelookup}s connect=%{time_connect}s tls=%{time_appconnect}s first_byte=%{time_starttransfer}s total=%{time_total}s http=%{http_code}'
-  for fam in -4 -6; do
-    printf '  curl %s GET https://gate.smsaero.ru/v2/auth → ' "$fam"
-    curl "$fam" -sS -o /dev/null --connect-timeout 10 --max-time 15 -w "$w" https://gate.smsaero.ru/v2/auth 2>&1 | tr '\n' ' ' || true
-    echo
+  local host
+  for host in gate.smsaero.ru gate.smsaero.org gate.smsaero.net; do
+    echo "  ── $host: DNS $(getent ahosts "$host" | awk '$2 == "STREAM" {print $1}' | sort -u | tr '\n' ' ')"
+    for fam in -4 -6; do
+      printf '     curl %s GET /v2/auth → ' "$fam"
+      curl "$fam" -sS -o /dev/null --connect-timeout 10 --max-time 15 -w "$w" "https://$host/v2/auth" 2>&1 | tr '\n' ' ' || true
+      echo
+    done
   done
   printf '  host outgoing IPv4: %s\n' "$(curl -4 -sS --max-time 8 https://api.ipify.org 2>&1 || true)"
   log "SMS Aero connectivity (app container, same path as SmsAeroProvider)"
