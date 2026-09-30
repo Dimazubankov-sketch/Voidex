@@ -50,7 +50,13 @@ export async function signUpViaUi(page: Page, opts: { first?: string; last?: str
   await page.getByTestId("password").fill(PASSWORD);
   await page.getByTestId("password-confirm").fill(PASSWORD);
   await next(page);
-  for (const k of ["terms", "offer", "privacy", "data_processing"]) await page.getByTestId(`consent-${k}`).check({ force: true });
+  // Click the visible label like a user (Playwright waits until the step has
+  // stopped sliding), instead of force-clicking the hidden input's coordinates.
+  for (const k of ["terms", "offer", "privacy", "data_processing"]) {
+    const box = page.getByTestId(`consent-${k}`);
+    await page.locator("label", { has: box }).click();
+    await expect(box).toBeChecked();
+  }
   await next(page);
   await page.getByTestId("enter-workspace").click();
   await expect(page.getByTestId("workspace")).toBeVisible();
