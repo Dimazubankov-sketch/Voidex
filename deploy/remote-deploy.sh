@@ -377,6 +377,24 @@ cmd_rollback() {
   fi
 }
 
+# Read-only SMS Aero connectivity check (sends no SMS, prints no credentials):
+# from the host with curl (no credentials) and from inside the app container
+# (deploy/netcheck.mjs: DNS, TCP, TLS, /v2/auth, /v2/balance).
+sms_aero_diag() {
+  local fam w
+  log "SMS Aero connectivity (host, no credentials)"
+  getent ahosts gate.smsaero.ru | awk '{print "  DNS: " $1 " " $2}' | sort -u || echo "  DNS: no answer"
+  w='ip=%{remote_ip} dns=%{time_namelookup}s connect=%{time_connect}s tls=%{time_appconnect}s first_byte=%{time_starttransfer}s total=%{time_total}s http=%{http_code}'
+  for fam in -4 -6; do
+    printf '  curl %s GET https://gate.smsaero.ru/v2/auth → ' "$fam"
+    curl "$fam" -sS -o /dev/null --connect-timeout 10 --max-time 15 -w "$w" https://gate.smsaero.ru/v2/auth 2>&1 | tr '\n' ' '
+    echo
+  done
+  printf '  host outgoing IPv4: %s\n' "$(curl -4 -sS --max-time 8 https://api.ipify.org 2>&1)"
+  log "SMS Aero connectivity (app container, same path as SmsAeroProvider)"
+  compose exec -T app node --input-type=module - <"$BASE/repo/deploy/netcheck.mjs" 2>&1 || echo "  netcheck failed to run"
+}
+
 cmd_status() {
   local cur
   cur=$(current_version)
@@ -386,6 +404,7 @@ cmd_status() {
   log "Containers"
   compose ps
   [[ -n "$cur" ]] && health_check "$cur" || true
+  sms_aero_diag
   log "Server"
   echo "  $(uptime -p), load: $(cut -d' ' -f1-3 /proc/loadavg)"
   free -h | sed 's/^/  /'
