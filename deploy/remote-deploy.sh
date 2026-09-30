@@ -15,9 +15,15 @@
 # printed:
 #   line 1  registry token (short-lived GITHUB_TOKEN) — used once to pull images
 #           with a throwaway Docker config;
-#   line 2  OTP_API_KEY (otp.com live server key), optional — saved to
-#           $STATE/secrets.env (mode 600, owner deploy) for the app container.
-#           When the line is empty, the key already on the server is kept.
+#   line 2  OTP_API_KEY        (otp.com live server key)
+#   line 3  SMS_AERO_API_KEY   (SMS Aero API key)
+#   line 4  SMS_AERO_EMAIL     (SMS Aero account email = Basic-auth login)
+#   line 5  SMS_AERO_SIGN      (approved sender name; not secret)
+#   line 6  requested SMS provider: auto | otpcom | smsaero (not secret)
+# Lines 2–5 are saved to $STATE/secrets.env (mode 600, owner deploy) for the
+# app container; an empty line keeps the value already on the server. Line 6
+# is saved to $STATE/sms-provider on every deploy (empty = auto); rollbacks
+# keep it.
 set -Eeuo pipefail
 
 BASE=/opt/voidex
@@ -32,23 +38,46 @@ SECRETS_FILE="$STATE/secrets.env"
 
 export VOIDEX_ENV_FILE="$ENV_FILE" VOIDEX_SECRETS_FILE="$SECRETS_FILE"
 
+PROVIDER_FILE="$STATE/sms-provider"
+
 REGISTRY_TOKEN=""
 OTP_API_KEY_IN=""
+SMS_AERO_API_KEY_IN=""
+SMS_AERO_EMAIL_IN=""
+SMS_AERO_SIGN_IN=""
+SMS_PROVIDER_IN=""
 # Read all piped secrets up front, before any docker command can consume stdin.
 read_secrets() {
   [[ -t 0 ]] && return 0
   IFS= read -r REGISTRY_TOKEN || true
   IFS= read -r OTP_API_KEY_IN || true
+  IFS= read -r SMS_AERO_API_KEY_IN || true
+  IFS= read -r SMS_AERO_EMAIL_IN || true
+  IFS= read -r SMS_AERO_SIGN_IN || true
+  IFS= read -r SMS_PROVIDER_IN || true
   OTP_API_KEY_IN="${OTP_API_KEY_IN//[[:space:]]/}"
+  SMS_AERO_API_KEY_IN="${SMS_AERO_API_KEY_IN//[[:space:]]/}"
+  SMS_AERO_EMAIL_IN="${SMS_AERO_EMAIL_IN//[[:space:]]/}"
+  SMS_AERO_SIGN_IN="${SMS_AERO_SIGN_IN%$'\r'}"
+  SMS_PROVIDER_IN="${SMS_PROVIDER_IN//[[:space:]]/}"
 }
 
-# SMS provider for a given app image: otp.com when its key is on the server
-# and the build supports it (image label); otherwise what /opt/voidex/.env says.
+has_secret() { grep -q "^$1=." "$SECRETS_FILE" 2>/dev/null; }
+image_supports() { [[ "$(docker image inspect -f "{{index .Config.Labels \"su.voidex.$2\"}}" "$1" 2>/dev/null)" == 1 ]]; }
+
+# SMS provider for a given app image:
+#   smsaero — only when explicitly requested (GitHub variable SMS_PROVIDER or a
+#             Deploy run input), its key + email are on the server and the build
+#             supports it (image label su.voidex.smsaero);
+#   otpcom  — otherwise, when the otp.com key is on the server and the build supports it;
+#   else    — SMS_PROVIDER from /opt/voidex/.env (disabled).
 sms_provider_for() {
-  local image=$1 fallback
+  local image=$1 fallback requested
+  requested=$(cat "$PROVIDER_FILE" 2>/dev/null || echo auto)
   fallback=$(sed -n 's/^[[:space:]]*SMS_PROVIDER[[:space:]]*=[[:space:]]*//p' "$ENV_FILE" 2>/dev/null | tail -1 | tr -d "\"' \r")
-  if [[ -s "$SECRETS_FILE" ]] &&
-    [[ "$(docker image inspect -f '{{index .Config.Labels "su.voidex.otpcom"}}' "$image" 2>/dev/null)" == 1 ]]; then
+  if [[ "$requested" == smsaero ]] && has_secret SMS_AERO_API_KEY && has_secret SMS_AERO_EMAIL && image_supports "$image" smsaero; then
+    echo smsaero
+  elif has_secret OTP_API_KEY && image_supports "$image" otpcom; then
     echo otpcom
   else
     echo "${fallback:-disabled}"
@@ -89,29 +118,45 @@ preflight() {
   mkdir -p "$STATE" "$BACKUPS"
 }
 
-# Saves OTP_API_KEY for the app (never printed). Empty input keeps the saved key.
+# Saves provider secrets for the app (values are never printed). An empty
+# input keeps the value already saved. Validates everything before changing
+# anything, so a bad secret stops the release with the server untouched.
 store_secrets() {
   log "Secrets"
-  if [[ -z "$OTP_API_KEY_IN" ]]; then
-    if [[ -s "$SECRETS_FILE" ]]; then
-      ok "OTP_API_KEY: kept the key already saved on the server"
-    else
-      printf '  • OTP_API_KEY not provided — SMS stays as set in %s\n' "$ENV_FILE"
-    fi
-    return 0
-  fi
-  [[ "$OTP_API_KEY_IN" =~ ^otp_live_[A-Za-z0-9._~+/=-]+$ ]] ||
+  local requested="${SMS_PROVIDER_IN:-auto}"
+  case "$requested" in auto | otpcom | smsaero) ;; *) die "Unknown SMS provider '$requested' (use otpcom or smsaero). Nothing was changed." ;; esac
+  [[ -z "$OTP_API_KEY_IN" || "$OTP_API_KEY_IN" =~ ^otp_live_[A-Za-z0-9._~+/=-]+$ ]] ||
     die "OTP_API_KEY is not an otp.com live server key (must start with otp_live_). Nothing was changed."
-  local tmp
+  [[ -z "$SMS_AERO_API_KEY_IN" || "$SMS_AERO_API_KEY_IN" =~ ^[A-Za-z0-9._~+/=-]{8,256}$ ]] ||
+    die "SMS_AERO_API_KEY has unexpected characters. Nothing was changed."
+  [[ -z "$SMS_AERO_EMAIL_IN" || "$SMS_AERO_EMAIL_IN" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] ||
+    die "SMS_AERO_EMAIL is not an email address. Nothing was changed."
+  [[ -z "$SMS_AERO_SIGN_IN" || "$SMS_AERO_SIGN_IN" =~ ^[A-Za-z0-9\ ._-]{2,20}$ ]] ||
+    die "SMS_AERO_SIGN may contain only latin letters, digits, spaces, '.', '_' and '-'. Nothing was changed."
+
+  local tmp name value
   tmp=$(umask 077 && mktemp "$STATE/.secrets.XXXXXX")
-  {
-    echo "# Managed by the deploy pipeline from GitHub Secrets — do not edit by hand."
-    echo "OTP_API_KEY=$OTP_API_KEY_IN"
-  } >"$tmp"
+  echo "# Managed by the deploy pipeline from GitHub Secrets — do not edit by hand." >"$tmp"
+  for name in OTP_API_KEY SMS_AERO_API_KEY SMS_AERO_EMAIL SMS_AERO_SIGN; do
+    value="${name}_IN"
+    value="${!value}"
+    if [[ -n "$value" ]]; then
+      echo "$name=$value" >>"$tmp"
+      ok "$name: saved (value not shown)"
+    elif has_secret "$name"; then
+      grep "^$name=" "$SECRETS_FILE" | tail -1 >>"$tmp"
+      ok "$name: kept the value already on the server"
+    fi
+  done
   chmod 600 "$tmp"
+  if [[ "$requested" == smsaero ]] && ! { grep -q '^SMS_AERO_API_KEY=.' "$tmp" && grep -q '^SMS_AERO_EMAIL=.' "$tmp"; }; then
+    rm -f "$tmp"
+    die "SMS provider smsaero requested, but SMS_AERO_API_KEY and SMS_AERO_EMAIL are not both set in GitHub Secrets. Nothing was changed."
+  fi
   mv -f "$tmp" "$SECRETS_FILE"
-  OTP_API_KEY_IN=""
-  ok "OTP_API_KEY saved to $SECRETS_FILE (mode 600, value not shown)"
+  echo "$requested" >"$PROVIDER_FILE"
+  OTP_API_KEY_IN="" SMS_AERO_API_KEY_IN="" SMS_AERO_EMAIL_IN=""
+  ok "Requested SMS provider: $requested"
 }
 
 pull_image() {

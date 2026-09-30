@@ -26,11 +26,16 @@ const EnvSchema = z.object({
    * console  — development only: codes are logged/shown, nothing is sent.
    * disabled — no SMS gateway yet: phone verification is refused (503), never faked.
    * otpcom   — otp.com hosted OTP (production default): it makes, sends and checks the code.
+   * smsaero  — SMS Aero (Russia): delivers a code made and checked by VOIDEX.
    * twilio / smsru — real delivery of a code made by VOIDEX.
    */
-  SMS_PROVIDER: z.enum(["console", "disabled", "otpcom", "twilio", "smsru"]).default("console"),
+  SMS_PROVIDER: z.enum(["console", "disabled", "otpcom", "smsaero", "twilio", "smsru"]).default("console"),
   /** otp.com server key (otp_live_… in production). Server-side only; never logged. */
   OTP_API_KEY: z.string().optional(),
+  /** SMS Aero: account email (Basic-auth login), API key (password) and approved sender name. Server-side only. */
+  SMS_AERO_EMAIL: z.string().optional(),
+  SMS_AERO_API_KEY: z.string().optional(),
+  SMS_AERO_SIGN: z.string().optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
@@ -83,6 +88,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       throw new Error("OTP_API_KEY must be a live key (otp_live_…) in production; sandbox keys accept a fixed code.");
     }
   }
+  if (e.SMS_PROVIDER === "smsaero") {
+    // Messages name the missing variables, never their values.
+    const missing = [
+      !e.SMS_AERO_API_KEY?.trim() && "SMS_AERO_API_KEY",
+      !e.SMS_AERO_EMAIL?.trim() && "SMS_AERO_EMAIL",
+    ].filter(Boolean);
+    if (missing.length) throw new Error(`SMS_PROVIDER=smsaero requires ${missing.join(" and ")}.`);
+    if (!/^[^\s@:]+@[^\s@:]+\.[^\s@:]+$/.test(e.SMS_AERO_EMAIL!.trim())) {
+      throw new Error("SMS_AERO_EMAIL must be the SMS Aero account email (the Basic-auth login).");
+    }
+  }
   if (e.SMS_PROVIDER === "twilio" && !(e.TWILIO_ACCOUNT_SID && e.TWILIO_AUTH_TOKEN && e.TWILIO_FROM)) {
     throw new Error("SMS_PROVIDER=twilio requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM.");
   }
@@ -109,6 +125,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       twilio: { accountSid: e.TWILIO_ACCOUNT_SID, authToken: e.TWILIO_AUTH_TOKEN, from: e.TWILIO_FROM },
       smsru: { apiId: e.SMSRU_API_ID },
       otpcom: { apiKey: e.OTP_API_KEY?.trim() },
+      smsaero: { email: e.SMS_AERO_EMAIL?.trim(), apiKey: e.SMS_AERO_API_KEY?.trim(), sign: e.SMS_AERO_SIGN?.trim() || "SMS Aero" },
     },
     trustProxy: e.TRUST_PROXY,
     cookieSecure: e.COOKIE_SECURE ?? production,

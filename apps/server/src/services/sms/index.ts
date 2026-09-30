@@ -1,9 +1,11 @@
 import type { Config } from "../../config.js";
 import { OtpComSmsProvider } from "./otpcom.js";
+import { SmsAeroProvider } from "./smsaero.js";
 import { SmsDeliveryError, type OtpLog, type SmsProvider } from "./types.js";
 
 export * from "./types.js";
 export { OtpComSmsProvider, OtpProviderError, type OtpProviderErrorKind } from "./otpcom.js";
+export { SmsAeroProvider, SmsAeroError, type SmsAeroErrorKind } from "./smsaero.js";
 
 /**
  * Development provider: writes the message to the server log. The API also
@@ -82,6 +84,8 @@ export function createSmsProvider(config: Config, log?: OtpLog): SmsProvider {
   switch (config.sms.provider) {
     case "otpcom":
       return new OtpComSmsProvider({ apiKey: config.sms.otpcom.apiKey as string, log });
+    case "smsaero":
+      return new SmsAeroProvider({ ...(config.sms.smsaero as { email: string; apiKey: string; sign: string }), log });
     case "twilio":
       return new TwilioSmsProvider(config.sms.twilio as { accountSid: string; authToken: string; from: string });
     case "smsru":

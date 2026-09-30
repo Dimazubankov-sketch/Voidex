@@ -30,6 +30,9 @@ services:
       TWILIO_FROM: ${TWILIO_FROM:-}
       SMSRU_API_ID: ${SMSRU_API_ID:-}
       OTP_API_KEY: ${OTP_API_KEY:-}
+      SMS_AERO_EMAIL: ${SMS_AERO_EMAIL:-}
+      SMS_AERO_API_KEY: ${SMS_AERO_API_KEY:-}
+      SMS_AERO_SIGN: ${SMS_AERO_SIGN:-}
       MAIL_DOMAIN: ${MAIL_DOMAIN:-voidops.ru}
       TRUST_PROXY: "true"
 

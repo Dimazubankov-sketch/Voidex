@@ -8,6 +8,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sms_provider:
+        description: "SMS provider for this release (empty = GitHub variable SMS_PROVIDER, else otp.com)"
+        type: choice
+        options: ["", otpcom, smsaero]
+        default: ""
 
 # Releases run one at a time, in order; a running release is never cancelled.
 concurrency:
@@ -90,19 +96,26 @@ jobs:
         # The deploy key can only run the deploy command. Secrets travel on
         # stdin (never in the command line, never echoed; GitHub masks them):
         #   line 1: short-lived GITHUB_TOKEN so the server can pull the image
-        #   line 2: OTP_API_KEY → /opt/voidex/state/secrets.env (mode 600)
+        #   lines 2–5: OTP_API_KEY, SMS_AERO_API_KEY, SMS_AERO_EMAIL, SMS_AERO_SIGN
+        #              → /opt/voidex/state/secrets.env (mode 600); empty = keep
+        #   line 6: requested SMS provider (not secret): the run input, else the
+        #           repository variable SMS_PROVIDER, else auto (otp.com)
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OTP_API_KEY: ${{ secrets.OTP_API_KEY }}
+          SMS_AERO_API_KEY: ${{ secrets.SMS_AERO_API_KEY }}
+          SMS_AERO_EMAIL: ${{ secrets.SMS_AERO_EMAIL }}
+          SMS_AERO_SIGN: ${{ vars.SMS_AERO_SIGN }}
+          SMS_PROVIDER: ${{ inputs.sms_provider || vars.SMS_PROVIDER }}
         run: |
-          if [ -z "$OTP_API_KEY" ]; then
-            echo "::warning::Secret OTP_API_KEY is not set: the server keeps its current SMS configuration."
-          fi
-          printf '%s\n%s\n' "$REGISTRY_TOKEN" "$OTP_API_KEY" | ssh voidex "deploy $GITHUB_SHA"
+          echo "Requested SMS provider: ${SMS_PROVIDER:-auto}"
+          printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$REGISTRY_TOKEN" "$OTP_API_KEY" "$SMS_AERO_API_KEY" "$SMS_AERO_EMAIL" "$SMS_AERO_SIGN" "$SMS_PROVIDER" |
+            ssh voidex "deploy $GITHUB_SHA"
 
       - name: Verify https://voidex.su
         env:
           OTP_KEY_SET: ${{ secrets.OTP_API_KEY != '' }}
+          SMS_PROVIDER: ${{ inputs.sms_provider || vars.SMS_PROVIDER }}
         run: |
           set -u
           fail() { echo "::error::$1"; exit 1; }
@@ -124,10 +137,12 @@ jobs:
           echo "✔ Frontend loads ($asset)"
           info=$(curl -fsS --max-time 10 "$SITE/api/system/info") || fail "/api/system/info did not answer"
           sms=$(printf '%s' "$info" | grep -oE '"smsProvider":"[a-z]+"' | cut -d'"' -f4)
-          if [ "$OTP_KEY_SET" = "true" ]; then
+          expected=""
+          if [ "$SMS_PROVIDER" = "smsaero" ]; then expected=smsaero; elif [ "$OTP_KEY_SET" = "true" ]; then expected=otpcom; fi
+          if [ -n "$expected" ]; then
             case "$info" in
-              *'"smsProvider":"otpcom"'*'"smsDevMode":false'*'"smsAvailable":true'*) echo "✔ SMS provider: otp.com (phone verification available)" ;;
-              *) fail "SMS provider is '$sms', expected otpcom — see the server log (Production → logs)." ;;
+              *"\"smsProvider\":\"$expected\""*'"smsDevMode":false'*'"smsAvailable":true'*) echo "✔ SMS provider: $expected (phone verification available, not dev mode)" ;;
+              *) fail "SMS provider is '$sms', expected $expected — see the server log (Production → logs)." ;;
             esac
           else
             echo "• SMS provider: $sms"

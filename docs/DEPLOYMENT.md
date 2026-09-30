@@ -31,7 +31,8 @@ tests never touch the running version.
 | Path | What |
 |---|---|
 | `/opt/voidex/.env` | Production secrets (root:deploy, 640). Never in git or images. |
-| `/opt/voidex/state/secrets.env` | `OTP_API_KEY`, written by each deploy from GitHub Secrets (deploy, 600). |
+| `/opt/voidex/state/secrets.env` | `OTP_API_KEY`, `SMS_AERO_*`, written by each deploy from GitHub Secrets (deploy, 600). |
+| `/opt/voidex/state/sms-provider` | Requested SMS provider of the last deploy: `auto`, `otpcom` or `smsaero`. |
 | `/opt/voidex/repo` | Checkout of `main` at the deployed commit (compose file, Caddyfile, scripts). |
 | `/opt/voidex/bin/voidex-deploy` | The only command the GitHub deploy key may run (root-owned). |
 | `/opt/voidex/state/current`, `history` | Deployed version and release history. |
@@ -56,6 +57,9 @@ All are read in `apps/server/src/config.ts`. Production values live in `/opt/voi
 | `MAIL_DOMAIN` | `voidops.ru` | addresses `name@voidops.ru` |
 | `SMS_PROVIDER` | `otpcom` | chosen per release by the deploy script, see "SMS" below |
 | `OTP_API_KEY` | `otp_live_…` | from GitHub Secret `OTP_API_KEY` → `state/secrets.env` |
+| `SMS_AERO_API_KEY` | SMS Aero API key | from GitHub Secret `SMS_AERO_API_KEY` → `state/secrets.env` |
+| `SMS_AERO_EMAIL` | SMS Aero account email | from GitHub Secret `SMS_AERO_EMAIL` (Basic-auth login) |
+| `SMS_AERO_SIGN` | sender name | GitHub **variable** `SMS_AERO_SIGN`; default `SMS Aero` |
 | `TRUST_PROXY` | `true` (set in compose) | only Caddy can reach the app |
 | `LOG_LEVEL` | `info` | |
 | `VOIDEX_VERSION` | commit (set in image) | shown by `/api/health` |
@@ -75,6 +79,12 @@ Repository → Settings → Secrets and variables → Actions:
 | `DEPLOY_SSH_KEY` | private deploy key (printed once by `bootstrap.sh`, base64 line) |
 | `DEPLOY_KNOWN_HOSTS` | `161.35.135.122 ssh-ed25519 …` (printed by `bootstrap.sh`) |
 | `OTP_API_KEY` | otp.com **live server** key (`otp_live_…`) |
+| `SMS_AERO_API_KEY` | SMS Aero API key |
+| `SMS_AERO_EMAIL` | SMS Aero account email (login for the API's Basic auth) |
+
+Repository **variables** (Settings → Secrets and variables → Actions → Variables):
+`SMS_PROVIDER` (`smsaero` to make SMS Aero the production provider; unset = otp.com)
+and `SMS_AERO_SIGN` (approved sender name).
 
 The registry token is the workflow's own short-lived `GITHUB_TOKEN`. Secrets go
 to the server on the SSH connection's stdin (never on a command line, never
@@ -166,6 +176,33 @@ instead of failing.
 Change the key: update the GitHub Secret, then Actions → Deploy → Run workflow.
 Turn otp.com off: on the server `rm /opt/voidex/state/secrets.env`, delete the
 GitHub Secret, redeploy — phone verification is then refused (503), never faked.
+
+## SMS — SMS Aero
+
+`SMS_PROVIDER=smsaero` sends codes through SMS Aero (API v2,
+`POST https://gate.smsaero.ru/v2/sms/send`, JSON `number`/`sign`/`text`, HTTP
+Basic auth with the account email and API key). Unlike otp.com, SMS Aero only
+**delivers**: VOIDEX makes the code, stores its HMAC and checks it, with all
+VerificationService limits. One attempt per code (the API has no idempotency
+key, a retry could send a second code). Errors: 401 → wrong email/key,
+402 → no money, 404 "Invalid ip-address" → IP allow-list in the cabinet,
+400 → validation (number / sign / text), 429, 5xx, timeout — all shown to the
+user as "couldn't send SMS" (429 as "too many attempts", a bad number as
+"invalid number"); details are in the server log, never the key, the text
+(it holds the code) or the full number.
+
+SMS Aero moderates messages manually (up to 5–10 minutes) until a contract is
+signed; with the shared `SMS Aero` sender name the text must name the service
+(ours says "VOIDEX").
+
+**Which provider runs.** The deploy script picks it per release:
+`smsaero` only when requested — Actions → Deploy → Run workflow with
+*sms_provider* = `smsaero` (this release only; the next push goes back to the
+default) or the repository variable `SMS_PROVIDER=smsaero` (every release) —
+and the key + email are on the server; otherwise otp.com; otherwise
+`/opt/voidex/.env`. Rollbacks keep the last request; a build without SMS Aero
+support falls back to otp.com. The Deploy run fails (server untouched) if
+`smsaero` is requested without both secrets.
 
 ## First-time setup (done once)
 

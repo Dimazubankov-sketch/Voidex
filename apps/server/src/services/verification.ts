@@ -3,7 +3,7 @@ import { ErrorCode, type VerificationStartedDto } from "@voidex/shared";
 import { phoneVerifications, type verificationPurposes } from "../db/schema.js";
 import { hmac, otpCode, randomToken, safeEqualHex } from "../lib/crypto.js";
 import { fail } from "../lib/errors.js";
-import { OtpProviderError, SmsDeliveryError } from "./sms/index.js";
+import { OtpProviderError, SmsAeroError, SmsDeliveryError } from "./sms/index.js";
 import type { Ctx } from "./context.js";
 import type { Tx } from "../db/client.js";
 
@@ -241,6 +241,14 @@ function sendFailure(err: unknown) {
         // Key rejected, no balance, gateway down or timed out: details are in the server log.
         return fail(ErrorCode.SmsSendFailed, "We couldn't send an SMS to this number. Please try again later.");
     }
+  }
+  if (err instanceof SmsAeroError && err.kind === "invalid_number") {
+    return fail(ErrorCode.PhoneInvalid, "Enter a valid mobile phone number.", { fields: { phone: "invalid" } });
+  }
+  if (err instanceof SmsAeroError && err.kind === "rate_limited") {
+    return fail(ErrorCode.RateLimited, "Too many codes requested. Please try again later.", {
+      details: { retryAfterSeconds: err.info.retryAfterSeconds ?? 60 },
+    });
   }
   if (err instanceof SmsDeliveryError) {
     return fail(ErrorCode.SmsSendFailed, "We couldn't send an SMS to this number. Please try again later.");
