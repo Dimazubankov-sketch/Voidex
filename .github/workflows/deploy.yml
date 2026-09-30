@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       sms_provider:
-        description: "SMS provider for this release (empty = GitHub variable SMS_PROVIDER, else otp.com)"
+        description: "SMS provider for this release (empty = GitHub variable SMS_PROVIDER, else smsaero)"
         type: choice
         options: ["", otpcom, smsaero]
         default: ""
@@ -99,14 +99,14 @@ jobs:
         #   lines 2–5: OTP_API_KEY, SMS_AERO_API_KEY, SMS_AERO_EMAIL, SMS_AERO_SIGN
         #              → /opt/voidex/state/secrets.env (mode 600); empty = keep
         #   line 6: requested SMS provider (not secret): the run input, else the
-        #           repository variable SMS_PROVIDER, else auto (otp.com)
+        #           repository variable SMS_PROVIDER, else smsaero (production default)
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OTP_API_KEY: ${{ secrets.OTP_API_KEY }}
           SMS_AERO_API_KEY: ${{ secrets.SMS_AERO_API_KEY }}
           SMS_AERO_EMAIL: ${{ secrets.SMS_AERO_EMAIL }}
           SMS_AERO_SIGN: ${{ vars.SMS_AERO_SIGN }}
-          SMS_PROVIDER: ${{ inputs.sms_provider || vars.SMS_PROVIDER }}
+          SMS_PROVIDER: ${{ inputs.sms_provider || vars.SMS_PROVIDER || 'smsaero' }}
         run: |
           echo "Requested SMS provider: ${SMS_PROVIDER:-auto}"
           printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$REGISTRY_TOKEN" "$OTP_API_KEY" "$SMS_AERO_API_KEY" "$SMS_AERO_EMAIL" "$SMS_AERO_SIGN" "$SMS_PROVIDER" |
@@ -115,7 +115,7 @@ jobs:
       - name: Verify https://voidex.su
         env:
           OTP_KEY_SET: ${{ secrets.OTP_API_KEY != '' }}
-          SMS_PROVIDER: ${{ inputs.sms_provider || vars.SMS_PROVIDER }}
+          SMS_PROVIDER: ${{ inputs.sms_provider || vars.SMS_PROVIDER || 'smsaero' }}
         run: |
           set -u
           fail() { echo "::error::$1"; exit 1; }

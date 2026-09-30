@@ -84,7 +84,7 @@ Repository → Settings → Secrets and variables → Actions:
 | `SMS_AERO_EMAIL` | SMS Aero account email (login for the API's Basic auth) |
 
 Repository **variables** (Settings → Secrets and variables → Actions → Variables):
-`SMS_PROVIDER` (`smsaero` to make SMS Aero the production provider; unset = otp.com)
+`SMS_PROVIDER` (optional override: `otpcom` or `smsaero`; unset = `smsaero`, the production default)
 and `SMS_AERO_SIGN` (approved sender name).
 
 The registry token is the workflow's own short-lived `GITHUB_TOKEN`. Secrets go
@@ -206,14 +206,16 @@ SMS Aero moderates messages manually (up to 5–10 minutes) until a contract is
 signed; with the shared `SMS Aero` sender name the text must name the service
 (ours says "VOIDEX").
 
-**Which provider runs.** The deploy script picks it per release:
-`smsaero` only when requested — Actions → Deploy → Run workflow with
-*sms_provider* = `smsaero` (this release only; the next push goes back to the
-default) or the repository variable `SMS_PROVIDER=smsaero` (every release) —
-and the key + email are on the server; otherwise otp.com; otherwise
-`/opt/voidex/.env`. Rollbacks keep the last request; a build without SMS Aero
-support falls back to otp.com. The Deploy run fails (server untouched) if
-`smsaero` is requested without both secrets.
+**Which provider runs.** SMS Aero is the production provider. Each deploy
+requests one: the Deploy run input *sms_provider*, else the repository
+variable `SMS_PROVIDER`, else `smsaero`. The deploy script then uses
+`smsaero` when requested and its key + email are on the server and the build
+supports it; otherwise otp.com (when its key is on the server); otherwise
+`/opt/voidex/.env`. To go back to otp.com: set the variable
+`SMS_PROVIDER=otpcom` (every release) or run Deploy with *sms_provider* =
+`otpcom` (that release only). Rollbacks keep the last request; a build without
+SMS Aero support falls back to otp.com. The Deploy run fails (server
+untouched) if `smsaero` is requested without both secrets.
 
 ## First-time setup (done once)
 
