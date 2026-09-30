@@ -60,6 +60,7 @@ All are read in `apps/server/src/config.ts`. Production values live in `/opt/voi
 | `SMS_AERO_API_KEY` | SMS Aero API key | from GitHub Secret `SMS_AERO_API_KEY` → `state/secrets.env` |
 | `SMS_AERO_EMAIL` | SMS Aero account email | from GitHub Secret `SMS_AERO_EMAIL` (Basic-auth login) |
 | `SMS_AERO_SIGN` | sender name | GitHub **variable** `SMS_AERO_SIGN`; default `SMS Aero` |
+| `SMS_AERO_API_BASE` | not set → `https://gate.smsaero.org/v2` | optional; `https://gate.smsaero.net/v2` as the alternative |
 | `TRUST_PROXY` | `true` (set in compose) | only Caddy can reach the app |
 | `LOG_LEVEL` | `info` | |
 | `VOIDEX_VERSION` | commit (set in image) | shown by `/api/health` |
@@ -180,7 +181,7 @@ GitHub Secret, redeploy — phone verification is then refused (503), never fake
 ## SMS — SMS Aero
 
 `SMS_PROVIDER=smsaero` sends codes through SMS Aero (API v2,
-`POST https://gate.smsaero.ru/v2/sms/send`, JSON `number`/`sign`/`text`, HTTP
+`POST <SMS_AERO_API_BASE>/sms/send`, JSON `number`/`sign`/`text`, HTTP
 Basic auth with the account email and API key). Unlike otp.com, SMS Aero only
 **delivers**: VOIDEX makes the code, stores its HMAC and checks it, with all
 VerificationService limits. One attempt per code (the API has no idempotency
@@ -190,6 +191,16 @@ key, a retry could send a second code). Errors: 401 → wrong email/key,
 user as "couldn't send SMS" (429 as "too many attempts", a bad number as
 "invalid number"); details are in the server log, never the key, the text
 (it holds the code) or the full number.
+
+**Gateway.** `SMS_AERO_API_BASE` defaults to `https://gate.smsaero.org/v2`
+(alternative: `https://gate.smsaero.net/v2`). Both are official API v2
+gateways (the official SMS Aero clients list `gate.smsaero.ru`, `.org` and
+`.net`). `gate.smsaero.ru` is not used: from voidex-01 (`161.35.135.122`) its
+TCP connects but the TLS handshake never completes, while `.org`/`.net`
+answer `/v2/auth` normally. There is no automatic failover between gateways —
+a hidden retry could send the same SMS twice. To switch, set
+`SMS_AERO_API_BASE` in the app environment and redeploy. `Production → status`
+checks DNS/TCP/TLS and `/v2/auth` on all three gateways (no SMS is sent).
 
 SMS Aero moderates messages manually (up to 5–10 minutes) until a contract is
 signed; with the shared `SMS Aero` sender name the text must name the service

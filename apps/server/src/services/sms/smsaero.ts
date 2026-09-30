@@ -13,7 +13,14 @@ import { SmsDeliveryError, type OtpLog, type SmsProvider } from "./types.js";
  * full phone number.
  */
 
-export const SMSAERO_API_BASE = "https://gate.smsaero.ru/v2";
+/**
+ * Default gateway. gate.smsaero.org / gate.smsaero.net are the official API v2
+ * gateways (the official clients list .ru/.org/.net); gate.smsaero.ru does not
+ * complete a TLS handshake from the production server, so it is not the default.
+ * Override with SMS_AERO_API_BASE. There is deliberately no automatic failover:
+ * a hidden retry on another gateway could send the same SMS twice.
+ */
+export const SMSAERO_API_BASE = "https://gate.smsaero.org/v2";
 const TIMEOUT_MS = 10_000;
 
 export type SmsAeroErrorKind =
@@ -43,6 +50,7 @@ export interface SmsAeroOptions {
   apiKey: string;
   /** Sender name approved in the SMS Aero cabinet ("SMS Aero" is the shared test name). */
   sign: string;
+  /** API v2 base, e.g. https://gate.smsaero.org/v2 (SMS_AERO_API_BASE). */
   baseUrl?: string;
   timeoutMs?: number;
   /** Injected in tests; defaults to the global fetch. */

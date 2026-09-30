@@ -85,7 +85,7 @@ export function createSmsProvider(config: Config, log?: OtpLog): SmsProvider {
     case "otpcom":
       return new OtpComSmsProvider({ apiKey: config.sms.otpcom.apiKey as string, log });
     case "smsaero":
-      return new SmsAeroProvider({ ...(config.sms.smsaero as { email: string; apiKey: string; sign: string }), log });
+      return new SmsAeroProvider({ ...(config.sms.smsaero as { email: string; apiKey: string; sign: string; baseUrl?: string }), log });
     case "twilio":
       return new TwilioSmsProvider(config.sms.twilio as { accountSid: string; authToken: string; from: string });
     case "smsru":

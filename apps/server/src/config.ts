@@ -36,6 +36,8 @@ const EnvSchema = z.object({
   SMS_AERO_EMAIL: z.string().optional(),
   SMS_AERO_API_KEY: z.string().optional(),
   SMS_AERO_SIGN: z.string().optional(),
+  /** SMS Aero API v2 base URL (default https://gate.smsaero.org/v2; alternative https://gate.smsaero.net/v2). */
+  SMS_AERO_API_BASE: z.string().optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
@@ -95,6 +97,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       !e.SMS_AERO_EMAIL?.trim() && "SMS_AERO_EMAIL",
     ].filter(Boolean);
     if (missing.length) throw new Error(`SMS_PROVIDER=smsaero requires ${missing.join(" and ")}.`);
+    const base = e.SMS_AERO_API_BASE?.trim();
+    if (base && !/^https:\/\/[a-z0-9.-]+(:\d+)?\/v2\/?$/i.test(base)) {
+      throw new Error("SMS_AERO_API_BASE must be an https URL ending in /v2, e.g. https://gate.smsaero.org/v2.");
+    }
     if (!/^[^\s@:]+@[^\s@:]+\.[^\s@:]+$/.test(e.SMS_AERO_EMAIL!.trim())) {
       throw new Error("SMS_AERO_EMAIL must be the SMS Aero account email (the Basic-auth login).");
     }
@@ -125,7 +131,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       twilio: { accountSid: e.TWILIO_ACCOUNT_SID, authToken: e.TWILIO_AUTH_TOKEN, from: e.TWILIO_FROM },
       smsru: { apiId: e.SMSRU_API_ID },
       otpcom: { apiKey: e.OTP_API_KEY?.trim() },
-      smsaero: { email: e.SMS_AERO_EMAIL?.trim(), apiKey: e.SMS_AERO_API_KEY?.trim(), sign: e.SMS_AERO_SIGN?.trim() || "SMS Aero" },
+      smsaero: { email: e.SMS_AERO_EMAIL?.trim(), apiKey: e.SMS_AERO_API_KEY?.trim(), sign: e.SMS_AERO_SIGN?.trim() || "SMS Aero", baseUrl: e.SMS_AERO_API_BASE?.trim() || undefined },
     },
     trustProxy: e.TRUST_PROXY,
     cookieSecure: e.COOKIE_SECURE ?? production,

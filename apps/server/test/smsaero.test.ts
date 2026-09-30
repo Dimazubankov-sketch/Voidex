@@ -85,13 +85,34 @@ describe("SmsAeroProvider (mock HTTP)", () => {
     await provider(fake, log).send(PHONE, TEXT);
     expect(fake.calls).toHaveLength(1);
     const c = fake.calls[0]!;
-    expect(c.url).toBe("https://gate.smsaero.ru/v2/sms/send");
+    expect(c.url).toBe("https://gate.smsaero.org/v2/sms/send");
     expect(c.method).toBe("POST");
     expect(c.headers["content-type"]).toBe("application/json");
     expect(c.headers.authorization).toBe(`Basic ${Buffer.from(`${EMAIL}:${DUMMY_KEY}`).toString("base64")}`);
     expect(c.body).toEqual({ number: "79161234567", sign: "SMS Aero", text: TEXT });
     expect(log.text).toContain("SMS Aero: message accepted");
     expect(log.text).toContain('"messageId":1001');
+  });
+
+  it("default gateway is gate.smsaero.org, never gate.smsaero.ru", async () => {
+    const fake = new FakeSmsAero();
+    await provider(fake).send(PHONE, TEXT);
+    expect(fake.calls[0]!.url.startsWith("https://gate.smsaero.org/v2/")).toBe(true);
+    expect(fake.calls[0]!.url).not.toContain("smsaero.ru");
+  });
+
+  it("a custom base URL (SMS_AERO_API_BASE) is used for the request; single attempt, no gateway failover", async () => {
+    const fake = new FakeSmsAero();
+    const log = new MemoryLog();
+    const p = new SmsAeroProvider({ email: EMAIL, apiKey: DUMMY_KEY, sign: "SMS Aero", baseUrl: "https://gate.smsaero.net/v2/", fetch: fake.fetch, log });
+    await p.send(PHONE, TEXT);
+    expect(fake.calls.map((c) => c.url)).toEqual(["https://gate.smsaero.net/v2/sms/send"]);
+    fake.faults.push("timeout");
+    expect((await sendErr(p)).kind).toBe("timeout");
+    expect(fake.calls).toHaveLength(2); // one call per send, never retried on .org/.ru
+    expect(fake.calls[1]!.url).toBe("https://gate.smsaero.net/v2/sms/send");
+    expect(log.text).not.toContain(DUMMY_KEY);
+    expect(log.text).not.toContain(EMAIL);
   });
 
   it("+7 numbers go out as 11 digits starting with 7 (no plus, no 8)", async () => {
@@ -226,11 +247,25 @@ describe("config: SMS_PROVIDER=smsaero", () => {
   it("production with key + email builds a real SmsAeroProvider (not dev, not disabled); sign defaults to SMS Aero", () => {
     const config = loadConfig({ ...prod, SMS_AERO_EMAIL: EMAIL, SMS_AERO_API_KEY: DUMMY_KEY } as NodeJS.ProcessEnv);
     expect(config.sms.smsaero.sign).toBe("SMS Aero");
+    expect(config.sms.smsaero.baseUrl).toBeUndefined(); // provider default: https://gate.smsaero.org/v2
     const sms = createSmsProvider(config);
     expect(sms).toBeInstanceOf(SmsAeroProvider);
     expect(sms.isDevelopment).toBe(false);
     expect(sms.enabled).toBe(true);
     expect(sms.hosted).toBeUndefined();
+  });
+
+  it("SMS_AERO_API_BASE reaches the provider; invalid values are refused", async () => {
+    const env = { ...prod, SMS_AERO_EMAIL: EMAIL, SMS_AERO_API_KEY: DUMMY_KEY };
+    const config = loadConfig({ ...env, SMS_AERO_API_BASE: "https://gate.smsaero.net/v2" } as NodeJS.ProcessEnv);
+    expect(config.sms.smsaero.baseUrl).toBe("https://gate.smsaero.net/v2");
+    const fake = new FakeSmsAero();
+    const sms = new SmsAeroProvider({ ...(config.sms.smsaero as { email: string; apiKey: string; sign: string; baseUrl?: string }), fetch: fake.fetch });
+    await sms.send(PHONE, TEXT);
+    expect(fake.calls[0]!.url).toBe("https://gate.smsaero.net/v2/sms/send");
+    for (const bad of ["http://gate.smsaero.org/v2", "https://gate.smsaero.org", "gate.smsaero.org/v2"]) {
+      expect(() => loadConfig({ ...env, SMS_AERO_API_BASE: bad } as NodeJS.ProcessEnv), bad).toThrow(/SMS_AERO_API_BASE/);
+    }
   });
 
   it("existing SMS_PROVIDER values keep working", () => {
