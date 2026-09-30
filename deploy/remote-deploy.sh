@@ -383,14 +383,14 @@ cmd_rollback() {
 sms_aero_diag() {
   local fam w
   log "SMS Aero connectivity (host, no credentials)"
-  getent ahosts gate.smsaero.ru | awk '{print "  DNS: " $1 " " $2}' | sort -u || echo "  DNS: no answer"
+  getent ahosts gate.smsaero.ru | awk '$2 == "STREAM" {print "  DNS: " $1}' | sort -u || echo "  DNS: no answer"
   w='ip=%{remote_ip} dns=%{time_namelookup}s connect=%{time_connect}s tls=%{time_appconnect}s first_byte=%{time_starttransfer}s total=%{time_total}s http=%{http_code}'
   for fam in -4 -6; do
     printf '  curl %s GET https://gate.smsaero.ru/v2/auth → ' "$fam"
-    curl "$fam" -sS -o /dev/null --connect-timeout 10 --max-time 15 -w "$w" https://gate.smsaero.ru/v2/auth 2>&1 | tr '\n' ' '
+    curl "$fam" -sS -o /dev/null --connect-timeout 10 --max-time 15 -w "$w" https://gate.smsaero.ru/v2/auth 2>&1 | tr '\n' ' ' || true
     echo
   done
-  printf '  host outgoing IPv4: %s\n' "$(curl -4 -sS --max-time 8 https://api.ipify.org 2>&1)"
+  printf '  host outgoing IPv4: %s\n' "$(curl -4 -sS --max-time 8 https://api.ipify.org 2>&1 || true)"
   log "SMS Aero connectivity (app container, same path as SmsAeroProvider)"
   compose exec -T app node --input-type=module - <"$BASE/repo/deploy/netcheck.mjs" 2>&1 || echo "  netcheck failed to run"
 }
