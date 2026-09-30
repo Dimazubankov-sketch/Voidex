@@ -16,7 +16,12 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:5173",
     locale: "ru-RU",
     trace: "retain-on-failure",
-    launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : undefined,
+    launchOptions: {
+      ...(process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {}),
+      // Without a UTF-8 locale (bare CI containers) Chromium saves non-ASCII
+      // download names as "download"; real browsers keep them.
+      env: { ...process.env, LANG: process.env.LANG || "C.UTF-8" },
+    },
   },
   projects: [
     { name: "mobile", use: { ...devices["Pixel 7"], browserName: "chromium" } },

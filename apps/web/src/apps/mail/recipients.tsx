@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RiCloseLine } from "@remixicon/react";
 import { parseAddress } from "@voidex/shared";
 import { cx } from "@/lib/cx";
@@ -58,6 +58,7 @@ export function RecipientField({
   invalid,
   autoFocus,
   testId,
+  trailing,
 }: {
   label: string;
   value: string[];
@@ -65,6 +66,8 @@ export function RecipientField({
   invalid?: string[];
   autoFocus?: boolean;
   testId?: string;
+  /** Control at the end of the row (e.g. "Cc / Bcc"): laid out beside the input, never on top of it. */
+  trailing?: ReactNode;
 }) {
   const t = useT();
   const domain = useMailDomain();
@@ -126,7 +129,7 @@ export function RecipientField({
             }
           }}
           placeholder={value.length ? "" : t("mail.recipientHint", { domain })}
-          className="h-8 min-w-[120px] flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
+          className="h-8 min-w-[120px] flex-1 truncate bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -134,6 +137,11 @@ export function RecipientField({
           data-testid={testId}
         />
       </div>
+      {trailing && (
+        <div className="flex h-8 shrink-0 items-center" onClick={(e) => e.stopPropagation()}>
+          {trailing}
+        </div>
+      )}
       {focused && suggestions.length > 0 && (
         <div className="absolute left-16 top-full z-30 mt-1 w-[min(360px,calc(100%-64px))] overflow-hidden rounded-2xl border bg-surface p-1 shadow-float">
           {suggestions.map((s) => (

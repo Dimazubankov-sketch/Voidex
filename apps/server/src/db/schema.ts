@@ -358,8 +358,8 @@ export const mailEntries = pgTable(
 );
 
 /**
- * Attachments — data model reserved for the next step. Binary content will live
- * in an object store behind the `BlobStorage` interface; only metadata here.
+ * Mail attachments: metadata only. The bytes live behind the `BlobStorage`
+ * interface (services/blobs.ts), referenced by `storageKey`.
  */
 export const mailAttachments = pgTable(
   "mail_attachments",
@@ -375,4 +375,30 @@ export const mailAttachments = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("mail_attachments_message_idx").on(t.messageId)],
+);
+
+/* ==========================================================================
+   Files
+   ========================================================================== */
+
+/**
+ * Binary content behind the BlobStorage interface (mail attachments, desktop
+ * wallpapers). Owned by a user: deleting the account removes their files.
+ * Callers delete a blob when the last thing referencing it goes away.
+ */
+export const blobs = pgTable(
+  "blobs",
+  {
+    key: text("key").primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** What the blob is for: "mail" attachment content or the "wallpaper". */
+    purpose: text("purpose", { enum: ["mail", "wallpaper"] }).notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("blobs_owner_idx").on(t.ownerUserId, t.purpose)],
 );

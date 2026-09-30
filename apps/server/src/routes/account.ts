@@ -18,6 +18,8 @@ import { fail, notFound } from "../lib/errors.js";
 
 const idParam = z.object({ id: z.string().uuid() });
 const AVATAR_MAX = 512 * 1024;
+/** Wallpapers arrive downscaled by the client; this is a hard ceiling. */
+const WALLPAPER_MAX = 8 * 1024 * 1024;
 
 function sniffImage(buf: Buffer): string | null {
   if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
@@ -38,6 +40,9 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
     done(null, body),
   );
 
+  // Wallpaper upload: raw image bytes (type sniffed from the content).
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: WALLPAPER_MAX }, (_req, body, done) => done(null, body));
+
   app.addHook("preHandler", app.authenticate);
 
   // ---------------------------------------------------------------- account
@@ -55,6 +60,29 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete("/account/avatar", async (req) => accounts.deleteAvatar(req.auth!.userId));
+
+  app.put(
+    "/account/wallpaper",
+    { bodyLimit: WALLPAPER_MAX, config: { rateLimit: { max: 20 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } },
+    async (req) => {
+      const body = req.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
+      const mime = sniffImage(body);
+      if (!mime) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
+      return accounts.setWallpaper(req.auth!.userId, mime, body);
+    },
+  );
+
+  /** Only the owner can read their wallpaper. */
+  app.get("/account/wallpaper", async (req, reply) => {
+    const w = await accounts.getWallpaper(req.auth!.userId);
+    if (!w) throw notFound("Wallpaper");
+    reply.header("Cache-Control", "private, max-age=86400");
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.type(w.mimeType).send(w.data);
+  });
+
+  app.delete("/account/wallpaper", async (req) => accounts.deleteWallpaper(req.auth!.userId));
 
   /** Avatars are visible to any signed-in VOIDEX user (e.g. mail senders). */
   app.get("/users/:id/avatar", async (req, reply) => {

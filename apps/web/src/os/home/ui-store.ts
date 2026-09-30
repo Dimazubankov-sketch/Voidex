@@ -1,0 +1,81 @@
+import { create } from "zustand";
+import type { AppId, LayoutItem } from "@voidex/shared";
+
+/**
+ * Device-local UI state of the home screen (not synced: what is open *here*).
+ * The arrangement itself is in the synced layout (layout.ts).
+ */
+export type ContextTarget =
+  | { kind: "app"; id: AppId; inFolder?: string }
+  | { kind: "folder"; id: string }
+  | { kind: "desktop" }
+  | { kind: "launcher-app"; id: AppId }
+  | { kind: "space"; id: string };
+
+export type RenameTarget = { kind: "app"; id: AppId } | { kind: "space"; id: string };
+
+export interface ContextMenuState {
+  x: number;
+  y: number;
+  target: ContextTarget;
+}
+
+export interface DragState {
+  item: LayoutItem;
+  /** Folder the dragged app is being moved inside of (open folder). */
+  fromFolder?: string;
+  /** Size of the icon tile being dragged, for the floating copy. */
+  size: number;
+  /** Item the dragged app would merge with on release (folder creation). */
+  mergeWith?: string;
+}
+
+interface HomeUi {
+  editing: boolean;
+  mobilePage: number;
+  openFolder: { id: string; origin: DOMRect | null } | null;
+  renamingFolder: string | null;
+  renaming: RenameTarget | null;
+  menu: ContextMenuState | null;
+  search: { open: boolean; query: string };
+  appearanceOpen: boolean;
+  launcherOpen: boolean;
+  drag: DragState | null;
+  setEditing: (v: boolean) => void;
+  setMobilePage: (p: number) => void;
+  setOpenFolder: (f: HomeUi["openFolder"]) => void;
+  setRenamingFolder: (id: string | null) => void;
+  setRenaming: (r: RenameTarget | null) => void;
+  openMenu: (m: ContextMenuState) => void;
+  closeMenu: () => void;
+  setSearch: (s: Partial<HomeUi["search"]>) => void;
+  setAppearanceOpen: (v: boolean) => void;
+  setLauncherOpen: (v: boolean) => void;
+  setDrag: (d: DragState | null) => void;
+  patchDrag: (d: Partial<DragState>) => void;
+}
+
+export const useHomeUi = create<HomeUi>((set) => ({
+  editing: false,
+  mobilePage: 0,
+  openFolder: null,
+  renamingFolder: null,
+  renaming: null,
+  menu: null,
+  search: { open: false, query: "" },
+  appearanceOpen: false,
+  launcherOpen: false,
+  drag: null,
+  setEditing: (editing) => set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null }),
+  setMobilePage: (mobilePage) => set({ mobilePage }),
+  setOpenFolder: (openFolder) => set(openFolder ? { openFolder, menu: null } : { openFolder, menu: null, renamingFolder: null }),
+  setRenamingFolder: (renamingFolder) => set({ renamingFolder }),
+  setRenaming: (renaming) => set({ renaming, menu: null }),
+  openMenu: (menu) => set({ menu }),
+  closeMenu: () => set({ menu: null }),
+  setSearch: (s) => set((st) => ({ search: { ...st.search, ...s } })),
+  setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false }),
+  setLauncherOpen: (launcherOpen) => set({ launcherOpen, menu: null }),
+  setDrag: (drag) => set({ drag }),
+  patchDrag: (d) => set((st) => (st.drag ? { drag: { ...st.drag, ...d } } : {})),
+}));

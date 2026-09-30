@@ -1,13 +1,19 @@
 import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import {
   ErrorCode,
+  MAIL_ATTACHMENT_MAX_BYTES,
+  MAIL_ATTACHMENTS_MAX,
+  MAIL_ATTACHMENTS_TOTAL_MAX_BYTES,
+  attachmentMimeType,
   makeSnippet,
+  sanitizeFilename,
   parseAddress,
   subjectWithPrefix,
   type DraftCreateInput,
   type DraftDto,
   type DraftInput,
   type MailAddressDto,
+  type MailAttachmentDto,
   type MailFolder,
   type MailMessageDto,
   type MailSummaryDto,
@@ -18,7 +24,7 @@ import {
   type ThreadSummaryDto,
 } from "@voidex/shared";
 import type { Tx } from "../db/client.js";
-import { mailAccounts, mailEntries, mailMessages, mailRecipients, mailThreads, users } from "../db/schema.js";
+import { mailAccounts, mailAttachments, mailEntries, mailMessages, mailRecipients, mailThreads, users } from "../db/schema.js";
 import { fail, notFound } from "../lib/errors.js";
 import type { Ctx } from "./context.js";
 
@@ -26,6 +32,30 @@ type Account = typeof mailAccounts.$inferSelect & { displayName: string };
 type Message = typeof mailMessages.$inferSelect;
 type Entry = typeof mailEntries.$inferSelect;
 type Recipient = typeof mailRecipients.$inferSelect;
+type Attachment = typeof mailAttachments.$inferSelect;
+
+const toAttachmentDto = (a: Attachment): MailAttachmentDto => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, size: a.sizeBytes });
+
+/** Magic bytes of the raster images we preview inline; other types are served as downloads only. */
+function looksLike(mime: string, b: Buffer): boolean {
+  switch (mime) {
+    case "image/jpeg":
+      return b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    case "image/png":
+      return b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case "image/gif":
+      return b.length > 6 && (b.subarray(0, 6).toString("latin1") === "GIF87a" || b.subarray(0, 6).toString("latin1") === "GIF89a");
+    case "image/webp":
+      return b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP";
+    case "image/heic":
+    case "image/heif":
+      return b.length > 12 && b.subarray(4, 8).toString("latin1") === "ftyp";
+    case "application/pdf":
+      return b.length > 5 && b.subarray(0, 5).toString("latin1") === "%PDF-";
+    default:
+      return true;
+  }
+}
 
 export type ThreadAction = "archive" | "trash" | "restore" | "delete_forever" | "read" | "unread" | "star" | "unstar" | "inbox";
 
@@ -232,6 +262,7 @@ export class MailService {
       .orderBy(asc(mailEntries.sortAt));
 
     const recipients = await this.recipientsOf(visible.map((v) => v.m.id));
+    const attachments = await this.attachmentsOf(visible.map((v) => v.m.id));
 
     const items: ThreadSummaryDto[] = page.map((g) => {
       const rows = visible.filter((v) => v.e.threadId === g.threadId);
@@ -261,6 +292,7 @@ export class MailService {
         starred: !!g.starred,
         lastMessageAt: new Date(g.lastAt).toISOString(),
         hasDraft: rows.some((r) => r.m.status === "draft"),
+        hasAttachments: sentRows.some((r) => (attachments.get(r.m.id)?.length ?? 0) > 0),
       };
     });
 
@@ -288,6 +320,7 @@ export class MailService {
       .limit(query.limit + 1);
     const page = rows.slice(0, query.limit);
     const recipients = await this.recipientsOf(page.map((r) => r.m.id));
+    const attachments = await this.attachmentsOf(page.map((r) => r.m.id));
     const items = page.map(({ e, m }) => ({
       id: m.threadId ?? m.id,
       draftId: m.id,
@@ -299,6 +332,7 @@ export class MailService {
       starred: e.isStarred,
       lastMessageAt: e.sortAt.toISOString(),
       hasDraft: true,
+      hasAttachments: (attachments.get(m.id)?.length ?? 0) > 0,
     }));
     const last = page.at(-1);
     return { items, nextCursor: rows.length > query.limit && last ? encodeCursor(last.e.sortAt, last.m.id) : null };
@@ -320,9 +354,25 @@ export class MailService {
     return map;
   }
 
+  private async attachmentsOf(messageIds: string[], tx: Tx = this.ctx.db) {
+    const map = new Map<string, MailAttachmentDto[]>();
+    if (!messageIds.length) return map;
+    const rows = await tx
+      .select()
+      .from(mailAttachments)
+      .where(inArray(mailAttachments.messageId, [...new Set(messageIds)]))
+      .orderBy(asc(mailAttachments.createdAt), asc(mailAttachments.id));
+    for (const a of rows) {
+      const list = map.get(a.messageId) ?? [];
+      list.push(toAttachmentDto(a));
+      map.set(a.messageId, list);
+    }
+    return map;
+  }
+
   // ---------------------------------------------------------------- reading
 
-  private toMessageDto(acc: Account, e: Entry, m: Message, recipients: Recipient[]): MailMessageDto {
+  private toMessageDto(acc: Account, e: Entry, m: Message, recipients: Recipient[], attachments: MailAttachmentDto[]): MailMessageDto {
     const own = m.senderAccountId === acc.id;
     // Bcc is visible only to the sender; a bcc'd recipient sees only To/Cc.
     const visibleRecipients = own ? recipients : recipients.filter((r) => r.kind !== "bcc");
@@ -343,6 +393,7 @@ export class MailService {
       inReplyToId: m.inReplyToId,
       forwardOfId: m.forwardOfId,
       isOwn: own,
+      attachments,
     };
   }
 
@@ -364,10 +415,11 @@ export class MailService {
       .orderBy(asc(mailEntries.sortAt));
     if (!rows.length) throw notFound("Conversation");
     const recipients = await this.recipientsOf(rows.map((r) => r.m.id));
+    const attachments = await this.attachmentsOf(rows.map((r) => r.m.id));
     return {
       id: threadId,
       subject: rows[0]!.t.subject,
-      messages: rows.map((r) => this.toMessageDto(acc, r.e, r.m, recipients.get(r.m.id) ?? [])),
+      messages: rows.map((r) => this.toMessageDto(acc, r.e, r.m, recipients.get(r.m.id) ?? [], attachments.get(r.m.id) ?? [])),
     };
   }
 
@@ -483,6 +535,7 @@ export class MailService {
       replyToMessageId: m.inReplyToId,
       forwardOfMessageId: m.forwardOfId,
       updatedAt: m.updatedAt.toISOString(),
+      attachments: (await this.attachmentsOf([m.id], tx)).get(m.id) ?? [],
     };
   }
 
@@ -529,6 +582,7 @@ export class MailService {
         })
         .returning();
       await this.writeRecipients(tx, m!.id, input);
+      if (forwardOfId) await this.copyAttachments(tx, forwardOfId, m!.id, userId);
       await tx.insert(mailEntries).values({
         accountId: acc.id,
         messageId: m!.id,
@@ -570,10 +624,89 @@ export class MailService {
     const acc = await this.accountFor(userId);
     await this.ctx.db.transaction(async (tx) => {
       await this.ownDraft(tx, acc, draftId, true);
+      const files = await tx.select({ key: mailAttachments.storageKey }).from(mailAttachments).where(eq(mailAttachments.messageId, draftId));
       await tx.delete(mailMessages).where(eq(mailMessages.id, draftId));
+      await this.ctx.blobs.delete(files.map((f) => f.key), tx);
     });
     this.ctx.events.toUser(userId, { type: "mail.changed" });
     return { ok: true };
+  }
+
+  // ---------------------------------------------------------------- attachments
+
+  /** Forwarding carries the original files along: each gets its own copy owned by the forwarder. */
+  private async copyAttachments(tx: Tx, fromMessageId: string, toMessageId: string, ownerUserId: string) {
+    const files = await tx.select().from(mailAttachments).where(eq(mailAttachments.messageId, fromMessageId)).orderBy(asc(mailAttachments.createdAt));
+    for (const f of files) {
+      const key = await this.ctx.blobs.copy(f.storageKey, ownerUserId, tx);
+      if (key) await tx.insert(mailAttachments).values({ messageId: toMessageId, filename: f.filename, mimeType: f.mimeType, sizeBytes: f.sizeBytes, storageKey: key });
+    }
+  }
+
+  /**
+   * Adds a file to one of the caller's drafts. The type comes from the file
+   * extension (allow-list) and is verified against the content for images and
+   * PDFs; size, count and total size are enforced here, not in the client.
+   */
+  async addAttachment(userId: string, draftId: string, input: { filename: string; data: Buffer }): Promise<MailAttachmentDto> {
+    const acc = await this.accountFor(userId);
+    const filename = sanitizeFilename(input.filename);
+    const mimeType = attachmentMimeType(filename);
+    if (!mimeType) {
+      throw fail(ErrorCode.AttachmentTypeNotAllowed, "This type of file can't be attached.", { status: 415, details: { filename } });
+    }
+    if (!input.data.length) throw fail(ErrorCode.ValidationFailed, "The file is empty.");
+    if (input.data.length > MAIL_ATTACHMENT_MAX_BYTES) {
+      throw fail(ErrorCode.AttachmentTooLarge, "The file is too large.", { status: 413, details: { maxBytes: MAIL_ATTACHMENT_MAX_BYTES } });
+    }
+    if (!looksLike(mimeType, input.data)) {
+      throw fail(ErrorCode.AttachmentTypeNotAllowed, "The file content does not match its type.", { status: 415, details: { filename } });
+    }
+    const dto = await this.ctx.db.transaction(async (tx) => {
+      await this.ownDraft(tx, acc, draftId, true);
+      const existing = await tx.select({ size: mailAttachments.sizeBytes }).from(mailAttachments).where(eq(mailAttachments.messageId, draftId));
+      if (existing.length >= MAIL_ATTACHMENTS_MAX) {
+        throw fail(ErrorCode.AttachmentLimit, "Too many attachments.", { status: 422, details: { max: MAIL_ATTACHMENTS_MAX } });
+      }
+      if (existing.reduce((n, a) => n + a.size, 0) + input.data.length > MAIL_ATTACHMENTS_TOTAL_MAX_BYTES) {
+        throw fail(ErrorCode.AttachmentLimit, "Attachments are too large in total.", { status: 422, details: { maxBytes: MAIL_ATTACHMENTS_TOTAL_MAX_BYTES } });
+      }
+      const key = await this.ctx.blobs.put({ ownerUserId: userId, purpose: "mail", mimeType, data: input.data }, tx);
+      const [row] = await tx.insert(mailAttachments).values({ messageId: draftId, filename, mimeType, sizeBytes: input.data.length, storageKey: key }).returning();
+      await tx.update(mailMessages).set({ updatedAt: this.ctx.now() }).where(eq(mailMessages.id, draftId));
+      return toAttachmentDto(row!);
+    });
+    this.ctx.events.toUser(userId, { type: "mail.changed" });
+    return dto;
+  }
+
+  async removeAttachment(userId: string, draftId: string, attachmentId: string) {
+    const acc = await this.accountFor(userId);
+    await this.ctx.db.transaction(async (tx) => {
+      await this.ownDraft(tx, acc, draftId, true);
+      const [row] = await tx
+        .delete(mailAttachments)
+        .where(and(eq(mailAttachments.id, attachmentId), eq(mailAttachments.messageId, draftId)))
+        .returning();
+      if (!row) throw notFound("Attachment");
+      await this.ctx.blobs.delete([row.storageKey], tx);
+    });
+    this.ctx.events.toUser(userId, { type: "mail.changed" });
+    return { ok: true };
+  }
+
+  /** A file of a message the caller can see (own draft, sent or received). */
+  async attachment(userId: string, attachmentId: string) {
+    const acc = await this.accountFor(userId);
+    const [row] = await this.ctx.db
+      .select({ a: mailAttachments })
+      .from(mailAttachments)
+      .innerJoin(mailEntries, and(eq(mailEntries.messageId, mailAttachments.messageId), eq(mailEntries.accountId, acc.id), isNull(mailEntries.deletedAt)))
+      .where(eq(mailAttachments.id, attachmentId));
+    if (!row) throw notFound("Attachment");
+    const blob = await this.ctx.blobs.get(row.a.storageKey);
+    if (!blob) throw notFound("Attachment");
+    return { filename: row.a.filename, mimeType: row.a.mimeType, data: blob.data };
   }
 
   /** Delivers a draft to every internal recipient atomically. */
@@ -717,9 +850,10 @@ export class MailService {
       .where(and(eq(mailEntries.accountId, acc.id), isNull(mailEntries.deletedAt)))
       .orderBy(asc(mailEntries.sortAt));
     const recips = await this.recipientsOf(rows.map((r) => r.m.id));
+    const files = await this.attachmentsOf(rows.map((r) => r.m.id));
     return {
       address: acc.address,
-      messages: rows.map((r) => this.toMessageDto(acc, r.e, r.m, recips.get(r.m.id) ?? [])),
+      messages: rows.map((r) => this.toMessageDto(acc, r.e, r.m, recips.get(r.m.id) ?? [], files.get(r.m.id) ?? [])),
     };
   }
 }

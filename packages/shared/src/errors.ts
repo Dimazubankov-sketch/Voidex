@@ -62,6 +62,9 @@ export const ErrorCode = {
   NoRecipients: "no_recipients",
   MessageTooLarge: "message_too_large",
   DraftAlreadySent: "draft_already_sent",
+  AttachmentTooLarge: "attachment_too_large",
+  AttachmentTypeNotAllowed: "attachment_type_not_allowed",
+  AttachmentLimit: "attachment_limit",
 
   // apps
   AppNotInRegistry: "app_not_in_registry",

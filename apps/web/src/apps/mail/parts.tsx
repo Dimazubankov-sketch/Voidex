@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  RiAttachment2,
   RiArchiveLine,
   RiArrowGoBackLine,
   RiDeleteBin6Line,
@@ -28,6 +29,7 @@ import { Button, EmptyState, IconButton, Notice, Skeleton } from "@/ui/controls"
 import { ConfirmDialog, toast } from "@/ui/overlays";
 import { useMailSummary } from "@/lib/mail-summary";
 import { draftsApi, fetchComposeDefaults, useThread, useThreadAction, useThreadList, type ThreadAction } from "./data";
+import { MessageAttachments } from "./attachments";
 import { useMail } from "./store";
 
 export const FOLDERS: { view: MailView; label: MessageKey; icon: typeof RiInboxLine }[] = [
@@ -201,7 +203,7 @@ function ThreadRow({ thread }: { thread: ThreadSummaryDto }) {
   const open = async () => {
     if (thread.draftId) {
       const d = await draftsApi.get(thread.draftId);
-      compose({ draftId: d.id, to: d.to, cc: d.cc, bcc: d.bcc, subject: d.subject, body: d.body, replyToMessageId: d.replyToMessageId ?? undefined, forwardOfMessageId: d.forwardOfMessageId ?? undefined });
+      compose({ draftId: d.id, to: d.to, cc: d.cc, bcc: d.bcc, subject: d.subject, body: d.body, replyToMessageId: d.replyToMessageId ?? undefined, forwardOfMessageId: d.forwardOfMessageId ?? undefined, attachments: d.attachments });
       return;
     }
     openThread(thread.id);
@@ -250,6 +252,7 @@ function ThreadRow({ thread }: { thread: ThreadSummaryDto }) {
         </div>
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-[13px] text-text-secondary">{thread.snippet}</span>
+          {thread.hasAttachments && <RiAttachment2 className="size-4 shrink-0 text-text-tertiary" aria-label={t("mail.hasAttachments")} data-testid="thread-has-attachments" />}
           {thread.hasDraft && !thread.draftId && <span className="shrink-0 text-[11px] font-semibold uppercase text-danger">{t("mail.draft")}</span>}
           <button
             type="button"
@@ -406,7 +409,7 @@ function MessageCard({ message: m, defaultOpen }: { message: MailMessageDto; def
           size="sm"
           onClick={async () => {
             const d = await draftsApi.get(m.id);
-            compose({ draftId: d.id, to: d.to, cc: d.cc, bcc: d.bcc, subject: d.subject, body: d.body, replyToMessageId: d.replyToMessageId ?? undefined });
+            compose({ draftId: d.id, to: d.to, cc: d.cc, bcc: d.bcc, subject: d.subject, body: d.body, replyToMessageId: d.replyToMessageId ?? undefined, attachments: d.attachments });
           }}
         >
           {t("mail.continueDraft")}
@@ -457,6 +460,7 @@ function MessageCard({ message: m, defaultOpen }: { message: MailMessageDto; def
               {showQuote && <div className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary/30 pl-3 text-[14px] text-text-secondary" data-selectable>{quoted}</div>}
             </>
           )}
+          <MessageAttachments items={m.attachments} />
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" icon={<RiReplyLine className="size-4" />} onClick={() => reply("reply")} data-testid="reply">
               {t("mail.reply")}

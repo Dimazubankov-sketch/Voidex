@@ -1,5 +1,6 @@
 import type { Config } from "../config.js";
 import type { Db } from "../db/client.js";
+import type { BlobStorage } from "./blobs.js";
 import type { EventHub } from "./events.js";
 import type { SmsProvider } from "./sms/index.js";
 
@@ -9,6 +10,7 @@ export interface Ctx {
   config: Config;
   sms: SmsProvider;
   events: EventHub;
+  blobs: BlobStorage;
   now: () => Date;
 }
 

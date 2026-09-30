@@ -5,6 +5,9 @@ import {
   ErrorCode,
   LEGAL_DOCUMENTS,
   PreferencesPatchSchema,
+  isAppId,
+  normalizeLayout,
+  type AppId,
   type MeDto,
   type Preferences,
   type UsernameCheckDto,
@@ -442,6 +445,28 @@ export class AccountService {
     return (await this.ctx.db.query.userAvatars.findFirst({ where: eq(userAvatars.userId, userId) })) ?? null;
   }
 
+  // ---------------------------------------------------------------- wallpaper
+
+  /** One wallpaper image per account: a new upload replaces the previous one. */
+  async setWallpaper(userId: string, mimeType: string, data: Buffer) {
+    const version = await this.ctx.db.transaction(async (tx) => {
+      await this.ctx.blobs.delete(await this.ctx.blobs.keysOf(userId, "wallpaper", tx), tx);
+      const key = await this.ctx.blobs.put({ ownerUserId: userId, purpose: "wallpaper", mimeType, data }, tx);
+      return key.slice(-12);
+    });
+    return { version };
+  }
+
+  async getWallpaper(userId: string) {
+    const [key] = await this.ctx.blobs.keysOf(userId, "wallpaper");
+    return key ? this.ctx.blobs.get(key) : null;
+  }
+
+  async deleteWallpaper(userId: string) {
+    await this.ctx.blobs.delete(await this.ctx.blobs.keysOf(userId, "wallpaper"));
+    return { ok: true };
+  }
+
   // ---------------------------------------------------------------- preferences
 
   async updatePreferences(userId: string, patch: z.infer<typeof PreferencesPatchSchema>) {
@@ -451,6 +476,12 @@ export class AccountService {
       notifications: { ...base.notifications, ...patch.notifications },
       workspace: { ...base.workspace, ...patch.workspace },
     };
+    if (patch.workspace?.layout) {
+      // The server keeps the desktop consistent with what is really installed.
+      const installed = await this.ctx.db.query.installedApps.findMany({ where: eq(installedApps.userId, userId) });
+      const ids = installed.map((r) => r.appId).filter((id): id is AppId => isAppId(id) && APP_REGISTRY[id].status === "available");
+      next.workspace.layout = normalizeLayout(patch.workspace.layout, ids);
+    }
     await this.ctx.db
       .insert(userPreferences)
       .values({ userId, data: next })

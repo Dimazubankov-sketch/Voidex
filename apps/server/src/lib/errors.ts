@@ -32,6 +32,9 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.RecipientExternal]: 422,
   [ErrorCode.NoRecipients]: 422,
   [ErrorCode.DraftAlreadySent]: 409,
+  [ErrorCode.AttachmentTooLarge]: 413,
+  [ErrorCode.AttachmentTypeNotAllowed]: 415,
+  [ErrorCode.AttachmentLimit]: 422,
   [ErrorCode.AppNotInRegistry]: 404,
   [ErrorCode.AppNotRemovable]: 403,
 };

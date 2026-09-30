@@ -19,7 +19,9 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
   const z = wm.order.indexOf(win.id) + 10;
   const focused = wm.focusedId === win.id;
   const fg = foregroundId(wm) === win.id;
-  const minimized = win.state === "minimized";
+  // PC virtual desktops: windows of other desktops step aside (they keep their state).
+  const offSpace = ff === "desktop" && win.space !== wm.space;
+  const minimized = win.state === "minimized" || offSpace;
   const maximized = win.state === "maximized";
   const { bounds } = wm;
 
@@ -129,7 +131,9 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
   // desktop
   const launcher = launcherRect();
   const rect = maximized ? { x: GUTTER, y: GUTTER, w: bounds.w - GUTTER * 2, h: bounds.h - GUTTER * 2 } : win.rect;
-  const minimizedTarget = launcher
+  const minimizedTarget = offSpace
+    ? { x: rect.x - 80, y: rect.y, scale: 0.97, opacity: 0 }
+    : launcher
     ? { x: launcher.x + launcher.w / 2 - rect.w / 2, y: launcher.y - rect.h / 2, scale: 0.08, opacity: 0 }
     : { x: rect.x, y: rect.y + 60, scale: 0.9, opacity: 0 };
   const openFrom = win.origin

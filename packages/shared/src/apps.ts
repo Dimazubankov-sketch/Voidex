@@ -19,6 +19,13 @@ export type AppPermission =
   | "mail.send"
   | "notifications.post";
 
+/**
+ * Default grouping of apps in the "by category" desktop view. A user can move
+ * an app to another category; that choice is stored in their workspace layout.
+ */
+export const APP_CATEGORIES = ["work", "communication", "media", "tools", "entertainment", "system"] as const;
+export type AppCategory = (typeof APP_CATEGORIES)[number];
+
 export interface AppManifest {
   id: AppId;
   name: Record<LanguageCode, string>;
@@ -32,6 +39,9 @@ export interface AppManifest {
   preinstalled: boolean;
   permissions: AppPermission[];
   status: "available" | "disabled";
+  category: AppCategory;
+  /** Extra words app search matches (other names people use for the app). */
+  keywords: Record<LanguageCode, string[]>;
   window: {
     defaultWidth: number;
     defaultHeight: number;
@@ -53,6 +63,8 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
     preinstalled: true,
     permissions: ["account.read", "account.write", "security.manage"],
     status: "available",
+    category: "system",
+    keywords: { en: ["preferences", "account", "security", "system", "wallpaper", "desktop"], ru: ["параметры", "аккаунт", "безопасность", "система", "обои", "рабочий стол"] },
     window: { defaultWidth: 920, defaultHeight: 640, minWidth: 560, minHeight: 440, singleton: true },
   },
   mail: {
@@ -65,6 +77,8 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
     preinstalled: true,
     permissions: ["mail.read", "mail.send", "notifications.post"],
     status: "available",
+    category: "communication",
+    keywords: { en: ["email", "inbox", "messages", "letters", "voidops"], ru: ["почта", "письма", "входящие", "email", "voidops"] },
     window: { defaultWidth: 1180, defaultHeight: 720, minWidth: 720, minHeight: 480, singleton: true },
   },
 };

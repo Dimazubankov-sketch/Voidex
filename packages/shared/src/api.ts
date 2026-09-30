@@ -4,6 +4,7 @@ import { LEGAL_KEYS } from "./legal.js";
 import { MAIL_BODY_MAX, MAIL_RECIPIENTS_MAX, MAIL_SUBJECT_MAX, MAIL_VIEWS } from "./mail.js";
 import { LANGUAGE_CODES } from "./regions.js";
 import { PASSWORD_MAX } from "./validation/password.js";
+import { WorkspaceLayoutSchema } from "./workspace.js";
 
 /**
  * Request schemas shared by the server (authoritative validation) and the web
@@ -98,6 +99,8 @@ export const PreferencesSchema = z.object({
   }),
   workspace: z.object({
     appOrder: z.array(z.enum(APP_IDS as [string, ...string[]])).max(100),
+    /** Desktop arrangement, folders, wallpaper (see workspace.ts). Absent until first customised. */
+    layout: WorkspaceLayoutSchema.optional(),
   }),
 });
 export type Preferences = z.infer<typeof PreferencesSchema>;

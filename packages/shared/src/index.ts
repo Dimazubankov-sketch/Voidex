@@ -3,6 +3,7 @@ export * from "./regions.js";
 export * from "./legal.js";
 export * from "./apps.js";
 export * from "./mail.js";
+export * from "./workspace.js";
 export * from "./api.js";
 export * from "./dto.js";
 export * from "./validation/person.js";

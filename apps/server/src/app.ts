@@ -19,6 +19,7 @@ import { LegalService } from "./services/legal.js";
 import { MailService } from "./services/mail.js";
 import { SessionService, type AuthContext } from "./services/sessions.js";
 import { OtpComSmsProvider, createSmsProvider, type SmsProvider } from "./services/sms/index.js";
+import { PgBlobStorage } from "./services/blobs.js";
 import { VerificationService } from "./services/verification.js";
 import { accountRoutes } from "./routes/account.js";
 import { authRoutes } from "./routes/auth.js";
@@ -77,6 +78,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
     config,
     sms: sms ?? createSmsProvider(config, app.log),
     events: new EventHub(),
+    blobs: new PgBlobStorage(db),
     now: now ?? (() => new Date()),
   };
   const sessions = new SessionService(ctx);
@@ -161,7 +163,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
       reply.header("Access-Control-Allow-Origin", origin);
       reply.header("Vary", "Origin");
       reply.header("Access-Control-Allow-Credentials", "true");
-      reply.header("Access-Control-Allow-Headers", "authorization,content-type,x-voidex-client,x-voidex-device,x-voidex-refresh");
+      reply.header("Access-Control-Allow-Headers", "authorization,content-type,x-file-name,x-voidex-client,x-voidex-device,x-voidex-refresh");
       reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE");
       if (req.method === "OPTIONS") return reply.status(204).send();
     }

@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import { createStore, useStore, type StoreApi } from "zustand";
-import type { MailView } from "@voidex/shared";
+import type { MailAttachmentDto, MailView } from "@voidex/shared";
 
 export interface ComposerState {
   /** Local id so a new composer remounts cleanly. */
@@ -13,6 +13,7 @@ export interface ComposerState {
   body: string;
   replyToMessageId?: string;
   forwardOfMessageId?: string;
+  attachments?: MailAttachmentDto[];
 }
 
 export interface MailUiState {

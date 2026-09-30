@@ -150,8 +150,17 @@ export interface ThreadSummaryDto {
   starred: boolean;
   lastMessageAt: string;
   hasDraft: boolean;
+  /** At least one message of the conversation carries a file. */
+  hasAttachments: boolean;
   /** For the drafts view each item is a single draft. */
   draftId?: string;
+}
+
+export interface MailAttachmentDto {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
 }
 
 export interface MailRecipientDto extends MailAddressDto {
@@ -175,6 +184,7 @@ export interface MailMessageDto {
   inReplyToId: string | null;
   forwardOfId: string | null;
   isOwn: boolean;
+  attachments: MailAttachmentDto[];
 }
 
 export interface ThreadDetailDto {
@@ -194,6 +204,7 @@ export interface DraftDto {
   replyToMessageId: string | null;
   forwardOfMessageId: string | null;
   updatedAt: string;
+  attachments: MailAttachmentDto[];
 }
 
 export interface Paginated<T> {

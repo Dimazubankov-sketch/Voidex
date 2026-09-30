@@ -126,11 +126,14 @@ test("window system: open, go home via [...] menu, reopen from launcher", async 
   if (!isMobile) {
     await expect(page.getByTestId("menu-minimize")).toBeVisible();
     await expect(page.getByTestId("menu-maximize")).toBeVisible();
+    // Minimizing is the way back to the workspace; no duplicate "Workspace" item.
+    await expect(page.getByTestId("menu-home")).toHaveCount(0);
+    await page.getByTestId("menu-minimize").click();
   } else {
     await expect(page.getByTestId("menu-minimize")).toHaveCount(0);
     await expect(page.getByTestId("menu-switcher")).toBeVisible();
+    await page.getByTestId("menu-home").click();
   }
-  await page.getByTestId("menu-home").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
   await page.getByTestId("launcher-button").click();
   await page.getByTestId("launcher-settings").click();

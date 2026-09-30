@@ -199,6 +199,13 @@ button {
   to { background-position: 200% 0; }
 }
 
+/* Home screen edit mode: icons wiggle gently (like iOS). */
+@keyframes vx-wiggle {
+  0%, 100% { transform: rotate(-1.6deg); }
+  50% { transform: rotate(1.6deg); }
+}
+.vx-wiggle { animation: vx-wiggle 300ms ease-in-out infinite; transform-origin: 50% 55%; }
+
 .animate-shake { animation: vx-shake 380ms var(--ease-out); }
 .animate-fade-up { animation: vx-fade-up 260ms var(--ease-out) both; }
 .animate-pop { animation: vx-pop 420ms var(--ease-spring) both; }

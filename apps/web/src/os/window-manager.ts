@@ -12,6 +12,10 @@ import { APP_REGISTRY, type AppId } from "@voidex/shared";
  * Apps stay mounted while minimized/backgrounded so their state survives
  * switching. Windows are device-local (a phone and a PC arrange apps
  * differently); the data inside apps is what syncs across devices.
+ *
+ * PC virtual desktops: every window belongs to one desktop (`space`); only the
+ * windows of the current desktop are shown. Phones have no virtual desktops,
+ * so there every window is reachable regardless of `space`.
  */
 
 export type WindowState = "normal" | "maximized" | "minimized";
@@ -36,6 +40,8 @@ export interface AppWindow {
   params: Record<string, unknown>;
   paramsVersion: number;
   openedAt: number;
+  /** PC virtual desktop this window lives on. */
+  space: string;
 }
 
 interface WMState {
@@ -44,7 +50,12 @@ interface WMState {
   order: string[];
   focusedId: string | null;
   switcherOpen: boolean;
+  /** Current PC virtual desktop. */
+  space: string;
   bounds: { w: number; h: number };
+  setSpace: (space: string) => void;
+  /** A desktop was removed: its windows join another one. */
+  moveSpaceWindows: (from: string, to: string) => void;
   setBounds: (w: number, h: number) => void;
   open: (appId: AppId, opts?: { origin?: Rect | null; params?: Record<string, unknown> }) => string;
   focus: (id: string) => void;
@@ -62,6 +73,7 @@ interface WMState {
 }
 
 const STORAGE = (userId: string) => `vx.wm.${userId}`;
+export const DEFAULT_SPACE = "d_1";
 let persistKey: string | null = null;
 
 function clampRect(r: Rect, b: { w: number; h: number }, min: { w: number; h: number }): Rect {
@@ -85,9 +97,24 @@ export const useWM = create<WMState>((set, get) => ({
   order: [],
   focusedId: null,
   switcherOpen: false,
+  space: DEFAULT_SPACE,
   bounds: { w: 1280, h: 800 },
 
   setBounds: (w, h) => set({ bounds: { w, h } }),
+
+  setSpace: (space) => {
+    const s = get();
+    if (s.space === space) return;
+    set({ space, focusedId: foregroundId(s, space) });
+    persist();
+  },
+
+  moveSpaceWindows: (from, to) => {
+    const s = get();
+    const windows = Object.fromEntries(Object.entries(s.windows).map(([id, w]) => [id, w.space === from ? { ...w, space: to } : w])) as Record<string, AppWindow>;
+    set({ windows, space: s.space === from ? to : s.space });
+    persist();
+  },
 
   open: (appId, opts = {}) => {
     const s = get();
@@ -101,6 +128,8 @@ export const useWM = create<WMState>((set, get) => ({
           [existing.id]: {
             ...existing,
             state,
+            // Opening an app that is on another PC desktop brings it here.
+            space: s.space,
             origin: opts.origin ?? existing.origin,
             ...(opts.params ? { params: opts.params, paramsVersion: existing.paramsVersion + 1 } : {}),
           },
@@ -123,6 +152,7 @@ export const useWM = create<WMState>((set, get) => ({
       params: opts.params ?? {},
       paramsVersion: 0,
       openedAt: Date.now(),
+      space: s.space,
     };
     set({ windows: { ...s.windows, [id]: win }, order: [...s.order, id], focusedId: id, switcherOpen: false });
     persist();
@@ -139,6 +169,7 @@ export const useWM = create<WMState>((set, get) => ({
       order: [...s.order.filter((i) => i !== id), id],
       focusedId: id,
       switcherOpen: false,
+      space: w.space,
     });
     persist();
   },
@@ -147,7 +178,7 @@ export const useWM = create<WMState>((set, get) => ({
     const s = get();
     const { [id]: _removed, ...rest } = s.windows;
     const order = s.order.filter((i) => i !== id);
-    const nextFocus = [...order].reverse().find((i) => rest[i]?.state !== "minimized") ?? null;
+    const nextFocus = [...order].reverse().find((i) => rest[i]?.state !== "minimized" && rest[i]?.space === s.space) ?? null;
     set({ windows: rest, order, focusedId: s.focusedId === id ? nextFocus : s.focusedId });
     persist();
   },
@@ -158,7 +189,7 @@ export const useWM = create<WMState>((set, get) => ({
     if (!w) return;
     const prevState = w.state === "minimized" ? w.prevState : w.state;
     const windows = { ...s.windows, [id]: { ...w, state: "minimized" as const, prevState } };
-    const nextFocus = [...s.order].reverse().find((i) => i !== id && windows[i]?.state !== "minimized") ?? null;
+    const nextFocus = [...s.order].reverse().find((i) => i !== id && windows[i]?.state !== "minimized" && windows[i]?.space === s.space) ?? null;
     set({ windows, focusedId: nextFocus });
     persist();
   },
@@ -202,10 +233,11 @@ export const useWM = create<WMState>((set, get) => ({
     persist();
   },
 
+
   reset: () => {
     persistKey = null;
     for (const k of Object.keys(savedRects)) delete savedRects[k as AppId];
-    set({ windows: {}, order: [], focusedId: null, switcherOpen: false });
+    set({ windows: {}, order: [], focusedId: null, switcherOpen: false, space: DEFAULT_SPACE });
   },
 
   hydrate: (userId) => {
@@ -213,7 +245,7 @@ export const useWM = create<WMState>((set, get) => ({
     try {
       const raw = localStorage.getItem(persistKey);
       if (!raw) return;
-      const data = JSON.parse(raw) as { rects?: Record<string, Rect>; open?: { appId: AppId; state: WindowState }[] };
+      const data = JSON.parse(raw) as { rects?: Record<string, Rect>; open?: { appId: AppId; state: WindowState; space?: string }[]; space?: string };
       Object.assign(savedRects, data.rects ?? {});
       const s = get();
       const windows: Record<string, AppWindow> = {};
@@ -231,10 +263,11 @@ export const useWM = create<WMState>((set, get) => ({
           params: {},
           paramsVersion: 0,
           openedAt: Date.now(),
+          space: typeof o.space === "string" ? o.space : DEFAULT_SPACE,
         };
         order.push(o.appId);
       }
-      set({ windows, order, focusedId: null });
+      set({ windows, order, focusedId: null, space: typeof data.space === "string" ? data.space : DEFAULT_SPACE });
     } catch {
       /* corrupt or unavailable storage: start clean */
     }
@@ -251,7 +284,12 @@ function persist() {
       persistKey,
       JSON.stringify({
         rects: savedRects,
-        open: s.order.map((id) => ({ appId: s.windows[id]!.appId, state: s.windows[id]!.state === "minimized" ? s.windows[id]!.prevState : s.windows[id]!.state })),
+        space: s.space,
+        open: s.order.map((id) => ({
+          appId: s.windows[id]!.appId,
+          state: s.windows[id]!.state === "minimized" ? s.windows[id]!.prevState : s.windows[id]!.state,
+          space: s.windows[id]!.space,
+        })),
       }),
     );
   } catch {
@@ -259,11 +297,12 @@ function persist() {
   }
 }
 
-/** Top-most visible window, if any. */
-export function foregroundId(s: Pick<WMState, "order" | "windows">): string | null {
+/** Top-most visible window, if any (on one PC desktop when `space` is given). */
+export function foregroundId(s: Pick<WMState, "order" | "windows">, space?: string): string | null {
   for (let i = s.order.length - 1; i >= 0; i--) {
     const id = s.order[i]!;
-    if (s.windows[id]?.state !== "minimized") return id;
+    const w = s.windows[id];
+    if (w && w.state !== "minimized" && (space === undefined || w.space === space)) return id;
   }
   return null;
 }

@@ -19,6 +19,79 @@ export const MAIL_RECIPIENTS_MAX = 50;
 
 export type RecipientKind = "to" | "cc" | "bcc";
 
+// ---- attachments ------------------------------------------------------------
+
+export const MAIL_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const MAIL_ATTACHMENTS_MAX = 10;
+export const MAIL_ATTACHMENTS_TOTAL_MAX_BYTES = 25 * 1024 * 1024;
+export const MAIL_ATTACHMENT_NAME_MAX = 180;
+
+/**
+ * Attachment types VOIDEX Mail accepts, by extension. The server derives the
+ * stored MIME type from this table (never from what the client claims) and
+ * verifies raster images by their magic bytes. Anything executable or
+ * scriptable (exe, js, html, svg, …) is refused.
+ */
+export const MAIL_ATTACHMENT_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  csv: "text/csv",
+  md: "text/markdown",
+  rtf: "application/rtf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  odt: "application/vnd.oasis.opendocument.text",
+  ods: "application/vnd.oasis.opendocument.spreadsheet",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  zip: "application/zip",
+  "7z": "application/x-7z-compressed",
+  rar: "application/vnd.rar",
+  gz: "application/gzip",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+};
+
+/** Previewable in the message (decoded by the browser as an image). */
+export const MAIL_INLINE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+export function attachmentExtension(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  return dot === -1 ? "" : filename.slice(dot + 1).toLowerCase();
+}
+
+/** MIME type for an allowed file name, or null if the type is not accepted. */
+export function attachmentMimeType(filename: string): string | null {
+  return MAIL_ATTACHMENT_TYPES[attachmentExtension(filename)] ?? null;
+}
+
+/** Makes a user-supplied file name safe to store and to send back in headers. */
+export function sanitizeFilename(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? "";
+  // eslint-disable-next-line no-control-regex
+  const clean = base.replace(/[\u0000-\u001f\u007f"<>|:*?]/g, "").replace(/\s+/g, " ").trim().replace(/^\.+/, "");
+  if (!clean) return "file";
+  if (clean.length <= MAIL_ATTACHMENT_NAME_MAX) return clean;
+  const ext = attachmentExtension(clean);
+  const keep = MAIL_ATTACHMENT_NAME_MAX - (ext ? ext.length + 1 : 0);
+  return ext ? `${clean.slice(0, keep)}.${ext}` : clean.slice(0, MAIL_ATTACHMENT_NAME_MAX);
+}
+
 export interface AddressParts {
   local: string;
   domain: string;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { RiArrowDownSLine, RiArrowUpSLine, RiCloseLine, RiDeleteBinLine, RiSendPlane2Fill } from "@remixicon/react";
-import { MAIL_SUBJECT_MAX } from "@voidex/shared";
+import { RiArrowDownSLine, RiArrowUpSLine, RiAttachment2, RiCloseLine, RiDeleteBinLine, RiSendPlane2Fill } from "@remixicon/react";
+import { MAIL_SUBJECT_MAX, type MailAttachmentDto } from "@voidex/shared";
 import { ApiError } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -10,6 +10,7 @@ import { useT } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
 import { Button, IconButton, Notice, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
+import { ATTACHMENT_ACCEPT, ComposerAttachments, attachmentsApi, checkFile, type PendingUpload } from "./attachments";
 import { draftsApi } from "./data";
 import { RecipientField } from "./recipients";
 import { useMail, type ComposerState } from "./store";
@@ -52,6 +53,9 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
   const latest = useRef({ to, cc, bcc, subject, body });
   latest.current = { to, cc, bcc, subject, body };
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<MailAttachmentDto[]>(initial.attachments ?? []);
+  const [pending, setPending] = useState<PendingUpload[]>([]);
 
   const ensureDraft = useCallback(async () => {
     if (draftId.current) return draftId.current;
@@ -59,6 +63,8 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
       .create({ ...latest.current, replyToMessageId: initial.replyToMessageId, forwardOfMessageId: initial.forwardOfMessageId })
       .then((d) => {
         draftId.current = d.id;
+        // A forward starts with the original's files (copied by the server).
+        if (d.attachments.length) setAttachments((cur) => [...d.attachments.filter((a) => !cur.some((c) => c.id === a.id)), ...cur]);
         return d.id;
       });
     return creating.current;
@@ -102,6 +108,52 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
     }
   }, [initial.replyToMessageId, initial.forwardOfMessageId]);
 
+  // Opening an existing draft: its files come from the server.
+  useEffect(() => {
+    if (!initial.draftId || initial.attachments) return;
+    void draftsApi
+      .get(initial.draftId)
+      .then((d) => setAttachments(d.attachments))
+      .catch(() => undefined);
+  }, [initial.draftId, initial.attachments]);
+
+  async function addFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const list = [...files];
+    for (const f of list) {
+      const problem = checkFile(f);
+      if (problem) {
+        toast({ title: t(`error.${problem}`), body: f.name, tone: "danger" });
+        continue;
+      }
+      const key = `${Date.now()}-${Math.random()}`;
+      setPending((p) => [...p, { key, filename: f.name, size: f.size }]);
+      try {
+        const id = await ensureDraft();
+        const a = await attachmentsApi.upload(id, f);
+        setAttachments((cur) => [...cur, a]);
+        setSave("saved");
+        void queryClient.invalidateQueries({ queryKey: ["mail", "list", "drafts"] });
+      } catch (err) {
+        toast({ title: errorMessage(t, err), body: f.name, tone: "danger" });
+      } finally {
+        setPending((p) => p.filter((x) => x.key !== key));
+      }
+    }
+  }
+
+  async function removeAttachment(a: MailAttachmentDto) {
+    const id = draftId.current;
+    setAttachments((cur) => cur.filter((x) => x.id !== a.id));
+    if (!id) return;
+    try {
+      await attachmentsApi.remove(id, a.id);
+    } catch (err) {
+      setAttachments((cur) => [...cur, a]);
+      toast({ title: errorMessage(t, err), tone: "danger" });
+    }
+  }
+
   async function send() {
     setError(null);
     setInvalid([]);
@@ -139,6 +191,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
   }
 
   const hasRecipients = to.length + cc.length + bcc.length > 0;
+  const uploading = pending.length > 0;
   const status =
     save === "saving" ? (
       <span className="flex items-center gap-1.5">
@@ -187,7 +240,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
           </>
         )}
         {mobile && (
-          <Button size="sm" onClick={send} loading={sending} disabled={!hasRecipients} icon={<RiSendPlane2Fill className="size-4" />} data-testid="composer-send">
+          <Button size="sm" onClick={send} loading={sending} disabled={!hasRecipients || uploading} icon={<RiSendPlane2Fill className="size-4" />} data-testid="composer-send">
             {t("mail.send")}
           </Button>
         )}
@@ -195,14 +248,21 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
       {!collapsed && (
         <>
           <div className="px-4">
-            <div className="relative">
-              <RecipientField label={t("mail.to")} value={to} onChange={setTo} invalid={invalid} autoFocus={!initial.replyToMessageId && !to.length} testId="composer-to" />
-              {!showCc && (
-                <button type="button" className="absolute right-0 top-3 text-[13px] font-medium text-primary" onClick={() => setShowCc(true)}>
-                  {t("mail.addCcBcc")}
-                </button>
-              )}
-            </div>
+            <RecipientField
+              label={t("mail.to")}
+              value={to}
+              onChange={setTo}
+              invalid={invalid}
+              autoFocus={!initial.replyToMessageId && !to.length}
+              testId="composer-to"
+              trailing={
+                !showCc && (
+                  <button type="button" className="whitespace-nowrap rounded-lg px-1.5 text-[13px] font-medium text-primary hover:bg-primary-soft" onClick={() => setShowCc(true)} data-testid="composer-show-cc">
+                    {t("mail.addCcBcc")}
+                  </button>
+                )
+              }
+            />
             {showCc && (
               <>
                 <RecipientField label={t("mail.cc")} value={cc} onChange={setCc} invalid={invalid} testId="composer-cc" />
@@ -225,6 +285,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
             className="scroll-area min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-[15px] leading-relaxed outline-none placeholder:text-text-tertiary"
             data-testid="composer-body"
           />
+          <ComposerAttachments items={attachments} pending={pending} onRemove={(a) => void removeAttachment(a)} />
           {error && (
             <div className="px-4 pb-2">
               <Notice tone="danger">{error}</Notice>
@@ -232,10 +293,25 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
           )}
           <div className="flex shrink-0 items-center gap-2 border-t px-4 py-3 pb-[max(var(--safe-bottom),12px)]">
             {!mobile && (
-              <Button onClick={send} loading={sending} disabled={!hasRecipients} icon={<RiSendPlane2Fill className="size-4" />} data-testid="composer-send">
+              <Button onClick={send} loading={sending} disabled={!hasRecipients || uploading} icon={<RiSendPlane2Fill className="size-4" />} data-testid="composer-send">
                 {sending ? t("mail.sending") : t("mail.send")}
               </Button>
             )}
+            <IconButton label={t("mail.attach")} onClick={() => fileInput.current?.click()} data-testid="composer-attach">
+              <RiAttachment2 className="size-5" />
+            </IconButton>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              accept={ATTACHMENT_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                void addFiles(e.target.files);
+                e.target.value = "";
+              }}
+              data-testid="composer-file-input"
+            />
             <div className="flex-1" />
             <IconButton label={t("mail.discard")} onClick={discard} data-testid="composer-discard">
               <RiDeleteBinLine className="size-5" />

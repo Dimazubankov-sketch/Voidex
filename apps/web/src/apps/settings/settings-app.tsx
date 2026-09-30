@@ -7,6 +7,7 @@ import {
   RiEarthLine,
   RiInformationLine,
   RiKeyLine,
+  RiLayoutGridLine,
   RiMailLine,
   RiPhoneLine,
   RiShieldCheckLine,
@@ -23,6 +24,7 @@ import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { AccountSection, CountrySection, EmailSection, LanguageSection, PersonalSection } from "./sections/account";
 import { DevicesSection, PasswordSection, PhoneSection, SecuritySection } from "./sections/security";
+import { DesktopSection } from "./sections/desktop";
 import { AboutSection, NotificationsSection, PrivacySection } from "./sections/system";
 
 export type SectionId =
@@ -37,6 +39,7 @@ export type SectionId =
   | "language"
   | "country"
   | "notifications"
+  | "desktop"
   | "about";
 
 export interface SectionProps {
@@ -62,6 +65,7 @@ const SECTIONS: SectionDef[] = [
   { id: "privacy", label: "settings.privacy", icon: RiShieldCheckLine, Component: PrivacySection, group: "system" },
   { id: "language", label: "settings.language", icon: RiTranslate2, Component: LanguageSection, group: "system" },
   { id: "country", label: "settings.country", icon: RiEarthLine, Component: CountrySection, group: "system" },
+  { id: "desktop", label: "settings.desktop", icon: RiLayoutGridLine, Component: DesktopSection, group: "system" },
   { id: "notifications", label: "settings.notifications", icon: RiNotification3Line, Component: NotificationsSection, group: "system" },
   { id: "about", label: "settings.about", icon: RiInformationLine, Component: AboutSection, group: "system" },
 ];
