@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { RiWifiOffLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
+import { takeReopenApp } from "@/lib/known-accounts";
 import { useSession } from "@/lib/session";
 import { ApprovalPrompt } from "./approval-prompt";
 import { useConnection, useServerEvents } from "./events";
@@ -52,6 +53,13 @@ export function Workspace() {
     setHydrated(true);
     return () => useWM.getState().reset();
   }, [userId]);
+
+  // An account switch made from an app (Vibex) reopens that app for the new account.
+  useEffect(() => {
+    if (!hydrated) return;
+    const app = takeReopenApp();
+    if (app === "vibex") useWM.getState().open("vibex");
+  }, [hydrated]);
 
   // Shared Vibex links (#vibex/post/<id>) open the post inside Vibex.
   useEffect(() => {

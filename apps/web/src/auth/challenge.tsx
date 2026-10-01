@@ -178,6 +178,11 @@ export function ChallengeDevice({ challenge, onApproved, onUseSms }: { challenge
   );
 }
 
-export async function completeLogin(challenge: ChallengeDto) {
-  return api.post<SessionResponse>(`/api/auth/challenges/${challenge.id}/complete`, { secret: challenge.secret }, { anonymous: true });
+/** `replaceSession`: an account switch — the current session ends once the new one exists. */
+export async function completeLogin(challenge: ChallengeDto, opts: { replaceSession?: boolean } = {}) {
+  return api.post<SessionResponse>(
+    `/api/auth/challenges/${challenge.id}/complete`,
+    { secret: challenge.secret, ...(opts.replaceSession ? { replaceSession: true } : {}) },
+    { anonymous: !opts.replaceSession },
+  );
 }

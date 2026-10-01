@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { MeDto, SessionResponse } from "@voidex/shared";
 import { useI18n } from "./i18n";
+import { rememberAccount } from "./known-accounts";
 
 export type SignedOutReason = "expired" | "revoked" | "signed_out" | null;
 
@@ -37,6 +38,7 @@ export const useSession = create<SessionState>((set) => ({
       /* ignore */
     }
     useI18n.getState().setLanguage(s.user.language);
+    rememberAccount(s.user);
     set({
       status: "signedIn",
       accessToken: s.accessToken,

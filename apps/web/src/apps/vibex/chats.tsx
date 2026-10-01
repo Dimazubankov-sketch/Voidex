@@ -708,7 +708,7 @@ export function Conversation({ chatId, onBack }: { chatId: string; onBack?: () =
           <Avatar name={c.peer.name} userId={c.peer.id} version={c.peer.avatarVersion} size={38} />
           <span className="min-w-0">
             <span className="block truncate text-[15px] font-semibold">{c.peer.name}</span>
-            <span className="block truncate text-[12px] text-text-tertiary">@{c.peer.handle}</span>
+            <span className="block truncate text-[12px] text-text-tertiary">{c.peer.address}</span>
           </span>
         </button>
       </WindowHeader>

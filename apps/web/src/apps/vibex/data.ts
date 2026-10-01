@@ -4,6 +4,9 @@ import {
   VIBEX_POST_IMAGE_TYPES,
   attachmentMimeType,
   type VibexChatDto,
+  type VibexCommentDto,
+  type VibexMeDto,
+  type VibexTranslationDto,
   type VibexFileDto,
   type VibexHistoryItemDto,
   type VibexMessageDto,
@@ -29,7 +32,23 @@ export const vk = {
   people: (q: string) => ["vibex", "people", q] as const,
   history: (kind: HistoryKind) => ["vibex", "history", kind] as const,
   file: (id: string) => ["vibex", "file", id] as const,
+  me: ["vibex", "me"] as const,
+  comments: (id: string) => ["vibex", "comments", id] as const,
 };
+
+// ------------------------------------------------------------ vibex sign-in
+
+/** Is Vibex activated for this VOIDEX account? */
+export function useVibexMe() {
+  return useQuery({ queryKey: vk.me, queryFn: () => api.get<VibexMeDto>("/api/vibex/me"), staleTime: 60_000 });
+}
+
+export async function activateVibex(email: string, password: string) {
+  const me = await api.post<VibexMeDto>("/api/vibex/activate", { email, password });
+  queryClient.setQueryData(vk.me, me);
+  void queryClient.invalidateQueries({ queryKey: vk.all });
+  return me;
+}
 
 export type HistoryKind = "liked" | "bookmarks";
 
@@ -266,6 +285,64 @@ function refreshPosts() {
   void queryClient.invalidateQueries({ queryKey: vk.posts });
   void queryClient.invalidateQueries({ queryKey: ["vibex", "history"] });
   void queryClient.invalidateQueries({ queryKey: ["vibex", "profile"] });
+}
+
+export function useEditPost() {
+  return useMutation({
+    mutationFn: (v: { id: string; text: string }) => api.patch<VibexPostDto>(`/api/vibex/posts/${v.id}`, { text: v.text }),
+    onSuccess: (p) => patchPost(p),
+  });
+}
+
+/** "Not interested": gone from my feed right away. */
+export function useHidePost() {
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/api/vibex/posts/${id}/hide`),
+    onSuccess: (_r, id) => {
+      queryClient.setQueryData<PostsData>(vk.feed, (d) => d && { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.filter((p) => p.id !== id && p.repostOf?.id !== id) })) });
+    },
+  });
+}
+
+export const reportPost = (id: string, reason: "spam" | "abuse" | "other") => api.post(`/api/vibex/posts/${id}/report`, { reason });
+
+export const translatePost = (id: string) => api.post<VibexTranslationDto>(`/api/vibex/posts/${id}/translate`);
+
+// --------------------------------------------------------------- comments
+
+export function useComments(postId: string) {
+  return useQuery({ queryKey: vk.comments(postId), queryFn: () => api.get<VibexCommentDto[]>(`/api/vibex/posts/${postId}/comments`), staleTime: 0 });
+}
+
+function bumpComments(postId: string, by: number) {
+  const fix = (p: VibexPostDto): VibexPostDto =>
+    p.id === postId ? { ...p, comments: Math.max(0, p.comments + by) } : p.repostOf?.id === postId ? { ...p, repostOf: { ...p.repostOf, comments: Math.max(0, p.repostOf.comments + by) } } : p;
+  for (const [key, data] of queryClient.getQueriesData<PostsData>({ queryKey: vk.all })) {
+    if (data && "pages" in data && Array.isArray(data.pages) && data.pages[0] && "items" in data.pages[0]) {
+      queryClient.setQueryData<PostsData>(key, { ...data, pages: data.pages.map((pg) => ({ ...pg, items: pg.items.map((x) => (x && "kind" in x ? fix(x) : x)) })) });
+    }
+  }
+  queryClient.setQueryData<VibexPostDto>(vk.post(postId), (p) => p && fix(p));
+}
+
+export function useAddComment(postId: string) {
+  return useMutation({
+    mutationFn: (text: string) => api.post<VibexCommentDto>(`/api/vibex/posts/${postId}/comments`, { text }),
+    onSuccess: (c) => {
+      queryClient.setQueryData<VibexCommentDto[]>(vk.comments(postId), (list) => (list?.some((x) => x.id === c.id) ? list : [...(list ?? []), c]));
+      bumpComments(postId, 1);
+    },
+  });
+}
+
+export function useDeleteComment(postId: string) {
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/vibex/comments/${id}`),
+    onSuccess: (_r, id) => {
+      queryClient.setQueryData<VibexCommentDto[]>(vk.comments(postId), (list) => list?.filter((c) => c.id !== id));
+      bumpComments(postId, -1);
+    },
+  });
 }
 
 export function useDeletePost() {

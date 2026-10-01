@@ -3,17 +3,21 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   RiBookmarkFill,
   RiBookmarkLine,
+  RiChat1Line,
   RiCloseLine,
   RiDeleteBinLine,
+  RiEyeOffLine,
+  RiFlagLine,
   RiHeart3Fill,
   RiHeart3Line,
   RiImageAddLine,
   RiLinkM,
   RiMoreFill,
+  RiPencilLine,
   RiRepeat2Line,
   RiShareForwardLine,
 } from "@remixicon/react";
-import { VIBEX_FILES_MAX, VIBEX_POST_IMAGE_TYPES, VIBEX_POST_MAX, type VibexFileDto, type VibexPersonDto, type VibexPostDto } from "@voidex/shared";
+import { VIBEX_FILES_MAX, VIBEX_POST_IMAGE_TYPES, VIBEX_POST_MAX, detectLanguage, type VibexFileDto, type VibexPersonDto, type VibexPostDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -21,96 +25,180 @@ import { formatRelative, useLanguage, useT } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { Button, EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { ConfirmDialog, MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
-import { checkVibexFile, filesApi, postLink, useCreatePost, useDeletePost, usePostAction, useRepost } from "./data";
+import {
+  checkVibexFile,
+  filesApi,
+  postLink,
+  reportPost,
+  translatePost,
+  useCreatePost,
+  useDeletePost,
+  useEditPost,
+  useHidePost,
+  usePostAction,
+  useRepost,
+} from "./data";
 import { MediaGrid, VibexImage } from "./media";
 import { useVibex } from "./store";
 
 // ------------------------------------------------------------------ pieces
 
-function PersonLine({ person, at, note, size = 42 }: { person: VibexPersonDto; at: string; note?: string; size?: number }) {
+/** Voyzen header line: avatar, name, then email · time (· edited). */
+function PersonLine({ person, at, edited, note, size = 44 }: { person: VibexPersonDto; at: string; edited?: boolean; note?: string; size?: number }) {
+  const t = useT();
   const lang = useLanguage();
   const push = useVibex((s) => s.push);
+  const open = () => push({ kind: "person", id: person.id });
   return (
-    <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => push({ kind: "person", id: person.id })} data-testid="post-author">
-      <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={size} />
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate text-[15px] font-semibold text-text">{person.name}</span>
+    <div className="flex min-w-0 flex-1 items-start gap-3">
+      <button type="button" onClick={open} className="shrink-0 rounded-full" aria-label={person.name} data-testid="post-author">
+        <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={size} />
+      </button>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <p className="flex min-w-0 items-baseline gap-1.5 text-[15px] leading-tight text-text">
+          <button type="button" onClick={open} className="truncate font-semibold hover:underline">
+            {person.name}
+          </button>
           {note && <span className="shrink-0 text-[14px] text-text-secondary">{note}</span>}
-        </span>
-        <span className="block truncate text-[13px] text-text-tertiary">
-          @{person.handle} · {formatRelative(at, lang)}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function PostText({ text }: { text: string }) {
-  if (!text) return null;
-  return (
-    <p className="whitespace-pre-wrap break-words text-[15px] leading-[1.45] text-text" data-selectable>
-      {text}
-    </p>
-  );
-}
-
-function Count({ n }: { n: number }) {
-  return n > 0 ? <span className="min-w-3 text-[13px] font-medium tabular-nums">{n}</span> : null;
-}
-
-/** Like / share / bookmark — always about the original post. */
-function PostActions({ post }: { post: VibexPostDto }) {
-  const t = useT();
-  const action = usePostAction();
-  const share = useVibex((s) => s.share);
-  return (
-    <div className="-mx-2 flex items-center gap-1 pt-1">
-      <button
-        type="button"
-        onClick={() => action.mutate({ post, action: post.liked ? "unlike" : "like" })}
-        className={cx("pressable flex h-9 items-center gap-1.5 rounded-full px-2.5", post.liked ? "text-[#e0457b]" : "text-text-secondary hover:bg-surface-hover")}
-        aria-pressed={post.liked}
-        aria-label={t("vibex.post.like")}
-        title={t("vibex.post.like")}
-        data-testid="post-like"
-      >
-        <motion.span key={String(post.liked)} initial={post.liked ? { scale: 0.6 } : false} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 520, damping: 14 }}>
-          {post.liked ? <RiHeart3Fill className="size-5" /> : <RiHeart3Line className="size-5" />}
-        </motion.span>
-        <Count n={post.likes} />
-      </button>
-      <button
-        type="button"
-        onClick={() => share(post)}
-        className={cx("pressable flex h-9 items-center gap-1.5 rounded-full px-2.5 hover:bg-surface-hover", post.reposted ? "text-primary" : "text-text-secondary")}
-        aria-label={t("vibex.post.share")}
-        title={t("vibex.post.share")}
-        data-testid="post-share"
-      >
-        <RiShareForwardLine className="size-5" />
-        <Count n={post.reposts} />
-      </button>
-      <span className="flex-1" />
-      <IconButton
-        label={post.bookmarked ? t("vibex.post.unbookmark") : t("vibex.post.bookmark")}
-        size="sm"
-        active={post.bookmarked}
-        onClick={() => action.mutate({ post, action: post.bookmarked ? "unbookmark" : "bookmark" })}
-        data-testid="post-bookmark"
-      >
-        {post.bookmarked ? <RiBookmarkFill className="size-[18px]" /> : <RiBookmarkLine className="size-[18px]" />}
-      </IconButton>
+        </p>
+        <p className="mt-0.5 truncate text-[12px] text-text-secondary" data-testid="post-meta">
+          {person.address} · {formatRelative(at, lang)}
+          {edited && ` · ${t("vibex.post.edited")}`}
+        </p>
+      </div>
     </div>
   );
 }
 
+/** Text with Voyzen's "Translate" link — only when the post isn't in my language already. */
+function PostText({ post }: { post: VibexPostDto }) {
+  const t = useT();
+  const lang = useLanguage();
+  const [shown, setShown] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!post.text) return null;
+  const source = detectLanguage(post.text);
+  const canTranslate = source !== lang;
+  const toggle = async () => {
+    if (shown !== null) return setShown(null);
+    setBusy(true);
+    try {
+      const r = await translatePost(post.id);
+      setShown(r.text);
+    } catch (e) {
+      toast({ title: t("vibex.post.translateFailed"), body: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="px-4 pb-3">
+      <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text" data-selectable data-testid="post-text">
+        {shown ?? post.text}
+      </p>
+      {canTranslate && (
+        <button type="button" onClick={toggle} disabled={busy} className="mt-1 text-[14px] font-medium text-primary hover:underline disabled:opacity-60" data-testid="post-translate">
+          {busy ? t("vibex.post.translating") : shown !== null ? t("vibex.post.showOriginal") : t("vibex.post.translate")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({
+  icon,
+  label,
+  aria,
+  count,
+  onClick,
+  active,
+  activeClass = "text-primary",
+  testId,
+  pressed,
+}: {
+  icon: ReactNode;
+  label: string;
+  aria?: string;
+  count?: number;
+  onClick: () => void;
+  active?: boolean;
+  activeClass?: string;
+  testId: string;
+  pressed?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      aria-label={aria}
+      title={aria}
+      className={cx("flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors hover:bg-surface-secondary active:bg-surface-hover", active ? activeClass : "text-text-secondary")}
+      data-testid={testId}
+    >
+      {icon}
+      {label && <span className="truncate">{label}</span>}
+      {!!count && <span className="text-[13px] tabular-nums text-text-tertiary">{count}</span>}
+    </button>
+  );
+}
+
+/** Voyzen's action row: ❤ · 💬 · Share — always about the original post. */
+function PostActions({ post }: { post: VibexPostDto }) {
+  const t = useT();
+  const action = usePostAction();
+  const share = useVibex((s) => s.share);
+  const comment = useVibex((s) => s.openComments);
+  return (
+    <div className="grid grid-cols-3 border-t">
+      <ActionButton
+        icon={
+          <motion.span key={String(post.liked)} initial={post.liked ? { scale: 0.6 } : false} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 520, damping: 16 }} className="flex">
+            {post.liked ? <RiHeart3Fill className="size-5" /> : <RiHeart3Line className="size-5" />}
+          </motion.span>
+        }
+        label={post.likes ? String(post.likes) : ""}
+        aria={t("vibex.post.like")}
+        active={post.liked}
+        activeClass="text-[#e0457b]"
+        pressed={post.liked}
+        onClick={() => action.mutate({ post, action: post.liked ? "unlike" : "like" })}
+        testId="post-like"
+      />
+      <ActionButton
+        icon={<RiChat1Line className="size-5" />}
+        label={post.comments ? String(post.comments) : ""}
+        aria={t("vibex.post.comment")}
+        onClick={() => comment(post.id)}
+        testId="post-comment"
+      />
+      <ActionButton
+        icon={<RiShareForwardLine className="size-5" />}
+        label={t("vibex.post.share")}
+        count={post.reposts}
+        active={post.reposted}
+        onClick={() => share(post)}
+        testId="post-share"
+      />
+    </div>
+  );
+}
+
+/**
+ * "…" on a post — Voyzen's set: copy link; mine: edit, delete; someone
+ * else's: not interested, report. Plus bookmarks (VOIDEX history) and, on my
+ * repost, taking it off my page.
+ */
 function PostMenu({ post, wrapper }: { post: VibexPostDto; wrapper?: VibexPostDto }) {
   const t = useT();
   const pop = usePopover();
   const del = useDeletePost();
   const repost = useRepost();
+  const hide = useHidePost();
+  const action = usePostAction();
   const [confirm, setConfirm] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const items: MenuItem[] = [
     {
       id: "copy-link",
@@ -121,20 +209,31 @@ function PostMenu({ post, wrapper }: { post: VibexPostDto; wrapper?: VibexPostDt
         toast({ title: t("vibex.share.copied"), tone: "success" });
       },
     },
+    {
+      id: "bookmark",
+      label: post.bookmarked ? t("vibex.post.unbookmark") : t("vibex.post.bookmark"),
+      icon: post.bookmarked ? <RiBookmarkFill className="size-5" /> : <RiBookmarkLine className="size-5" />,
+      onSelect: () => action.mutate({ post, action: post.bookmarked ? "unbookmark" : "bookmark" }),
+    },
   ];
   if (wrapper?.mine) {
-    items.push({
-      id: "unrepost",
-      label: t("vibex.post.undoRepost"),
-      icon: <RiRepeat2Line className="size-5" />,
-      onSelect: () => repost.mutate({ id: post.id, on: false }),
-    });
+    items.push({ id: "unrepost", label: t("vibex.post.undoRepost"), icon: <RiRepeat2Line className="size-5" />, onSelect: () => repost.mutate({ id: post.id, on: false }) });
   } else if (post.mine) {
+    items.push({ id: "edit-post", label: t("vibex.post.edit"), icon: <RiPencilLine className="size-5" />, onSelect: () => setEditing(true) });
     items.push({ id: "delete-post", label: t("vibex.post.delete"), icon: <RiDeleteBinLine className="size-5" />, danger: true, onSelect: () => setConfirm(true) });
+  }
+  if (!post.mine) {
+    items.push({
+      id: "not-interested",
+      label: t("vibex.post.notInterested"),
+      icon: <RiEyeOffLine className="size-5" />,
+      onSelect: () => hide.mutate(post.id, { onSuccess: () => toast({ title: t("vibex.post.hidden") }) }),
+    });
+    items.push({ id: "report", label: t("vibex.post.report"), icon: <RiFlagLine className="size-5" />, danger: true, onSelect: () => setReporting(true) });
   }
   return (
     <>
-      <IconButton ref={pop.anchor} label={t("vibex.post.more")} size="sm" onClick={pop.toggle} data-testid="post-menu">
+      <IconButton ref={pop.anchor} label={t("vibex.post.more")} size="sm" onClick={pop.toggle} data-testid="post-menu" className="text-text-tertiary">
         <RiMoreFill className="size-5" />
       </IconButton>
       <Popover open={pop.open} onClose={pop.close} anchor={pop.anchor} width={250}>
@@ -158,7 +257,77 @@ function PostMenu({ post, wrapper }: { post: VibexPostDto; wrapper?: VibexPostDt
           }
         }}
       />
+      {editing && <EditPostSheet post={post} onClose={() => setEditing(false)} />}
+      <ReportSheet postId={post.id} open={reporting} onClose={() => setReporting(false)} />
     </>
+  );
+}
+
+function EditPostSheet({ post, onClose }: { post: VibexPostDto; onClose: () => void }) {
+  const t = useT();
+  const edit = useEditPost();
+  const [text, setText] = useState(post.text);
+  const can = (text.trim().length > 0 || post.media.length > 0) && text !== post.text && !edit.isPending;
+  const save = async () => {
+    try {
+      await edit.mutateAsync({ id: post.id, text });
+      onClose();
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    }
+  };
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title={t("vibex.post.edit")}
+      width={560}
+      testId="post-edit"
+      footer={
+        <>
+          <span className="flex-1" />
+          <Button variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button onClick={save} disabled={!can} loading={edit.isPending} data-testid="post-edit-save">
+            {t("common.save")}
+          </Button>
+        </>
+      }
+    >
+      <textarea
+        autoFocus
+        value={text}
+        maxLength={VIBEX_POST_MAX}
+        onChange={(e) => setText(e.target.value)}
+        className="min-h-[140px] w-full resize-none bg-transparent text-[16px] leading-[1.45] outline-none"
+        data-testid="post-edit-text"
+      />
+    </Sheet>
+  );
+}
+
+function ReportSheet({ postId, open, onClose }: { postId: string; open: boolean; onClose: () => void }) {
+  const t = useT();
+  const send = async (reason: "spam" | "abuse" | "other") => {
+    try {
+      await reportPost(postId, reason);
+      toast({ title: t("vibex.post.reportThanks"), tone: "success" });
+      onClose();
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    }
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title={t("vibex.post.report")} width={420} testId="post-report">
+      <div className="overflow-hidden rounded-2xl border border-border">
+        {(["spam", "abuse", "other"] as const).map((r) => (
+          <button key={r} type="button" onClick={() => void send(r)} className="flex h-12 w-full items-center px-4 text-left text-[15px] hover:bg-surface-secondary [&:not(:last-child)]:border-b" data-testid={`report-${r}`}>
+            {t(`vibex.report.${r}`)}
+          </button>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 
@@ -172,44 +341,63 @@ export function UnavailablePost({ className }: { className?: string }) {
   );
 }
 
-/** The original inside a repost or a chat message: compact, keeps the original id. */
+/** The original inside a repost or a chat message (Voyzen's quoted post). */
 export function NestedPost({ post, actions }: { post: VibexPostDto; actions?: boolean }) {
+  const lang = useLanguage();
+  const push = useVibex((s) => s.push);
   return (
-    <div className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-surface px-4 py-3" data-testid="nested-post" data-post-id={post.id}>
-      <div className="flex items-center gap-2">
-        <PersonLine person={post.author} at={post.createdAt} size={34} />
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface" data-testid="nested-post" data-post-id={post.id}>
+      <div className="flex items-center gap-2 px-3 pt-3">
+        <button type="button" onClick={() => push({ kind: "person", id: post.author.id })} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <Avatar name={post.author.name} userId={post.author.id} version={post.author.avatarVersion} size={24} />
+          <span className="truncate text-[13px] font-semibold text-text">{post.author.name}</span>
+          <span className="shrink-0 text-[12px] text-text-tertiary">· {formatRelative(post.createdAt, lang)}</span>
+        </button>
         {actions && <PostMenu post={post} />}
       </div>
-      <PostText text={post.text} />
-      <MediaGrid media={post.media} />
+      {post.text && (
+        <p className="whitespace-pre-wrap break-words px-3 pb-2 pt-1.5 text-[14px] leading-relaxed text-text" data-selectable>
+          {post.text}
+        </p>
+      )}
+      {post.media.length > 0 && (
+        <div className="px-3 pb-3">
+          <MediaGrid media={post.media} />
+        </div>
+      )}
     </div>
   );
 }
 
+/** A post in the Voyzen layout: header, text (+ translate), media, ❤ · 💬 · Share. */
 export function PostCard({ post }: { post: VibexPostDto }) {
   const t = useT();
-  const shell = "flex flex-col gap-3 rounded-[24px] bg-surface px-4 pb-2 pt-4 shadow-tile sm:px-5";
+  const shell = "overflow-hidden rounded-2xl border border-border bg-surface shadow-tile";
   if (post.kind === "repost") {
     const orig = post.repostOf;
     return (
       <article className={shell} data-testid="post-card" data-kind="repost" data-post-id={post.id}>
-        <div className="flex items-center gap-2">
+        <div className="flex items-start gap-2 p-4 pb-3">
           <PersonLine person={post.author} at={post.createdAt} note={t("vibex.post.sharedBy")} />
           {orig && <PostMenu post={orig} wrapper={post} />}
         </div>
-        {orig ? <NestedPost post={orig} /> : <UnavailablePost />}
-        {orig ? <PostActions post={orig} /> : <div className="h-2" />}
+        <div className="px-4 pb-3">{orig ? <NestedPost post={orig} /> : <UnavailablePost />}</div>
+        {orig && <PostActions post={orig} />}
       </article>
     );
   }
   return (
     <article className={shell} data-testid="post-card" data-kind="post" data-post-id={post.id}>
-      <div className="flex items-center gap-2">
-        <PersonLine person={post.author} at={post.createdAt} />
+      <div className="flex items-start gap-2 p-4 pb-3">
+        <PersonLine person={post.author} at={post.createdAt} edited={!!post.editedAt} />
         <PostMenu post={post} />
       </div>
-      <PostText text={post.text} />
-      <MediaGrid media={post.media} />
+      <PostText post={post} />
+      {post.media.length > 0 && (
+        <div className="px-4 pb-3">
+          <MediaGrid media={post.media} />
+        </div>
+      )}
       <PostActions post={post} />
     </article>
   );
@@ -231,7 +419,7 @@ export function PostList({
     return (
       <div className="flex flex-col gap-3">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-40 rounded-[24px]" />
+          <Skeleton key={i} className="h-40 rounded-2xl" />
         ))}
       </div>
     );
@@ -286,7 +474,7 @@ export function ComposerPrompt() {
     <button
       type="button"
       onClick={() => compose(true)}
-      className="pressable flex items-center gap-3 rounded-[24px] bg-surface px-4 py-3 text-left shadow-tile"
+      className="pressable flex items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3 text-left shadow-tile"
       data-testid="composer-prompt"
     >
       <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={40} />
@@ -431,8 +619,9 @@ export function PostComposer() {
   );
 }
 
-export function FeedEmpty({ mine }: { mine?: boolean }) {
+export function FeedEmpty({ mine, reposts }: { mine?: boolean; reposts?: boolean }) {
   const t = useT();
+  if (reposts) return <EmptyState icon={<RiRepeat2Line className="size-7" />} title={t("vibex.profile.noReposts")} />;
   return (
     <EmptyState
       icon={<RiImageAddLine className="size-7" />}

@@ -88,6 +88,15 @@ function handle(event: ServerEvent) {
       if (prefs?.sound) playChime();
       break;
     }
+    case "vibex.feed":
+      // Someone posted, edited, liked or commented: feeds and that post refresh.
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "feed"] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "posts"] });
+      if (event.postId) {
+        void queryClient.invalidateQueries({ queryKey: ["vibex", "post", event.postId] });
+        void queryClient.invalidateQueries({ queryKey: ["vibex", "comments", event.postId] });
+      }
+      break;
     case "vibex.chats":
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
       if (event.conversationId) void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });

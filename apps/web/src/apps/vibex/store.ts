@@ -16,6 +16,10 @@ export interface VibexUiState {
   historyKind: HistoryKind;
   composing: boolean;
   sharing: VibexPostDto | null;
+  /** Comments screen of this post (Voyzen: full surface over the app). */
+  commentsFor: string | null;
+  /** Phones: the side menu drawer. */
+  drawer: boolean;
   go: (s: VibexSection) => void;
   openChat: (id: string | null) => void;
   push: (p: VibexPage) => void;
@@ -23,6 +27,8 @@ export interface VibexUiState {
   setHistoryKind: (k: HistoryKind) => void;
   compose: (open: boolean) => void;
   share: (post: VibexPostDto | null) => void;
+  openComments: (postId: string | null) => void;
+  setDrawer: (open: boolean) => void;
 }
 
 /** UI state of one Vibex window (each window instance gets its own store). */
@@ -34,13 +40,17 @@ export function createVibexStore() {
     historyKind: "liked",
     composing: false,
     sharing: null,
-    go: (section) => set({ section, stack: [], chatId: null }),
+    commentsFor: null,
+    drawer: false,
+    go: (section) => set({ section, stack: [], chatId: null, commentsFor: null, drawer: false }),
     openChat: (chatId) => set({ section: "chats", chatId, stack: [] }),
     push: (p) => set((s) => (p.kind === "chat" ? { section: "chats", chatId: p.id, stack: [] } : { stack: [...s.stack, p] })),
     back: () => set((s) => (s.stack.length ? { stack: s.stack.slice(0, -1) } : { chatId: null })),
     setHistoryKind: (historyKind) => set({ historyKind }),
     compose: (composing) => set({ composing }),
     share: (sharing) => set({ sharing }),
+    openComments: (commentsFor) => set({ commentsFor }),
+    setDrawer: (drawer) => set({ drawer }),
   }));
 }
 
