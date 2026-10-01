@@ -22,6 +22,7 @@ import { OtpComSmsProvider, createSmsProvider, type SmsProvider } from "./servic
 import { PgBlobStorage } from "./services/blobs.js";
 import { VerificationService } from "./services/verification.js";
 import { VibexService } from "./services/vibex.js";
+import { createTranslator, type Translator } from "./services/translate.js";
 import { accountRoutes } from "./routes/account.js";
 import { authRoutes } from "./routes/auth.js";
 import { mailRoutes } from "./routes/mail.js";
@@ -54,11 +55,12 @@ export interface Services {
 export interface BuildOptions {
   config: Config;
   sms?: SmsProvider;
+  translator?: Translator;
   db?: Db;
   now?: () => Date;
 }
 
-export async function buildApp({ config, sms, db: providedDb, now }: BuildOptions): Promise<FastifyInstance> {
+export async function buildApp({ config, sms, translator, db: providedDb, now }: BuildOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger:
       config.env === "test"
@@ -82,6 +84,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
     sms: sms ?? createSmsProvider(config, app.log),
     events: new EventHub(),
     blobs: new PgBlobStorage(db),
+    translator: translator ?? createTranslator(config.translate.provider, config.translate.email),
     now: now ?? (() => new Date()),
   };
   const sessions = new SessionService(ctx);

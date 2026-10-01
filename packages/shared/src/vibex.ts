@@ -8,6 +8,7 @@ import { z } from "zod";
 
 export const VIBEX_MESSAGE_MAX = 4000;
 export const VIBEX_POST_MAX = 2000;
+export const VIBEX_COMMENT_MAX = 1000;
 /** Files on one chat message / images on one post. */
 export const VIBEX_FILES_MAX = 10;
 export const VIBEX_FILE_MAX_BYTES = 10 * 1024 * 1024;
@@ -50,6 +51,9 @@ export interface VibexPostDto {
   /** I shared it on my page. */
   reposted: boolean;
   mine: boolean;
+  /** Step 2.2: comment count, last edit time. */
+  comments: number;
+  editedAt: string | null;
   /** Reposts: the original post, or null when it is no longer available. */
   repostOf?: VibexPostDto | null;
 }
@@ -93,6 +97,28 @@ export interface VibexProfileDto {
   me: boolean;
 }
 
+export interface VibexCommentDto {
+  id: string;
+  postId: string;
+  author: VibexPersonDto;
+  text: string;
+  createdAt: string;
+  mine: boolean;
+}
+
+/** Vibex is activated per VOIDEX account; `person` is how others see me. */
+export interface VibexMeDto {
+  activated: boolean;
+  person: VibexPersonDto;
+}
+
+export interface VibexTranslationDto {
+  text: string;
+  /** Detected source language (null: the provider detected it). */
+  source: string | null;
+  target: string;
+}
+
 export interface VibexPage<T> {
   items: T[];
   next: string | null;
@@ -129,3 +155,15 @@ export const VibexShareSchema = z.object({
 });
 
 export const VibexHistoryQuerySchema = VibexCursorQuerySchema.extend({ kind: z.enum(["liked", "bookmarks"]) });
+
+export const VibexCommentSchema = z.object({ text: z.string().trim().min(1).max(VIBEX_COMMENT_MAX) });
+
+export const VibexEditPostSchema = z.object({ text: z.string().max(VIBEX_POST_MAX) });
+
+export const VibexReportSchema = z.object({ reason: z.enum(["spam", "abuse", "other"]).default("other") });
+
+/** Vibex sign-in / activation: the VOIDEX account's email (Mail address) and password. */
+export const VibexActivateSchema = z.object({
+  email: z.string().trim().toLowerCase().max(254),
+  password: z.string().min(1).max(256),
+});

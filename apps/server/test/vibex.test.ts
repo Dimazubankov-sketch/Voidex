@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ServerEvent } from "@voidex/shared";
-import { Device, createTestEnv, signUp, type TestEnv } from "./helpers.js";
+import { sql } from "drizzle-orm";
+import { Device, STRONG_PASSWORD, createTestEnv, signUp, type TestEnv } from "./helpers.js";
 
 let env: TestEnv;
 beforeAll(async () => {
@@ -13,9 +14,14 @@ afterAll(async () => {
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf00000301010036a2c3a90000000049454e44ae426082", "hex");
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 
-async function user(first: string) {
+/** A VOIDEX account that signed in to Vibex (activation with its email + password). */
+async function user(first: string, opts: { activate?: boolean } = {}) {
   const d = new Device(env.app);
   const r = await signUp(d, { firstName: first, lastName: "Vibex" });
+  if (opts.activate !== false) {
+    const act = await d.post("/api/vibex/activate", { email: r.address, password: STRONG_PASSWORD });
+    if (act.status !== 200) throw new Error(`activate failed: ${JSON.stringify(act.body)}`);
+  }
   return { d, id: r.user.id as string, sessionId: r.sessionId, address: r.address, username: r.username };
 }
 type U = Awaited<ReturnType<typeof user>>;
@@ -258,5 +264,109 @@ describe("vibex feed", () => {
     const second = await a.d.get(`/api/vibex/people/${a.id}/posts?limit=3&before=${first.body.next}`);
     expect(second.body.items.map((p: { text: string }) => p.text)).toEqual(["p1", "p0"]);
     expect(second.body.next).toBeNull();
+  });
+});
+
+describe("vibex step 2.2: sign-in, comments, edit, hide, report, translate", () => {
+  it("Vibex sign-in = this VOIDEX account (email + password); nothing works before it; one account = one profile", async () => {
+    const a = await user("Vera", { activate: false });
+    const other = await user("Oleg");
+    expect((await a.d.get("/api/vibex/me")).body).toMatchObject({ activated: false, person: { id: a.id, address: a.address } });
+    const blocked = await a.d.get("/api/vibex/feed");
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error.code).toBe("vibex_not_activated");
+    // Not activated people can't be found or messaged.
+    expect((await other.d.get(`/api/vibex/people?q=${a.username}`)).body).toHaveLength(0);
+    expect((await other.d.post("/api/vibex/chats/direct", { userId: a.id })).status).toBe(404);
+
+    expect((await a.d.post("/api/vibex/activate", { email: a.address, password: "wrong-password-1" })).body.error.code).toBe("invalid_credentials");
+    expect((await a.d.post("/api/vibex/activate", { email: "nobody-here@voidops.ru", password: STRONG_PASSWORD })).body.error.code).toBe("invalid_credentials");
+    // Someone else's email is never a second identity: the client switches accounts instead.
+    const foreign = await a.d.post("/api/vibex/activate", { email: other.address, password: STRONG_PASSWORD });
+    expect(foreign.status).toBe(409);
+    expect(foreign.body.error.code).toBe("vibex_other_account");
+
+    const ok = await a.d.post("/api/vibex/activate", { email: a.address.toUpperCase(), password: STRONG_PASSWORD });
+    expect(ok.body).toMatchObject({ activated: true, person: { id: a.id } });
+    expect((await a.d.post("/api/vibex/activate", { email: a.address, password: STRONG_PASSWORD })).status).toBe(200); // idempotent
+    expect((await a.d.get("/api/vibex/feed")).status).toBe(200);
+    expect((await other.d.get(`/api/vibex/people?q=${a.username}`)).body.map((p: { id: string }) => p.id)).toContain(a.id);
+  });
+
+  it("account switch: signing in to another account with replaceSession ends the current session", async () => {
+    const a = await user("Sasha");
+    const b = await user("Bella");
+    // Same browser (device cookie of B's device) so B's device is trusted: no second factor needed here.
+    b.d.accessToken = a.d.accessToken;
+    const r = await b.d.post("/api/auth/login", { identifier: b.address, password: STRONG_PASSWORD, replaceSession: true });
+    expect(r.body.status).toBe("ok");
+    expect(r.body.user.id).toBe(b.id);
+    // A's session (the caller) is gone.
+    const old = await a.d.get("/api/me");
+    expect(old.status).toBe(401);
+  });
+
+  it("comments, counts, edit by the author, delete rules", async () => {
+    const a = await user("Kira");
+    const b = await user("Lev");
+    const post = (await a.d.post("/api/vibex/posts", { text: "Hello comments" })).body;
+    const c1 = await b.d.post(`/api/vibex/posts/${post.id}/comments`, { text: "  Nice!  " });
+    expect(c1.status).toBe(201);
+    expect(c1.body).toMatchObject({ text: "Nice!", mine: true, author: { id: b.id } });
+    expect((await b.d.post(`/api/vibex/posts/${post.id}/comments`, { text: "   " })).status).toBe(400);
+    expect((await a.d.get(`/api/vibex/posts/${post.id}`)).body.comments).toBe(1);
+    const list = await a.d.get(`/api/vibex/posts/${post.id}/comments`);
+    expect(list.body.map((c: { text: string; mine: boolean }) => [c.text, c.mine])).toEqual([["Nice!", false]]);
+
+    // Only the author edits; the edit is marked.
+    expect((await b.d.patch(`/api/vibex/posts/${post.id}`, { text: "hacked" })).status).toBe(404);
+    const edited = await a.d.patch(`/api/vibex/posts/${post.id}`, { text: "Hello, edited" });
+    expect(edited.body).toMatchObject({ text: "Hello, edited", editedAt: expect.any(String) });
+    expect((await a.d.patch(`/api/vibex/posts/${post.id}`, { text: "" })).status).toBe(400);
+
+    // A stranger can't delete a comment; the post's author can.
+    const c = await user("Mila");
+    expect((await c.d.delete(`/api/vibex/comments/${c1.body.id}`)).status).toBe(404);
+    expect((await a.d.delete(`/api/vibex/comments/${c1.body.id}`)).status).toBe(200);
+    expect((await a.d.get(`/api/vibex/posts/${post.id}`)).body.comments).toBe(0);
+  });
+
+  it("not interested hides a post (and its reposts) from my feed only; reports are stored once", async () => {
+    const a = await user("Nina");
+    const b = await user("Petr");
+    const post = (await a.d.post("/api/vibex/posts", { text: "Maybe not for everyone" })).body;
+    const c = await user("Raya");
+    await c.d.post(`/api/vibex/posts/${post.id}/repost`);
+    expect((await a.d.post(`/api/vibex/posts/${post.id}/hide`)).status).toBe(400); // own post
+    expect((await b.d.post(`/api/vibex/posts/${post.id}/hide`)).status).toBe(200);
+    const feedB = (await b.d.get("/api/vibex/feed?limit=100")).body.items as { id: string; repostOf?: { id: string } | null }[];
+    expect(feedB.some((p) => p.id === post.id || p.repostOf?.id === post.id)).toBe(false);
+    const feedC = (await c.d.get("/api/vibex/feed?limit=100")).body.items as { id: string }[];
+    expect(feedC.some((p) => p.id === post.id)).toBe(true);
+
+    expect((await b.d.post(`/api/vibex/posts/${post.id}/report`, { reason: "spam" })).status).toBe(200);
+    expect((await b.d.post(`/api/vibex/posts/${post.id}/report`, { reason: "spam" })).status).toBe(200);
+    const rows = await env.app.ctx.db.execute<{ n: number }>(sql`select count(*)::int as n from vibex_reports where post_id = ${post.id}`);
+    expect(rows.rows[0]!.n).toBe(1);
+  });
+
+  it("feed changes reach other people's devices live", async () => {
+    const a = await user("Uma");
+    const b = await user("Vlad");
+    const live = listen(b);
+    const post = (await a.d.post("/api/vibex/posts", { text: "live" })).body;
+    await b.d.post(`/api/vibex/posts/${post.id}/like`);
+    live.stop();
+    expect(live.events.filter((e) => e.type === "vibex.feed" && e.postId === post.id).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("translation: target = reader's language, source detected; 503 when the provider is off", async () => {
+    const a = await user("Yana");
+    const b = await user("Zoe");
+    const post = (await a.d.post("/api/vibex/posts", { text: "Good morning, how are you today?" })).body;
+    // The test server has translation disabled: an honest 503, no fake text.
+    const off = await b.d.post(`/api/vibex/posts/${post.id}/translate`);
+    expect(off.status).toBe(503);
+    expect(off.body.error.code).toBe("service_unavailable");
   });
 });

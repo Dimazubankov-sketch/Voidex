@@ -457,6 +457,8 @@ export const vibexPosts = pgTable(
     text: text("text").notNull().default(""),
     repostOfId: uuid("repost_of_id").references((): AnyPgColumn => vibexPosts.id, { onDelete: "set null" }),
     createdAt: createdAt(),
+    /** Step 2.2: the author edited the text. */
+    editedAt: ts("edited_at"),
     deletedAt: ts("deleted_at"),
   },
   (t) => [
@@ -539,4 +541,64 @@ export const vibexBookmarks = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.postId, t.userId] }), index("vibex_bookmarks_user_idx").on(t.userId, t.createdAt)],
+);
+
+/**
+ * Step 2.2: Vibex is activated per VOIDEX account (email + password on the
+ * Vibex sign-in screen). One account = one Vibex profile; no second identity.
+ */
+export const vibexProfiles = pgTable("vibex_profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  activatedAt: ts("activated_at").notNull().defaultNow(),
+});
+
+export const vibexComments = pgTable(
+  "vibex_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => vibexPosts.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    text: text("text").notNull(),
+    createdAt: createdAt(),
+    deletedAt: ts("deleted_at"),
+  },
+  (t) => [index("vibex_comments_post_idx").on(t.postId, t.createdAt)],
+);
+
+/** "Not interested": the post leaves this person's feed. */
+export const vibexHiddenPosts = pgTable(
+  "vibex_hidden_posts",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => vibexPosts.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ name: "vibex_hidden_posts_pk", columns: [t.userId, t.postId] })],
+);
+
+/** Reports of posts, kept for moderation (one per person per post). */
+export const vibexReports = pgTable(
+  "vibex_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => vibexPosts.id, { onDelete: "cascade" }),
+    reason: text("reason", { enum: ["spam", "abuse", "other"] }).notNull().default("other"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("vibex_reports_once_uq").on(t.reporterId, t.postId)],
 );

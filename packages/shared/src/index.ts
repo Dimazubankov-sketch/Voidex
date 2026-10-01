@@ -10,3 +10,4 @@ export * from "./validation/person.js";
 export * from "./validation/username.js";
 export * from "./validation/password.js";
 export * from "./vibex.js";
+export * from "./language-detect.js";

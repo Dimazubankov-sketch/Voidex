@@ -54,6 +54,12 @@ export const LoginSchema = z.object({
   identifier: z.string().min(1).max(254),
   password,
   deviceName: z.string().max(80).optional(),
+  /**
+   * Account switch (e.g. from Vibex): the caller's current session (Bearer
+   * token) is signed out once the new one is issued. Same sessions, same
+   * checks — a new device still needs the second factor.
+   */
+  replaceSession: z.boolean().optional(),
 });
 
 export const ChallengeSecretSchema = z.object({ secret });

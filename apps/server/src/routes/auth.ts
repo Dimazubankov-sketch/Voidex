@@ -59,6 +59,17 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   // ---------------------------------------------------------------- sign-in
 
+  /** Account switch: the session that made the request (Bearer) ends once a new one exists. */
+  const endCallerSession = async (authorization: string | undefined, newUserId: string) => {
+    if (!authorization?.startsWith("Bearer ")) return;
+    try {
+      const old = await sessions.authenticate(authorization.slice(7));
+      if (old.userId !== newUserId) await sessions.revoke(old.sessionId, "account_switch");
+    } catch {
+      /* already gone */
+    }
+  };
+
   app.post("/login", { config: limit(10) }, async (req, reply): Promise<LoginResponse> => {
     const body = parse(LoginSchema, req.body);
     const meta = requestMeta(req, body.deviceName);
@@ -66,6 +77,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     if (await sessions.isTrustedDevice(user.id, meta.deviceToken)) {
       const issued = await app.ctx.db.transaction((tx) => sessions.create(tx, user.id, meta, { trustDevice: true }));
+      if (body.replaceSession) await endCallerSession(req.headers.authorization, user.id);
       return { status: "ok", ...sendSession(req, reply, config, issued, await accounts.me(user.id)) };
     }
     // New device: password alone is not enough.
@@ -99,8 +111,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   app.post("/challenges/:id/complete", { config: limit(15) }, async (req, reply) => {
     const { id } = parse(idParam, req.params);
-    const body = parse(ChallengeSecretSchema.extend({ deviceName: z.string().max(80).optional() }), req.body);
+    const body = parse(ChallengeSecretSchema.extend({ deviceName: z.string().max(80).optional(), replaceSession: z.boolean().optional() }), req.body);
     const { issued, me } = await challenges.completeLogin(id, body.secret, requestMeta(req, body.deviceName));
+    if (body.replaceSession) await endCallerSession(req.headers.authorization, me.id);
     return sendSession(req, reply, config, issued, me);
   });
 

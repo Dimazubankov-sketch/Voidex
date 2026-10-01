@@ -3,6 +3,7 @@ import type { Db } from "../db/client.js";
 import type { BlobStorage } from "./blobs.js";
 import type { EventHub } from "./events.js";
 import type { SmsProvider } from "./sms/index.js";
+import type { Translator } from "./translate.js";
 
 /** Dependencies shared by all services. Built once in app.ts. */
 export interface Ctx {
@@ -11,6 +12,7 @@ export interface Ctx {
   sms: SmsProvider;
   events: EventHub;
   blobs: BlobStorage;
+  translator: Translator;
   now: () => Date;
 }
 

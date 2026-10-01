@@ -28,6 +28,11 @@ export class EventHub {
     }
   }
 
+  /** Every connected device (public changes, e.g. the Vibex feed). */
+  toAll(event: ServerEvent) {
+    for (const s of this.subs) s.listener(event);
+  }
+
   toSession(sessionId: string, event: ServerEvent) {
     for (const s of this.subs) if (s.sessionId === sessionId) s.listener(event);
   }

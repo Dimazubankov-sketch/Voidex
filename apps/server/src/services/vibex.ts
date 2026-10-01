@@ -6,7 +6,11 @@ import {
   VIBEX_POST_IMAGE_TYPES,
   attachmentMimeType,
   sanitizeFilename,
+  detectLanguage,
   type VibexChatDto,
+  type VibexCommentDto,
+  type VibexMeDto,
+  type VibexTranslationDto,
   type VibexFileDto,
   type VibexHistoryItemDto,
   type VibexMessageDto,
@@ -16,7 +20,21 @@ import {
   type VibexProfileDto,
 } from "@voidex/shared";
 import type { Db, Tx } from "../db/client.js";
-import { mailAccounts, users, vibexBookmarks, vibexConversations, vibexFiles, vibexLikes, vibexMembers, vibexMessages, vibexPosts } from "../db/schema.js";
+import {
+  mailAccounts,
+  users,
+  vibexBookmarks,
+  vibexComments,
+  vibexConversations,
+  vibexFiles,
+  vibexHiddenPosts,
+  vibexLikes,
+  vibexMembers,
+  vibexMessages,
+  vibexPosts,
+  vibexProfiles,
+  vibexReports,
+} from "../db/schema.js";
 import { looksLike } from "../lib/file-types.js";
 import { fail, notFound } from "../lib/errors.js";
 import type { Ctx } from "./context.js";
@@ -69,6 +87,26 @@ const fileDto = (f: FileRow): VibexFileDto => ({
 export class VibexService {
   constructor(private readonly ctx: Ctx) {}
 
+  /** Translations cache: post id + edit time + target → text (bounded). */
+  private readonly translations = new Map<string, VibexTranslationDto>();
+
+  // ---------------------------------------------------------------- profile
+
+  async isActivated(userId: string): Promise<boolean> {
+    const [p] = await this.ctx.db.select({ id: vibexProfiles.userId }).from(vibexProfiles).where(eq(vibexProfiles.userId, userId));
+    return !!p;
+  }
+
+  async me(userId: string): Promise<VibexMeDto> {
+    return { activated: await this.isActivated(userId), person: await this.person(userId) };
+  }
+
+  /** Turns Vibex on for this VOIDEX account (idempotent). Credentials are checked by the route. */
+  async activate(userId: string): Promise<VibexMeDto> {
+    await this.ctx.db.insert(vibexProfiles).values({ userId }).onConflictDoNothing();
+    return this.me(userId);
+  }
+
   // ------------------------------------------------------------------ people
 
   private async persons(ids: string[], db: Db | Tx = this.ctx.db): Promise<Map<string, VibexPersonDto>> {
@@ -111,6 +149,8 @@ export class VibexService {
       .select({ id: users.id })
       .from(users)
       .innerJoin(mailAccounts, and(eq(mailAccounts.userId, users.id), eq(mailAccounts.isPrimary, true)))
+      // Only people who use Vibex can be found and messaged here.
+      .innerJoin(vibexProfiles, eq(vibexProfiles.userId, users.id))
       .where(
         and(
           ne(users.id, viewerId),
@@ -251,7 +291,7 @@ export class VibexService {
     const originals = originalIds.length ? await this.ctx.db.select().from(vibexPosts).where(inArray(vibexPosts.id, originalIds)) : [];
     const all = [...rows, ...originals];
     const ids = all.map((r) => r.id);
-    const [people, media, likeCounts, repostCounts, myLikes, myMarks, myReposts] = await Promise.all([
+    const [people, media, likeCounts, repostCounts, myLikes, myMarks, myReposts, commentCounts] = await Promise.all([
       this.persons(all.map((r) => r.authorId)),
       this.filesOf("postId", ids),
       this.ctx.db
@@ -270,7 +310,13 @@ export class VibexService {
         .select({ id: vibexPosts.repostOfId })
         .from(vibexPosts)
         .where(and(inArray(vibexPosts.repostOfId, ids), eq(vibexPosts.authorId, viewerId), eq(vibexPosts.kind, "repost"), isNull(vibexPosts.deletedAt))),
+      this.ctx.db
+        .select({ id: vibexComments.postId, n: sql<number>`count(*)::int` })
+        .from(vibexComments)
+        .where(and(inArray(vibexComments.postId, ids), isNull(vibexComments.deletedAt)))
+        .groupBy(vibexComments.postId),
     ]);
+    const comments = new Map(commentCounts.map((r) => [r.id, r.n]));
     const likes = new Map(likeCounts.map((r) => [r.id, r.n]));
     const reposts = new Map(repostCounts.map((r) => [r.id!, r.n]));
     const liked = new Set(myLikes.map((r) => r.id));
@@ -289,6 +335,8 @@ export class VibexService {
       bookmarked: marked.has(r.id),
       reposted: reposted.has(r.id),
       mine: r.authorId === viewerId,
+      comments: comments.get(r.id) ?? 0,
+      editedAt: r.editedAt?.toISOString() ?? null,
     });
     const byId = new Map(all.map((r) => [r.id, r]));
     for (const r of rows) {
@@ -316,9 +364,18 @@ export class VibexService {
     return { items: items.map((r) => dtos.get(r.id)!), next: more ? encodeCursor(items.at(-1)!.createdAt, items.at(-1)!.id) : null };
   }
 
-  /** Everyone's posts and reposts, newest first. */
+  /** Everyone's posts and reposts, newest first — minus what I marked "not interested". */
   feed(viewerId: string, cursor?: string, limit = 30) {
-    return this.page(viewerId, undefined, cursor, limit);
+    const hidden = this.ctx.db.select({ id: vibexHiddenPosts.postId }).from(vibexHiddenPosts).where(eq(vibexHiddenPosts.userId, viewerId));
+    return this.page(
+      viewerId,
+      and(
+        sql`${vibexPosts.id} NOT IN (${hidden})`,
+        or(isNull(vibexPosts.repostOfId), sql`${vibexPosts.repostOfId} NOT IN (${hidden})`),
+      ),
+      cursor,
+      limit,
+    );
   }
 
   personPosts(viewerId: string, userId: string, cursor?: string, limit = 30) {
@@ -342,7 +399,95 @@ export class VibexService {
       await this.claimFiles(tx, authorId, "post", input.mediaIds, { postId: p!.id });
       return p!;
     });
+    this.feedChanged(row.id);
     return this.post(authorId, row.id);
+  }
+
+  /** The author edits the text of their post (not of a repost). */
+  async editPost(authorId: string, id: string, text: string): Promise<VibexPostDto> {
+    const [row] = await this.ctx.db
+      .update(vibexPosts)
+      .set({ text: text.trim(), editedAt: this.ctx.now() })
+      .where(and(eq(vibexPosts.id, id), eq(vibexPosts.authorId, authorId), eq(vibexPosts.kind, "post"), isNull(vibexPosts.deletedAt)))
+      .returning();
+    if (!row) throw notFound("Post");
+    const media = await this.filesOf("postId", [row.id]);
+    if (!row.text && !(media.get(row.id)?.length ?? 0)) throw fail(ErrorCode.ValidationFailed, "Empty post", { fields: { text: "required" } });
+    this.feedChanged(row.id);
+    return this.post(authorId, row.id);
+  }
+
+  /** "Not interested": the post (and reposts of it) leave my feed. */
+  async hidePost(userId: string, id: string) {
+    const post = await this.target(id);
+    if (post.authorId === userId) throw fail(ErrorCode.ValidationFailed, "You can't hide your own post.");
+    await this.ctx.db.insert(vibexHiddenPosts).values({ userId, postId: post.id }).onConflictDoNothing();
+    return { ok: true };
+  }
+
+  /** A report for moderation (one per person per post). */
+  async report(userId: string, id: string, reason: "spam" | "abuse" | "other") {
+    const post = await this.target(id);
+    if (post.authorId === userId) throw fail(ErrorCode.ValidationFailed, "You can't report your own post.");
+    await this.ctx.db.insert(vibexReports).values({ reporterId: userId, postId: post.id, reason }).onConflictDoNothing();
+    return { ok: true };
+  }
+
+  // --------------------------------------------------------------- comments
+
+  async comments(viewerId: string, postId: string): Promise<VibexCommentDto[]> {
+    const post = await this.target(postId);
+    const rows = await this.ctx.db
+      .select()
+      .from(vibexComments)
+      .where(and(eq(vibexComments.postId, post.id), isNull(vibexComments.deletedAt)))
+      .orderBy(asc(vibexComments.createdAt), asc(vibexComments.id))
+      .limit(500);
+    const people = await this.persons(rows.map((r) => r.authorId));
+    return rows.map((r) => ({ id: r.id, postId: r.postId, author: people.get(r.authorId)!, text: r.text, createdAt: r.createdAt.toISOString(), mine: r.authorId === viewerId }));
+  }
+
+  async addComment(authorId: string, postId: string, text: string): Promise<VibexCommentDto> {
+    const post = await this.target(postId);
+    const [row] = await this.ctx.db.insert(vibexComments).values({ postId: post.id, authorId, text: text.trim() }).returning();
+    this.feedChanged(post.id);
+    return { id: row!.id, postId: post.id, author: await this.person(authorId), text: row!.text, createdAt: row!.createdAt.toISOString(), mine: true };
+  }
+
+  /** The comment's author or the post's author removes a comment. */
+  async deleteComment(userId: string, commentId: string) {
+    const [c] = await this.ctx.db.select().from(vibexComments).where(and(eq(vibexComments.id, commentId), isNull(vibexComments.deletedAt)));
+    if (!c) throw notFound("Comment");
+    const [p] = await this.ctx.db.select({ authorId: vibexPosts.authorId }).from(vibexPosts).where(eq(vibexPosts.id, c.postId));
+    if (c.authorId !== userId && p?.authorId !== userId) throw notFound("Comment");
+    await this.ctx.db.update(vibexComments).set({ deletedAt: this.ctx.now() }).where(eq(vibexComments.id, commentId));
+    this.feedChanged(c.postId);
+    return { ok: true };
+  }
+
+  // ------------------------------------------------------------- translation
+
+  /** Translates a post the reader can see into their language. */
+  async translate(viewerId: string, postId: string): Promise<VibexTranslationDto> {
+    const post = await this.target(postId);
+    const [viewer] = await this.ctx.db.select({ language: users.language }).from(users).where(eq(users.id, viewerId));
+    const target = viewer?.language ?? "en";
+    if (!post.text.trim()) throw fail(ErrorCode.ValidationFailed, "Nothing to translate.");
+    const key = `${post.id}|${post.editedAt?.getTime() ?? 0}|${target}`;
+    const cached = this.translations.get(key);
+    if (cached) return cached;
+    const source = detectLanguage(post.text);
+    if (source === target) return { text: post.text, source, target };
+    const text = await this.ctx.translator.translate(post.text, source, target);
+    const dto = { text, source, target };
+    if (this.translations.size > 2000) this.translations.delete(this.translations.keys().next().value!);
+    this.translations.set(key, dto);
+    return dto;
+  }
+
+  /** Feed-wide change (new post, edit, comment, delete): every signed-in Vibex refreshes. */
+  private feedChanged(postId?: string) {
+    this.ctx.events.toAll({ type: "vibex.feed", ...(postId ? { postId } : {}) });
   }
 
   async deletePost(authorId: string, id: string) {
@@ -352,6 +497,7 @@ export class VibexService {
       .where(and(eq(vibexPosts.id, id), eq(vibexPosts.authorId, authorId), isNull(vibexPosts.deletedAt)))
       .returning();
     if (!row) throw notFound("Post");
+    this.feedChanged(row.id);
     return { ok: true };
   }
 
@@ -369,6 +515,7 @@ export class VibexService {
     const post = await this.target(id);
     if (on) await this.ctx.db.insert(vibexLikes).values({ postId: post.id, userId }).onConflictDoNothing();
     else await this.ctx.db.delete(vibexLikes).where(and(eq(vibexLikes.postId, post.id), eq(vibexLikes.userId, userId)));
+    this.feedChanged(post.id);
     return this.post(userId, post.id);
   }
 
@@ -383,6 +530,7 @@ export class VibexService {
   async repost(userId: string, id: string): Promise<VibexPostDto> {
     const original = await this.target(id);
     await this.ctx.db.insert(vibexPosts).values({ authorId: userId, kind: "repost", repostOfId: original.id }).onConflictDoNothing();
+    this.feedChanged(original.id);
     const [mine] = await this.ctx.db
       .select()
       .from(vibexPosts)
@@ -396,6 +544,7 @@ export class VibexService {
       .update(vibexPosts)
       .set({ deletedAt: this.ctx.now() })
       .where(and(eq(vibexPosts.authorId, userId), eq(vibexPosts.repostOfId, original.id), eq(vibexPosts.kind, "repost"), isNull(vibexPosts.deletedAt)));
+    this.feedChanged(original.id);
     return this.post(userId, original.id);
   }
 
@@ -434,7 +583,7 @@ export class VibexService {
   async openDirect(userId: string, otherId: string): Promise<VibexChatDto> {
     if (otherId === userId) throw fail(ErrorCode.ValidationFailed, "You can't chat with yourself.");
     const [other] = await this.ctx.db.select({ id: users.id, status: users.status }).from(users).where(eq(users.id, otherId));
-    if (!other || other.status !== "active") throw notFound("User");
+    if (!other || other.status !== "active" || !(await this.isActivated(otherId))) throw notFound("User");
     const directKey = [userId, otherId].sort().join(":");
     const id = await this.ctx.db.transaction(async (tx) => {
       await tx.insert(vibexConversations).values({ kind: "direct", directKey }).onConflictDoNothing();

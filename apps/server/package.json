@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate-cli.ts",
+    "db:seed:dev": "tsx --env-file-if-exists=.env src/db/seed-dev.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

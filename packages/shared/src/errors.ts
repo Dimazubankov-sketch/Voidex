@@ -66,6 +66,10 @@ export const ErrorCode = {
   AttachmentTypeNotAllowed: "attachment_type_not_allowed",
   AttachmentLimit: "attachment_limit",
 
+  // vibex
+  VibexNotActivated: "vibex_not_activated",
+  VibexOtherAccount: "vibex_other_account",
+
   // apps
   AppNotInRegistry: "app_not_in_registry",
   AppNotRemovable: "app_not_removable",

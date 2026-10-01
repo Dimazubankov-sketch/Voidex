@@ -42,6 +42,9 @@ const EnvSchema = z.object({
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),
   SMSRU_API_ID: z.string().optional(),
+  // Vibex post translation: mymemory (default) or disabled. TRANSLATE_EMAIL raises MyMemory's daily quota.
+  TRANSLATE_PROVIDER: z.enum(["mymemory", "disabled"]).optional(),
+  TRANSLATE_EMAIL: z.string().optional(),
 
   /** Set when running behind a reverse proxy so client IPs are correct. */
   TRUST_PROXY: bool.default(false),
@@ -132,6 +135,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       smsru: { apiId: e.SMSRU_API_ID },
       otpcom: { apiKey: e.OTP_API_KEY?.trim() },
       smsaero: { email: e.SMS_AERO_EMAIL?.trim(), apiKey: e.SMS_AERO_API_KEY?.trim(), sign: e.SMS_AERO_SIGN?.trim() || "SMS Aero", baseUrl: e.SMS_AERO_API_BASE?.trim() || undefined },
+    },
+    translate: {
+      // Tests never call the network.
+      provider: e.TRANSLATE_PROVIDER ?? (e.NODE_ENV === "test" ? "disabled" : "mymemory"),
+      email: e.TRANSLATE_EMAIL?.trim() || undefined,
     },
     trustProxy: e.TRUST_PROXY,
     cookieSecure: e.COOKIE_SECURE ?? production,

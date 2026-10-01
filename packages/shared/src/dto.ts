@@ -228,6 +228,8 @@ export type ServerEvent =
   | { type: "vibex.message"; conversationId: string; messageId: string; senderId: string; senderName: string; snippet: string }
   /** Vibex: chats changed (read receipts, pins) — refresh the list. */
   | { type: "vibex.chats"; conversationId?: string }
+  /** Vibex: a post was created / edited / liked / commented / removed — refresh feeds. */
+  | { type: "vibex.feed"; postId?: string }
   | {
       type: "mail.received";
       threadId: string;
