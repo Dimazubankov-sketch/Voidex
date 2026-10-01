@@ -40,7 +40,8 @@ describe("workspace layout (server-side, per account)", () => {
     const me = await pc.get("/api/me");
     const saved: WorkspaceLayout = me.body.preferences.workspace.layout;
     expect(saved.mobile.columns).toBe(4);
-    expect(saved.mobile.pages).toEqual([[{ kind: "folder", id: "f_work01" }]]);
+    // Apps the client didn't know about (Vibex) are appended by the server.
+    expect(saved.mobile.pages).toEqual([[{ kind: "folder", id: "f_work01" }, { kind: "app", id: "vibex" }]]);
     expect(saved.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-milk-violet" });
     expect(saved.appearance.glass).toBe("medium");
   });
@@ -51,7 +52,7 @@ describe("workspace layout (server-side, per account)", () => {
     const bad = defaultLayout(["mail", "settings"]);
     bad.mobile.pages = [[{ kind: "app", id: "mail" }, { kind: "app", id: "mail" }]];
     const r = await d.patch("/api/preferences", { workspace: { layout: bad } });
-    expect(r.body.workspace.layout.mobile.pages).toEqual([[{ kind: "app", id: "mail" }, { kind: "app", id: "settings" }]]);
+    expect(r.body.workspace.layout.mobile.pages).toEqual([[{ kind: "app", id: "mail" }, { kind: "app", id: "settings" }, { kind: "app", id: "vibex" }]]);
   });
 
   it("layouts saved before Step 2.1 still load: retired wallpapers are mapped, glass defaults to on", async () => {

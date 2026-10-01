@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail";
+export type AppId = "settings" | "mail" | "vibex";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -102,6 +102,31 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
       tr: ["e-posta", "gelen kutusu", "mesajlar", "mektup", "voidops"],
     },
     window: { defaultWidth: 1180, defaultHeight: 720, minWidth: 720, minHeight: 480, singleton: true },
+  },
+  vibex: {
+    id: "vibex",
+    name: { en: "Vibex", ru: "Vibex", es: "Vibex", de: "Vibex", fr: "Vibex", pt: "Vibex", zh: "Vibex", ja: "Vibex", ko: "Vibex", tr: "Vibex" },
+    caption: { en: "Chats & feed", ru: "Чаты и лента", es: "Chats y noticias", de: "Chats & Feed", fr: "Discussions et fil", pt: "Chats e feed", zh: "聊天与动态", ja: "チャットとフィード", ko: "채팅 및 피드", tr: "Sohbetler ve akış" },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    permissions: ["account.read", "notifications.post"],
+    status: "available",
+    category: "communication",
+    keywords: {
+      en: ["messenger", "chat", "messages", "feed", "posts", "social"],
+      ru: ["мессенджер", "чат", "сообщения", "лента", "посты", "соцсеть"],
+      es: ["mensajería", "chat", "mensajes", "noticias", "publicaciones", "social"],
+      de: ["Messenger", "Chat", "Nachrichten", "Feed", "Beiträge", "sozial"],
+      fr: ["messagerie", "discussion", "messages", "fil", "publications", "social"],
+      pt: ["mensageiro", "chat", "mensagens", "feed", "publicações", "social"],
+      zh: ["即时通讯", "聊天", "消息", "动态", "帖子", "社交"],
+      ja: ["メッセンジャー", "チャット", "メッセージ", "フィード", "投稿", "ソーシャル"],
+      ko: ["메신저", "채팅", "메시지", "피드", "게시물", "소셜"],
+      tr: ["mesajlaşma", "sohbet", "mesajlar", "akış", "gönderiler", "sosyal"],
+    },
+    window: { defaultWidth: 1120, defaultHeight: 740, minWidth: 720, minHeight: 500, singleton: true },
   },
 };
 

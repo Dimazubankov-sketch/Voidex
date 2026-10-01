@@ -85,7 +85,7 @@ export async function signUpViaApi(page: Page, first = "Борис", last = "О�
   expect(res.user).toBeTruthy();
   await page.reload();
   await expect(page.getByTestId("workspace")).toBeVisible();
-  return { username, address: `${username}@voidops.ru` };
+  return { username, address: `${username}@voidops.ru`, id: res.user.id as string, token: res.accessToken as string };
 }
 
 export async function newPage(browser: Browser, mobile: boolean) {
@@ -97,7 +97,7 @@ export async function newPage(browser: Browser, mobile: boolean) {
   return ctx.newPage();
 }
 
-export async function openApp(page: Page, id: "mail" | "settings") {
+export async function openApp(page: Page, id: "mail" | "settings" | "vibex") {
   await page.getByTestId(`app-${id}`).click();
   await expect(page.locator(`[data-testid="window-${id}"][data-state="open"]`)).toBeVisible();
 }

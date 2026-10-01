@@ -292,11 +292,12 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await page.waitForTimeout(300);
   await finger.up();
   await expect(overlay).toHaveCount(0);
+  // The folder of one dissolves: Mail, Settings and Vibex are on the page again.
   const top = page.locator('[data-home-container="mobile:0"] > [data-home-item]');
-  await expect(top).toHaveCount(2);
+  await expect(top).toHaveCount(3);
   const app = page.locator('[data-home-container="mobile:0"] [data-testid^="app-"]').first();
   await finger.tap(await center(app.getByTestId("home-remove-badge")));
-  await expect(top).toHaveCount(1);
+  await expect(top).toHaveCount(2);
 });
 
 test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, empty dock leaves only search", async ({ page }) => {
@@ -304,7 +305,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await signUpViaApi(page, "Дан", "Ок");
   const dockOrder = () => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
   await expect(page.getByTestId("dock")).toBeVisible();
-  expect(await dockOrder()).toEqual(["mail", "settings"]);
+  expect(await dockOrder()).toEqual(["mail", "settings", "vibex"]);
 
   // Hover the Desktops system icon → glass menu; create and switch desktops there.
   await page.getByTestId("dock-desktops").hover();
@@ -324,7 +325,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.mouse.move(a.x + 10, a.y, { steps: 2 });
   await page.mouse.move(b.x + 40, b.y, { steps: 10 });
   await page.mouse.up();
-  await expect.poll(dockOrder).toEqual(["settings", "mail"]);
+  await expect.poll(dockOrder).toEqual(["settings", "mail", "vibex"]);
 
   // Open from the dock.
   await page.getByTestId("dock-app-mail").click();
@@ -332,8 +333,8 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-close").click();
 
-  // Unpin both (menu) → the dock disappears, the search stays.
-  for (const id of ["mail", "settings"]) {
+  // Unpin all (menu) → the dock disappears, the search stays.
+  for (const id of ["mail", "settings", "vibex"]) {
     await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
     await page.getByTestId(`dock-app-${id}`).click({ button: "right" });
     await page.getByTestId("menu-unpin").click();

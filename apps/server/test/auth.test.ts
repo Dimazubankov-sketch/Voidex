@@ -46,7 +46,7 @@ describe("registration", () => {
     expect(me.status).toBe(200);
     expect(me.body.firstName).toBe("Anna");
     const apps = await d.get("/api/apps");
-    expect(apps.body.map((a: { id: string }) => a.id).sort()).toEqual(["mail", "settings"]);
+    expect(apps.body.map((a: { id: string }) => a.id).sort()).toEqual(["mail", "settings", "vibex"]);
   });
 
   it("rejects an already linked phone before sending SMS", async () => {

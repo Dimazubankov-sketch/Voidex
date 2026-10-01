@@ -1,0 +1,290 @@
+import { useInfiniteQuery, useMutation, useQuery, type InfiniteData } from "@tanstack/react-query";
+import {
+  VIBEX_FILE_MAX_BYTES,
+  VIBEX_POST_IMAGE_TYPES,
+  attachmentMimeType,
+  type VibexChatDto,
+  type VibexFileDto,
+  type VibexHistoryItemDto,
+  type VibexMessageDto,
+  type VibexPage,
+  type VibexPersonDto,
+  type VibexPostDto,
+  type VibexProfileDto,
+} from "@voidex/shared";
+import { api, qs } from "@/lib/api";
+import { queryClient } from "@/lib/query";
+
+/** Query keys: everything under ["vibex"] so a reconnect / sign-out refreshes it all. */
+export const vk = {
+  all: ["vibex"] as const,
+  chats: ["vibex", "chats"] as const,
+  chat: (id: string) => ["vibex", "chat", id] as const,
+  messages: (id: string) => ["vibex", "messages", id] as const,
+  feed: ["vibex", "feed"] as const,
+  posts: ["vibex", "posts"] as const,
+  personPosts: (id: string) => ["vibex", "posts", "person", id] as const,
+  post: (id: string) => ["vibex", "post", id] as const,
+  profile: (id: string) => ["vibex", "profile", id] as const,
+  people: (q: string) => ["vibex", "people", q] as const,
+  history: (kind: HistoryKind) => ["vibex", "history", kind] as const,
+  file: (id: string) => ["vibex", "file", id] as const,
+};
+
+export type HistoryKind = "liked" | "bookmarks";
+
+// ---------------------------------------------------------------- people
+
+export function usePeople(q: string) {
+  return useQuery({
+    queryKey: vk.people(q),
+    queryFn: () => api.get<VibexPersonDto[]>(`/api/vibex/people${qs({ q })}`),
+    staleTime: 30_000,
+  });
+}
+
+export function useProfile(id: string | null) {
+  return useQuery({
+    queryKey: vk.profile(id ?? ""),
+    enabled: !!id,
+    queryFn: () => api.get<VibexProfileDto>(`/api/vibex/people/${id}`),
+  });
+}
+
+// ----------------------------------------------------------------- chats
+
+export function useChats() {
+  return useQuery({ queryKey: vk.chats, queryFn: () => api.get<VibexChatDto[]>("/api/vibex/chats"), staleTime: 15_000 });
+}
+
+export function useChat(id: string | null) {
+  return useQuery({
+    queryKey: vk.chat(id ?? ""),
+    enabled: !!id,
+    queryFn: () => api.get<VibexChatDto>(`/api/vibex/chats/${id}`),
+    // Prefill from the list so the header shows instantly.
+    initialData: () => queryClient.getQueryData<VibexChatDto[]>(vk.chats)?.find((c) => c.id === id),
+    initialDataUpdatedAt: () => queryClient.getQueryState(vk.chats)?.dataUpdatedAt,
+  });
+}
+
+export function useMessages(id: string) {
+  return useInfiniteQuery({
+    queryKey: vk.messages(id),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexPage<VibexMessageDto>>(`/api/vibex/chats/${id}/messages${qs({ before: pageParam, limit: 50 })}`),
+    getNextPageParam: (last) => last.next,
+    staleTime: 10_000,
+  });
+}
+
+export const openDirect = (userId: string) => api.post<VibexChatDto>("/api/vibex/chats/direct", { userId });
+
+type MessagesData = InfiniteData<VibexPage<VibexMessageDto>>;
+
+export function useSendMessage(chatId: string) {
+  return useMutation({
+    mutationFn: (v: { text: string; fileIds: string[] }) => api.post<VibexMessageDto>(`/api/vibex/chats/${chatId}/messages`, v),
+    onSuccess: (msg) => {
+      // Show it right away; the server event then refreshes every device.
+      queryClient.setQueryData<MessagesData>(vk.messages(chatId), (d) => {
+        if (!d || d.pages[0]?.items.some((m) => m.id === msg.id)) return d;
+        const [first, ...rest] = d.pages;
+        return { ...d, pages: [{ ...first!, items: [msg, ...first!.items] }, ...rest] };
+      });
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
+}
+
+export function markRead(chatId: string) {
+  return api.post(`/api/vibex/chats/${chatId}/read`).then(() => {
+    queryClient.setQueryData<VibexChatDto[]>(vk.chats, (list) => list?.map((c) => (c.id === chatId ? { ...c, unread: 0 } : c)));
+  });
+}
+
+export function useSetPins() {
+  return useMutation({
+    mutationFn: (conversationIds: string[]) => api.put<VibexChatDto[]>("/api/vibex/chats/pins", { conversationIds }),
+    onMutate: async (ids) => {
+      await queryClient.cancelQueries({ queryKey: vk.chats });
+      const prev = queryClient.getQueryData<VibexChatDto[]>(vk.chats);
+      if (prev) queryClient.setQueryData(vk.chats, applyPins(prev, ids));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && queryClient.setQueryData(vk.chats, ctx.prev),
+    onSuccess: (list) => queryClient.setQueryData(vk.chats, list),
+  });
+}
+
+/** The list as the server will return it after `PUT /chats/pins` (pinned in my order, then by activity). */
+export function applyPins(list: VibexChatDto[], pinnedIds: string[]): VibexChatDto[] {
+  const pos = new Map(pinnedIds.map((id, i) => [id, i]));
+  return list
+    .map((c) => ({ ...c, pinnedPosition: pos.get(c.id) ?? null }))
+    .filter((c) => c.lastMessage || c.pinnedPosition !== null)
+    .sort((a, b) => {
+      if (a.pinnedPosition !== null || b.pinnedPosition !== null) {
+        if (a.pinnedPosition === null) return 1;
+        if (b.pinnedPosition === null) return -1;
+        return a.pinnedPosition - b.pinnedPosition;
+      }
+      return b.lastMessageAt.localeCompare(a.lastMessageAt);
+    });
+}
+
+// ----------------------------------------------------------------- files
+
+export const filesApi = {
+  upload: (file: File, purpose: "message" | "post") =>
+    api.post<VibexFileDto>(`/api/vibex/files${qs({ purpose })}`, file, {
+      headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) },
+    }),
+  discard: (id: string) => api.delete(`/api/vibex/files/${id}`),
+  blob: (id: string) => api.get<Blob>(`/api/vibex/files/${id}`),
+};
+
+/** Client-side check (the server re-validates everything). Returns an error code or null. */
+export function checkVibexFile(file: File, purpose: "message" | "post"): "attachment_type_not_allowed" | "attachment_too_large" | null {
+  const mime = attachmentMimeType(file.name);
+  if (!mime || (purpose === "post" && !VIBEX_POST_IMAGE_TYPES.includes(mime))) return "attachment_type_not_allowed";
+  if (file.size > VIBEX_FILE_MAX_BYTES) return "attachment_too_large";
+  return null;
+}
+
+/** Image previews: fetched with the access token, shown from a blob URL. */
+export function useFileUrl(id: string | null) {
+  return useQuery({
+    queryKey: vk.file(id ?? ""),
+    enabled: !!id,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    queryFn: async () => URL.createObjectURL(await filesApi.blob(id!)),
+  });
+}
+
+export async function saveFile(f: VibexFileDto) {
+  const url = URL.createObjectURL(await filesApi.blob(f.id));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = f.filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+// ------------------------------------------------------------------ posts
+
+function postPages(key: readonly unknown[], url: (cursor: string | null) => string, enabled = true) {
+  return {
+    queryKey: key,
+    enabled,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }: { pageParam: string | null }) => api.get<VibexPage<VibexPostDto>>(url(pageParam)),
+    getNextPageParam: (last: VibexPage<VibexPostDto>) => last.next,
+    // Other people's changes (deleted posts, new reposts) don't arrive as events: refresh on every visit.
+    staleTime: 0,
+  };
+}
+
+export function useFeed() {
+  return useInfiniteQuery(postPages(vk.feed, (before) => `/api/vibex/feed${qs({ before })}`));
+}
+
+export function usePersonPosts(id: string | null) {
+  return useInfiniteQuery(postPages(vk.personPosts(id ?? ""), (before) => `/api/vibex/people/${id}/posts${qs({ before })}`, !!id));
+}
+
+export function usePost(id: string | null) {
+  return useQuery({ queryKey: vk.post(id ?? ""), enabled: !!id, queryFn: () => api.get<VibexPostDto>(`/api/vibex/posts/${id}`), retry: false });
+}
+
+export function useHistory(kind: HistoryKind) {
+  return useInfiniteQuery({
+    queryKey: vk.history(kind),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexPage<VibexHistoryItemDto>>(`/api/vibex/history${qs({ kind, before: pageParam })}`),
+    getNextPageParam: (last) => last.next,
+    staleTime: 0,
+  });
+}
+
+type PostsData = InfiniteData<VibexPage<VibexPostDto>>;
+
+/** Applies a fresh copy of an original post everywhere it is shown (cards, repost cards, history, chats). */
+function patchPost(updated: VibexPostDto) {
+  const fix = (p: VibexPostDto): VibexPostDto => {
+    if (p.id === updated.id) return { ...updated, repostOf: p.repostOf };
+    if (p.repostOf?.id === updated.id) return { ...p, repostOf: { ...updated } };
+    return p;
+  };
+  for (const [key, data] of queryClient.getQueriesData<PostsData>({ queryKey: vk.posts })) {
+    if (data?.pages) queryClient.setQueryData<PostsData>(key, { ...data, pages: data.pages.map((pg) => ({ ...pg, items: pg.items.map(fix) })) });
+  }
+  queryClient.setQueryData<PostsData>(vk.feed, (d) => d && { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.map(fix) })) });
+  queryClient.setQueryData<VibexPostDto>(vk.post(updated.id), (p) => p && fix(p));
+}
+
+export function usePostAction() {
+  return useMutation({
+    mutationFn: async (v: { post: VibexPostDto; action: "like" | "unlike" | "bookmark" | "unbookmark" }) => {
+      const id = v.post.repostOf?.id ?? v.post.id;
+      const path = v.action.endsWith("like") ? "like" : "bookmark";
+      return v.action.startsWith("un") ? api.delete<VibexPostDto>(`/api/vibex/posts/${id}/${path}`) : api.post<VibexPostDto>(`/api/vibex/posts/${id}/${path}`);
+    },
+    onMutate: ({ post, action }) => {
+      const orig = post.kind === "repost" ? post.repostOf : post;
+      if (!orig) return;
+      const next = { ...orig };
+      if (action === "like") Object.assign(next, { liked: true, likes: orig.likes + (orig.liked ? 0 : 1) });
+      if (action === "unlike") Object.assign(next, { liked: false, likes: Math.max(0, orig.likes - (orig.liked ? 1 : 0)) });
+      if (action === "bookmark") next.bookmarked = true;
+      if (action === "unbookmark") next.bookmarked = false;
+      patchPost(next);
+    },
+    onSuccess: (p) => patchPost(p),
+    onSettled: (_d, _e, v) => {
+      void queryClient.invalidateQueries({ queryKey: vk.history(v.action.endsWith("like") ? "liked" : "bookmarks") });
+    },
+  });
+}
+
+export function useCreatePost() {
+  return useMutation({
+    mutationFn: (v: { text: string; mediaIds: string[] }) => api.post<VibexPostDto>("/api/vibex/posts", v),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: vk.feed });
+      void queryClient.invalidateQueries({ queryKey: vk.posts });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "profile"] });
+    },
+  });
+}
+
+function refreshPosts() {
+  void queryClient.invalidateQueries({ queryKey: vk.feed });
+  void queryClient.invalidateQueries({ queryKey: vk.posts });
+  void queryClient.invalidateQueries({ queryKey: ["vibex", "history"] });
+  void queryClient.invalidateQueries({ queryKey: ["vibex", "profile"] });
+}
+
+export function useDeletePost() {
+  return useMutation({ mutationFn: (id: string) => api.delete(`/api/vibex/posts/${id}`), onSuccess: refreshPosts });
+}
+
+export function useRepost() {
+  return useMutation({
+    mutationFn: (v: { id: string; on: boolean }) =>
+      v.on ? api.post<VibexPostDto>(`/api/vibex/posts/${v.id}/repost`) : api.delete<VibexPostDto>(`/api/vibex/posts/${v.id}/repost`),
+    onSuccess: refreshPosts,
+  });
+}
+
+export function sharePost(postId: string, userIds: string[], text: string) {
+  return api.post<{ conversationIds: string[] }>(`/api/vibex/posts/${postId}/share`, { userIds, text });
+}
+
+/** A link to a post that opens it inside VOIDEX (requires being signed in). */
+export function postLink(id: string) {
+  return `${window.location.origin}/#vibex/post/${id}`;
+}

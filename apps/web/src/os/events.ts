@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { toast } from "@/ui/overlays";
+import { visibleChats } from "@/apps/vibex/store";
 import { useWM } from "./window-manager";
 
 export const useConnection = create<{ connected: boolean; online: boolean }>(() => ({
@@ -65,6 +66,30 @@ function handle(event: ServerEvent) {
       if (prefs?.sound) playChime();
       break;
     }
+    case "vibex.message": {
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
+      if (event.senderId === session.user?.id || seenMessages.has(event.messageId)) break;
+      seenMessages.add(event.messageId);
+      // No banner for a chat that is already on screen.
+      if (visibleChats.has(event.conversationId) && document.visibilityState === "visible") break;
+      const prefs = session.user?.preferences.notifications;
+      if (prefs?.newMailBanner) {
+        toast({
+          title: t("vibex.newMessage", { name: event.senderName }),
+          body: prefs.showPreview ? event.snippet || t("vibex.chats.attachment") : undefined,
+          onClick: () => useWM.getState().open("vibex", { params: { chatId: event.conversationId } }),
+          duration: 6000,
+        });
+      }
+      if (prefs?.sound) playChime();
+      break;
+    }
+    case "vibex.chats":
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
+      if (event.conversationId) void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
+      break;
     case "account.updated":
     case "preferences.updated":
       void refreshMe();

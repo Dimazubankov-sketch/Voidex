@@ -50,6 +50,20 @@ export function Workspace() {
     return () => useWM.getState().reset();
   }, [userId]);
 
+  // Shared Vibex links (#vibex/post/<id>) open the post inside Vibex.
+  useEffect(() => {
+    if (!hydrated) return;
+    const follow = () => {
+      const m = /^#vibex\/post\/([0-9a-f-]{36})$/.exec(window.location.hash);
+      if (!m) return;
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      useWM.getState().open("vibex", { params: { postId: m[1] } });
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [hydrated]);
+
   // PC: only the current virtual desktop's windows count as open.
   const fg = ff === "desktop" ? foregroundId(wm, wm.space) : foregroundId(wm);
   const anyVisible = !!fg;

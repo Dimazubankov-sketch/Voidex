@@ -93,6 +93,11 @@ export function MailGlyph({ className }: { className?: string }) {
   );
 }
 
+/** Vibex — the speech-bubble mark (raster, from the provided brand asset). */
+export function VibexGlyph({ className }: { className?: string }) {
+  return <img src="/brand/vibex-mark.png" alt="" aria-hidden className={cx("object-contain", className)} draggable={false} />;
+}
+
 /** Rounded white tile with a soft glow — the VOIDEX app icon container. */
 export function AppTile({ children, size = 72, className, glow }: { children: React.ReactNode; size?: number; className?: string; glow?: boolean }) {
   return (
