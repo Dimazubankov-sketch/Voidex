@@ -12,6 +12,7 @@ import {
   type DraftCreateInput,
   type DraftDto,
   type DraftInput,
+  type LanguageCode,
   type MailAddressDto,
   type MailAttachmentDto,
   type MailFolder,
@@ -56,6 +57,21 @@ function looksLike(mime: string, b: Buffer): boolean {
       return true;
   }
 }
+
+/** Quote / forward headers in the reader's interface language. */
+type QuoteText = { wrote: (when: string, who: string) => string; fwd: string; from: string; date: string; subject: string; to: string };
+const QUOTE: Record<LanguageCode, QuoteText> = {
+  en: { wrote: (w, who) => `On ${w}, ${who} wrote:`, fwd: "---------- Forwarded message ----------", from: "From", date: "Date", subject: "Subject", to: "To" },
+  ru: { wrote: (w, who) => `${w}, ${who} пишет:`, fwd: "---------- Пересланное сообщение ----------", from: "От", date: "Дата", subject: "Тема", to: "Кому" },
+  es: { wrote: (w, who) => `El ${w}, ${who} escribió:`, fwd: "---------- Mensaje reenviado ----------", from: "De", date: "Fecha", subject: "Asunto", to: "Para" },
+  de: { wrote: (w, who) => `Am ${w} schrieb ${who}:`, fwd: "---------- Weitergeleitete Nachricht ----------", from: "Von", date: "Datum", subject: "Betreff", to: "An" },
+  fr: { wrote: (w, who) => `Le ${w}, ${who} a écrit :`, fwd: "---------- Message transféré ----------", from: "De", date: "Date", subject: "Objet", to: "À" },
+  pt: { wrote: (w, who) => `Em ${w}, ${who} escreveu:`, fwd: "---------- Mensagem encaminhada ----------", from: "De", date: "Data", subject: "Assunto", to: "Para" },
+  zh: { wrote: (w, who) => `${who} 于 ${w} 写道：`, fwd: "---------- 转发的邮件 ----------", from: "发件人", date: "日期", subject: "主题", to: "收件人" },
+  ja: { wrote: (w, who) => `${w}、${who} さんは書きました:`, fwd: "---------- 転送メッセージ ----------", from: "差出人", date: "日付", subject: "件名", to: "宛先" },
+  ko: { wrote: (w, who) => `${w}에 ${who}님이 작성:`, fwd: "---------- 전달된 메시지 ----------", from: "보낸 사람", date: "날짜", subject: "제목", to: "받는 사람" },
+  tr: { wrote: (w, who) => `${w} tarihinde ${who} şunu yazdı:`, fwd: "---------- İletilen ileti ----------", from: "Kimden", date: "Tarih", subject: "Konu", to: "Kime" },
+};
 
 export type ThreadAction = "archive" | "trash" | "restore" | "delete_forever" | "read" | "unread" | "star" | "unstar" | "inbox";
 
@@ -801,7 +817,7 @@ export class MailService {
     userId: string,
     messageId: string,
     mode: "reply" | "reply_all" | "forward",
-    locale: { lang: "en" | "ru"; tz?: string } = { lang: "en" },
+    locale: { lang: LanguageCode; tz?: string } = { lang: "en" },
   ) {
     const acc = await this.accountFor(userId);
     const m = await this.visibleMessage(this.ctx.db, acc, messageId);
@@ -814,10 +830,7 @@ export class MailService {
     } catch {
       when = new Intl.DateTimeFormat(locale.lang, { dateStyle: "long", timeStyle: "short", timeZone: "UTC" }).format(m.sentAt ?? m.createdAt);
     }
-    const L =
-      locale.lang === "ru"
-        ? { wrote: (w: string, who: string) => `${w}, ${who} пишет:`, fwd: "---------- Пересланное сообщение ----------", from: "От", date: "Дата", subject: "Тема", to: "Кому" }
-        : { wrote: (w: string, who: string) => `On ${w}, ${who} wrote:`, fwd: "---------- Forwarded message ----------", from: "From", date: "Date", subject: "Subject", to: "To" };
+    const L = QUOTE[locale.lang] ?? QUOTE.en;
     const who = `${m.senderName} <${m.senderAddress}>`;
     if (mode === "forward") {
       const header = [

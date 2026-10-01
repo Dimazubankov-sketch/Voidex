@@ -21,14 +21,15 @@ export const ATTACHMENT_ACCEPT = Object.keys(MAIL_ATTACHMENT_TYPES)
   .join(",");
 
 export function formatBytes(n: number, lang: string) {
-  const units = lang === "ru" ? ["Б", "КБ", "МБ"] : ["B", "KB", "MB"];
+  const units = ["byte", "kilobyte", "megabyte"] as const;
   let v = n;
   let u = 0;
   while (v >= 1024 && u < units.length - 1) {
     v /= 1024;
     u++;
   }
-  return `${new Intl.NumberFormat(lang, { maximumFractionDigits: u === 0 ? 0 : 1 }).format(v)} ${units[u]}`;
+  // Unit names in the interface language (Б / KB / Ko / КБ…).
+  return new Intl.NumberFormat(lang, { style: "unit", unit: units[u], unitDisplay: "short", maximumFractionDigits: u === 0 ? 0 : 1 }).format(v);
 }
 
 function FileIcon({ mime, className }: { mime: string; className?: string }) {

@@ -4,6 +4,7 @@ import {
   ErrorCode,
   MAIL_ATTACHMENT_MAX_BYTES,
   DraftInputSchema,
+  LANGUAGE_CODES,
   MailListQuerySchema,
   MailMessageFlagSchema,
   MailThreadActionSchema,
@@ -47,7 +48,7 @@ export const mailRoutes: FastifyPluginAsync = async (app) => {
     const q = parse(
       z.object({
         mode: z.enum(["reply", "reply_all", "forward"]),
-        lang: z.enum(["en", "ru"]).default("en"),
+        lang: z.enum(LANGUAGE_CODES).default("en"),
         tz: z.string().max(64).regex(/^[A-Za-z_+\-/0-9]+$/).optional(),
       }),
       req.query,

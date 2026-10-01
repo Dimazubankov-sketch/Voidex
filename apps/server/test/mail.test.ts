@@ -88,6 +88,20 @@ describe("internal mail", () => {
     expect(d.body.cc).toEqual([c.address]);
   });
 
+  it("reply / forward quote headers follow every interface language", async () => {
+    const a = await user();
+    const b = await user();
+    const first = await send(a.d, { to: [b.address], subject: "Hallo", body: "Text" });
+    const msg = (await b.d.get(`/api/mail/threads/${first.body.threadId}`)).body.messages[0];
+    const de = await b.d.get(`/api/mail/messages/${msg.id}/compose?mode=reply&lang=de`);
+    expect(de.status).toBe(200);
+    expect(de.body.body).toContain("schrieb");
+    const ja = await b.d.get(`/api/mail/messages/${msg.id}/compose?mode=forward&lang=ja`);
+    expect(ja.status).toBe(200);
+    expect(ja.body.body).toContain("転送メッセージ");
+    expect((await b.d.get(`/api/mail/messages/${msg.id}/compose?mode=reply&lang=xx`)).status).toBe(400);
+  });
+
   it("forwards into a new thread", async () => {
     const a = await user();
     const b = await user();
