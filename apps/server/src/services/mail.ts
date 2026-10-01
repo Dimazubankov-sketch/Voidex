@@ -26,6 +26,7 @@ import {
 } from "@voidex/shared";
 import type { Tx } from "../db/client.js";
 import { mailAccounts, mailAttachments, mailEntries, mailMessages, mailRecipients, mailThreads, users } from "../db/schema.js";
+import { looksLike } from "../lib/file-types.js";
 import { fail, notFound } from "../lib/errors.js";
 import type { Ctx } from "./context.js";
 
@@ -38,25 +39,6 @@ type Attachment = typeof mailAttachments.$inferSelect;
 const toAttachmentDto = (a: Attachment): MailAttachmentDto => ({ id: a.id, filename: a.filename, mimeType: a.mimeType, size: a.sizeBytes });
 
 /** Magic bytes of the raster images we preview inline; other types are served as downloads only. */
-function looksLike(mime: string, b: Buffer): boolean {
-  switch (mime) {
-    case "image/jpeg":
-      return b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-    case "image/png":
-      return b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    case "image/gif":
-      return b.length > 6 && (b.subarray(0, 6).toString("latin1") === "GIF87a" || b.subarray(0, 6).toString("latin1") === "GIF89a");
-    case "image/webp":
-      return b.length > 12 && b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP";
-    case "image/heic":
-    case "image/heif":
-      return b.length > 12 && b.subarray(4, 8).toString("latin1") === "ftyp";
-    case "application/pdf":
-      return b.length > 5 && b.subarray(0, 5).toString("latin1") === "%PDF-";
-    default:
-      return true;
-  }
-}
 
 /** Quote / forward headers in the reader's interface language. */
 type QuoteText = { wrote: (when: string, who: string) => string; fwd: string; from: string; date: string; subject: string; to: string };

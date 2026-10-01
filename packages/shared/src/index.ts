@@ -9,3 +9,4 @@ export * from "./dto.js";
 export * from "./validation/person.js";
 export * from "./validation/username.js";
 export * from "./validation/password.js";
+export * from "./vibex.js";

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   customType,
   date,
@@ -394,11 +395,148 @@ export const blobs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     /** What the blob is for: "mail" attachment content or the "wallpaper". */
-    purpose: text("purpose", { enum: ["mail", "wallpaper"] }).notNull(),
+    purpose: text("purpose", { enum: ["mail", "wallpaper", "vibex"] }).notNull(),
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     data: bytea("data").notNull(),
     createdAt: createdAt(),
   },
   (t) => [index("blobs_owner_idx").on(t.ownerUserId, t.purpose)],
+);
+
+/* ==========================================================================
+   Vibex — messenger and social feed
+   ========================================================================== */
+
+/** A conversation. Direct chats have one row per pair of people (direct_key). */
+export const vibexConversations = pgTable(
+  "vibex_conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind", { enum: ["direct"] }).notNull().default("direct"),
+    /** "<smaller user id>:<larger user id>" — one direct chat per pair. */
+    directKey: text("direct_key"),
+    createdAt: createdAt(),
+    lastMessageAt: ts("last_message_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("vibex_conversations_direct_uq").on(t.directKey)],
+);
+
+/** Membership, with each member's read marker and their own pinned order. */
+export const vibexMembers = pgTable(
+  "vibex_members",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => vibexConversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Everything up to here is read (null: nothing yet). */
+    lastReadAt: ts("last_read_at"),
+    /** Position among this member's pinned chats; null = not pinned. */
+    pinnedPosition: integer("pinned_position"),
+    joinedAt: ts("joined_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] }), index("vibex_members_user_idx").on(t.userId)],
+);
+
+/**
+ * A post on someone's page. A repost is a post of kind "repost" pointing at the
+ * original (never a copy). Posts are soft-deleted so reposts and history can
+ * show "post unavailable".
+ */
+export const vibexPosts = pgTable(
+  "vibex_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["post", "repost"] }).notNull().default("post"),
+    text: text("text").notNull().default(""),
+    repostOfId: uuid("repost_of_id").references((): AnyPgColumn => vibexPosts.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    deletedAt: ts("deleted_at"),
+  },
+  (t) => [
+    index("vibex_posts_created_idx").on(t.createdAt),
+    index("vibex_posts_author_idx").on(t.authorId, t.createdAt),
+    index("vibex_posts_repost_of_idx").on(t.repostOfId),
+    uniqueIndex("vibex_posts_one_repost_uq").on(t.authorId, t.repostOfId).where(sql`kind = 'repost' AND deleted_at IS NULL`),
+  ],
+);
+
+export const vibexMessages = pgTable(
+  "vibex_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => vibexConversations.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    text: text("text").notNull().default(""),
+    /** A post shared into the chat ("Share → send in a message"). */
+    sharedPostId: uuid("shared_post_id").references(() => vibexPosts.id, { onDelete: "set null" }),
+    sharedPost: boolean("shared_post").notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [index("vibex_messages_conversation_idx").on(t.conversationId, t.createdAt)],
+);
+
+/** Files of chat messages and pictures of posts; the bytes live in `blobs`. */
+export const vibexFiles = pgTable(
+  "vibex_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose", { enum: ["message", "post"] }).notNull(),
+    /** Set when the message / post is sent; until then only the owner sees it. */
+    messageId: uuid("message_id").references(() => vibexMessages.id, { onDelete: "cascade" }),
+    postId: uuid("post_id").references(() => vibexPosts.id, { onDelete: "cascade" }),
+    position: integer("position").notNull().default(0),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("vibex_files_message_idx").on(t.messageId),
+    index("vibex_files_post_idx").on(t.postId),
+    index("vibex_files_owner_idx").on(t.ownerId, t.createdAt),
+  ],
+);
+
+export const vibexLikes = pgTable(
+  "vibex_likes",
+  {
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => vibexPosts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index("vibex_likes_user_idx").on(t.userId, t.createdAt)],
+);
+
+/** Private: only the person who bookmarked sees it. */
+export const vibexBookmarks = pgTable(
+  "vibex_bookmarks",
+  {
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => vibexPosts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.postId, t.userId] }), index("vibex_bookmarks_user_idx").on(t.userId, t.createdAt)],
 );

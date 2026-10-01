@@ -224,6 +224,10 @@ export type ServerEvent =
   | { type: "approval.requested"; approvalId: string }
   | { type: "approval.resolved"; approvalId: string }
   | { type: "mail.changed"; threadIds?: string[] }
+  /** Vibex: a new chat message (to every member's devices). */
+  | { type: "vibex.message"; conversationId: string; messageId: string; senderId: string; senderName: string; snippet: string }
+  /** Vibex: chats changed (read receipts, pins) — refresh the list. */
+  | { type: "vibex.chats"; conversationId?: string }
   | {
       type: "mail.received";
       threadId: string;

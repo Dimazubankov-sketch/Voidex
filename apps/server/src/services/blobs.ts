@@ -20,7 +20,7 @@ export interface BlobStorage {
   keysOf(ownerUserId: string, purpose: BlobPurpose, tx?: Tx): Promise<string[]>;
 }
 
-export type BlobPurpose = "mail" | "wallpaper";
+export type BlobPurpose = "mail" | "wallpaper" | "vibex";
 
 export class PgBlobStorage implements BlobStorage {
   constructor(private readonly db: Db) {}

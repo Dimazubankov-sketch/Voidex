@@ -21,10 +21,12 @@ import { SessionService, type AuthContext } from "./services/sessions.js";
 import { OtpComSmsProvider, createSmsProvider, type SmsProvider } from "./services/sms/index.js";
 import { PgBlobStorage } from "./services/blobs.js";
 import { VerificationService } from "./services/verification.js";
+import { VibexService } from "./services/vibex.js";
 import { accountRoutes } from "./routes/account.js";
 import { authRoutes } from "./routes/auth.js";
 import { mailRoutes } from "./routes/mail.js";
 import { systemRoutes } from "./routes/system.js";
+import { vibexRoutes } from "./routes/vibex.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -46,6 +48,7 @@ export interface Services {
   apps: AppsService;
   legal: LegalService;
   mail: MailService;
+  vibex: VibexService;
 }
 
 export interface BuildOptions {
@@ -92,6 +95,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
     apps: new AppsService(ctx),
     legal: new LegalService(),
     mail: new MailService(ctx),
+    vibex: new VibexService(ctx),
   };
   app.decorate("services", services);
   app.decorate("ctx", ctx);
@@ -206,6 +210,7 @@ export async function buildApp({ config, sms, db: providedDb, now }: BuildOption
       await api.register(authRoutes, { prefix: "/auth" });
       await api.register(accountRoutes);
       await api.register(mailRoutes, { prefix: "/mail" });
+      await api.register(vibexRoutes, { prefix: "/vibex" });
     },
     { prefix: "/api" },
   );
