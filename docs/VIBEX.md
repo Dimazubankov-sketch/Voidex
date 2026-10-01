@@ -95,7 +95,7 @@ on the uploader's next upload.
   conversation, composer), `posts.tsx` (cards, composer), `share-sheet.tsx`,
   `people.tsx` (people, profiles, history), `media.tsx` (previews, viewer, files),
   `data.ts` (queries/mutations), `store.ts` (per-window UI state).
-* Brand: `public/brand/vibex-mark.png` (`VibexGlyph`).
+* Brand: `public/brand/app-vibex.png` (`VibexGlyph`).
 
 ## Known limits / next
 

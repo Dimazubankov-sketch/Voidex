@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/cx";
@@ -82,87 +82,25 @@ export function VoidexWordmark({ className }: { className?: string }) {
   );
 }
 
-/** Settings — hexagonal shutter (after the provided reference). */
+/*
+ * App logos (Step 2.2 set): the provided artwork, used as is — only the white
+ * tile, glow and page background of the source images were cut away. Shown
+ * through TrimmedLogo so every mark fills the same box in its tile.
+ */
+
+/** Settings — hexagonal shutter. */
 export function SettingsGlyph({ className }: { className?: string }) {
-  const id = useId();
-  // Six segments between an outer and inner hexagon, three alternating tones.
-  const R = 44;
-  const r = 20;
-  const pt = (rad: number, i: number) => {
-    const a = (Math.PI / 3) * i - Math.PI / 2;
-    return [50 + rad * Math.cos(a), 50 + rad * Math.sin(a)] as const;
-  };
-  const tones = [`url(#${id}a)`, `url(#${id}b)`, `url(#${id}c)`];
-  // viewBox = the mark's own bounds, so it fills the icon box like every other logo.
-  return (
-    <svg viewBox="5.5 5.5 89 89" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={`${id}a`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#7b5cff" />
-          <stop offset="1" stopColor="#5a3cf0" />
-        </linearGradient>
-        <linearGradient id={`${id}b`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#a58cff" />
-          <stop offset="1" stopColor="#8a6cfa" />
-        </linearGradient>
-        <linearGradient id={`${id}c`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#c7b6ff" />
-          <stop offset="1" stopColor="#ab95fc" />
-        </linearGradient>
-      </defs>
-      {Array.from({ length: 6 }, (_, i) => {
-        // Each blade is offset by half a side, which gives the folded "shutter" look.
-        const o1 = pt(R, i);
-        const o2 = pt(R, i + 1);
-        const i2 = pt(r, i + 1.5);
-        const i1 = pt(r, i + 0.5);
-        return (
-          <path
-            key={i}
-            d={`M${o1.join(",")} L${o2.join(",")} L${i2.join(",")} L${i1.join(",")} Z`}
-            fill={tones[i % 3]}
-            stroke="white"
-            strokeOpacity="0.35"
-            strokeWidth="0.6"
-            strokeLinejoin="round"
-          />
-        );
-      })}
-    </svg>
-  );
+  return <TrimmedLogo src="/brand/app-settings.png" className={className} />;
 }
 
-/** Mail — folded envelope of three triangles (after the provided reference). */
+/** Mail — the envelope. */
 export function MailGlyph({ className }: { className?: string }) {
-  const id = useId();
-  return (
-    <svg viewBox="11 11.5 78 78" className={className} aria-hidden>
-      <defs>
-        <linearGradient id={`${id}l`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#8a64ff" />
-          <stop offset="1" stopColor="#5b2cf2" />
-        </linearGradient>
-        <linearGradient id={`${id}r`} x1="1" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#c9b8ff" />
-          <stop offset="1" stopColor="#b39cfb" />
-        </linearGradient>
-        <linearGradient id={`${id}b`} x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0" stopColor="#9a74ff" />
-          <stop offset="1" stopColor="#8358fb" />
-        </linearGradient>
-      </defs>
-      <g strokeLinejoin="round">
-        <path d="M14 18 L50 52 L14 84 Z" fill={`url(#${id}l)`} stroke={`url(#${id}l)`} strokeWidth="5" />
-        <path d="M86 18 L86 84 L50 52 Z" fill={`url(#${id}r)`} stroke={`url(#${id}r)`} strokeWidth="5" />
-        <path d="M14 84 L50 52 L86 84 Z" fill={`url(#${id}b)`} stroke={`url(#${id}b)`} strokeWidth="5" />
-      </g>
-    </svg>
-  );
+  return <TrimmedLogo src="/brand/app-mail.png" className={className} />;
 }
 
-/** Vibex — the speech-bubble mark (raster, from the provided brand asset). */
+/** Vibex — the speech-bubble mark. */
 export function VibexGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/vibex-mark.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-vibex.png" className={className} />;
 }
 
 /** Share of the tile the logo's content box fills — the same for every app. */
