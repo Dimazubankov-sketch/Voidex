@@ -18,7 +18,11 @@ export interface ContextMenuState {
   x: number;
   y: number;
   target: ContextTarget;
+  /** Unique per opening, so a menu reopened at the same spot starts fresh. */
+  seq?: number;
 }
+
+let menuSeq = 0;
 
 export interface DragState {
   item: LayoutItem;
@@ -71,7 +75,7 @@ export const useHomeUi = create<HomeUi>((set) => ({
   setOpenFolder: (openFolder) => set(openFolder ? { openFolder, menu: null } : { openFolder, menu: null, renamingFolder: null }),
   setRenamingFolder: (renamingFolder) => set({ renamingFolder }),
   setRenaming: (renaming) => set({ renaming, menu: null }),
-  openMenu: (menu) => set({ menu }),
+  openMenu: (menu) => set({ menu: { ...menu, seq: ++menuSeq } }),
   closeMenu: () => set({ menu: null }),
   setSearch: (s) => set((st) => ({ search: { ...st.search, ...s } })),
   setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false }),

@@ -108,7 +108,7 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
         plain && "bg-surface",
         ff === "mobile" ? "inset-[10px] top-[max(var(--safe-top),10px)] bottom-[max(var(--safe-bottom),10px)] rounded-[32px]" : "inset-[14px] rounded-[34px]",
       )}
-      style={plain ? undefined : { backgroundColor: "var(--surface)", ...wp.style }}
+      style={plain ? undefined : wp.style}
       animate={receded ? { opacity: 0.55, scale: 0.985 } : hidden ? { opacity: 0.6, scale: 0.94 } : { opacity: 1, scale: 1 }}
       transition={{ duration: 0.4, ease: EASE }}
       aria-hidden={hidden || undefined}

@@ -86,7 +86,7 @@ export function ContextMenu({ layout }: { layout: WorkspaceLayout }) {
           data-testid="home-context-backdrop"
         />
       )}
-      <AnimatePresence>{menu && <MenuPanel key={`${menu.x}:${menu.y}`} layout={layout} x={menu.x} y={menu.y} target={menu.target} />}</AnimatePresence>
+      <AnimatePresence>{menu && <MenuPanel key={menu.seq} layout={layout} x={menu.x} y={menu.y} target={menu.target} />}</AnimatePresence>
     </>,
     document.body,
   );

@@ -32,6 +32,11 @@ class Finger {
   up() {
     return this.cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   }
+  async tap(p: { x: number; y: number }) {
+    await this.down(p);
+    await this.page.waitForTimeout(60);
+    await this.up();
+  }
   async longPress(p: { x: number; y: number }) {
     await this.down(p);
     await this.page.waitForTimeout(650);
@@ -241,4 +246,49 @@ test("Settings → Desktop: text size and wallpaper apply to desktop labels only
   await page.getByTestId("wallpaper-color-e0f2fe").click();
   await expect(page.getByTestId("label-size-l")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(224, 242, 254\)/);
+});
+
+test("phone: touch drag works inside a folder; first tap on − after a drag removes the icon", async ({ page }) => {
+  test.skip(!isMobile(page), "phone gestures");
+  await signUpViaApi(page, "Ада", "Ро");
+  const finger = await Finger.on(page);
+  // Folder with both apps (via the menus).
+  await finger.longPress(await center(page.getByTestId("app-mail")));
+  await page.getByTestId("menu-create-folder").click();
+  await page.getByTestId("folder-name-input").press("Enter");
+  await page.getByTestId("folder-backdrop").click({ position: { x: 10, y: 10 } });
+  await expect(page.getByTestId("folder-overlay")).toHaveCount(0);
+  await finger.longPress(await center(page.getByTestId("app-settings")));
+  await page.getByTestId("menu-add-to-folder").click();
+  await page.getByTestId("home-context-menu").getByRole("menuitem").first().click();
+  await page.locator('[data-testid^="folder-f_"]').click();
+  const overlay = page.getByTestId("folder-overlay");
+  await expect(overlay.locator("[data-home-item]")).toHaveCount(2);
+  await page.waitForTimeout(400);
+  const order = () => overlay.locator("[data-home-item]").evaluateAll((els) => els.map((e) => e.getAttribute("data-home-item")));
+  const before = await order();
+  const a = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
+  const b = await center(overlay.locator("[data-home-item]").nth(1).locator("[data-tile]"));
+  await finger.down(a);
+  await page.waitForTimeout(600);
+  await finger.moveTo(a, { x: b.x + 40, y: b.y }, 10);
+  await page.waitForTimeout(400);
+  await finger.up();
+  await expect.poll(order).toEqual([...before].reverse());
+
+  // Drag the first app out of the folder, then the very first tap on "−" works.
+  const c = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
+  const out = { x: c.x, y: (page.viewportSize()?.height ?? 900) - 120 };
+  await finger.down(c);
+  await finger.moveTo(c, out, 14);
+  await page.waitForTimeout(700);
+  await finger.moveTo(out, { x: out.x + 5, y: out.y - 20 }, 3);
+  await page.waitForTimeout(300);
+  await finger.up();
+  await expect(overlay).toHaveCount(0);
+  const top = page.locator('[data-home-container="mobile:0"] > [data-home-item]');
+  await expect(top).toHaveCount(2);
+  const app = page.locator('[data-home-container="mobile:0"] [data-testid^="app-"]').first();
+  await finger.tap(await center(app.getByTestId("home-remove-badge")));
+  await expect(top).toHaveCount(1);
 });

@@ -59,7 +59,6 @@ function RemoveBadge({ label, onRemove }: { label: string; onRemove: () => void 
       data-home-control
       data-testid="home-remove-badge"
       className="absolute -left-2 -top-2 z-10 flex size-[22px] items-center justify-center rounded-full border border-white/70 bg-[rgba(60,60,72,0.72)] text-white shadow-md backdrop-blur-md animate-pop"
-      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
         onRemove();
@@ -144,7 +143,9 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
       layout
       layoutId={`home-${itemKey(item)}`}
       transition={{ layout: { duration: 0.28, ease: EASE } }}
-      className="flex justify-center"
+      // The browser must not take a finger on an icon for scrolling, or it
+      // cancels the drag (pointercancel). Free space still scrolls.
+      className="flex touch-none justify-center"
       style={{ width: metrics.cell }}
       data-home-item={itemKey(item)}
       data-index={index}

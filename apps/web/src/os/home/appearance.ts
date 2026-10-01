@@ -58,13 +58,14 @@ export function wallpaperStyle(w: Wallpaper, imageUrl: string | null | undefined
       return { style: { background: PRESETS[w.id].css }, dark: PRESETS[w.id].dark, image: false };
     case "image":
       return {
-        style: imageUrl ? { backgroundImage: `url("${imageUrl}")`, backgroundSize: "cover", backgroundPosition: "center" } : {},
+        // One shorthand only: mixing background and backgroundColor confuses React's style diffing.
+        style: { background: imageUrl ? `url("${imageUrl}") center / cover no-repeat, var(--surface)` : "var(--surface)" },
         // Photos vary: labels get light text with a soft shadow.
         dark: true,
         image: true,
       };
     default:
-      return { style: {}, dark: false, image: false };
+      return { style: { background: "var(--surface)" }, dark: false, image: false };
   }
 }
 
