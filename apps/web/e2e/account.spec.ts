@@ -122,7 +122,7 @@ test("change password in Settings", async ({ page }) => {
   await expect(page.getByText("Пароль изменён")).toBeVisible();
 });
 
-test("window system: open, go home via [...] menu, reopen from launcher", async ({ page }) => {
+test("window system: open, minimize via [...] menu (phone and PC alike), reopen from launcher", async ({ page }) => {
   await signUpViaApi(page, "Ян", "Ким");
   await openApp(page, "settings");
   await page.getByTestId("window-menu").last().click();
@@ -134,9 +134,11 @@ test("window system: open, go home via [...] menu, reopen from launcher", async 
     await expect(page.getByTestId("menu-home")).toHaveCount(0);
     await page.getByTestId("menu-minimize").click();
   } else {
-    await expect(page.getByTestId("menu-minimize")).toHaveCount(0);
+    // Phone: "Minimize" (the PC icon and action) instead of "Workspace"; no maximize.
+    await expect(page.getByTestId("menu-home")).toHaveCount(0);
+    await expect(page.getByTestId("menu-maximize")).toHaveCount(0);
     await expect(page.getByTestId("menu-switcher")).toBeVisible();
-    await page.getByTestId("menu-home").click();
+    await page.getByTestId("menu-minimize").click();
   }
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
   await page.getByTestId("launcher-button").click();

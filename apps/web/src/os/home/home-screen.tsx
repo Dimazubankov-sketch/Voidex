@@ -476,6 +476,8 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
           transition={{ duration: 0.22, ease: EASE }}
           className="absolute inset-0"
           data-home-free
+          data-testid="desktop-space"
+          data-space={layout.desktop.spaces.findIndex((s) => s.id === current.id) + 1}
         >
           {free ? (
             <FreeArea layout={layout} items={items} metrics={m} label={label} render={item} spaceId={current.id} />

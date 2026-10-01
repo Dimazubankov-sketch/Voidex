@@ -127,11 +127,12 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await expect(page.getByTestId("search-result-mail")).toBeVisible();
   await page.getByTestId("home-search-cancel").click();
 
-  // Brush → wallpaper and 4 icons per row.
+  // Brush → menu (Wallpaper · View · Widgets) → Wallpaper.
   await finger.longPress(empty);
   await page.getByTestId("home-appearance").click();
-  await page.getByTestId("wallpaper-preset-wave-violet").click();
-  await page.getByTestId("phone-columns-4").click();
+  await expect(page.getByTestId("brush-menu")).toBeVisible();
+  await page.getByTestId("brush-wallpaper").click();
+  await page.getByTestId("wallpaper-preset-wave-light").click();
   await page.keyboard.press("Escape");
   await page.getByTestId("home-done").click();
 
@@ -192,33 +193,48 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await expect(page.getByTestId("search-result-settings")).toBeVisible();
   await page.getByTestId("home-search").fill("");
 
+  // No desktop tabs at the top any more (and no desktop "..."): desktops live in the dock.
+  await expect(page.getByTestId("space-tabs")).toHaveCount(0);
+  await expect(page.getByTestId("workspace-menu")).toHaveCount(0);
+  const space = page.getByTestId("desktop-space");
+  const goSpace = async (n: number) => {
+    await page.getByTestId("dock-desktops").click();
+    await page.getByTestId(`dock-space-${n}`).click();
+    await expect(space).toHaveAttribute("data-space", String(n));
+  };
+
   // Virtual desktops: a new one is empty; windows stay on the desktop they were opened on.
-  await page.getByTestId("space-add").click();
-  await expect(page.getByTestId("space-2")).toHaveAttribute("aria-selected", "true");
+  await page.mouse.click(60, 500, { button: "right" });
+  await page.getByTestId("menu-new-space").click();
+  await expect(space).toHaveAttribute("data-space", "2");
   await expect(folder).toHaveCount(0);
   await page.getByTestId("launcher-button").click();
   await page.getByTestId("launcher-settings").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
   // With windows open, Ctrl+Alt+← / → switches desktops.
   await page.keyboard.press("Control+Alt+ArrowLeft");
-  await expect(page.getByTestId("space-1")).toHaveAttribute("aria-selected", "true");
+  await expect(space).toHaveAttribute("data-space", "1");
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
   await expect(folder).toHaveCount(1);
-  await page.getByTestId("space-2").click();
+  await goSpace(2);
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-minimize").click();
-  await page.getByTestId("space-1").click();
+  await goSpace(1);
 
-  // Right click on free space → categories view.
+  // Right click on free space → View → Categories: applied at once, the menu stays.
   const grid = (await page.getByTestId("desktop-grid").boundingBox())!;
   await page.mouse.click(grid.x + 20, grid.y + grid.height + 120, { button: "right" });
+  for (const id of ["appearance", "view", "widgets", "edit"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
   await page.getByTestId("menu-view").click();
+  await page.getByTestId("menu-view-categories").click();
   await expect(page.getByTestId("desktop-categories")).toBeVisible();
   await expect(page.getByTestId("category-folders")).toBeVisible();
-  await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
-  await page.mouse.click(40, 400, { button: "right" });
-  await page.getByTestId("menu-view").click();
+  await expect(page.getByTestId("menu-view-categories")).toHaveAttribute("aria-checked", "true");
+  await page.getByTestId("menu-view-grid").click();
+  await expect(page.getByTestId("desktop-grid")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.mouse.click(5, 5);
 
   // Long press on free space → edit mode; a click on free space leaves it.
   await page.mouse.move(40, 400);
@@ -233,19 +249,33 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await page.waitForTimeout(600);
   await page.reload();
   await expect(folder).toHaveAccessibleName("Главное");
-  await expect(page.getByTestId("space-2")).toBeVisible();
+  await page.getByTestId("dock-desktops").click();
+  await expect(page.getByTestId("dock-space-2")).toBeVisible();
 });
 
-test("Settings → Desktop: text size and wallpaper apply to desktop labels only", async ({ page }) => {
+test("Settings → Desktop: scale (PC) / icons per row (phone), wallpaper, glass; no label colour / size", async ({ page }) => {
   await signUpViaApi(page, "Ира", "Ву");
   await page.getByTestId("app-settings").click();
-  if (isMobile(page)) await page.getByTestId("settings-nav-desktop").click();
-  else await page.getByTestId("settings-nav-desktop").click();
+  await page.getByTestId("settings-nav-desktop").click();
   await expect(page.getByTestId("settings-desktop")).toBeVisible();
-  await page.getByTestId("label-size-l").click();
+  // Retired settings are gone; the profile sections are not in the Settings list.
+  await expect(page.getByTestId("label-size")).toHaveCount(0);
+  await expect(page.getByTestId("label-color")).toHaveCount(0);
+  for (const id of ["personal", "security", "password", "phone", "email", "devices"]) await expect(page.getByTestId(`settings-nav-${id}`)).toHaveCount(0);
+  if (isMobile(page)) {
+    // Phones scale by icons per row only — no second scale control.
+    await expect(page.getByTestId("scale")).toHaveCount(0);
+    await page.getByTestId("phone-columns-4").click();
+    await expect(page.getByTestId("phone-columns-4")).toHaveAttribute("aria-checked", "true");
+  } else {
+    await expect(page.getByTestId("phone-columns")).toHaveCount(0);
+    await page.getByTestId("scale-compact").click();
+    await expect(page.getByTestId("scale-compact")).toHaveAttribute("aria-checked", "true");
+    await page.getByTestId("dock-scale-l").click();
+    await expect(page.getByTestId("dock-scale-l")).toHaveAttribute("aria-checked", "true");
+  }
   await page.getByTestId("wallpaper-preset-mist").click();
-  await expect(page.getByTestId("label-size-l")).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(241, 241, 244\)/);
+  await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(240, 240, 243\)/);
   // Glass effect: a real document-wide setting (default on).
   await expect(page.locator("html")).toHaveAttribute("data-glass", "on");
   await page.getByTestId("glass-off").click();
@@ -311,10 +341,11 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.getByTestId("dock-desktops").hover();
   await expect(page.getByTestId("dock-desktops-menu")).toBeVisible();
   await page.getByTestId("dock-space-add").click();
-  await expect(page.getByTestId("space-2")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("desktop-space")).toHaveAttribute("data-space", "2");
   await page.getByTestId("dock-desktops").hover();
+  await expect(page.getByTestId("dock-space-2")).toHaveAttribute("aria-checked", "true");
   await page.getByTestId("dock-space-1").click();
-  await expect(page.getByTestId("space-1")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("desktop-space")).toHaveAttribute("data-space", "1");
   await page.mouse.move(700, 300);
 
   // Reorder inside the dock.
@@ -333,14 +364,26 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-close").click();
 
-  // Unpin all (menu) → the dock disappears, the search stays.
+  // The search field is inside the dock's one glass shell.
+  await expect(page.getByTestId("dock")).toHaveAttribute("data-glass-shell", "true");
+  await expect(page.getByTestId("dock").getByTestId("home-search")).toBeVisible();
+
+  // Unpin all apps and the Desktops item → no glass, only the search field.
   for (const id of ["mail", "settings", "vibex"]) {
     await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
     await page.getByTestId(`dock-app-${id}`).click({ button: "right" });
     await page.getByTestId("menu-unpin").click();
   }
-  await expect(page.getByTestId("dock")).toHaveCount(0);
+  await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
+  await page.getByTestId("dock-desktops").click({ button: "right" });
+  await page.getByTestId("menu-unpin").click();
+  await expect(page.getByTestId("dock")).not.toHaveAttribute("data-glass-shell", "true");
+  await expect(page.locator("[data-dock-app]")).toHaveCount(0);
   await expect(page.getByTestId("home-search")).toBeVisible();
+  // …and the Desktops item comes back from the desktop's right-click menu.
+  await page.mouse.click(60, 500, { button: "right" });
+  await page.getByTestId("menu-dock-desktops").click();
+  await expect(page.getByTestId("dock-desktops")).toBeVisible();
 
   // Pin by context menu; it survives a reload.
   await page.getByTestId("app-settings").click({ button: "right" });
@@ -352,19 +395,28 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   expect(await dockOrder()).toEqual(["settings"]);
 });
 
-test("phone: grid / categories view switch in the home header, saved to the account", async ({ page }) => {
+test("phone: long press → brush → View switches Grid / Categories in place, menu stays open; saved to the account", async ({ page }) => {
   test.skip(!isMobile(page), "phone home");
   await signUpViaApi(page, "Ли", "Ван");
-  await expect(page.getByTestId("home-view-grid")).toHaveAttribute("aria-checked", "true");
-  await page.getByTestId("home-view-categories").click();
+  const finger = await Finger.on(page);
+  // No permanent view button / "..." / desktops button at the top of the home screen.
+  await expect(page.getByTestId("home-view")).toHaveCount(0);
+  await expect(page.getByTestId("workspace-menu")).toHaveCount(0);
+  const box = (await page.getByTestId("home-page-0").boundingBox())!;
+  await finger.longPress({ x: box.x + box.width / 2, y: box.y + box.height - 80 });
+  await page.getByTestId("home-appearance").click();
+  for (const id of ["brush-wallpaper", "brush-view-row", "brush-widgets"]) await expect(page.getByTestId(id)).toBeVisible();
+  await expect(page.getByTestId("brush-view-grid")).toHaveAttribute("aria-checked", "true");
+  await page.getByTestId("brush-view-categories").click();
   await expect(page.getByTestId("home-categories")).toBeVisible();
+  await expect(page.getByTestId("brush-menu")).toBeVisible(); // still open
+  await expect(page.getByTestId("brush-view-row")).toContainText("По категориям");
   await expect(page.getByTestId("category-communication").getByTestId("app-mail")).toBeVisible();
-  await expect(page.getByTestId("category-system").getByTestId("app-settings")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("home-done").click();
   await page.getByTestId("app-mail").click(); // apps still open from the categories view
   await expect(page.locator('[data-testid="window-mail"][data-state="open"]')).toBeVisible();
   await page.waitForTimeout(600);
   await page.reload();
   await expect(page.getByTestId("home-categories")).toBeVisible();
-  await page.getByTestId("home-view-grid").click();
-  await expect(page.getByTestId("home-page-0")).toBeVisible();
 });

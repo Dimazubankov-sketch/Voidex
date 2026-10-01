@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -94,6 +94,17 @@ export function newSpace() {
 export function ContextMenu({ layout }: { layout: WorkspaceLayout }) {
   const menu = useHomeUi((s) => s.menu);
   const close = () => useHomeUi.getState().closeMenu();
+  // Esc closes the menu (a menu that stays open after "View" must still close from the keyboard).
+  useEffect(() => {
+    if (!menu) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      useHomeUi.getState().closeMenu();
+    };
+    window.addEventListener("keydown", h, true);
+    return () => window.removeEventListener("keydown", h, true);
+  }, [menu]);
   return createPortal(
     <>
       {menu && (

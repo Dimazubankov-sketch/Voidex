@@ -11,12 +11,15 @@ Workspace layout (per account, synced)
  ├── folders      shared by phone and PC — an app in a folder is in it everywhere
  ├── hidden       apps removed from the desktop (still installed, still in the 9-dot menu)
  ├── mobile       pages (max 3) of top-level items, 3 or 4 icons per row
- ├── desktop      virtual desktops (max 6) with their icons; columns 3–8, density,
- │                view grid | categories, order manual | by name
+ ├── desktop      virtual desktops (max 6) with their icons; columns 3–8, scale (density),
+ │                view grid | categories, order manual | by name, arrange grid | free
+ │                (+ positions), dock (pinned apps), dockDesktops, dockScale s|m|l
+ ├── widgets      system widgets: PC free position on a desktop / phone stack on a page
  ├── categories   the user's own category per app (default: the app manifest)
  ├── names        the user's own icon label per app
  └── appearance   wallpaper (VOIDEX default | system preset | own image), glass level
-                  (off / medium / on), label colour (auto/dark/light), label size, captions
+                  (off / medium / on), captions. (Label colour / size retired in 2.2:
+                  labels follow the wallpaper contrast and the scale.)
 Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC desktop each is on
 ```
 
@@ -117,3 +120,39 @@ purpose with its own quota).
   or minimise. A "Move window to desktop" item in the window menu is next.
 * Categories and name-sorted views are for browsing: switch to the grid / manual order to
   drag icons (menus work everywhere).
+
+## Step 2.2 — desktop, dock, widgets
+
+* **Dock = one glass object**: search field + pinned apps + the "Desktops" system item, width by
+  content (`os/home/dock.tsx`). Nothing but the field → no glass. Hover accent is a ~12 %
+  transform (`useMagnify`), so the dock never resizes or jumps. Sizes S/M/L
+  (`desktop.dockScale`, tiles 40/46/52 px). Windows (also maximized) end right above the dock
+  (`dockZone`).
+* **Drag in the dock** changes a preview only (`drag.dockIndex`); the layout is written once on
+  drop; Esc / pointer cancel change nothing. A drag that started in the dock never hides the
+  app's desktop icon (the dock and the desktop are independent views of one app).
+* **Desktop tabs, the desktop `…` and the phone view button are gone.** Desktops: dock item,
+  "Desktops" widget, phone round glass button (pages), Ctrl+Alt+← / →.
+* **Brush** (edit mode, top-left, phone and PC) → Wallpaper · View · Widgets
+  (`brush-menu.tsx`). View switches Grid / Categories (PC: also Free) in place and the menu stays.
+  PC right click on free space → Wallpaper · View ▸ · Widgets · Edit · New desktop.
+* **Widgets** (`widgets.tsx`): built-in catalogue (first: Desktops), search, add / remove, drag
+  to move in edit mode; stored in `layout.widgets` (synced, normalized server-side).
+* **Free placement** (`desktop.arrange = "free"`): positions are fractions of the desktop area
+  minus one cell, so they adapt to any screen and never leave it; the grid order is untouched.
+* **Scale** (Settings, PC only): small / standard / moderately larger icons and labels. Phones
+  scale by icons per row only.
+* **View flip-back fix**: a server copy of the account (our own `preferences.updated` echo) never
+  replaces the layout while a local edit is unconfirmed, nor when one of our saves was confirmed
+  after the refetch started (`mergeServerUser` in `layout.ts`). Covered by
+  `e2e/step22.spec.ts` with a delayed `/api/me` (fails without the fix).
+* **Windows**: geometry lives as long as the window; closing forgets it, reopening uses the
+  standard size and never inherits maximized.
+* **Wallpapers**: neutral built-ins (clean white, white + violet glow, grey) and the VOIDEX wave
+  series (purple wave light, milk, milk & purple, grey wave, grey & purple, milk + grey + purple).
+  Retired presets map to the nearest new one in `normalizeLayout`.
+* **Icons**: every logo fills the same box in its tile (vector marks use their own bounds,
+  raster logos are trimmed of transparent margins at runtime). System UI graphics carry
+  `data-system-ui` / `data-system-asset`: no save-image callout, no native drag. User content
+  (Vibex / Mail pictures, attachments) is not marked.
+* **Logo intro**: short VOIDEX intro on full page load only; skipped with reduced motion.

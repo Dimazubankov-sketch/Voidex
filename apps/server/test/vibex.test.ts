@@ -149,7 +149,7 @@ describe("vibex chats", () => {
 
   it("pinned chats keep my order; the rest follow by activity; pins are per person", async () => {
     const a = await user("Ada");
-    const others = await Promise.all(["Ben", "Cid", "Dan", "Eve"].map(user));
+    const others = await Promise.all(["Ben", "Cid", "Dan", "Eve"].map((n) => user(n)));
     const chats: string[] = [];
     for (const o of others) {
       const c = (await a.d.post("/api/vibex/chats/direct", { userId: o.id })).body;

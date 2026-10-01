@@ -103,3 +103,39 @@ on the uploader's next upload.
 * No follow graph: the feed shows everyone's posts.
 * Files are kept in PostgreSQL (`blobs`), like Mail attachments; moving blobs to object
   storage is a storage-layer change (`BlobStorage` interface) for later.
+
+## Step 2.2 — Voyzen structure on the VOIDEX stack
+
+Architecture stays VOIDEX (accounts, sessions, files, realtime, database); the interface follows
+the original Voyzen.
+
+* **Vibex sign-in** (`auth.tsx`): Voyzen's auth card, email + password, **no phone**. It turns
+  Vibex on for the signed-in VOIDEX account (`POST /api/vibex/activate`, password checked with the
+  normal brute-force protection) — never a second account. Another account's email answers
+  `vibex_other_account` and the UI offers to switch. Until activation the API answers
+  `vibex_not_activated`; only activated people are found / can be messaged. Migration `0005`
+  activates everyone who already used Vibex.
+* **Switch account**: through VOIDEX sessions — `POST /api/auth/login` with `replaceSession`
+  ends this device's current session once the new one is issued; a device that isn't trusted
+  for that account still needs the second factor. The device keeps a list of accounts used on it
+  (`lib/known-accounts.ts`, no secrets). One email = one VOIDEX account.
+* **Side menu** (`sidebar.tsx`): Vibex mark + name, account card (profile / switch), Home,
+  Search, Messages, History (only here), Settings (VOIDEX Settings), Sign out. Collapsible rail on
+  PC, drawer from the avatar on phones; phone bottom bar Home · New post · Messages. No dark mode,
+  Plus/Premium, Support, Analytics, Monetization, calls, games, polls.
+* **Post card**: avatar, name, email · time (· edited), `…` (copy link, bookmark; mine: edit,
+  delete; others: not interested, report), text + **Translate** (only when the detected language
+  differs from the interface language), media, then ❤ · 💬 · Share.
+* **Comments** (`comments.tsx`, `GET/POST /posts/:id/comments`, `DELETE /comments/:id` by the
+  comment's or the post's author), **edit** (`PATCH /posts/:id`), **not interested**
+  (`POST /posts/:id/hide`, also hides reposts of it), **report** (`POST /posts/:id/report`).
+* **Translation** (`POST /posts/:id/translate`): source detected by `detectLanguage` (shared),
+  target = reader's language; provider `TRANSLATE_PROVIDER=mymemory|disabled` (default mymemory,
+  `TRANSLATE_EMAIL` raises its quota). Provider errors → 503, never fake text. Only visible posts
+  are sent, results cached in memory.
+* **Live feed**: `vibex.feed` events refresh feeds / posts / comments on every device.
+* **Demo data** (dev / test only): `pnpm --filter @voidex/server db:seed:dev [your@voidops.ru]` —
+  4 people with posts (pictures), comments, likes, chats. Refuses `NODE_ENV=production`.
+
+Migration `0005_vibex_social.sql` (additive): `vibex_profiles`, `vibex_comments`,
+`vibex_hidden_posts`, `vibex_reports`, `vibex_posts.edited_at`.
