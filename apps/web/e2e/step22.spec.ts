@@ -17,18 +17,38 @@ async function longPressTouch(page: Page, p: { x: number; y: number }) {
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 
-/** Bounding box once it stops changing (open / maximize animations finished). */
+/**
+ * A window's box once its open / maximize animation is over: no scale left in
+ * its transform (on-screen size = layout size), fully opaque, and unchanged
+ * between two reads. A stalled first frame can't pass for "settled".
+ */
 async function settledBox(l: Locator) {
   let prev = "";
+  let same = 0;
   await expect
-    .poll(async () => {
-      const now = JSON.stringify(await l.boundingBox());
-      const same = now === prev && now !== "null";
-      prev = now;
-      return same;
-    }, { intervals: [120] })
+    .poll(
+      async () => {
+        const s = await l.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const e = el as HTMLElement;
+          const done = Math.abs(r.width - e.offsetWidth) < 0.5 && Math.abs(r.height - e.offsetHeight) < 0.5 && getComputedStyle(e).opacity === "1";
+          return done ? JSON.stringify({ x: r.x, y: r.y, width: r.width, height: r.height }) : "";
+        });
+        same = s !== "" && s === prev ? same + 1 : 0;
+        prev = s;
+        return same >= 2; // three identical reads in a row
+      },
+      { intervals: [150] },
+    )
     .toBe(true);
   return JSON.parse(prev) as { x: number; y: number; width: number; height: number };
+}
+
+/** Right click on free desktop space once the desktop has loaded (not its loading skeleton). */
+async function desktopMenu(page: Page, x = 60, y = 500) {
+  await expect(page.getByTestId("app-mail")).toBeVisible();
+  await page.mouse.click(x, y, { button: "right" });
+  await expect(page.getByTestId("home-context-menu")).toBeVisible();
 }
 
 const dockOrder = (page: Page) => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
@@ -95,7 +115,7 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
 test("view: Grid ↔ Categories switched many times stays on the last choice (no flip-back) and survives a reload", async ({ page }) => {
   test.skip(isMobile(page), "PC right-click");
   await signUpViaApi(page, "Вика", "Вид");
-  await page.mouse.click(60, 500, { button: "right" });
+  await desktopMenu(page);
   await page.getByTestId("menu-view").click();
   const grid = page.getByTestId("menu-view-grid");
   const cats = page.getByTestId("menu-view-categories");
@@ -118,7 +138,7 @@ test("view: Grid ↔ Categories switched many times stays on the last choice (no
   await page.keyboard.press("Escape");
   await page.reload();
   await expect(page.getByTestId("desktop-categories")).toBeVisible();
-  await page.mouse.click(60, 500, { button: "right" });
+  await desktopMenu(page);
   await page.getByTestId("menu-view").click();
   await page.getByTestId("menu-view-grid").click();
   await page.waitForTimeout(1200);
@@ -136,7 +156,7 @@ test("view race (slow network): our own save's echo arriving late never flips th
     await new Promise((r) => setTimeout(r, 1200));
     await route.fulfill({ response: res });
   });
-  await page.mouse.click(60, 500, { button: "right" });
+  await desktopMenu(page);
   await page.getByTestId("menu-view").click();
   await page.getByTestId("menu-view-categories").click(); // saved ~350 ms later → echo → slow refetch (categories)
   await page.waitForTimeout(600);
@@ -156,7 +176,7 @@ test("view race (slow network): our own save's echo arriving late never flips th
 test("free placement: drop an icon anywhere, it stays there after a reload; the grid comes back unchanged", async ({ page }) => {
   test.skip(isMobile(page), "PC free placement");
   await signUpViaApi(page, "Фрида", "Фри");
-  await page.mouse.click(60, 500, { button: "right" });
+  await desktopMenu(page);
   await page.getByTestId("menu-view").click();
   await page.getByTestId("menu-view-free").click();
   await page.keyboard.press("Escape");
@@ -191,7 +211,7 @@ test("free placement: drop an icon anywhere, it stays there after a reload; the 
   expect(tile.x + tile.width).toBeLessThanOrEqual(1180);
   expect(tile.y + tile.height).toBeLessThanOrEqual(820);
   // Back to the grid: the grid order is intact.
-  await page.mouse.click(590, 140, { button: "right" }); // free space (icons sit top-left and where Settings was dropped)
+  await desktopMenu(page, 590, 140); // free space (icons sit top-left and where Settings was dropped)
   await page.getByTestId("menu-view").click();
   await page.getByTestId("menu-view-free").click();
   await page.keyboard.press("Escape");
@@ -229,10 +249,15 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   // Maximize: the window ends above the dock, the dock stays fully visible on top.
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-maximize").click();
-  const max = await settledBox(win);
+  await settledBox(win);
   const dock = (await page.getByTestId("dock").boundingBox())!;
-  expect(max.y + max.height).toBeLessThanOrEqual(dock.y);
-  expect(dock.y - (max.y + max.height)).toBeLessThan(16); // no big empty gap
+  // Final geometry: the window ends just above the dock (no overlap, no big gap).
+  const gap = async () => {
+    const b = (await win.boundingBox())!;
+    return dock.y - (b.y + b.height);
+  };
+  await expect.poll(gap).toBeGreaterThanOrEqual(0);
+  expect(await gap()).toBeLessThan(16);
   const hit = await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest("[data-dock]"), { x: dock.x + dock.width / 2, y: dock.y + dock.height / 2 });
   expect(hit).toBe(true);
 
@@ -291,11 +316,11 @@ test("phone: long press → brush → Widgets: add the Desktops widget; round De
 test("PC: widgets panel from the right-click menu; the Desktops widget switches desktops; system icons can't be dragged out as images", async ({ page }) => {
   test.skip(isMobile(page), "PC");
   await signUpViaApi(page, "Пётр", "Вид");
-  await page.mouse.click(60, 500, { button: "right" });
+  await desktopMenu(page);
   await page.getByTestId("menu-new-space").click();
   await page.getByTestId("dock-desktops").click();
   await page.getByTestId("dock-space-1").click();
-  await page.mouse.click(60, 500, { button: "right" });
+  await desktopMenu(page);
   await page.getByTestId("menu-widgets").click();
   await page.getByTestId("widget-add-desktops").click();
   await page.keyboard.press("Escape");
