@@ -10,6 +10,8 @@ import {
   folderFromApp,
   hideApp,
   moveItem,
+  pinToDock,
+  unpinFromDock,
   normalizeLayout,
   removeFromFolder,
   removeSpace,
@@ -164,5 +166,20 @@ describe("workspace layout model", () => {
     expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "wave-milk" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-milk" });
     expect(WorkspaceLayoutSchema.safeParse({ ...l, appearance: { ...l.appearance, glass: "max" } }).success).toBe(false);
     expect(WorkspaceLayoutSchema.safeParse({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "<script>" } } }).success).toBe(false);
+  });
+
+  it("PC dock: every app pinned by default (and for older layouts), pin / reorder / unpin, empty stays empty", () => {
+    let l = norm(defaultLayout(APPS));
+    expect(l.desktop.dock).toEqual(["mail", "settings"]);
+    const { dock: _dock, ...olderDesktop } = l.desktop;
+    expect(norm({ ...l, desktop: olderDesktop }).desktop.dock).toEqual(["mail", "settings"]);
+    l = norm(pinToDock(l, "settings", 0));
+    expect(l.desktop.dock).toEqual(["settings", "mail"]);
+    l = norm(unpinFromDock(unpinFromDock(l, "mail"), "settings"));
+    expect(l.desktop.dock).toEqual([]);
+    l = norm(pinToDock(l, "mail"));
+    expect(l.desktop.dock).toEqual(["mail"]);
+    expect(norm({ ...l, desktop: { ...l.desktop, dock: ["mail", "mail", "settings"] } }).desktop.dock).toEqual(["mail", "settings"]);
+    expect(normalizeLayout(l, ["settings"]).desktop.dock).toEqual([]); // uninstalled apps leave the dock
   });
 });

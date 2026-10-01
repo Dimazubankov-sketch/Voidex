@@ -15,11 +15,12 @@ import { AppearanceSheet } from "./appearance-panel";
 import { ContextMenu, newSpace, spaceLabel } from "./context-menu";
 import { FolderOverlay } from "./folder-overlay";
 import { useHomeGestures } from "./gestures";
+import { DOCK_ZONE } from "./dock";
 import { DragGhost, HomeItem, type IconMetrics, type LabelStyle } from "./icons";
 import { Launcher } from "./launcher";
 import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
-import { DesktopSearchBar, MobileSearch } from "./search";
+import { MobileSearch } from "./search";
 import { useHomeUi } from "./ui-store";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -200,9 +201,8 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
       )}
 
       {ff === "desktop" && ready && (
-        <div className="relative z-10 shrink-0 px-6 pb-5 pt-1">
-          <DesktopSearchBar apps={apps} layout={layout} />
-        </div>
+        // Room for the PC bottom bar (search + dock, rendered above windows by the workspace).
+        <div className="shrink-0" style={{ height: DOCK_ZONE - 14 }} aria-hidden />
       )}
 
       <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} width={250} testId="workspace-menu-popover">

@@ -170,6 +170,9 @@ export const en = {
 
   // home screen / desktop
   "home.saveFailed": "Couldn't save the desktop. Will retry.",
+  "dock.title": "Dock",
+  "dock.pin": "Pin to dock",
+  "dock.unpin": "Unpin from dock",
   "home.edit": "Edit desktop",
   "home.done": "Done",
   "home.appearance": "Wallpaper & view",

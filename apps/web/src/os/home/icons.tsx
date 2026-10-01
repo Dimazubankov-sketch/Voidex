@@ -1,4 +1,5 @@
 import { memo, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { motion, motionValue } from "motion/react";
 import { RiSubtractLine } from "@remixicon/react";
 import { APP_REGISTRY, removeFromFolder, type AppId, type Folder, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
@@ -213,9 +214,9 @@ export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
   const drag = useHomeUi((s) => s.drag);
   if (!drag) return null;
   const folder = drag.item.kind === "folder" ? layout.folders.find((f) => f.id === drag.item.id) : undefined;
-  return (
+  return createPortal(
     <motion.div
-      className="pointer-events-none fixed left-0 top-0 z-[260]"
+      className={cx("pointer-events-none fixed left-0 top-0 z-[260] transition-opacity", drag.unpin && "opacity-50")}
       style={{ x: ghost.x, y: ghost.y, marginLeft: -drag.size / 2, marginTop: -drag.size / 2 }}
       data-testid="drag-ghost"
     >
@@ -228,6 +229,7 @@ export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
           <FolderTile folder={folder} size={drag.size} />
         ) : null}
       </div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

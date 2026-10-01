@@ -298,3 +298,55 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await finger.tap(await center(app.getByTestId("home-remove-badge")));
   await expect(top).toHaveCount(1);
 });
+
+test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, empty dock leaves only search", async ({ page }) => {
+  test.skip(isMobile(page), "PC dock");
+  await signUpViaApi(page, "Дан", "Ок");
+  const dockOrder = () => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
+  await expect(page.getByTestId("dock")).toBeVisible();
+  expect(await dockOrder()).toEqual(["mail", "settings"]);
+
+  // Hover the Desktops system icon → glass menu; create and switch desktops there.
+  await page.getByTestId("dock-desktops").hover();
+  await expect(page.getByTestId("dock-desktops-menu")).toBeVisible();
+  await page.getByTestId("dock-space-add").click();
+  await expect(page.getByTestId("space-2")).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("dock-desktops").hover();
+  await page.getByTestId("dock-space-1").click();
+  await expect(page.getByTestId("space-1")).toHaveAttribute("aria-selected", "true");
+  await page.mouse.move(700, 300);
+
+  // Reorder inside the dock.
+  const a = await center(page.getByTestId("dock-app-mail"));
+  const b = await center(page.getByTestId("dock-app-settings"));
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(a.x + 10, a.y, { steps: 2 });
+  await page.mouse.move(b.x + 40, b.y, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(dockOrder).toEqual(["settings", "mail"]);
+
+  // Open from the dock.
+  await page.getByTestId("dock-app-mail").click();
+  await expect(page.locator('[data-testid="window-mail"][data-state="open"]')).toBeVisible();
+  await page.getByTestId("window-menu").last().click();
+  await page.getByTestId("menu-close").click();
+
+  // Unpin both (menu) → the dock disappears, the search stays.
+  for (const id of ["mail", "settings"]) {
+    await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
+    await page.getByTestId(`dock-app-${id}`).click({ button: "right" });
+    await page.getByTestId("menu-unpin").click();
+  }
+  await expect(page.getByTestId("dock")).toHaveCount(0);
+  await expect(page.getByTestId("home-search")).toBeVisible();
+
+  // Pin by context menu; it survives a reload.
+  await page.getByTestId("app-settings").click({ button: "right" });
+  await page.getByTestId("menu-pin").click();
+  await expect(page.getByTestId("dock-app-settings")).toBeVisible();
+  await page.waitForTimeout(600);
+  await page.reload();
+  await expect(page.getByTestId("dock-app-settings")).toBeVisible();
+  expect(await dockOrder()).toEqual(["settings"]);
+});

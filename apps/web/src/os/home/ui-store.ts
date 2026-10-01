@@ -10,6 +10,7 @@ export type ContextTarget =
   | { kind: "folder"; id: string }
   | { kind: "desktop" }
   | { kind: "launcher-app"; id: AppId }
+  | { kind: "dock-app"; id: AppId }
   | { kind: "space"; id: string };
 
 export type RenameTarget = { kind: "app"; id: AppId } | { kind: "space"; id: string };
@@ -32,6 +33,12 @@ export interface DragState {
   size: number;
   /** Item the dragged app would merge with on release (folder creation). */
   mergeWith?: string;
+  /** PC dock: the drag started in the dock. */
+  fromDock?: boolean;
+  /** PC dock: a desktop icon hovers the dock and would be pinned at this index. */
+  overDock?: number;
+  /** PC dock: dragged up and out of the dock — released, it is unpinned. */
+  unpin?: boolean;
 }
 
 interface HomeUi {

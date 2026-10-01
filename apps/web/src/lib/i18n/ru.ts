@@ -159,6 +159,9 @@ export const ru: Record<MessageKey, string> = {
 
   // home screen / desktop
   "home.saveFailed": "Не удалось сохранить рабочий стол. Повторим позже.",
+  "dock.title": "Док",
+  "dock.pin": "Закрепить в доке",
+  "dock.unpin": "Открепить от дока",
   "home.edit": "Изменить рабочий стол",
   "home.done": "Готово",
   "home.appearance": "Обои и вид",

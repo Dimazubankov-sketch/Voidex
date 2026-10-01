@@ -7,6 +7,7 @@ import { useSession } from "@/lib/session";
 import { ApprovalPrompt } from "./approval-prompt";
 import { useConnection, useServerEvents } from "./events";
 import { AppSwitcher } from "./app-switcher";
+import { DOCK_ZONE, DesktopBottomBar } from "./home/dock";
 import { HomeScreen } from "./home/home-screen";
 import { WindowFrame } from "./window-frame";
 import { foregroundId, useWM, type Rect } from "./window-manager";
@@ -52,13 +53,16 @@ export function Workspace() {
   // PC: only the current virtual desktop's windows count as open.
   const fg = ff === "desktop" ? foregroundId(wm, wm.space) : foregroundId(wm);
   const anyVisible = !!fg;
+  // PC bottom bar (search + dock): windows, also maximized ones, keep clear of it.
+  const bar = ff === "desktop";
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-background" data-testid="workspace">
       <HomeScreen receded={anyVisible && ff === "desktop"} hidden={anyVisible && ff === "mobile"} launcherBtn={launcherBtn} />
-      <div ref={layer} className="pointer-events-none absolute inset-0 [&>*]:pointer-events-auto" style={{ zIndex: 20 }}>
+      <div ref={layer} className="pointer-events-none absolute inset-x-0 top-0 [&>*]:pointer-events-auto" style={{ zIndex: 20, bottom: bar ? DOCK_ZONE : 0 }}>
         {hydrated && wm.order.map((id) => wm.windows[id] && <WindowFrame key={id} win={wm.windows[id]!} launcherRect={() => rectOf(launcherBtn.current)} />)}
       </div>
+      {ff === "desktop" && <DesktopBottomBar />}
       {ff === "mobile" && <AppSwitcher />}
       <OfflineBanner />
       <ApprovalPrompt />

@@ -43,6 +43,16 @@ Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC 
 * Glass (`appearance.glass`, default `on`) is applied as `<html data-glass>` and drives the
   `vx-glass*` CSS tokens used by the dock, folders, menus, desktop tabs and search.
 
+## PC dock (Step 2.1)
+
+* `desktop.dock` in the synced layout: pinned apps in order (new and older layouts: every app;
+  emptied stays empty). Pin / unpin from the icon's right-click menu, by dragging a desktop icon
+  onto the dock, or by dragging a dock icon up and out; drag inside the dock to reorder.
+* The bottom bar holds the search field and, next to it, the glass dock; with nothing pinned only
+  the search remains. Windows (also maximized) keep clear of the bar.
+* The "Desktops" system icon at the end of the dock: hover (or click) for a glass menu with the
+  desktops (current one marked) and "New desktop". The tabs at the top stay.
+
 ## Code map (web)
 
 | File | What |
@@ -53,6 +63,7 @@ Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC 
 | `os/home/folder-overlay.tsx` | open folder: rename, reorder, drag out |
 | `os/home/context-menu.tsx` | right-click / long-press menus with sub-menus |
 | `os/home/appearance-panel.tsx` | wallpaper, text, arrangement, view — used by the brush and by Settings → Рабочий стол |
+| `os/home/dock.tsx` | PC bottom bar: search + dock (magnification, drag, Desktops menu) |
 | `os/home/launcher.tsx` | 9-dot menu: all apps, search, add hidden apps back, system actions |
 | `os/home/search.tsx` | app search (name, own label, aliases, caption, category); PC bottom bar, phone pull-down |
 | `os/home/layout.ts` | reading the layout and saving edits |

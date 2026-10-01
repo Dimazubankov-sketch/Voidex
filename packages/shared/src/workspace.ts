@@ -10,7 +10,8 @@ import { APP_CATEGORIES, APP_IDS, type AppCategory, type AppId } from "./apps.js
  *    │                app menu — removing an icon never uninstalls anything)
  *    ├── mobile       pages of icons (max 3) and 3 or 4 icons per row
  *    ├── desktop      virtual desktops, each with its own icons; grid density,
- *    │                columns, grid / by-category view, manual / by-name order
+ *    │                columns, grid / by-category view, manual / by-name order;
+ *    │                dock: apps pinned to the PC dock, in order
  *    ├── categories   the user's own category for an app (overrides the manifest)
  *    ├── names        the user's own label for an app icon (the app keeps its name)
  *    └── appearance   wallpaper and icon label style
@@ -30,6 +31,7 @@ export const SPACE_NAME_MAX = 30;
 export const ITEMS_PER_CONTAINER_MAX = 120;
 export const DESKTOP_COLUMNS_MIN = 3;
 export const DESKTOP_COLUMNS_MAX = 8;
+export const DOCK_MAX = 16;
 export const APP_LABEL_MAX = 40;
 
 /**
@@ -120,6 +122,8 @@ export const WorkspaceLayoutSchema = z.object({
     view: z.enum(["grid", "categories"]),
     sort: z.enum(["manual", "name"]),
     spaces: z.array(DesktopSpaceSchema).min(1).max(DESKTOP_SPACES_MAX),
+    /** Pinned apps of the PC dock. Absent in layouts saved before Step 2.1 (→ every app). */
+    dock: z.array(appId).max(DOCK_MAX).optional(),
   }),
   categories: z.partialRecord(appId, z.enum(APP_CATEGORIES)),
   /** Added after v1 shipped: older stored layouts have no `names`. */
@@ -159,7 +163,7 @@ export function defaultLayout(apps: AppId[]): WorkspaceLayout {
     folders: [],
     hidden: [],
     mobile: { columns: 3, pages: [items] },
-    desktop: { columns: 5, density: "normal", view: "grid", sort: "manual", spaces: [{ id: "d_1", name: "", items }] },
+    desktop: { columns: 5, density: "normal", view: "grid", sort: "manual", spaces: [{ id: "d_1", name: "", items }], dock: [...apps] },
     categories: {},
     names: {},
     appearance: DEFAULT_APPEARANCE,
@@ -255,6 +259,8 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
       view: base.desktop.view,
       sort: base.desktop.sort,
       spaces,
+      // Never customised → every installed app; an emptied dock stays empty.
+      dock: [...new Set(base.desktop.dock ?? installed)].filter((a) => installedSet.has(a)).slice(0, DOCK_MAX),
     },
     categories,
     names,
@@ -425,6 +431,22 @@ export function renameApp(l: WorkspaceLayout, app: AppId, name: string): Workspa
   const clean = name.trim().slice(0, APP_LABEL_MAX);
   if (clean) n.names[app] = clean;
   else delete n.names[app];
+  return n;
+}
+
+/** The PC dock: pinned apps in order. Pinning an already pinned app moves it. */
+export function pinToDock(l: WorkspaceLayout, app: AppId, index = Number.MAX_SAFE_INTEGER): WorkspaceLayout {
+  const n = clone(l);
+  const dock = (n.desktop.dock ?? []).filter((a) => a !== app);
+  if (dock.length >= DOCK_MAX) return l;
+  dock.splice(Math.max(0, Math.min(index, dock.length)), 0, app);
+  n.desktop.dock = dock;
+  return n;
+}
+
+export function unpinFromDock(l: WorkspaceLayout, app: AppId): WorkspaceLayout {
+  const n = clone(l);
+  n.desktop.dock = (n.desktop.dock ?? []).filter((a) => a !== app);
   return n;
 }
 

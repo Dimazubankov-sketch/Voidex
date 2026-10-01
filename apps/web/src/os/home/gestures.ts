@@ -1,8 +1,9 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { MOBILE_PAGES_MAX, moveItem, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
+import { MOBILE_PAGES_MAX, moveItem, pinToDock, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
 import type { FormFactor } from "@/lib/form-factor";
 import { useWM } from "../window-manager";
 import { itemKey, mergeInto, parseItem } from "./actions";
+import { dockIndexAt } from "./dock";
 import { ghost } from "./icons";
 import { currentLayout, updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
@@ -193,6 +194,17 @@ export function useHomeGestures(opts: GestureOptions) {
         return;
       }
 
+      // PC: an app dragged onto the dock gets pinned there (the desktop icon stays).
+      if (optsRef.current.ff === "desktop" && d.item.kind === "app") {
+        if (find("[data-dock]")) {
+          unschedule();
+          const index = dockIndexAt(x);
+          if (d.overDock !== index || d.mergeWith) ui().patchDrag({ overDock: index, mergeWith: undefined });
+          return;
+        }
+        if (d.overDock !== undefined) ui().patchDrag({ overDock: undefined });
+      }
+
       // PC: hold over a desktop tab → switch to it and bring the icon along.
       const tab = find("[data-home-space]");
       if (tab) {
@@ -244,7 +256,11 @@ export function useHomeGestures(opts: GestureOptions) {
       unschedule();
       const d = ui().drag;
       document.body.style.cursor = "";
-      if (d && commit && d.mergeWith && d.item.kind === "app") {
+      if (d && commit && d.item.kind === "app" && d.overDock !== undefined) {
+        const app = d.item.id;
+        const index = d.overDock;
+        updateLayout((l) => pinToDock(l, app, index));
+      } else if (d && commit && d.mergeWith && d.item.kind === "app") {
         const target = parseItem(d.mergeWith);
         if (target) mergeInto(d.item.id, target);
       }

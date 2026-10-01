@@ -19,8 +19,10 @@ import {
   RiApps2Line,
   RiListUnordered,
   RiShareBoxLine,
+  RiPushpinLine,
+  RiUnpinLine,
 } from "@remixicon/react";
-import { APP_CATEGORIES, addSpace, moveItem, removeFromFolder, removeSpace, sameItem, setCategory, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
+import { APP_CATEGORIES, addSpace, moveItem, pinToDock, removeFromFolder, removeSpace, sameItem, setCategory, unpinFromDock, type AppId, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
@@ -131,6 +133,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         list.push({ id: "create-folder", label: t("home.createFolder"), icon: <RiFolderAddLine />, onSelect: () => createFolderWith(id) });
         list.push({ id: "add-to-folder", label: t("home.addToFolder"), icon: <RiFolderTransferLine />, sub: "folders" });
         if (!mobile) {
+          list.push(dockEntry(id));
           list.push({ id: "rename", label: t("home.rename"), icon: <RiEditLine />, onSelect: () => ui().setRenaming({ kind: "app", id }) });
           list.push({ id: "category", label: t("home.category"), icon: <RiPriceTag3Line />, sub: "category" });
           if (layout.desktop.spaces.length > 1) list.push({ id: "move-space", label: t("home.moveToSpace"), icon: <RiMacbookLine />, sub: "spaces" });
@@ -160,9 +163,17 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         const hidden = layout.hidden.includes(id);
         return [
           { id: "open", label: t("home.open"), icon: <RiShareBoxLine />, onSelect: () => openApp(id) },
+          ...(mobile ? [] : [dockEntry(id)]),
           hidden
             ? { id: "add-to-desktop", label: t("home.addToDesktop"), icon: <RiAddLine />, onSelect: () => addToDesktop(id) }
             : { id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => removeFromDesktop(id), danger: true },
+        ];
+      }
+      case "dock-app": {
+        const id = target.id;
+        return [
+          { id: "open", label: t("home.open"), icon: <RiShareBoxLine />, onSelect: () => openApp(id) },
+          { id: "unpin", label: t("dock.unpin"), icon: <RiUnpinLine />, onSelect: () => updateLayout((l) => unpinFromDock(l, id)) },
         ];
       }
       case "space": {
@@ -191,6 +202,12 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         return list;
       }
     }
+  }
+
+  function dockEntry(id: AppId): Entry {
+    return (layout.desktop.dock ?? []).includes(id)
+      ? { id: "unpin", label: t("dock.unpin"), icon: <RiUnpinLine />, onSelect: () => updateLayout((l) => unpinFromDock(l, id)) }
+      : { id: "pin", label: t("dock.pin"), icon: <RiPushpinLine />, onSelect: () => updateLayout((l) => pinToDock(l, id)) };
   }
 
   function subEntries(): Entry[] {
