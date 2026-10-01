@@ -21,7 +21,7 @@ describe("workspace layout (server-side, per account)", () => {
     let layout = normalizeLayout(null, ["mail", "settings"]);
     layout = dropOnto(layout, "settings", { kind: "app", id: "mail" }, "Работа", "f_work01");
     layout.mobile.columns = 4;
-    layout.appearance = { ...layout.appearance, wallpaper: { kind: "preset", id: "wave-milk-violet" }, labelSize: "l", glass: "medium" };
+    layout.appearance = { ...layout.appearance, wallpaper: { kind: "preset", id: "wave-milk-violet" }, glass: "medium" };
 
     const r = await phone.patch("/api/preferences", { workspace: { layout } });
     expect(r.status).toBe(200);
@@ -62,7 +62,7 @@ describe("workspace layout (server-side, per account)", () => {
     const { glass: _glass, ...oldAppearance } = l.appearance;
     const r = await d.patch("/api/preferences", { workspace: { layout: { ...l, appearance: { ...oldAppearance, wallpaper: { kind: "gradient", id: "night" } } } } });
     expect(r.status).toBe(200);
-    expect(r.body.workspace.layout.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-violet" });
+    expect(r.body.workspace.layout.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-light" });
     expect(r.body.workspace.layout.appearance.glass).toBe("on");
   });
 

@@ -19,6 +19,10 @@ import {
   renameFolder,
   reorderInFolder,
   showApp,
+  placeItem,
+  addWidget,
+  moveWidget,
+  removeWidget,
   type LayoutItem,
   type WorkspaceLayout,
 } from "./workspace.js";
@@ -160,8 +164,14 @@ describe("workspace layout model", () => {
     const parsed = WorkspaceLayoutSchema.parse({ ...old, appearance: legacyAppearance });
     expect(parsed.appearance.glass).toBe("on");
     const l = norm(parsed);
-    expect(l.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-violet" });
-    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "orbit" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-violet" });
+    expect(l.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-light" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "orbit" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-light" });
+    // Step 2.1 presets retired in Step 2.2
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "glow" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "aura" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "wave-violet" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-light" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "wave-gray-violet" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-gray-purple" });
+    // Retired label settings are reset
+    expect(norm({ ...l, appearance: { ...l.appearance, labelColor: "light", labelSize: "l" } }).appearance).toMatchObject({ labelColor: "auto", labelSize: "m" });
     expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "unknown-x" } } }).appearance.wallpaper).toEqual({ kind: "default" });
     expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "wave-milk" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-milk" });
     expect(WorkspaceLayoutSchema.safeParse({ ...l, appearance: { ...l.appearance, glass: "max" } }).success).toBe(false);
@@ -181,5 +191,48 @@ describe("workspace layout model", () => {
     expect(l.desktop.dock).toEqual(["mail"]);
     expect(norm({ ...l, desktop: { ...l.desktop, dock: ["mail", "mail", "settings"] } }).desktop.dock).toEqual(["mail", "settings"]);
     expect(normalizeLayout(l, ["settings"]).desktop.dock).toEqual([]); // uninstalled apps leave the dock
+  });
+
+  it("Step 2.2: older layouts get dock / free placement / widget defaults", () => {
+    const l = norm(defaultLayout(APPS));
+    const { dockDesktops: _a, dockScale: _b, arrange: _c, positions: _d, ...olderDesktop } = l.desktop;
+    const { widgets: _w, ...older } = l;
+    const parsed = WorkspaceLayoutSchema.parse({ ...older, desktop: olderDesktop });
+    expect(parsed.widgets).toEqual([]);
+    expect(parsed.desktop).toMatchObject({ dockDesktops: true, dockScale: "m", arrange: "grid", positions: {} });
+    expect(norm(parsed)).toEqual(l);
+  });
+
+  it("free placement: positions are kept for items on a desktop and clamped into the area", () => {
+    let l = norm(defaultLayout(APPS));
+    l = norm(placeItem(l, app("mail"), { x: 0.5, y: 0.25 }));
+    expect(l.desktop.positions).toEqual({ "app:mail": { x: 0.5, y: 0.25 } });
+    l = norm({ ...l, desktop: { ...l.desktop, positions: { "app:mail": { x: 3, y: -1 }, "app:ghost": { x: 0.1, y: 0.1 } } } });
+    expect(l.desktop.positions).toEqual({ "app:mail": { x: 1, y: 0 } });
+    // Hidden apps lose their position; the grid order is untouched.
+    expect(norm(hideApp(l, "mail")).desktop.positions).toEqual({});
+    expect(l.desktop.spaces[0]!.items).toEqual([app("mail"), app("settings")]);
+    expect(WorkspaceLayoutSchema.safeParse({ ...l, desktop: { ...l.desktop, positions: { "app:mail": { x: 2, y: 0 } } } }).success).toBe(false);
+  });
+
+  it("widgets: add / move / remove, unknown types dropped, removed desktop moves them", () => {
+    let l = norm(defaultLayout(APPS));
+    const added = addSpace(l, () => 0.5)!;
+    l = norm(added.layout);
+    l = norm(addWidget(l, "desktops", { surface: "desktop", space: added.id, x: 0.2, y: 0.3 }, "w_test01"));
+    l = norm(addWidget(l, "desktops", { surface: "mobile", page: 0 }, "w_test02"));
+    expect(l.widgets.map((w) => [w.id, w.surface, w.container])).toEqual([
+      ["w_test01", "desktop", added.id],
+      ["w_test02", "mobile", "0"],
+    ]);
+    l = norm(moveWidget(l, "w_test01", { x: 1.4, y: 0.5 }));
+    expect(l.widgets[0]).toMatchObject({ x: 1, y: 0.5 });
+    l = norm(removeSpace(l, added.id));
+    expect(l.widgets[0]!.container).toBe("d_1");
+    l = norm(removeWidget(l, "w_test02"));
+    expect(l.widgets.map((w) => w.id)).toEqual(["w_test01"]);
+    const bogus = { ...l, widgets: [...l.widgets, { id: "w_test01", type: "desktops", surface: "desktop", container: "d_9", x: 0, y: 0 }] } as WorkspaceLayout;
+    expect(norm(bogus).widgets).toHaveLength(1); // duplicate id dropped
+    expect(WorkspaceLayoutSchema.safeParse({ ...l, widgets: [{ ...l.widgets[0]!, type: "clock" }] }).success).toBe(false);
   });
 });

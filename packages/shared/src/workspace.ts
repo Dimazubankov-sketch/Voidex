@@ -33,36 +33,66 @@ export const DESKTOP_COLUMNS_MIN = 3;
 export const DESKTOP_COLUMNS_MAX = 8;
 export const DOCK_MAX = 16;
 export const APP_LABEL_MAX = 40;
+export const WIDGETS_MAX = 24;
 
 /**
- * System wallpapers (Step 2.1 set). Older layouts may still hold Step 2
- * gradients / presets: `normalizeLayout` maps them to the nearest new one.
+ * System wallpapers (Step 2.2 set): the neutral built-ins (clean white, white
+ * with a soft violet glow, grey) and the VOIDEX wave series — a milky base,
+ * two shades split by one soft organic wave, after the VOIDEX Mail artwork.
+ * Older layouts may still hold retired presets / Step 2 gradients:
+ * `normalizeLayout` maps them to the nearest current one.
  */
-export const WALLPAPER_PRESETS = ["white", "glow", "mist", "aura", "wave-violet", "wave-milk", "wave-milk-violet", "wave-gray-violet"] as const;
+export const WALLPAPER_PRESETS = [
+  "white",
+  "aura",
+  "mist",
+  "wave-light",
+  "wave-milk",
+  "wave-milk-violet",
+  "wave-gray",
+  "wave-gray-purple",
+  "wave-milk-gray-purple",
+] as const;
 export type WallpaperPreset = (typeof WALLPAPER_PRESETS)[number];
 /** Step 2 gradients — still accepted in stored data, shown as presets. */
 export const WALLPAPER_GRADIENTS = ["dawn", "lavender", "mist", "aurora", "sand", "night"] as const;
 export type WallpaperGradient = (typeof WALLPAPER_GRADIENTS)[number];
 const LEGACY_WALLPAPER: Record<string, WallpaperPreset> = {
-  voidex: "glow",
+  // Step 2.1 presets retired in Step 2.2
+  glow: "aura",
+  "wave-violet": "wave-light",
+  "wave-gray-violet": "wave-gray-purple",
+  // Step 2 presets / gradients
+  voidex: "aura",
   waves: "wave-milk-violet",
-  orbit: "wave-violet",
+  orbit: "wave-light",
   grid: "mist",
   dawn: "wave-milk-violet",
   lavender: "wave-milk-violet",
   mist: "mist",
-  aurora: "wave-violet",
+  aurora: "wave-light",
   sand: "wave-milk",
-  night: "wave-violet",
+  night: "wave-light",
 };
 
 /** Glass material of the desktop's floating UI (dock, folders, menus). */
 export const GLASS_LEVELS = ["off", "medium", "on"] as const;
 export type GlassLevel = (typeof GLASS_LEVELS)[number];
 
+/** Built-in system widgets (no widget store yet — a catalogue of system ones). */
+export const WIDGET_TYPES = ["desktops"] as const;
+export type WidgetType = (typeof WIDGET_TYPES)[number];
+export const DOCK_SCALES = ["s", "m", "l"] as const;
+export type DockScale = (typeof DOCK_SCALES)[number];
+
 const appId = z.enum(APP_IDS as [AppId, ...AppId[]]);
 const folderId = z.string().regex(/^f_[a-z0-9]{4,24}$/);
 const spaceId = z.string().regex(/^d_[a-z0-9]{1,24}$/);
+const widgetId = z.string().regex(/^w_[a-z0-9]{4,24}$/);
+/** A position as a fraction of the free area (0..1): adapts to any screen size. */
+const fraction = z.number().min(0).max(1);
+export const PositionSchema = z.object({ x: fraction, y: fraction });
+export type Position = z.infer<typeof PositionSchema>;
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 
 export const LayoutItemSchema = z.discriminatedUnion("kind", [
@@ -91,9 +121,12 @@ export type Wallpaper = z.infer<typeof WallpaperSchema>;
 
 export const AppearanceSchema = z.object({
   wallpaper: WallpaperSchema,
-  /** Icon labels: automatic contrast against the wallpaper, or forced. */
-  labelColor: z.enum(["auto", "dark", "light"]),
-  labelSize: z.enum(["s", "m", "l"]),
+  /**
+   * Retired in Step 2.2 (labels follow the wallpaper contrast and the interface
+   * scale). Still accepted in stored data; normalizeLayout resets them.
+   */
+  labelColor: z.enum(["auto", "dark", "light"]).default("auto"),
+  labelSize: z.enum(["s", "m", "l"]).default("m"),
   /** Second line under the app name (e.g. "System", unread count). */
   captions: z.boolean(),
   /** Added in Step 2.1; older stored layouts have none (→ "on"). */
@@ -107,6 +140,22 @@ export const DesktopSpaceSchema = z.object({
   items: z.array(LayoutItemSchema).max(ITEMS_PER_CONTAINER_MAX),
 });
 export type DesktopSpace = z.infer<typeof DesktopSpaceSchema>;
+
+/**
+ * A widget on the home screen. PC: free position on one desktop (`x`, `y` are
+ * fractions of the free area). Phone: shown at the top of one page, ordered
+ * by `y`.
+ */
+export const WidgetSchema = z.object({
+  id: widgetId,
+  type: z.enum(WIDGET_TYPES),
+  surface: z.enum(["desktop", "mobile"]),
+  /** PC desktop id, or the phone page index as a string. */
+  container: z.string().max(32),
+  x: fraction,
+  y: fraction,
+});
+export type Widget = z.infer<typeof WidgetSchema>;
 
 export const WorkspaceLayoutSchema = z.object({
   v: z.literal(1),
@@ -126,10 +175,20 @@ export const WorkspaceLayoutSchema = z.object({
     spaces: z.array(DesktopSpaceSchema).min(1).max(DESKTOP_SPACES_MAX),
     /** Pinned apps of the PC dock. Absent in layouts saved before Step 2.1 (→ every app). */
     dock: z.array(appId).max(DOCK_MAX).optional(),
+    /** Step 2.2: the "Desktops" system item is in the dock (it can be removed and put back). */
+    dockDesktops: z.boolean().default(true),
+    /** Step 2.2: dock size — small range only. */
+    dockScale: z.enum(DOCK_SCALES).default("m"),
+    /** Step 2.2: icons in the grid, or placed freely (positions below). The grid is kept. */
+    arrange: z.enum(["grid", "free"]).default("grid"),
+    /** Free placement: item key ("app:mail", "folder:f_…") → position on its desktop. */
+    positions: z.record(z.string().max(40), PositionSchema).default({}),
   }),
   categories: z.partialRecord(appId, z.enum(APP_CATEGORIES)),
   /** Added after v1 shipped: older stored layouts have no `names`. */
   names: z.partialRecord(appId, z.string().max(APP_LABEL_MAX)).default({}),
+  /** Step 2.2: home-screen widgets (older layouts: none). */
+  widgets: z.array(WidgetSchema).max(WIDGETS_MAX).default([]),
   appearance: AppearanceSchema,
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
@@ -151,8 +210,9 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
   const base = { ...DEFAULT_APPEARANCE, ...(a ?? {}) };
   return {
     wallpaper: normalizeWallpaper(base.wallpaper),
-    labelColor: base.labelColor,
-    labelSize: base.labelSize,
+    // No longer user settings (Step 2.2): automatic contrast, size from the scale.
+    labelColor: "auto",
+    labelSize: "m",
     captions: base.captions,
     glass: (GLASS_LEVELS as readonly string[]).includes(base.glass) ? base.glass : "on",
   };
@@ -165,15 +225,29 @@ export function defaultLayout(apps: AppId[]): WorkspaceLayout {
     folders: [],
     hidden: [],
     mobile: { columns: 3, pages: [items], view: "grid" },
-    desktop: { columns: 5, density: "normal", view: "grid", sort: "manual", spaces: [{ id: "d_1", name: "", items }], dock: [...apps] },
+    desktop: {
+      columns: 5,
+      density: "normal",
+      view: "grid",
+      sort: "manual",
+      spaces: [{ id: "d_1", name: "", items }],
+      dock: [...apps],
+      dockDesktops: true,
+      dockScale: "m",
+      arrange: "grid",
+      positions: {},
+    },
     categories: {},
     names: {},
+    widgets: [],
     appearance: DEFAULT_APPEARANCE,
   };
 }
 
 export const sameItem = (a: LayoutItem, b: LayoutItem) => a.kind === b.kind && a.id === b.id;
-const itemKey = (i: LayoutItem) => `${i.kind}:${i.id}`;
+export const layoutItemKey = (i: LayoutItem) => `${i.kind}:${i.id}`;
+const itemKey = layoutItemKey;
+const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
 
 /**
  * Makes any layout valid for the apps the user has installed:
@@ -250,6 +324,29 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
     if (installedSet.has(id as AppId) && clean) names[id as AppId] = clean;
   }
 
+  // Free placement: only items that are on a PC desktop, positions kept inside the area.
+  const onDesktop = new Set(spaces.flatMap((sp) => sp.items.map(itemKey)));
+  const positions: Record<string, Position> = {};
+  for (const [k, p] of Object.entries(base.desktop.positions ?? {})) {
+    if (onDesktop.has(k) && p && Number.isFinite(p.x) && Number.isFinite(p.y)) positions[k] = { x: clamp01(p.x), y: clamp01(p.y) };
+  }
+
+  // Widgets: known types, unique ids, on an existing desktop / page.
+  const widgetIds = new Set<string>();
+  const widgets: Widget[] = [];
+  for (const w of base.widgets ?? []) {
+    if (widgets.length >= WIDGETS_MAX || widgetIds.has(w.id) || !(WIDGET_TYPES as readonly string[]).includes(w.type)) continue;
+    let container = w.container;
+    if (w.surface === "desktop") {
+      if (!spaces.some((sp) => sp.id === container)) container = spaces[0]!.id;
+    } else {
+      const page = Number(container);
+      container = String(Number.isInteger(page) ? Math.max(0, Math.min(pages.length - 1, page)) : 0);
+    }
+    widgetIds.add(w.id);
+    widgets.push({ id: w.id, type: w.type, surface: w.surface === "mobile" ? "mobile" : "desktop", container, x: clamp01(w.x), y: clamp01(w.y) });
+  }
+
   return {
     v: 1,
     folders,
@@ -263,9 +360,14 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
       spaces,
       // Never customised → every installed app; an emptied dock stays empty.
       dock: [...new Set(base.desktop.dock ?? installed)].filter((a) => installedSet.has(a)).slice(0, DOCK_MAX),
+      dockDesktops: base.desktop.dockDesktops !== false,
+      dockScale: (DOCK_SCALES as readonly string[]).includes(base.desktop.dockScale) ? base.desktop.dockScale : "m",
+      arrange: base.desktop.arrange === "free" ? "free" : "grid",
+      positions,
     },
     categories,
     names,
+    widgets,
     appearance: normalizeAppearance(base.appearance),
   };
 }
@@ -475,7 +577,9 @@ export function removeSpace(l: WorkspaceLayout, space: string): WorkspaceLayout 
   if (i <= 0) return l;
   const n = clone(l);
   const [gone] = n.desktop.spaces.splice(i, 1);
-  n.desktop.spaces[i - 1]!.items.push(...gone!.items);
+  const prev = n.desktop.spaces[i - 1]!;
+  prev.items.push(...gone!.items);
+  for (const w of n.widgets) if (w.surface === "desktop" && w.container === space) w.container = prev.id;
   return n;
 }
 
@@ -489,4 +593,55 @@ export function renameSpace(l: WorkspaceLayout, space: string, name: string): Wo
 /** Category of an app for this user: their own choice, else the manifest default. */
 export function categoryOf(l: Pick<WorkspaceLayout, "categories">, app: AppId, fallback: AppCategory): AppCategory {
   return l.categories[app] ?? fallback;
+}
+
+
+// ---------------------------------------------------------------------------
+// Step 2.2: free placement and widgets.
+
+/** Free placement: puts an item at a position (fractions of the desktop area). */
+export function placeItem(l: WorkspaceLayout, item: LayoutItem, pos: Position): WorkspaceLayout {
+  const n = clone(l);
+  n.desktop.positions = { ...n.desktop.positions, [itemKey(item)]: { x: clamp01(pos.x), y: clamp01(pos.y) } };
+  return n;
+}
+
+export function newWidgetId(random: () => number = Math.random): string {
+  return `w_${Math.floor(random() * 36 ** 8)
+    .toString(36)
+    .padStart(8, "0")}`;
+}
+
+export function addWidget(
+  l: WorkspaceLayout,
+  type: WidgetType,
+  where: { surface: "desktop"; space: string; x?: number; y?: number } | { surface: "mobile"; page: number },
+  id = newWidgetId(),
+): WorkspaceLayout {
+  if (l.widgets.length >= WIDGETS_MAX) return l;
+  const n = clone(l);
+  if (where.surface === "desktop") {
+    n.widgets.push({ id, type, surface: "desktop", container: where.space, x: clamp01(where.x ?? 0.04), y: clamp01(where.y ?? 0.04) });
+  } else {
+    const onPage = n.widgets.filter((w) => w.surface === "mobile" && w.container === String(where.page));
+    const y = onPage.length ? Math.min(1, Math.max(...onPage.map((w) => w.y)) + 0.01) : 0;
+    n.widgets.push({ id, type, surface: "mobile", container: String(where.page), x: 0, y });
+  }
+  return n;
+}
+
+export function removeWidget(l: WorkspaceLayout, id: string): WorkspaceLayout {
+  const n = clone(l);
+  n.widgets = n.widgets.filter((w) => w.id !== id);
+  return n;
+}
+
+export function moveWidget(l: WorkspaceLayout, id: string, pos: Partial<Position> & { container?: string }): WorkspaceLayout {
+  const n = clone(l);
+  const w = n.widgets.find((x) => x.id === id);
+  if (!w) return l;
+  if (pos.x !== undefined) w.x = clamp01(pos.x);
+  if (pos.y !== undefined) w.y = clamp01(pos.y);
+  if (pos.container !== undefined) w.container = pos.container;
+  return n;
 }
