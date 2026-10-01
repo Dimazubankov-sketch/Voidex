@@ -3,10 +3,10 @@ import { RiCheckLine, RiDeleteBinLine, RiImageAddLine } from "@remixicon/react";
 import {
   DESKTOP_COLUMNS_MAX,
   DESKTOP_COLUMNS_MIN,
-  WALLPAPER_GRADIENTS,
   WALLPAPER_PRESETS,
   defaultLayout,
   type Wallpaper,
+  type WallpaperPreset,
   type WorkspaceLayout,
 } from "@voidex/shared";
 import { api } from "@/lib/api";
@@ -15,7 +15,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { Button, Spinner, Switch } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
-import { PRESETS, WALLPAPER_COLORS, prepareWallpaper, useWallpaperImage, wallpaperStyle } from "./appearance";
+import { DEFAULT_SWATCH, prepareWallpaper, useWallpaperImage, wallpaperStyle } from "./appearance";
 import { useWorkspaceLayout, updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 
@@ -38,6 +38,21 @@ export function AppearancePanel({ showReset }: { showReset?: boolean }) {
     <div className="space-y-6" data-testid="appearance-panel">
       <p className="text-[13px] text-text-secondary">{t("appearance.synced")}</p>
       <WallpaperPicker current={a.wallpaper} onPick={(wallpaper) => setAppearance({ wallpaper })} />
+
+      <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
+        <Field label={t("appearance.glass")}>
+          <Segmented
+            value={a.glass}
+            options={[
+              ["off", "appearance.glassOff"],
+              ["medium", "appearance.glassMedium"],
+              ["on", "appearance.glassOn"],
+            ]}
+            onChange={(glass) => setAppearance({ glass })}
+            testId="glass"
+          />
+        </Field>
+      </Block>
 
       <Block title={t("appearance.text")} hint={t("appearance.textHint")}>
         <Field label={t("appearance.textColor")}>
@@ -208,13 +223,24 @@ function Segmented<V extends string>({
   );
 }
 
+const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
+  white: "wallpaper.white",
+  glow: "wallpaper.glow",
+  mist: "wallpaper.mist",
+  aura: "wallpaper.aura",
+  "wave-violet": "wallpaper.waveViolet",
+  "wave-milk": "wallpaper.waveMilk",
+  "wave-milk-violet": "wallpaper.waveMilkViolet",
+  "wave-gray-violet": "wallpaper.waveGrayViolet",
+};
+
 function sameWallpaper(a: Wallpaper, b: Wallpaper) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function Swatch({ wallpaper, current, onPick, label, testId, children }: { wallpaper: Wallpaper; current: Wallpaper; onPick: (w: Wallpaper) => void; label: string; testId: string; children?: ReactNode }) {
   const image = useWallpaperImage(wallpaper);
-  const style = wallpaper.kind === "default" ? { background: PRESETS.voidex.css } : wallpaperStyle(wallpaper, image.data).style;
+  const style = wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data).style;
   const active = sameWallpaper(wallpaper, current);
   return (
     <button
@@ -224,15 +250,20 @@ function Swatch({ wallpaper, current, onPick, label, testId, children }: { wallp
       aria-pressed={active}
       title={label}
       data-testid={testId}
-      className={cx("pressable relative h-[72px] w-[52px] shrink-0 overflow-hidden rounded-[14px] border border-black/10 shadow-sm", active && "ring-[3px] ring-primary ring-offset-2")}
-      style={style}
+      className="pressable flex w-[68px] shrink-0 flex-col items-center gap-1.5"
     >
-      {children}
-      {active && (
-        <span className="absolute bottom-1 right-1 flex size-5 items-center justify-center rounded-full bg-primary text-white">
-          <RiCheckLine className="size-3.5" />
-        </span>
-      )}
+      <span
+        className={cx("relative block h-[92px] w-[64px] overflow-hidden rounded-[16px] border border-black/10 shadow-sm", active && "ring-[3px] ring-primary ring-offset-2")}
+        style={style}
+      >
+        {children}
+        {active && (
+          <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-white">
+            <RiCheckLine className="size-3.5" />
+          </span>
+        )}
+      </span>
+      <span className={cx("line-clamp-2 min-h-[2.5em] w-full text-center text-[11px] leading-tight", active ? "font-semibold text-text" : "text-text-secondary")}>{label}</span>
     </button>
   );
 }
@@ -265,32 +296,14 @@ function WallpaperPicker({ current, onPick }: { current: Wallpaper; onPick: (w: 
     }
   };
 
-  const row = (title: string, children: ReactNode) => (
-    <div>
-      <div className="mb-2 text-[13px] text-text-secondary">{title}</div>
-      <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 pt-1 [scrollbar-width:none]">{children}</div>
-    </div>
-  );
-
   return (
     <Block title={t("appearance.wallpaper")}>
-      {row(
-        t("appearance.presets"),
-        <>
-          <Swatch wallpaper={{ kind: "default" }} current={current} onPick={onPick} label={t("appearance.default")} testId="wallpaper-default" />
-          {WALLPAPER_PRESETS.map((id) => (
-            <Swatch key={id} wallpaper={{ kind: "preset", id }} current={current} onPick={onPick} label={id} testId={`wallpaper-preset-${id}`} />
-          ))}
-        </>,
-      )}
-      {row(
-        t("appearance.gradients"),
-        WALLPAPER_GRADIENTS.map((id) => <Swatch key={id} wallpaper={{ kind: "gradient", id }} current={current} onPick={onPick} label={id} testId={`wallpaper-gradient-${id}`} />),
-      )}
-      {row(
-        t("appearance.colors"),
-        WALLPAPER_COLORS.map((color) => <Swatch key={color} wallpaper={{ kind: "color", color }} current={current} onPick={onPick} label={color} testId={`wallpaper-color-${color.slice(1)}`} />),
-      )}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] justify-items-center gap-x-2 gap-y-3 pt-1" data-testid="wallpaper-presets">
+        <Swatch wallpaper={{ kind: "default" }} current={current} onPick={onPick} label={t("wallpaper.default")} testId="wallpaper-default" />
+        {WALLPAPER_PRESETS.map((id) => (
+          <Swatch key={id} wallpaper={{ kind: "preset", id }} current={current} onPick={onPick} label={t(WALLPAPER_LABEL[id])} testId={`wallpaper-preset-${id}`} />
+        ))}
+      </div>
       <div>
         <div className="mb-2 text-[13px] text-text-secondary">{t("appearance.image")}</div>
         <div className="flex flex-wrap items-center gap-3">

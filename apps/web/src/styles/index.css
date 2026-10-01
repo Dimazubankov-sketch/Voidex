@@ -43,7 +43,42 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
+  /* Glass — the material of the desktop's floating UI (dock, folders, menus).
+     Three levels from Settings → Desktop → Glass effect, set on <html data-glass>. */
+  --glass-bg: rgba(255, 255, 255, 0.56);
+  --glass-bg-strong: rgba(255, 255, 255, 0.7);
+  --glass-blur: 22px;
+  --glass-sat: 1.6;
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(20, 20, 40, 0.07);
+  --glass-shadow: 0 12px 32px rgba(20, 20, 40, 0.12);
+  --glass-tile: linear-gradient(145deg, rgba(240, 238, 255, 0.74) 0%, rgba(226, 229, 250, 0.52) 100%);
+  --glass-scrim: rgba(30, 30, 40, 0.12);
+  --glass-scrim-blur: 12px;
+
   color-scheme: light;
+}
+
+:root[data-glass="medium"] {
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-bg-strong: rgba(255, 255, 255, 0.88);
+  --glass-blur: 10px;
+  --glass-sat: 1.2;
+  --glass-tile: linear-gradient(145deg, rgba(242, 240, 255, 0.92) 0%, rgba(232, 234, 251, 0.86) 100%);
+  --glass-scrim-blur: 6px;
+}
+
+:root[data-glass="off"] {
+  --glass-bg: var(--surface);
+  --glass-bg-strong: var(--surface);
+  --glass-blur: 0px;
+  --glass-sat: 1;
+  --glass-border: var(--border);
+  --glass-edge: rgba(20, 20, 40, 0.04);
+  --glass-shadow: 0 8px 24px rgba(20, 20, 40, 0.1);
+  --glass-tile: #ecebf7;
+  --glass-scrim: rgba(30, 30, 40, 0.22);
+  --glass-scrim-blur: 0px;
 }
 
 @theme inline {
@@ -148,6 +183,23 @@ button {
   border-radius: 999px;
   border: 3px solid transparent;
   background-clip: content-box;
+}
+
+.vx-glass,
+.vx-glass-strong,
+.vx-glass-tile {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 0 0 0.5px var(--glass-edge), var(--glass-shadow);
+}
+.vx-glass { background: var(--glass-bg); }
+.vx-glass-strong { background: var(--glass-bg-strong); }
+.vx-glass-tile { background: var(--glass-tile); box-shadow: 0 0 0 0.5px var(--glass-edge), var(--shadow-tile); }
+.vx-glass-scrim {
+  background: var(--glass-scrim);
+  -webkit-backdrop-filter: blur(var(--glass-scrim-blur));
+  backdrop-filter: blur(var(--glass-scrim-blur));
 }
 
 .brand-gradient {

@@ -21,7 +21,7 @@ describe("workspace layout (server-side, per account)", () => {
     let layout = normalizeLayout(null, ["mail", "settings"]);
     layout = dropOnto(layout, "settings", { kind: "app", id: "mail" }, "Работа", "f_work01");
     layout.mobile.columns = 4;
-    layout.appearance = { ...layout.appearance, wallpaper: { kind: "gradient", id: "lavender" }, labelSize: "l" };
+    layout.appearance = { ...layout.appearance, wallpaper: { kind: "preset", id: "wave-milk-violet" }, labelSize: "l", glass: "medium" };
 
     const r = await phone.patch("/api/preferences", { workspace: { layout } });
     expect(r.status).toBe(200);
@@ -41,7 +41,8 @@ describe("workspace layout (server-side, per account)", () => {
     const saved: WorkspaceLayout = me.body.preferences.workspace.layout;
     expect(saved.mobile.columns).toBe(4);
     expect(saved.mobile.pages).toEqual([[{ kind: "folder", id: "f_work01" }]]);
-    expect(saved.appearance.wallpaper).toEqual({ kind: "gradient", id: "lavender" });
+    expect(saved.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-milk-violet" });
+    expect(saved.appearance.glass).toBe("medium");
   });
 
   it("the server normalizes what clients send (duplicates, missing apps)", async () => {
@@ -51,6 +52,17 @@ describe("workspace layout (server-side, per account)", () => {
     bad.mobile.pages = [[{ kind: "app", id: "mail" }, { kind: "app", id: "mail" }]];
     const r = await d.patch("/api/preferences", { workspace: { layout: bad } });
     expect(r.body.workspace.layout.mobile.pages).toEqual([[{ kind: "app", id: "mail" }, { kind: "app", id: "settings" }]]);
+  });
+
+  it("layouts saved before Step 2.1 still load: retired wallpapers are mapped, glass defaults to on", async () => {
+    const d = new Device(env.app);
+    await signUp(d);
+    const l = defaultLayout(["mail", "settings"]);
+    const { glass: _glass, ...oldAppearance } = l.appearance;
+    const r = await d.patch("/api/preferences", { workspace: { layout: { ...l, appearance: { ...oldAppearance, wallpaper: { kind: "gradient", id: "night" } } } } });
+    expect(r.status).toBe(200);
+    expect(r.body.workspace.layout.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-violet" });
+    expect(r.body.workspace.layout.appearance.glass).toBe("on");
   });
 
   it("rejects malformed layouts", async () => {

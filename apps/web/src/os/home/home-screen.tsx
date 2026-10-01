@@ -73,6 +73,11 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
     openApp(item.id, el);
   }, []);
 
+  // The glass level is a document-wide material: dock, folders and menus render in portals.
+  useEffect(() => {
+    document.documentElement.dataset.glass = layout.appearance.glass;
+  }, [layout.appearance.glass]);
+
   // Leaving the home screen (an app comes to the front) ends edit mode.
   useEffect(() => {
     if (hidden || receded) useHomeUi.getState().setEditing(false);
@@ -99,7 +104,7 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
     return () => window.removeEventListener("keydown", h);
   }, [ff, layout.desktop.spaces]);
 
-  const glassBtn = plain ? undefined : "bg-white/55 text-text shadow-tile backdrop-blur-xl hover:bg-white/75";
+  const glassBtn = plain ? undefined : "vx-glass text-text hover:bg-white/75";
 
   return (
     <motion.main
@@ -204,7 +209,7 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
         <WorkspaceMenu onDone={menu.close} />
       </Popover>
       <Launcher anchor={launcherBtn} apps={apps} layout={layout} />
-      <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} />
+      <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />
       <ContextMenu layout={layout} />
       <AppearanceSheet />
       <RenameSheet layout={layout} />
@@ -447,7 +452,7 @@ function SpaceTabs({ layout }: { layout: WorkspaceLayout }) {
   return (
     <div
       className={cx(
-        "flex items-center gap-1 rounded-full border border-white/70 bg-surface/70 p-1 shadow-tile backdrop-blur-xl transition-transform",
+        "vx-glass flex items-center gap-1 rounded-full p-1 transition-transform",
         dragging && "scale-105",
       )}
       role="tablist"

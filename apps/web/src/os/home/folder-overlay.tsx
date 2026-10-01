@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { renameFolder, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { useFormFactor } from "@/lib/form-factor";
+import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
+import type { LabelTone } from "./appearance";
 import { HomeItem, type IconMetrics, type LabelStyle } from "./icons";
 import { updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
@@ -15,7 +17,18 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  * app to open it, tap the name to rename, drag to reorder, drag out of the
  * panel to take an app out. Tap outside closes it.
  */
-export function FolderOverlay({ layout, editing, onOpen }: { layout: WorkspaceLayout; editing: boolean; onOpen: (item: LayoutItem, el: HTMLElement) => void }) {
+export function FolderOverlay({
+  layout,
+  editing,
+  onOpen,
+  tone,
+}: {
+  layout: WorkspaceLayout;
+  editing: boolean;
+  onOpen: (item: LayoutItem, el: HTMLElement) => void;
+  /** Title colour against the wallpaper behind the folder. */
+  tone: LabelTone;
+}) {
   const t = useT();
   const ff = useFormFactor();
   const open = useHomeUi((s) => s.openFolder);
@@ -49,7 +62,7 @@ export function FolderOverlay({ layout, editing, onOpen }: { layout: WorkspaceLa
       {folder && (
         <motion.div className="fixed inset-0 z-[120] flex items-center justify-center p-4" exit={{ pointerEvents: "none" }} data-testid="folder-overlay">
           <motion.div
-            className="absolute inset-0 bg-[rgba(30,30,40,0.12)] backdrop-blur-md"
+            className="vx-glass-scrim absolute inset-0"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, pointerEvents: "none" }}
@@ -65,10 +78,10 @@ export function FolderOverlay({ layout, editing, onOpen }: { layout: WorkspaceLa
             exit={from}
             transition={{ duration: 0.32, ease: EASE }}
           >
-            <FolderTitle id={folder.id} name={folder.name || t("home.folder")} renaming={renaming === folder.id} />
+            <FolderTitle id={folder.id} name={folder.name || t("home.folder")} renaming={renaming === folder.id} tone={tone} />
             <div
               data-folder-panel
-              className="w-full rounded-[36px] border border-white/70 bg-white/60 p-5 shadow-window backdrop-blur-2xl"
+              className="vx-glass w-full rounded-[36px] p-5"
             >
               <div
                 className="grid justify-center"
@@ -99,7 +112,7 @@ export function FolderOverlay({ layout, editing, onOpen }: { layout: WorkspaceLa
   );
 }
 
-function FolderTitle({ id, name, renaming }: { id: string; name: string; renaming: boolean }) {
+function FolderTitle({ id, name, renaming, tone }: { id: string; name: string; renaming: boolean; tone: LabelTone }) {
   const t = useT();
   const [value, setValue] = useState(name);
   const input = useRef<HTMLInputElement>(null);
@@ -135,7 +148,10 @@ function FolderTitle({ id, name, renaming }: { id: string; name: string; renamin
   return (
     <button
       type="button"
-      className="mb-4 max-w-full truncate rounded-2xl px-4 py-1.5 text-[24px] font-bold tracking-tight text-text [text-shadow:0_1px_8px_rgba(255,255,255,0.6)] hover:bg-white/40"
+      className={cx(
+        "mb-4 max-w-full truncate rounded-2xl px-4 py-1.5 text-[24px] font-bold tracking-tight hover:bg-white/20",
+        tone === "light" ? "text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.25)]" : "text-text [text-shadow:0_1px_8px_rgba(255,255,255,0.6)]",
+      )}
       onClick={() => useHomeUi.getState().setRenamingFolder(id)}
       title={t("home.rename")}
       data-testid="folder-name"

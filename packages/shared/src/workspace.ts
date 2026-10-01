@@ -32,10 +32,31 @@ export const DESKTOP_COLUMNS_MIN = 3;
 export const DESKTOP_COLUMNS_MAX = 8;
 export const APP_LABEL_MAX = 40;
 
+/**
+ * System wallpapers (Step 2.1 set). Older layouts may still hold Step 2
+ * gradients / presets: `normalizeLayout` maps them to the nearest new one.
+ */
+export const WALLPAPER_PRESETS = ["white", "glow", "mist", "aura", "wave-violet", "wave-milk", "wave-milk-violet", "wave-gray-violet"] as const;
+export type WallpaperPreset = (typeof WALLPAPER_PRESETS)[number];
+/** Step 2 gradients — still accepted in stored data, shown as presets. */
 export const WALLPAPER_GRADIENTS = ["dawn", "lavender", "mist", "aurora", "sand", "night"] as const;
 export type WallpaperGradient = (typeof WALLPAPER_GRADIENTS)[number];
-export const WALLPAPER_PRESETS = ["voidex", "waves", "orbit", "grid"] as const;
-export type WallpaperPreset = (typeof WALLPAPER_PRESETS)[number];
+const LEGACY_WALLPAPER: Record<string, WallpaperPreset> = {
+  voidex: "glow",
+  waves: "wave-milk-violet",
+  orbit: "wave-violet",
+  grid: "mist",
+  dawn: "wave-milk-violet",
+  lavender: "wave-milk-violet",
+  mist: "mist",
+  aurora: "wave-violet",
+  sand: "wave-milk",
+  night: "wave-violet",
+};
+
+/** Glass material of the desktop's floating UI (dock, folders, menus). */
+export const GLASS_LEVELS = ["off", "medium", "on"] as const;
+export type GlassLevel = (typeof GLASS_LEVELS)[number];
 
 const appId = z.enum(APP_IDS as [AppId, ...AppId[]]);
 const folderId = z.string().regex(/^f_[a-z0-9]{4,24}$/);
@@ -59,7 +80,8 @@ export const WallpaperSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("default") }),
   z.object({ kind: z.literal("color"), color: hexColor }),
   z.object({ kind: z.literal("gradient"), id: z.enum(WALLPAPER_GRADIENTS) }),
-  z.object({ kind: z.literal("preset"), id: z.enum(WALLPAPER_PRESETS) }),
+  /** Any short id: unknown / retired ones are mapped or reset by normalizeLayout. */
+  z.object({ kind: z.literal("preset"), id: z.string().regex(/^[a-z0-9-]{1,32}$/) }),
   /** The user's own picture; `version` changes when a new one is uploaded. */
   z.object({ kind: z.literal("image"), version: z.string().max(64) }),
 ]);
@@ -72,6 +94,8 @@ export const AppearanceSchema = z.object({
   labelSize: z.enum(["s", "m", "l"]),
   /** Second line under the app name (e.g. "System", unread count). */
   captions: z.boolean(),
+  /** Added in Step 2.1; older stored layouts have none (→ "on"). */
+  glass: z.enum(GLASS_LEVELS).default("on"),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -104,7 +128,29 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on" };
+
+/** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
+export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
+  if (!w) return { kind: "default" };
+  if (w.kind === "gradient") return { kind: "preset", id: LEGACY_WALLPAPER[w.id] ?? "glow" };
+  if (w.kind === "preset" && !(WALLPAPER_PRESETS as readonly string[]).includes(w.id)) {
+    const mapped = LEGACY_WALLPAPER[w.id];
+    return mapped ? { kind: "preset", id: mapped } : { kind: "default" };
+  }
+  return w;
+}
+
+function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
+  const base = { ...DEFAULT_APPEARANCE, ...(a ?? {}) };
+  return {
+    wallpaper: normalizeWallpaper(base.wallpaper),
+    labelColor: base.labelColor,
+    labelSize: base.labelSize,
+    captions: base.captions,
+    glass: (GLASS_LEVELS as readonly string[]).includes(base.glass) ? base.glass : "on",
+  };
+}
 
 export function defaultLayout(apps: AppId[]): WorkspaceLayout {
   const items = apps.map((id) => ({ kind: "app" as const, id }));
@@ -212,7 +258,7 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
     },
     categories,
     names,
-    appearance: base.appearance ?? DEFAULT_APPEARANCE,
+    appearance: normalizeAppearance(base.appearance),
   };
 }
 

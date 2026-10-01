@@ -228,7 +228,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
     <motion.div
         ref={panel}
         role="menu"
-        className="fixed z-[210] overflow-hidden rounded-2xl border border-border/70 bg-surface/95 p-1.5 shadow-float backdrop-blur-xl"
+        className="vx-glass-strong fixed z-[210] overflow-hidden rounded-2xl p-1.5"
         style={{ left: pos.left, top: pos.top, width: WIDTH }}
         initial={{ opacity: 0, scale: 0.92 }}
         animate={{ opacity: 1, scale: 1 }}

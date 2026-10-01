@@ -151,4 +151,18 @@ describe("workspace layout model", () => {
     const parsed = WorkspaceLayoutSchema.parse(legacy);
     expect(parsed.names).toEqual({});
   });
+
+  it("Step 2 layouts keep working: retired wallpapers map to the new set, glass defaults to on", () => {
+    const old = { ...norm(defaultLayout(APPS)) } as Record<string, unknown> & WorkspaceLayout;
+    const legacyAppearance = { wallpaper: { kind: "gradient", id: "night" }, labelColor: "auto", labelSize: "m", captions: true };
+    const parsed = WorkspaceLayoutSchema.parse({ ...old, appearance: legacyAppearance });
+    expect(parsed.appearance.glass).toBe("on");
+    const l = norm(parsed);
+    expect(l.appearance.wallpaper).toEqual({ kind: "preset", id: "wave-violet" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "orbit" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-violet" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "unknown-x" } } }).appearance.wallpaper).toEqual({ kind: "default" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "wave-milk" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "wave-milk" });
+    expect(WorkspaceLayoutSchema.safeParse({ ...l, appearance: { ...l.appearance, glass: "max" } }).success).toBe(false);
+    expect(WorkspaceLayoutSchema.safeParse({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "<script>" } } }).success).toBe(false);
+  });
 });

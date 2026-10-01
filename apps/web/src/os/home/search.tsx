@@ -85,7 +85,7 @@ export function DesktopSearchBar({ apps, layout }: { apps: InstalledAppDto[]; la
       <AnimatePresence>
         {open && (
           <motion.div
-            className="absolute inset-x-0 bottom-full mb-2 max-h-[50vh] overflow-auto rounded-[22px] border border-border/70 bg-surface/95 p-1.5 shadow-float backdrop-blur-xl"
+            className="vx-glass-strong absolute inset-x-0 bottom-full mb-2 max-h-[50vh] overflow-auto rounded-[22px] p-1.5"
             initial={{ opacity: 0, y: 6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4 }}
@@ -100,7 +100,7 @@ export function DesktopSearchBar({ apps, layout }: { apps: InstalledAppDto[]; la
           </motion.div>
         )}
       </AnimatePresence>
-      <label className="flex h-11 items-center gap-2.5 rounded-full border border-white/70 bg-surface/80 px-4 shadow-tile backdrop-blur-xl transition-shadow focus-within:shadow-float">
+      <label className="vx-glass flex h-11 items-center gap-2.5 rounded-full px-4 transition-shadow focus-within:shadow-float">
         <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
         <input
           ref={input}

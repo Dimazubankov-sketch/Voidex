@@ -15,8 +15,8 @@ Workspace layout (per account, synced)
  │                view grid | categories, order manual | by name
  ├── categories   the user's own category per app (default: the app manifest)
  ├── names        the user's own icon label per app
- └── appearance   wallpaper (default white | colour | gradient | preset | own image),
-                  label colour (auto/dark/light), label size, captions
+ └── appearance   wallpaper (VOIDEX default | system preset | own image), glass level
+                  (off / medium / on), label colour (auto/dark/light), label size, captions
 Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC desktop each is on
 ```
 
@@ -32,6 +32,16 @@ Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC 
 * The wallpaper image is a blob (`blobs` table, purpose `wallpaper`, one per user, max 8 MB,
   JPEG/PNG/WebP checked by magic bytes, readable only by its owner). The layout keeps just
   `{ kind: "image", version }`.
+
+## Wallpapers and glass (Step 2.1)
+
+* System wallpapers: VOIDEX (default), White, Violet glow, Light grey, Aura and four brand
+  waves (violet, milk, milk & violet, grey & violet) — two close shades split by one soft wave,
+  after the VOIDEX Mail artwork. Own picture upload stays.
+* Step 2 gradients / presets in stored layouts are mapped to the nearest new wallpaper by
+  `normalizeLayout` (server and client), so no data migration is needed.
+* Glass (`appearance.glass`, default `on`) is applied as `<html data-glass>` and drives the
+  `vx-glass*` CSS tokens used by the dock, folders, menus, desktop tabs and search.
 
 ## Code map (web)
 

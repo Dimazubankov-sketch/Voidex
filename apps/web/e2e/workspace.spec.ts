@@ -130,7 +130,7 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   // Brush → wallpaper and 4 icons per row.
   await finger.longPress(empty);
   await page.getByTestId("home-appearance").click();
-  await page.getByTestId("wallpaper-gradient-night").click();
+  await page.getByTestId("wallpaper-preset-wave-violet").click();
   await page.getByTestId("phone-columns-4").click();
   await page.keyboard.press("Escape");
   await page.getByTestId("home-done").click();
@@ -142,7 +142,7 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await expect(folder).toHaveCount(1);
   await expect(folder).toHaveAccessibleName("Работа");
   await expect(page.getByTestId("app-settings")).toHaveCount(0);
-  await expect(home).toHaveAttribute("style", /linear-gradient/);
+  await expect(home).toHaveAttribute("style", /svg/);
   await folder.click();
   await expect(page.getByTestId("folder-overlay").getByTestId("app-settings")).toBeVisible();
   await expect(page.getByTestId("folder-overlay").getByTestId("app-mail")).toBeVisible();
@@ -243,9 +243,15 @@ test("Settings → Desktop: text size and wallpaper apply to desktop labels only
   else await page.getByTestId("settings-nav-desktop").click();
   await expect(page.getByTestId("settings-desktop")).toBeVisible();
   await page.getByTestId("label-size-l").click();
-  await page.getByTestId("wallpaper-color-e0f2fe").click();
+  await page.getByTestId("wallpaper-preset-mist").click();
   await expect(page.getByTestId("label-size-l")).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(224, 242, 254\)/);
+  await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(241, 241, 244\)/);
+  // Glass effect: a real document-wide setting (default on).
+  await expect(page.locator("html")).toHaveAttribute("data-glass", "on");
+  await page.getByTestId("glass-off").click();
+  await expect(page.locator("html")).toHaveAttribute("data-glass", "off");
+  await page.getByTestId("glass-medium").click();
+  await expect(page.locator("html")).toHaveAttribute("data-glass", "medium");
 });
 
 test("phone: touch drag works inside a folder; first tap on − after a drag removes the icon", async ({ page }) => {

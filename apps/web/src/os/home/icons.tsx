@@ -81,14 +81,13 @@ export function FolderTile({ folder, size, highlight }: { folder: Folder; size: 
   return (
     <span
       className={cx(
-        "relative grid shrink-0 grid-cols-3 content-start justify-center gap-[5%] border border-white/80 p-[12%] shadow-tile ring-1 ring-black/[0.05] backdrop-blur-xl transition-transform duration-200",
+        "vx-glass-tile relative grid shrink-0 grid-cols-3 content-start justify-center gap-[5%] p-[12%] transition-transform duration-200",
         highlight && "scale-110 ring-4 ring-primary/30",
       )}
       style={{
         width: size,
         height: size,
         borderRadius: size * 0.3,
-        background: "linear-gradient(145deg, rgba(240,238,255,0.82) 0%, rgba(226,229,250,0.62) 100%)",
       }}
     >
       {folder.apps.slice(0, 9).map((id) => {
