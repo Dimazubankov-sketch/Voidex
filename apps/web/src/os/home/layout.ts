@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { normalizeLayout, type AppId, type InstalledAppDto, type WorkspaceLayout } from "@voidex/shared";
+import { normalizeLayout, type AppId, type InstalledAppDto, type MeDto, type WorkspaceLayout } from "@voidex/shared";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { qk } from "@/lib/query";
@@ -28,7 +28,10 @@ export function useInstalledApps() {
 
 let installedIds: AppId[] = [];
 let saveTimer: number | undefined;
+/** The newest local edit not yet confirmed by the server (unsaved or in flight). */
 let pending: WorkspaceLayout | null = null;
+/** Bumped every time the server confirms a save of this device's layout. */
+let savedEpoch = 0;
 
 export function useWorkspaceLayout() {
   const { apps, isLoading } = useInstalledApps();
@@ -62,6 +65,7 @@ async function flush() {
   if (!layout) return;
   try {
     await api.patch("/api/preferences", { workspace: { layout } });
+    savedEpoch++;
     if (pending === layout) pending = null;
   } catch {
     toast({ title: t("home.saveFailed"), tone: "danger" });
@@ -76,3 +80,24 @@ export function flushLayout() {
 }
 
 if (typeof window !== "undefined") window.addEventListener("pagehide", flushLayout);
+
+/** Call before fetching the account from the server; pass the value to `mergeServerUser`. */
+export function layoutEpoch() {
+  return savedEpoch;
+}
+
+/**
+ * Account data fetched from the server may carry an older desktop layout than
+ * this device shows: our own save triggers `preferences.updated`, and the
+ * refetch can be answered before (or while) the next edit is saved. A server
+ * copy never replaces the layout while a local edit is unconfirmed, nor when
+ * one of our saves was confirmed after the fetch started — otherwise a quick
+ * Grid → Categories → Grid flips back and forth. Other devices' edits still
+ * arrive with the next event (their refetch starts after our save).
+ */
+export function mergeServerUser(me: MeDto, fetchStartedAtEpoch?: number): MeDto {
+  const local = useSession.getState().user?.preferences.workspace.layout;
+  const stale = pending !== null || (fetchStartedAtEpoch !== undefined && fetchStartedAtEpoch !== savedEpoch);
+  if (!stale || !local) return me;
+  return { ...me, preferences: { ...me.preferences, workspace: { ...me.preferences.workspace, layout: pending ?? local } } };
+}

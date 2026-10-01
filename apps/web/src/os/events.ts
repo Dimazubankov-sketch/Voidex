@@ -8,6 +8,7 @@ import { qk, queryClient } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { toast } from "@/ui/overlays";
 import { visibleChats } from "@/apps/vibex/store";
+import { layoutEpoch, mergeServerUser } from "./home/layout";
 import { useWM } from "./window-manager";
 
 export const useConnection = create<{ connected: boolean; online: boolean }>(() => ({
@@ -36,7 +37,8 @@ function playChime() {
 }
 
 async function refreshMe() {
-  const me = await api.get<MeDto>("/api/me");
+  const epoch = layoutEpoch();
+  const me = mergeServerUser(await api.get<MeDto>("/api/me"), epoch);
   useSession.getState().setUser(me);
   queryClient.setQueryData(qk.me, me);
 }

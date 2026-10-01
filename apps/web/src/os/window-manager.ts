@@ -149,7 +149,10 @@ export const useWM = create<WMState>((set, get) => ({
       appId,
       state: "normal",
       prevState: "normal",
-      rect: savedRects[appId] ? clampRect(savedRects[appId]!, s.bounds, { w: manifest.window.minWidth, h: manifest.window.minHeight }) : defaultRect(appId, s.bounds, s.order.length),
+      // A newly opened app always starts at its standard size and place (never
+      // the size it had last time, never maximized): geometry lives only as
+      // long as the window does.
+      rect: defaultRect(appId, s.bounds, s.order.length),
       origin: opts.origin ?? null,
       params: opts.params ?? {},
       paramsVersion: 0,
@@ -178,7 +181,9 @@ export const useWM = create<WMState>((set, get) => ({
 
   close: (id) => {
     const s = get();
-    const { [id]: _removed, ...rest } = s.windows;
+    const { [id]: removed, ...rest } = s.windows;
+    // Closing forgets the window's size / position: reopening uses the defaults.
+    if (removed && !Object.values(rest).some((w) => w.appId === removed.appId)) delete savedRects[removed.appId];
     const order = s.order.filter((i) => i !== id);
     const nextFocus = [...order].reverse().find((i) => rest[i]?.state !== "minimized" && rest[i]?.space === s.space) ?? null;
     set({ windows: rest, order, focusedId: s.focusedId === id ? nextFocus : s.focusedId });
@@ -231,6 +236,7 @@ export const useWM = create<WMState>((set, get) => ({
   setSwitcher: (open) => set({ switcherOpen: open }),
 
   closeAll: () => {
+    for (const k of Object.keys(savedRects)) delete savedRects[k as AppId];
     set({ windows: {}, order: [], focusedId: null, switcherOpen: false });
     persist();
   },
@@ -248,7 +254,8 @@ export const useWM = create<WMState>((set, get) => ({
       const raw = localStorage.getItem(persistKey);
       if (!raw) return;
       const data = JSON.parse(raw) as { rects?: Record<string, Rect>; open?: { appId: AppId; state: WindowState; space?: string }[]; space?: string };
-      Object.assign(savedRects, data.rects ?? {});
+      const openApps = new Set((data.open ?? []).map((o) => o.appId));
+      for (const [appId, r] of Object.entries(data.rects ?? {})) if (openApps.has(appId as AppId)) savedRects[appId as AppId] = r;
       const s = get();
       const windows: Record<string, AppWindow> = {};
       const order: string[] = [];
@@ -285,7 +292,8 @@ function persist() {
     localStorage.setItem(
       persistKey,
       JSON.stringify({
-        rects: savedRects,
+        // Only open windows keep their geometry (restored after a reload).
+        rects: Object.fromEntries(Object.entries(savedRects).filter(([appId]) => s.order.some((id) => s.windows[id]?.appId === appId))),
         space: s.space,
         open: s.order.map((id) => ({
           appId: s.windows[id]!.appId,
@@ -297,6 +305,11 @@ function persist() {
   } catch {
     /* ignore */
   }
+}
+
+/** Standard geometry of an app's window on this screen (what a reopened app gets). */
+export function standardRect(appId: AppId): Rect {
+  return defaultRect(appId, useWM.getState().bounds, 0);
 }
 
 /** Top-most visible window, if any (on one PC desktop when `space` is given). */

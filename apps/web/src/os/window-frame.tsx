@@ -130,7 +130,8 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
 
   // desktop
   const launcher = launcherRect();
-  const rect = maximized ? { x: GUTTER, y: GUTTER, w: bounds.w - GUTTER * 2, h: bounds.h - GUTTER * 2 } : win.rect;
+  // Maximized: the whole area above the dock — the window layer already ends at the dock.
+  const rect = maximized ? { x: GUTTER, y: GUTTER, w: bounds.w - GUTTER * 2, h: bounds.h - GUTTER } : win.rect;
   const minimizedTarget = offSpace
     ? { x: rect.x - 80, y: rect.y, scale: 0.97, opacity: 0 }
     : launcher

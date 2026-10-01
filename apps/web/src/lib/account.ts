@@ -3,6 +3,7 @@ import type { MeDto, Preferences } from "@voidex/shared";
 import { api } from "./api";
 import { qk, queryClient } from "./query";
 import { useSession } from "./session";
+import { mergeServerUser } from "@/os/home/layout";
 
 let signingOut = false;
 /** True while this device is signing itself out (its own "revoked" event is expected). */
@@ -30,7 +31,9 @@ export async function signOutEverywhere() {
   }
 }
 
-function applyMe(me: MeDto) {
+function applyMe(server: MeDto) {
+  // A profile response must not undo a desktop edit that is still being saved.
+  const me = mergeServerUser(server);
   useSession.getState().setUser(me);
   queryClient.setQueryData(qk.me, me);
 }
