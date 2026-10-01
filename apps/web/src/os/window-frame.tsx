@@ -164,7 +164,7 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
         <>
           <div className="absolute inset-y-4 right-0 w-2 cursor-ew-resize" onPointerDown={(e) => startResize(e, "e")} />
           <div className="absolute inset-x-4 bottom-0 h-2 cursor-ns-resize" onPointerDown={(e) => startResize(e, "s")} />
-          <div className="absolute bottom-0 right-0 size-4 cursor-nwse-resize" onPointerDown={(e) => startResize(e, "se")} />
+          <div className="absolute bottom-0 right-0 size-4 cursor-nwse-resize" onPointerDown={(e) => startResize(e, "se")} data-testid="window-resize-se" />
         </>
       )}
     </motion.section>

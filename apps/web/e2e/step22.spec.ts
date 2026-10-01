@@ -228,8 +228,9 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
   const initial = await settledBox(win);
 
-  // Resize from the bottom-right corner.
-  const corner = { x: initial.x + initial.width - 4, y: initial.y + initial.height - 4 };
+  // Resize from the bottom-right corner handle (its centre: the window's
+  // rounded corner clips hit-testing right at the edge in current Chromium).
+  const corner = await center(win.getByTestId("window-resize-se"));
   await page.mouse.move(corner.x, corner.y);
   await page.mouse.down();
   await page.mouse.move(corner.x - 160, corner.y - 120, { steps: 8 });
