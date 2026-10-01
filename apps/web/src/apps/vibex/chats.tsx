@@ -74,14 +74,14 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
           <span className={cx("min-w-0 flex-1 truncate text-[15px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chat.peer.name}</span>
           {chat.lastMessage?.mine &&
             (read ? <RiCheckDoubleLine className="size-4 shrink-0 text-primary" /> : <RiCheckLine className="size-4 shrink-0 text-text-tertiary" />)}
-          <span className="shrink-0 text-[12px] tabular-nums text-text-tertiary">{chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}</span>
+          <span className={cx("shrink-0 text-[12px] tabular-nums text-text-tertiary", HOVER_HIDE)}>{chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}</span>
         </span>
         <span className="mt-0.5 flex items-center gap-2">
           <span className="line-clamp-1 min-w-0 flex-1 text-[14px] text-text-secondary">
             <Preview chat={chat} />
           </span>
           {chat.unread > 0 ? (
-            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white" data-testid="chat-unread">
+            <span className={cx("flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white", HOVER_HIDE)} data-testid="chat-unread">
               {chat.unread}
             </span>
           ) : chat.pinnedPosition !== null ? (
@@ -92,6 +92,9 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
     </>
   );
 }
+
+/** With a mouse, the row's [...] button takes the place of the time and the counter on hover. */
+const HOVER_HIDE = "transition-opacity [@media(hover:hover)]:group-hover:opacity-0";
 
 function rowClass(active: boolean) {
   return cx(
@@ -157,7 +160,7 @@ function ChatRow({ chat, pinnedIds }: { chat: VibexChatDto; pinnedIds: string[] 
         ref={pop.anchor}
         label={t("vibex.post.more")}
         size="sm"
-        className="absolute right-2 top-2 hidden bg-surface/90 shadow-tile [@media(hover:hover)]:group-hover:inline-flex"
+        className="absolute right-3 top-1/2 hidden -translate-y-1/2 bg-surface shadow-tile [@media(hover:hover)]:group-hover:inline-flex"
         onClick={pop.toggle}
         data-testid="chat-row-menu"
       >
@@ -316,7 +319,7 @@ function PinnedRow({
           ref={pop.anchor}
           label={t("vibex.post.more")}
           size="sm"
-          className={cx("absolute right-2 top-2 hidden bg-surface/90 shadow-tile", !dragging && "[@media(hover:hover)]:group-hover:inline-flex")}
+          className={cx("absolute right-3 top-1/2 hidden -translate-y-1/2 bg-surface shadow-tile", !dragging && "[@media(hover:hover)]:group-hover:inline-flex")}
           onClick={pop.toggle}
           data-testid="chat-row-menu"
         >

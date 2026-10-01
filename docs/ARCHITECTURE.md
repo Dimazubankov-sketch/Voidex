@@ -28,13 +28,13 @@ the client is Vite + React and the server is Fastify + PostgreSQL.
 ```
 apps/server      Fastify API, Drizzle ORM, PostgreSQL, SSE — the source of truth
   src/db           schema.ts (all tables), migrations in ../drizzle
-  src/services     accounts, sessions, verification (OTP), challenges, mail, apps, legal, events, sms/
-  src/routes       auth, account/security/apps/events, mail, system
+  src/services     accounts, sessions, verification (OTP), challenges, mail, vibex, apps, legal, events, sms/
+  src/routes       auth, account/security/apps/events, mail, vibex, system
   legal/           versioned legal documents (<key>/<version>.<lang>.md)
   test/            integration tests against a real PostgreSQL
 apps/web         Vite + React 19 + Tailwind v4 client (the OS shell and apps)
   src/os           workspace, window manager, app registry, system menu, events
-  src/apps         settings/, mail/ — code-split system apps
+  src/apps         settings/, mail/, vibex/ — code-split system apps
   src/auth         welcome, sign-up, sign-in, new-device challenge, recovery
   src/ui           design-system components; src/styles tokens
   e2e/             Playwright end-to-end tests (phone + desktop layouts)

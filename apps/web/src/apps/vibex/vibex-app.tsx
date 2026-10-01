@@ -254,7 +254,7 @@ function MobileVibex() {
       {(section === "feed" || section === "me") && (
         <motion.button
           onClick={() => compose(true)}
-          className="absolute bottom-[calc(84px+var(--safe-bottom))] right-4 z-10 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-glow"
+          className="absolute bottom-[calc(84px+var(--safe-bottom))] right-[max(16px,calc(50%-280px))] z-10 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-glow"
           whileTap={{ scale: 0.92 }}
           aria-label={t("vibex.newPost")}
           data-testid="vibex-new-post"
@@ -264,7 +264,10 @@ function MobileVibex() {
       )}
 
       {/* Tab bar */}
-      <nav className="vx-glass-strong absolute inset-x-3 bottom-[max(var(--safe-bottom),10px)] z-10 flex h-16 items-stretch rounded-[26px] px-1" data-testid="vibex-nav">
+      <nav
+        className="vx-glass-strong absolute bottom-[max(var(--safe-bottom),10px)] left-1/2 z-10 flex h-16 w-[calc(100%-24px)] max-w-[560px] -translate-x-1/2 items-stretch rounded-[26px] px-1"
+        data-testid="vibex-nav"
+      >
         {NAV.map((n) => {
           const active = section === n.id;
           const Icon = active ? n.fill : n.line;

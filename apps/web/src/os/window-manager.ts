@@ -89,7 +89,9 @@ function defaultRect(appId: AppId, b: { w: number; h: number }, index: number): 
   const w = Math.min(m.defaultWidth, b.w - 48);
   const h = Math.min(m.defaultHeight, b.h - 48);
   const cascade = (index % 5) * 28;
-  return { x: Math.round((b.w - w) / 2) + cascade - 56, y: Math.max(16, Math.round((b.h - h) / 2) + cascade - 40), w, h };
+  // Cascade around the centre, but never past the edges of the desktop (narrow screens, wide apps).
+  const x = Math.max(8, Math.min(Math.round((b.w - w) / 2) + cascade - 56, b.w - w - 8));
+  return { x, y: Math.max(16, Math.round((b.h - h) / 2) + cascade - 40), w, h };
 }
 
 export const useWM = create<WMState>((set, get) => ({
