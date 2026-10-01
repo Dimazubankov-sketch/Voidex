@@ -147,6 +147,13 @@ test("free placement: drop an icon anywhere, it stays there after a reload; the 
   await page.getByTestId("menu-view-free").click();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("desktop-free")).toBeVisible();
+  // Icons glide from the grid to their free spots (layout animation): grab the icon once it rests.
+  const tileBox = async () => JSON.stringify(await page.getByTestId("app-settings").locator("[data-tile]").boundingBox());
+  await expect.poll(async () => {
+    const a = await tileBox();
+    await page.waitForTimeout(100);
+    return a === (await tileBox());
+  }).toBe(true);
   const area = (await page.getByTestId("desktop-free").boundingBox())!;
   const from = await center(page.getByTestId("app-settings").locator("[data-tile]"));
   const target = { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 };
