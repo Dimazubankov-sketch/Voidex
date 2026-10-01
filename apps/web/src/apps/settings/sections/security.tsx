@@ -168,7 +168,7 @@ export function PhoneSection() {
   const [phone, setPhone] = useState("");
   const [verification, setVerification] = useState<VerificationStartedDto | null>(null);
   const [code, setCode] = useState("");
-  const country = me.country as CountryCode;
+  const [country, setCountry] = useState(me.country as CountryCode);
   const parsed = parsePhone(phone, country);
 
   const start = useMutation({
@@ -223,7 +223,7 @@ export function PhoneSection() {
             hideLabel={t("common.hide")}
             error={start.error instanceof ApiError && start.error.fields.password ? t("error.wrong_password") : undefined}
           />
-          <PhoneField label={t("settings.phone.new")} value={phone} onChange={setPhone} country={country} error={phone && !parsed ? t("error.phone_invalid") : undefined} />
+          <PhoneField label={t("settings.phone.new")} value={phone} onChange={setPhone} country={country} onCountryChange={setCountry} error={phone && !parsed ? t("error.phone_invalid") : undefined} />
           {start.error && !(start.error instanceof ApiError && start.error.fields.password) && <Notice tone="danger">{errorMessage(t, start.error)}</Notice>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setStage("view")}>

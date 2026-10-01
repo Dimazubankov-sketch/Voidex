@@ -40,6 +40,9 @@ export async function signUpViaUi(page: Page, opts: { first?: string; last?: str
   await next(page);
   await page.getByTestId("language-ru").click();
   await next(page);
+  // One phone field: the country code and the number on the same line, a placeholder until typing.
+  await expect(page.getByTestId("phone-country")).toContainText("+7");
+  await expect(page.getByTestId("phone-input")).toHaveAttribute("placeholder", "Номер телефона");
   await page.getByTestId("phone-input").fill(uniquePhoneDigits());
   await next(page);
   await page.getByTestId("otp-input").fill(await devCode(page));

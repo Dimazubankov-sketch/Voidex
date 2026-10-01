@@ -123,7 +123,18 @@ export function AppearancePanel({ showReset }: { showReset?: boolean }) {
       </Block>
 
       <Block title={t("appearance.view")}>
-        <Field label={t("appearance.view")}>
+        <Field label={t("appearance.phoneView")}>
+          <Segmented
+            value={layout.mobile.view}
+            options={[
+              ["grid", "home.viewGrid"],
+              ["categories", "home.viewCategories"],
+            ]}
+            onChange={(view) => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, view } }))}
+            testId="phone-view"
+          />
+        </Field>
+        <Field label={t("appearance.pcView")}>
           <Segmented
             value={layout.desktop.view}
             options={[

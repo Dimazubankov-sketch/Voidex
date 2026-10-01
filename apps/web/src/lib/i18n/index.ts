@@ -1,10 +1,18 @@
 import { create } from "zustand";
 import { DEFAULT_LANGUAGE, isLanguageCode, type LanguageCode } from "@voidex/shared";
 import { en, type MessageKey } from "./en";
+import { de } from "./de";
+import { es } from "./es";
+import { fr } from "./fr";
+import { ja } from "./ja";
+import { ko } from "./ko";
+import { pt } from "./pt";
 import { ru } from "./ru";
+import { tr } from "./tr";
+import { zh } from "./zh";
 
 /** Registered dictionaries. Adding a language = add a file + an entry here. */
-const DICTIONARIES: Record<LanguageCode, Record<MessageKey, string>> = { en, ru };
+const DICTIONARIES: Record<LanguageCode, Record<MessageKey, string>> = { en, ru, es, de, fr, pt, zh, ja, ko, tr };
 
 export type { MessageKey };
 export type TFunction = (key: MessageKey, vars?: Record<string, string | number>) => string;

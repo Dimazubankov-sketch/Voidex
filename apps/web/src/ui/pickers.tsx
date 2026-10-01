@@ -1,10 +1,11 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { RiCheckLine, RiSearchLine } from "@remixicon/react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { RiArrowDownSLine, RiCheckLine, RiGlobalLine, RiSearchLine } from "@remixicon/react";
 import { LANGUAGES, type LanguageCode } from "@voidex/shared";
 import { COUNTRY_CODES, callingCode, formatPhoneInput, type CountryCode } from "@voidex/shared/phone";
 import { cx } from "@/lib/cx";
 import { countryName, flagEmoji, monthNames, useLanguage, useT } from "@/lib/i18n";
 import { TextField } from "./controls";
+import { Sheet } from "./overlays";
 
 /** Countries sorted by localised name, with the most relevant ones first. */
 export function useCountries() {
@@ -114,11 +115,17 @@ export function OptionRow({
   );
 }
 
-/** Phone input with the country calling code, formatted as the user types. */
+/**
+ * Phone input: one solid field — country code on the left, the number on the
+ * same line to its right, "Phone number" as the placeholder until typing.
+ * The code opens a country picker when `onCountryChange` is given. Numbers
+ * typed with a leading "+" are taken as international and keep their own code.
+ */
 export function PhoneField({
   value,
   onChange,
   country,
+  onCountryChange,
   error,
   label,
   autoFocus,
@@ -126,37 +133,88 @@ export function PhoneField({
   value: string;
   onChange: (v: string) => void;
   country: CountryCode;
+  onCountryChange?: (c: CountryCode) => void;
   error?: string;
   label: string;
   autoFocus?: boolean;
 }) {
+  const t = useT();
+  const id = useId();
+  const [picker, setPicker] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
   const prefix = `+${callingCode(country)}`;
   const international = value.trim().startsWith("+");
   return (
-    <TextField
-      label={label}
-      type="tel"
-      inputMode="tel"
-      autoComplete="tel-national"
-      value={value}
-      onChange={(e) => {
-        const raw = e.target.value;
-        // Keep formatting only when appending (deleting through separators must stay easy).
-        const formatted = raw.length > value.length ? formatPhoneInput(raw, raw.trim().startsWith("+") ? undefined : country) : raw;
-        onChange(formatted);
-      }}
-      error={error}
-      autoFocus={autoFocus}
-      data-testid="phone-input"
-      left={
-        !international ? (
-          <span className="flex items-center gap-1.5 text-[16px] text-text">
-            <span className="text-[20px] leading-none">{flagEmoji(country)}</span>
-            <span className="tabular-nums text-text-secondary">{prefix}</span>
-          </span>
-        ) : undefined
-      }
-    />
+    <div className="w-full">
+      <div
+        className={cx(
+          "flex h-[58px] items-center rounded-2xl border bg-surface-secondary transition-colors",
+          "focus-within:border-primary focus-within:bg-surface focus-within:shadow-[0_0_0_4px_rgba(108,92,255,0.12)]",
+          error ? "border-danger bg-danger-soft/40" : "border-transparent",
+        )}
+        data-testid="phone-field"
+      >
+        <button
+          type="button"
+          onClick={() => (onCountryChange ? setPicker(true) : input.current?.focus())}
+          className={cx("flex h-full shrink-0 items-center gap-1.5 rounded-l-2xl pl-4 pr-2.5 text-[17px] text-text", onCountryChange && "hover:bg-black/[0.03]")}
+          aria-label={onCountryChange ? t("phone.chooseCountry") : prefix}
+          aria-haspopup={onCountryChange ? "dialog" : undefined}
+          data-testid="phone-country"
+        >
+          {international ? (
+            <RiGlobalLine className="size-5 text-text-secondary" />
+          ) : (
+            <>
+              <span className="text-[20px] leading-none">{flagEmoji(country)}</span>
+              <span className="tabular-nums leading-none">{prefix}</span>
+            </>
+          )}
+          {onCountryChange && <RiArrowDownSLine className="size-4 text-text-tertiary" />}
+        </button>
+        <span className="h-6 w-px shrink-0 bg-border-strong" aria-hidden />
+        <input
+          ref={input}
+          id={id}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel-national"
+          value={value}
+          placeholder={label}
+          aria-label={label}
+          aria-invalid={!!error || undefined}
+          aria-describedby={error ? `${id}-err` : undefined}
+          autoFocus={autoFocus}
+          onChange={(e) => {
+            const raw = e.target.value;
+            // Keep formatting only when appending (deleting through separators must stay easy).
+            // Groups separated by spaces (950 901 14 21) — parsing ignores them.
+            const formatted = raw.length > value.length ? formatPhoneInput(raw, raw.trim().startsWith("+") ? undefined : country).replace(/-/g, " ") : raw;
+            onChange(formatted);
+          }}
+          className="h-full min-w-0 flex-1 bg-transparent px-3 text-[17px] leading-none tabular-nums text-text outline-none placeholder:text-text-tertiary"
+          data-testid="phone-input"
+        />
+      </div>
+      {error && (
+        <div id={`${id}-err`} className="mt-1.5 px-1 text-[13px] text-danger animate-fade-up">
+          {error}
+        </div>
+      )}
+      {onCountryChange && (
+        <Sheet open={picker} onClose={() => setPicker(false)} title={t("phone.chooseCountry")} testId="phone-country-sheet">
+          <CountryList
+            value={country}
+            autoFocus
+            onChange={(c) => {
+              onCountryChange(c);
+              setPicker(false);
+              window.setTimeout(() => input.current?.focus(), 250);
+            }}
+          />
+        </Sheet>
+      )}
+    </div>
   );
 }
 

@@ -350,3 +350,20 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await expect(page.getByTestId("dock-app-settings")).toBeVisible();
   expect(await dockOrder()).toEqual(["settings"]);
 });
+
+test("phone: grid / categories view switch in the home header, saved to the account", async ({ page }) => {
+  test.skip(!isMobile(page), "phone home");
+  await signUpViaApi(page, "Ли", "Ван");
+  await expect(page.getByTestId("home-view-grid")).toHaveAttribute("aria-checked", "true");
+  await page.getByTestId("home-view-categories").click();
+  await expect(page.getByTestId("home-categories")).toBeVisible();
+  await expect(page.getByTestId("category-communication").getByTestId("app-mail")).toBeVisible();
+  await expect(page.getByTestId("category-system").getByTestId("app-settings")).toBeVisible();
+  await page.getByTestId("app-mail").click(); // apps still open from the categories view
+  await expect(page.locator('[data-testid="window-mail"][data-state="open"]')).toBeVisible();
+  await page.waitForTimeout(600);
+  await page.reload();
+  await expect(page.getByTestId("home-categories")).toBeVisible();
+  await page.getByTestId("home-view-grid").click();
+  await expect(page.getByTestId("home-page-0")).toBeVisible();
+});

@@ -115,6 +115,8 @@ export const WorkspaceLayoutSchema = z.object({
   mobile: z.object({
     columns: z.union([z.literal(3), z.literal(4)]),
     pages: z.array(z.array(LayoutItemSchema).max(ITEMS_PER_CONTAINER_MAX)).min(1).max(MOBILE_PAGES_MAX),
+    /** Phone: icon pages, or apps grouped by category (Step 2.1; older layouts → grid). */
+    view: z.enum(["grid", "categories"]).default("grid"),
   }),
   desktop: z.object({
     columns: z.number().int().min(DESKTOP_COLUMNS_MIN).max(DESKTOP_COLUMNS_MAX),
@@ -162,7 +164,7 @@ export function defaultLayout(apps: AppId[]): WorkspaceLayout {
     v: 1,
     folders: [],
     hidden: [],
-    mobile: { columns: 3, pages: [items] },
+    mobile: { columns: 3, pages: [items], view: "grid" },
     desktop: { columns: 5, density: "normal", view: "grid", sort: "manual", spaces: [{ id: "d_1", name: "", items }], dock: [...apps] },
     categories: {},
     names: {},
@@ -252,7 +254,7 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
     v: 1,
     folders,
     hidden,
-    mobile: { columns: base.mobile.columns === 4 ? 4 : 3, pages },
+    mobile: { columns: base.mobile.columns === 4 ? 4 : 3, pages, view: base.mobile.view === "categories" ? "categories" : "grid" },
     desktop: {
       columns: Math.min(DESKTOP_COLUMNS_MAX, Math.max(DESKTOP_COLUMNS_MIN, Math.round(base.desktop.columns))),
       density: base.desktop.density,

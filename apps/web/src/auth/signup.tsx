@@ -40,6 +40,8 @@ interface SignupData {
   birth: DateParts;
   country: CountryCode | null;
   language: LanguageCode | null;
+  /** Calling code of the phone number (defaults to the country of residence). */
+  phoneCountry: CountryCode | null;
   phone: string;
   verification: (VerificationStartedDto & { phoneE164: string; sentAt: number }) | null;
   proof: string | null;
@@ -65,6 +67,7 @@ export function SignupFlow({ onExit }: { onExit: () => void }) {
     birth: { day: "", month: "", year: "" },
     country: guessCountry(),
     language: useI18n.getState().language,
+    phoneCountry: null,
     phone: "",
     verification: null,
     proof: null,
@@ -100,7 +103,8 @@ export function SignupFlow({ onExit }: { onExit: () => void }) {
     { day: Number(data.birth.day) || undefined, month: Number(data.birth.month) || undefined, year: data.birth.year.length === 4 ? Number(data.birth.year) : undefined },
     data.country,
   );
-  const phoneParsed = data.country ? parsePhone(data.phone, data.country) : null;
+  const phoneCountry = data.phoneCountry ?? data.country;
+  const phoneParsed = phoneCountry ? parsePhone(data.phone, phoneCountry) : null;
   const pwCtx = { username: data.username, firstName: data.firstName, lastName: data.lastName, phone: data.verification?.phoneE164 };
   const passwordOk = isPasswordAcceptable(data.password, pwCtx) && data.password === data.confirm;
   const consentsOk = LEGAL_DOCUMENTS.every((d) => !d.required || data.consents[d.key]);
@@ -293,7 +297,8 @@ export function SignupFlow({ onExit }: { onExit: () => void }) {
                 label={t("signup.phone.label")}
                 value={data.phone}
                 onChange={(phone) => update({ phone })}
-                country={data.country}
+                country={phoneCountry ?? data.country}
+                onCountryChange={(c) => update({ phoneCountry: c })}
                 autoFocus
                 error={touched && !phoneParsed ? t("error.phone_invalid") : undefined}
               />

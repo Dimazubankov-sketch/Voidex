@@ -62,11 +62,11 @@ const SECTIONS: SectionDef[] = [
   { id: "phone", label: "settings.phone", icon: RiPhoneLine, Component: PhoneSection, group: "account" },
   { id: "email", label: "settings.email", icon: RiMailLine, Component: EmailSection, group: "account" },
   { id: "devices", label: "settings.devices", icon: RiDeviceLine, Component: DevicesSection, group: "account" },
-  { id: "privacy", label: "settings.privacy", icon: RiShieldCheckLine, Component: PrivacySection, group: "system" },
+  { id: "desktop", label: "settings.desktop", icon: RiLayoutGridLine, Component: DesktopSection, group: "system" },
   { id: "language", label: "settings.language", icon: RiTranslate2, Component: LanguageSection, group: "system" },
   { id: "country", label: "settings.country", icon: RiEarthLine, Component: CountrySection, group: "system" },
-  { id: "desktop", label: "settings.desktop", icon: RiLayoutGridLine, Component: DesktopSection, group: "system" },
   { id: "notifications", label: "settings.notifications", icon: RiNotification3Line, Component: NotificationsSection, group: "system" },
+  { id: "privacy", label: "settings.privacy", icon: RiShieldCheckLine, Component: PrivacySection, group: "system" },
   { id: "about", label: "settings.about", icon: RiInformationLine, Component: AboutSection, group: "system" },
 ];
 
@@ -105,28 +105,26 @@ export function SettingsApp() {
             <span className="pl-2 text-[15px] font-semibold">{t("settings.title")}</span>
           </WindowHeader>
           <nav className="scroll-area flex-1 px-3 pb-4">
-            <SidebarProfile onClick={() => setStack(["account"])} active={current === "account"} />
-            {(["account", "system"] as const).map((g) => (
-              <div key={g} className="mt-4">
-                <div className="px-3 pb-1.5 text-[12px] font-medium uppercase tracking-wide text-text-tertiary">
-                  {t(g === "account" ? "settings.groupAccount" : "settings.groupSystem")}
-                </div>
-                {SECTIONS.filter((s) => s.group === g && s.id !== "account").map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setStack([s.id])}
-                    data-testid={`settings-nav-${s.id}`}
-                    className={cx(
-                      "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[14px] transition-colors",
-                      current === s.id ? "bg-primary-soft font-semibold text-primary-strong" : "text-text hover:bg-surface-hover",
-                    )}
-                  >
-                    <s.icon className={cx("size-[18px]", current === s.id ? "text-primary" : "text-text-secondary")} />
-                    {t(s.label)}
-                  </button>
-                ))}
-              </div>
-            ))}
+            <SidebarProfile onClick={() => setStack(["account"])} active={SECTIONS.find((s) => s.id === current)?.group === "account"} />
+            {/* Account sections (personal data, security, password, phone, mail, devices)
+                live in the profile above; the list holds system settings only. */}
+            <div className="mt-4">
+              <div className="px-3 pb-1.5 text-[12px] font-medium uppercase tracking-wide text-text-tertiary">{t("settings.groupSystem")}</div>
+              {SECTIONS.filter((s) => s.group === "system").map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setStack([s.id])}
+                  data-testid={`settings-nav-${s.id}`}
+                  className={cx(
+                    "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[14px] transition-colors",
+                    current === s.id ? "bg-surface-hover font-semibold text-text" : "text-text hover:bg-surface-hover",
+                  )}
+                >
+                  <s.icon className={cx("size-[18px]", current === s.id ? "text-text" : "text-text-tertiary")} />
+                  {t(s.label)}
+                </button>
+              ))}
+            </div>
           </nav>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -209,16 +207,16 @@ function MobileIndex({ onOpen }: { onOpen: (id: SectionId) => void }) {
   return (
     <>
       <SidebarProfile onClick={() => onOpen("account")} large />
-      {(["account", "system"] as const).map((g) => (
+      {(["system"] as const).map((g) => (
         <div key={g} className="mb-6 overflow-hidden rounded-[20px] border border-border bg-surface">
-          {SECTIONS.filter((s) => s.group === g && s.id !== "account").map((s) => (
+          {SECTIONS.filter((s) => s.group === g).map((s) => (
             <button
               key={s.id}
               onClick={() => onOpen(s.id)}
               data-testid={`settings-nav-${s.id}`}
               className="flex h-[54px] w-full items-center gap-3 px-4 text-left text-[16px] active:bg-surface-secondary [&:not(:last-child)]:border-b"
             >
-              <span className="flex size-8 items-center justify-center rounded-[10px] bg-primary-soft text-primary">
+              <span className="flex size-8 items-center justify-center rounded-[10px] bg-surface-secondary text-text-secondary">
                 <s.icon className="size-[18px]" />
               </span>
               <span className="flex-1">{t(s.label)}</span>
@@ -242,7 +240,7 @@ function SidebarProfile({ onClick, active, large }: { onClick: () => void; activ
       className={cx(
         "flex w-full items-center gap-3 text-left transition-colors",
         large ? "mb-6 rounded-[20px] border border-border bg-surface p-4" : "mt-1 rounded-2xl p-2.5",
-        active ? "bg-primary-soft" : !large && "hover:bg-surface-hover",
+        active ? "bg-surface-hover" : !large && "hover:bg-surface-hover",
       )}
     >
       <Avatar name={name} userId={user.id} version={user.avatarVersion} size={large ? 56 : 42} />

@@ -45,7 +45,7 @@ export function Row({
         onClick && "transition-colors hover:bg-surface-hover active:bg-surface-secondary",
       )}
     >
-      {icon && <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[10px]", danger ? "bg-danger-soft text-danger" : "bg-primary-soft text-primary")}>{icon}</span>}
+      {icon && <span className={cx("flex size-8 shrink-0 items-center justify-center rounded-[10px]", danger ? "bg-danger-soft text-danger" : "bg-surface-secondary text-text-secondary")}>{icon}</span>}
       <span className="min-w-0 flex-1">
         <span className={cx("block text-[15px]", danger ? "font-medium text-danger" : "text-text")}>{label}</span>
         {hint && <span className="block text-[13px] leading-snug text-text-secondary">{hint}</span>}

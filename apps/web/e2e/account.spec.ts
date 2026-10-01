@@ -69,7 +69,10 @@ test("second device: SMS confirmation, then approval from a trusted device; devi
   // Device list on device 1 shows all three; sign device 3 out remotely.
   await openApp(page, "settings");
   const isMobile = (page.viewportSize()?.width ?? 1000) < 900;
-  await page.getByTestId("settings-nav-devices").last().click();
+  // Account sections live in the profile (not in the Settings list).
+  await expect(page.getByTestId("settings-nav-devices")).toHaveCount(0);
+  if (isMobile) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("row-devices").last().click();
   await expect(page.getByTestId("session-row")).toHaveCount(3);
   await page.getByTestId("session-revoke").first().click();
   await page.getByTestId("confirm-action").click();
@@ -107,7 +110,8 @@ test("forgot password: SMS recovery signs in and signs other devices out", async
 test("change password in Settings", async ({ page }) => {
   await signUpViaApi(page, "Вера", "Новикова");
   await openApp(page, "settings");
-  await page.getByTestId("settings-nav-password").last().click();
+  if ((page.viewportSize()?.width ?? 1000) < 900) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("row-password").last().click();
   await page.getByTestId("current-password").last().fill("Not-The-Password-1");
   await page.getByTestId("new-password").last().fill("Another-Strong-99");
   await page.getByTestId("new-password-confirm").last().fill("Another-Strong-99");

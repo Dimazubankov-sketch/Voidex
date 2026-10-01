@@ -41,19 +41,20 @@ export function AccountSection({ navigate }: SectionProps) {
       </div>
       <Group>
         <Row icon={<RiShieldCheckLine className="size-[18px]" />} label={t("settings.personal")} chevron onClick={() => navigate("personal")} testId="row-personal" />
-        <Row icon={<RiMailLine className="size-[18px]" />} label={t("settings.email")} value={me.mailAddress} chevron onClick={() => navigate("email")} />
+        <Row icon={<RiMailLine className="size-[18px]" />} label={t("settings.email")} value={me.mailAddress} chevron onClick={() => navigate("email")} testId="row-email" />
         <Row
           icon={<RiPhoneLine className="size-[18px]" />}
           label={t("settings.phone")}
           value={formatPhone(me.phone)}
           chevron
           onClick={() => navigate("phone")}
+          testId="row-phone"
         />
       </Group>
       <Group>
-        <Row icon={<RiShieldCheckLine className="size-[18px]" />} label={t("settings.security")} chevron onClick={() => navigate("security")} />
-        <Row icon={<RiKeyLine className="size-[18px]" />} label={t("settings.password")} chevron onClick={() => navigate("password")} />
-        <Row icon={<RiDeviceLine className="size-[18px]" />} label={t("settings.devices")} chevron onClick={() => navigate("devices")} />
+        <Row icon={<RiShieldCheckLine className="size-[18px]" />} label={t("settings.security")} chevron onClick={() => navigate("security")} testId="row-security" />
+        <Row icon={<RiKeyLine className="size-[18px]" />} label={t("settings.password")} chevron onClick={() => navigate("password")} testId="row-password" />
+        <Row icon={<RiDeviceLine className="size-[18px]" />} label={t("settings.devices")} chevron onClick={() => navigate("devices")} testId="row-devices" />
       </Group>
       <Group>
         <Row

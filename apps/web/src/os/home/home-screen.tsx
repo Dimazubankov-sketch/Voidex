@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
-import { RiAddLine, RiBrushLine, RiCheckLine, RiMoreFill } from "@remixicon/react";
+import { RiAddLine, RiBrushLine, RiCheckLine, RiLayoutGridLine, RiListUnordered, RiMoreFill } from "@remixicon/react";
 import { APP_CATEGORIES, DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -18,7 +18,7 @@ import { useHomeGestures } from "./gestures";
 import { DOCK_ZONE } from "./dock";
 import { DragGhost, HomeItem, type IconMetrics, type LabelStyle } from "./icons";
 import { Launcher } from "./launcher";
-import { useWorkspaceLayout } from "./layout";
+import { updateLayout, useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
 import { useHomeUi } from "./ui-store";
@@ -54,13 +54,14 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
   const tone = labelTone(layout.appearance, wp.dark);
   const label: LabelStyle = useMemo(() => ({ tone, size: layout.appearance.labelSize, captions: layout.appearance.captions }), [tone, layout.appearance.labelSize, layout.appearance.captions]);
   const pagerRef = useRef<Pager | null>(null);
-  const canArrange = ff === "mobile" || (layout.desktop.view === "grid" && layout.desktop.sort === "manual");
+  const mobileCategories = ff === "mobile" && layout.mobile.view === "categories";
+  const canArrange = ff === "mobile" ? !mobileCategories : layout.desktop.view === "grid" && layout.desktop.sort === "manual";
 
   const gestures = useHomeGestures({
     ff,
     canArrange,
-    pager: ff === "mobile" ? { move: (dx) => pagerRef.current?.move(dx), end: (dx, vx) => pagerRef.current?.end(dx, vx) } : undefined,
-    onPullDown: ff === "mobile" ? () => useHomeUi.getState().setSearch({ open: true, query: "" }) : undefined,
+    pager: ff === "mobile" && !mobileCategories ? { move: (dx) => pagerRef.current?.move(dx), end: (dx, vx) => pagerRef.current?.end(dx, vx) } : undefined,
+    onPullDown: ff === "mobile" && !mobileCategories ? () => useHomeUi.getState().setSearch({ open: true, query: "" }) : undefined,
   });
 
   const onOpen = useCallback((item: LayoutItem, el: HTMLElement) => {
@@ -151,6 +152,7 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
           )}
         </AnimatePresence>
         <div className="flex-1" />
+        {ff === "mobile" && !editing && <ViewToggle view={layout.mobile.view} glass={!plain} />}
         {ff === "desktop" && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <SpaceTabs layout={layout} />
@@ -243,11 +245,12 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const ro = new ResizeObserver(() => el.isConnected && setWidth(el.clientWidth));
     ro.observe(el);
     setWidth(el.clientWidth);
     return () => ro.disconnect();
-  }, []);
+    // The measured box changes with the view (pages ↔ categories).
+  }, [layout.mobile.view]);
 
   useEffect(() => {
     if (stored !== page) useHomeUi.getState().setMobilePage(page);
@@ -276,6 +279,27 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
   const cols = layout.mobile.columns;
   const cell = width ? (width - 16) / cols : 0;
   const metrics: IconMetrics = { tile: Math.round(Math.min(cols === 3 ? 72 : 62, cell * (cols === 3 ? 0.64 : 0.72))), cell, gapX: 0, gapY: cols === 3 ? 22 : 16 };
+
+  if (layout.mobile.view === "categories") {
+    // Apps grouped by category, scrolling vertically (arranging happens in the grid view).
+    return (
+      <div ref={box} className="scroll-area min-h-0 flex-1 touch-pan-y px-2 pb-8 pt-3" data-home-free>
+        {width > 0 && (
+          <CategoryView
+            layout={layout}
+            items={pages.flat()}
+            maxWidth={width}
+            tone={label.tone}
+            columns={{ count: cols, cell, gapY: metrics.gapY }}
+            testId="home-categories"
+            render={(item, j) => (
+              <HomeItem key={itemKey(item)} item={item} layout={layout} metrics={metrics} label={label} index={j} editing={editing} onOpen={onOpen} />
+            )}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-0 flex-1 touch-none flex-col">
@@ -306,6 +330,42 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
         )}
       </div>
       <PageDots count={pages.length} page={page} tone={label.tone} />
+    </div>
+  );
+}
+
+/** Phone: how apps are shown — icon pages or by category. Saved with the account. */
+function ViewToggle({ view, glass }: { view: "grid" | "categories"; glass: boolean }) {
+  const t = useT();
+  const set = (v: "grid" | "categories") => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, view: v } }));
+  return (
+    <div
+      className={cx("flex items-center rounded-full p-0.5", glass ? "vx-glass" : "bg-surface-secondary")}
+      role="radiogroup"
+      aria-label={t("appearance.view")}
+      data-home-control
+      data-testid="home-view"
+    >
+      {(
+        [
+          ["grid", RiLayoutGridLine, "home.viewGrid"],
+          ["categories", RiListUnordered, "home.viewCategories"],
+        ] as const
+      ).map(([v, Icon, key]) => (
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={view === v}
+          aria-label={t(key)}
+          title={t(key)}
+          onClick={() => set(v)}
+          className={cx("pressable flex size-8 items-center justify-center rounded-full", view === v ? "bg-surface text-text shadow-sm" : "text-text-secondary")}
+          data-testid={`home-view-${v}`}
+        >
+          <Icon className="size-[17px]" />
+        </button>
+      ))}
     </div>
   );
 }
@@ -415,12 +475,17 @@ function CategoryView({
   maxWidth,
   tone,
   render,
+  columns,
+  testId = "desktop-categories",
 }: {
   layout: WorkspaceLayout;
   items: LayoutItem[];
   maxWidth: number;
   tone: LabelTone;
   render: (i: LayoutItem, j: number) => ReactNode;
+  /** Phone: a fixed grid like the home pages. */
+  columns?: { count: number; cell: number; gapY: number };
+  testId?: string;
 }) {
   const t = useT();
   const groups = [
@@ -429,13 +494,19 @@ function CategoryView({
   ].filter((g) => g.items.length);
   let n = 0;
   return (
-    <div className="mx-auto space-y-6" style={{ maxWidth }} data-home-free data-testid="desktop-categories">
+    <div className="mx-auto space-y-6" style={{ maxWidth }} data-home-free data-testid={testId}>
       {groups.map((g) => (
         <section key={g.key} data-testid={`category-${g.key}`}>
           <h3 className={cx("mb-3 px-1 text-[13px] font-semibold uppercase tracking-wide", tone === "light" ? "text-white/85" : "text-text-tertiary")}>{g.title}</h3>
-          <div className="flex flex-wrap gap-x-2 gap-y-4" data-home-free>
-            {g.items.map((i) => render(i, n++))}
-          </div>
+          {columns ? (
+            <div className="grid" style={{ gridTemplateColumns: `repeat(${columns.count}, ${columns.cell}px)`, rowGap: columns.gapY }} data-home-free>
+              {g.items.map((i) => render(i, n++))}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-x-2 gap-y-4" data-home-free>
+              {g.items.map((i) => render(i, n++))}
+            </div>
+          )}
         </section>
       ))}
     </div>
