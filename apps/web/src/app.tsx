@@ -5,6 +5,7 @@ import { useSession } from "@/lib/session";
 import { useT } from "@/lib/i18n";
 import { queryClient } from "@/lib/query";
 import { VoidexMark } from "@/brand/brand";
+import { LogoIntro } from "@/brand/logo-intro";
 import { ToastViewport } from "@/ui/overlays";
 
 const AuthRoot = lazy(() => import("@/auth/auth-root").then((m) => ({ default: m.AuthRoot })));
@@ -59,6 +60,7 @@ export function App() {
         </AnimatePresence>
       )}
       <ToastViewport />
+      <LogoIntro />
     </>
   );
 }

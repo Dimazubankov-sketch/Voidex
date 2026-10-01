@@ -6,7 +6,7 @@ import { APP_REGISTRY, removeFromFolder, type AppId, type Folder, type LayoutIte
 import { cx } from "@/lib/cx";
 import { useLanguage, useT } from "@/lib/i18n";
 import { useMailSummary } from "@/lib/mail-summary";
-import { AppTile } from "@/brand/brand";
+import { AppTile, GLYPH_BOX } from "@/brand/brand";
 import { CLIENT_APPS } from "../app-registry";
 import { useWM } from "../window-manager";
 import { appLabel, itemKey, removeFromDesktop, ungroupFolder } from "./actions";
@@ -205,9 +205,14 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
   );
 });
 
+/** An app's logo at the standard size inside its tile (see GLYPH_BOX). */
 export function AppGlyph({ id }: { id: AppId }) {
   const { Icon } = CLIENT_APPS[id];
-  return <Icon className="size-[58%]" />;
+  return (
+    <span className="flex items-center justify-center" style={{ width: GLYPH_BOX, height: GLYPH_BOX }}>
+      <Icon className="size-full" />
+    </span>
+  );
 }
 
 /** Floating copy of the icon under the finger / cursor while dragging. */

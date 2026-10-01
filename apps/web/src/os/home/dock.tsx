@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, type 
 import { pinToDock, unpinFromDock, type AppId, type DockScale, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
-import { AppTile } from "@/brand/brand";
+import { AppTile, GLYPH_BOX } from "@/brand/brand";
 import { useWM } from "../window-manager";
 import { appLabel, openApp } from "./actions";
 import { DesktopSearchBar } from "./search";
@@ -276,7 +276,9 @@ function DesktopsItem({ layout, mouseX, tile }: { layout: WorkspaceLayout; mouse
       >
         <motion.span className="block" style={{ width: tile, height: tile, scale, originY: 1 }}>
           <AppTile size={tile} className="!shadow-[0_2px_8px_rgba(20,20,40,0.12)]">
-            <DesktopsGlyph />
+            <span className="flex items-center justify-center" style={{ width: GLYPH_BOX, height: GLYPH_BOX }}>
+              <DesktopsGlyph className="size-full" />
+            </span>
           </AppTile>
         </motion.span>
       </button>

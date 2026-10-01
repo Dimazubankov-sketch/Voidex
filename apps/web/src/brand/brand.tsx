@@ -1,10 +1,76 @@
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/cx";
 
 export function VoidexMark({ className }: { className?: string }) {
-  return <img src="/brand/voidex-mark.png" alt="VOIDEX" draggable={false} className={cx("select-none object-contain", className)} />;
+  return (
+    <img
+      src="/brand/voidex-mark.png"
+      alt="VOIDEX"
+      draggable={false}
+      data-system-asset
+      onContextMenu={(e) => e.preventDefault()}
+      className={cx("select-none object-contain", className)}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// App icon normalisation. Logos are never redrawn; each one is shown through
+// its own content box (transparent margins trimmed), so every logo fills the
+// same visual box inside the tile — one icon set, whatever padding the source
+// files have.
+
+const trimmed = new Map<string, { x: number; y: number; w: number; h: number; nw: number; nh: number }>();
+
+/** Bounding box of the non-transparent pixels of a raster logo (measured once per file). */
+function useContentBox(src: string) {
+  const [box, setBox] = useState(() => trimmed.get(src) ?? null);
+  useEffect(() => {
+    if (trimmed.has(src)) return setBox(trimmed.get(src)!);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext("2d", { willReadFrequently: true })!;
+        ctx.drawImage(img, 0, 0);
+        const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
+        let x0 = width, y0 = height, x1 = -1, y1 = -1;
+        for (let y = 0; y < height; y++)
+          for (let x = 0; x < width; x++)
+            if (data[(y * width + x) * 4 + 3]! > 8) {
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+        const b = { ...(x1 < 0 ? { x: 0, y: 0, w: width, h: height } : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }), nw: width, nh: height };
+        trimmed.set(src, b);
+        setBox(b);
+      } catch {
+        /* unreadable: show the file as it is */
+      }
+    };
+    img.src = src;
+  }, [src]);
+  return box;
+}
+
+/**
+ * A raster logo scaled to its content box: an SVG whose viewBox is the trimmed
+ * box, so the visible mark fills the element (aspect kept, centred).
+ */
+export function TrimmedLogo({ src, className }: { src: string; className?: string }) {
+  const box = useContentBox(src);
+  const vb = box ?? { x: 0, y: 0, w: 1, h: 1 };
+  return (
+    <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className={className} aria-hidden data-system-ui preserveAspectRatio="xMidYMid meet">
+      {box && <image href={src} x={0} y={0} width={box.nw} height={box.nh} />}
+    </svg>
+  );
 }
 
 export function VoidexWordmark({ className }: { className?: string }) {
@@ -27,8 +93,9 @@ export function SettingsGlyph({ className }: { className?: string }) {
     return [50 + rad * Math.cos(a), 50 + rad * Math.sin(a)] as const;
   };
   const tones = [`url(#${id}a)`, `url(#${id}b)`, `url(#${id}c)`];
+  // viewBox = the mark's own bounds, so it fills the icon box like every other logo.
   return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+    <svg viewBox="5.5 5.5 89 89" className={className} aria-hidden>
       <defs>
         <linearGradient id={`${id}a`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#7b5cff" />
@@ -69,7 +136,7 @@ export function SettingsGlyph({ className }: { className?: string }) {
 export function MailGlyph({ className }: { className?: string }) {
   const id = useId();
   return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden>
+    <svg viewBox="11 11.5 78 78" className={className} aria-hidden>
       <defs>
         <linearGradient id={`${id}l`} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#8a64ff" />
@@ -95,13 +162,19 @@ export function MailGlyph({ className }: { className?: string }) {
 
 /** Vibex — the speech-bubble mark (raster, from the provided brand asset). */
 export function VibexGlyph({ className }: { className?: string }) {
-  return <img src="/brand/vibex-mark.png" alt="" aria-hidden className={cx("object-contain", className)} draggable={false} />;
+  return <TrimmedLogo src="/brand/vibex-mark.png" className={className} />;
 }
+
+/** Share of the tile the logo's content box fills — the same for every app. */
+export const GLYPH_BOX = "52%";
 
 /** Rounded white tile with a soft glow — the VOIDEX app icon container. */
 export function AppTile({ children, size = 72, className, glow }: { children: React.ReactNode; size?: number; className?: string; glow?: boolean }) {
   return (
     <span
+      data-system-ui
+      onContextMenu={(e) => e.preventDefault()}
+      onDragStart={(e) => e.preventDefault()}
       className={cx("relative inline-flex shrink-0 items-center justify-center bg-surface shadow-tile", className)}
       style={{ width: size, height: size, borderRadius: size * 0.3 }}
     >

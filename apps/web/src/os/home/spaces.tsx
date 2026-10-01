@@ -17,7 +17,7 @@ import { useHomeUi } from "./ui-store";
 /** Glyph of the Desktops system app: two layered screens. */
 export function DesktopsGlyph({ className = "size-[62%]" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 48 48" className={className} aria-hidden data-system-ui>
+    <svg viewBox="5 6 38 38" className={className} aria-hidden data-system-ui>
       <defs>
         <linearGradient id="vx-desk-a" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#9a8cff" />
