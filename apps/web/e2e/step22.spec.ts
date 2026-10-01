@@ -17,6 +17,20 @@ async function longPressTouch(page: Page, p: { x: number; y: number }) {
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 
+/** Bounding box once it stops changing (open / maximize animations finished). */
+async function settledBox(l: Locator) {
+  let prev = "";
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await l.boundingBox());
+      const same = now === prev && now !== "null";
+      prev = now;
+      return same;
+    }, { intervals: [120] })
+    .toBe(true);
+  return JSON.parse(prev) as { x: number; y: number; width: number; height: number };
+}
+
 const dockOrder = (page: Page) => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
 
 test("dock: dragging inside the dock never hides the app's desktop icon; Esc cancels; drop reorders; drag out unpins; drag in pins", async ({ page }) => {
@@ -192,8 +206,7 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   const win = page.getByTestId("window-settings");
   await page.getByTestId("app-settings").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
-  await page.waitForTimeout(500);
-  const initial = (await win.boundingBox())!;
+  const initial = await settledBox(win);
 
   // Resize from the bottom-right corner.
   const corner = { x: initial.x + initial.width - 4, y: initial.y + initial.height - 4 };
@@ -201,8 +214,7 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   await page.mouse.down();
   await page.mouse.move(corner.x - 160, corner.y - 120, { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(300);
-  const resized = (await win.boundingBox())!;
+  const resized = await settledBox(win);
   expect(resized.width).toBeLessThan(initial.width - 100);
 
   // Close and reopen → the standard geometry again.
@@ -210,16 +222,14 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   await page.getByTestId("menu-close").click();
   await expect(win).toHaveCount(0);
   await page.getByTestId("app-settings").click();
-  await page.waitForTimeout(500);
-  const reopened = (await win.boundingBox())!;
+  const reopened = await settledBox(win);
   expect(Math.round(reopened.width)).toBe(Math.round(initial.width));
   expect(Math.round(reopened.height)).toBe(Math.round(initial.height));
 
   // Maximize: the window ends above the dock, the dock stays fully visible on top.
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-maximize").click();
-  await page.waitForTimeout(500);
-  const max = (await win.boundingBox())!;
+  const max = await settledBox(win);
   const dock = (await page.getByTestId("dock").boundingBox())!;
   expect(max.y + max.height).toBeLessThanOrEqual(dock.y);
   expect(dock.y - (max.y + max.height)).toBeLessThan(16); // no big empty gap
@@ -230,8 +240,7 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-close").click();
   await page.getByTestId("app-settings").click();
-  await page.waitForTimeout(500);
-  const again = (await win.boundingBox())!;
+  const again = await settledBox(win);
   expect(Math.round(again.width)).toBe(Math.round(initial.width));
 });
 
