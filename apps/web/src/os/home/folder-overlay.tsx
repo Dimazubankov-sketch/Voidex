@@ -51,7 +51,7 @@ export function FolderOverlay({
 
   const cols = ff === "mobile" ? 3 : Math.min(4, Math.max(3, Math.ceil(Math.sqrt(folder?.apps.length ?? 1))));
   const metrics: IconMetrics = ff === "mobile" ? { tile: 62, cell: 88, gapX: 0, gapY: 18 } : { tile: 64, cell: 104, gapX: 0, gapY: 18 };
-  const label: LabelStyle = { tone: "dark", size: layout.appearance.labelSize, captions: false };
+  const label: LabelStyle = { tone: "dark", name: 13, caption: 11, captions: false };
   const origin = open?.origin;
   const from = origin
     ? { opacity: 0, scale: 0.3, x: origin.left + origin.width / 2 - window.innerWidth / 2, y: origin.top + origin.height / 2 - window.innerHeight / 2 }

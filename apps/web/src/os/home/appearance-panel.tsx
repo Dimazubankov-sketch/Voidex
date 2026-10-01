@@ -19,146 +19,154 @@ import { DEFAULT_SWATCH, prepareWallpaper, useWallpaperImage, wallpaperStyle } f
 import { useWorkspaceLayout, updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 
+/** Parts of the panel: the brush shows one at a time, Settings → Desktop all of them. */
+export type AppearancePart = "wallpaper" | "view" | "dock" | "reset";
+
 /**
- * Desktop appearance and arrangement — one panel used by the brush button on
+ * Desktop appearance and arrangement — one panel used by the brush menu on
  * the home screen and by Settings → Desktop. Every choice is saved to the
  * account (layout.appearance / layout.mobile / layout.desktop), so it is the
- * same on every device. New wallpaper kinds are new swatches here plus a case
- * in `wallpaperStyle`.
+ * same on every device. Controls that only make sense on the other kind of
+ * device (phone icons per row vs PC scale and dock) are shown on that device.
+ * New wallpaper kinds are new swatches here plus a case in `wallpaperStyle`.
  */
-export function AppearancePanel({ showReset }: { showReset?: boolean }) {
+export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"] }: { parts?: AppearancePart[] }) {
   const t = useT();
+  const ff = useFormFactor();
   const { layout } = useWorkspaceLayout();
   const a = layout.appearance;
   const setAppearance = (patch: Partial<WorkspaceLayout["appearance"]>) => updateLayout((l) => ({ ...l, appearance: { ...l.appearance, ...patch } }));
   const setDesktop = (patch: Partial<WorkspaceLayout["desktop"]>) => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, ...patch } }));
   const [confirmReset, setConfirmReset] = useState(false);
+  const pc = ff === "desktop";
 
   return (
     <div className="space-y-6" data-testid="appearance-panel">
       <p className="text-[13px] text-text-secondary">{t("appearance.synced")}</p>
-      <WallpaperPicker current={a.wallpaper} onPick={(wallpaper) => setAppearance({ wallpaper })} />
+      {parts.includes("wallpaper") && (
+        <>
+          <WallpaperPicker current={a.wallpaper} onPick={(wallpaper) => setAppearance({ wallpaper })} />
+          <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
+            <Field label={t("appearance.glass")}>
+              <Segmented
+                value={a.glass}
+                options={[
+                  ["off", "appearance.glassOff"],
+                  ["medium", "appearance.glassMedium"],
+                  ["on", "appearance.glassOn"],
+                ]}
+                onChange={(glass) => setAppearance({ glass })}
+                testId="glass"
+              />
+            </Field>
+          </Block>
+        </>
+      )}
 
-      <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
-        <Field label={t("appearance.glass")}>
-          <Segmented
-            value={a.glass}
-            options={[
-              ["off", "appearance.glassOff"],
-              ["medium", "appearance.glassMedium"],
-              ["on", "appearance.glassOn"],
-            ]}
-            onChange={(glass) => setAppearance({ glass })}
-            testId="glass"
-          />
-        </Field>
-      </Block>
+      {parts.includes("view") && (
+        <Block title={t("appearance.view")}>
+          <Field label={t("appearance.view")}>
+            <Segmented
+              value={pc ? layout.desktop.view : layout.mobile.view}
+              options={[
+                ["grid", "home.viewGrid"],
+                ["categories", "home.viewCategories"],
+              ]}
+              onChange={(view) => (pc ? setDesktop({ view }) : updateLayout((l) => ({ ...l, mobile: { ...l.mobile, view } })))}
+              testId={pc ? "desktop-view" : "phone-view"}
+            />
+          </Field>
+          {pc ? (
+            <>
+              {/* Phones scale with the number of icons per row; PCs have the scale. */}
+              <Field label={t("appearance.scale")}>
+                <Segmented
+                  value={layout.desktop.density}
+                  options={[
+                    ["compact", "appearance.scaleS"],
+                    ["normal", "appearance.scaleM"],
+                    ["spacious", "appearance.scaleL"],
+                  ]}
+                  onChange={(density) => setDesktop({ density })}
+                  testId="scale"
+                />
+              </Field>
+              <Field label={t("appearance.pcColumns")}>
+                <Segmented
+                  value={String(layout.desktop.columns)}
+                  options={Array.from({ length: DESKTOP_COLUMNS_MAX - DESKTOP_COLUMNS_MIN + 1 }, (_, i) => {
+                    const v = String(i + DESKTOP_COLUMNS_MIN);
+                    return [v, v] as [string, string];
+                  })}
+                  onChange={(v) => setDesktop({ columns: Number(v) })}
+                  testId="pc-columns"
+                />
+              </Field>
+              <Field label={t("appearance.arrange")}>
+                <Segmented
+                  value={layout.desktop.arrange}
+                  options={[
+                    ["grid", "appearance.arrangeGrid"],
+                    ["free", "appearance.arrangeFree"],
+                  ]}
+                  onChange={(arrange) => setDesktop({ arrange })}
+                  testId="arrange"
+                />
+              </Field>
+              <Field label={t("appearance.sort")}>
+                <Segmented
+                  value={layout.desktop.sort}
+                  options={[
+                    ["manual", "appearance.sortManual"],
+                    ["name", "appearance.sortName"],
+                  ]}
+                  onChange={(sort) => setDesktop({ sort })}
+                  testId="desktop-sort"
+                />
+              </Field>
+            </>
+          ) : (
+            <Field label={t("appearance.phoneColumns")}>
+              <Segmented
+                value={String(layout.mobile.columns) as "3" | "4"}
+                options={[
+                  ["3", "3"],
+                  ["4", "4"],
+                ]}
+                onChange={(v) => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, columns: v === "4" ? 4 : 3 } }))}
+                testId="phone-columns"
+              />
+            </Field>
+          )}
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className="text-[14px]">{t("appearance.captions")}</span>
+            <Switch checked={a.captions} onChange={(captions) => setAppearance({ captions })} label={t("appearance.captions")} />
+          </div>
+        </Block>
+      )}
 
-      <Block title={t("appearance.text")} hint={t("appearance.textHint")}>
-        <Field label={t("appearance.textColor")}>
-          <Segmented
-            value={a.labelColor}
-            options={[
-              ["auto", "appearance.textAuto"],
-              ["dark", "appearance.textDark"],
-              ["light", "appearance.textLight"],
-            ]}
-            onChange={(labelColor) => setAppearance({ labelColor })}
-            testId="label-color"
-          />
-        </Field>
-        <Field label={t("appearance.textSize")}>
-          <Segmented
-            value={a.labelSize}
-            options={[
-              ["s", "appearance.sizeS"],
-              ["m", "appearance.sizeM"],
-              ["l", "appearance.sizeL"],
-            ]}
-            onChange={(labelSize) => setAppearance({ labelSize })}
-            testId="label-size"
-          />
-        </Field>
-        <div className="flex items-center justify-between gap-3 py-1">
-          <span className="text-[14px]">{t("appearance.captions")}</span>
-          <Switch checked={a.captions} onChange={(captions) => setAppearance({ captions })} label={t("appearance.captions")} />
-        </div>
-      </Block>
+      {parts.includes("dock") && pc && (
+        <Block title={t("appearance.dock")}>
+          <Field label={t("appearance.dockScale")}>
+            <Segmented
+              value={layout.desktop.dockScale}
+              options={[
+                ["s", "appearance.scaleS"],
+                ["m", "appearance.scaleM"],
+                ["l", "appearance.scaleL"],
+              ]}
+              onChange={(dockScale) => setDesktop({ dockScale })}
+              testId="dock-scale"
+            />
+          </Field>
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className="text-[14px]">{t("appearance.dockDesktops")}</span>
+            <Switch checked={layout.desktop.dockDesktops} onChange={(dockDesktops) => setDesktop({ dockDesktops })} label={t("appearance.dockDesktops")} />
+          </div>
+        </Block>
+      )}
 
-      <Block title={t("appearance.arrangement")}>
-        <Field label={t("appearance.phoneColumns")}>
-          <Segmented
-            value={String(layout.mobile.columns) as "3" | "4"}
-            options={[
-              ["3", "3"],
-              ["4", "4"],
-            ]}
-            onChange={(v) => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, columns: v === "4" ? 4 : 3 } }))}
-            testId="phone-columns"
-          />
-        </Field>
-        <Field label={t("appearance.pcColumns")}>
-          <Segmented
-            value={String(layout.desktop.columns)}
-            options={Array.from({ length: DESKTOP_COLUMNS_MAX - DESKTOP_COLUMNS_MIN + 1 }, (_, i) => {
-              const v = String(i + DESKTOP_COLUMNS_MIN);
-              return [v, v] as [string, string];
-            })}
-            onChange={(v) => setDesktop({ columns: Number(v) })}
-            testId="pc-columns"
-          />
-        </Field>
-        <Field label={t("appearance.density")}>
-          <Segmented
-            value={layout.desktop.density}
-            options={[
-              ["compact", "appearance.compact"],
-              ["normal", "appearance.normal"],
-              ["spacious", "appearance.spacious"],
-            ]}
-            onChange={(density) => setDesktop({ density })}
-            testId="density"
-          />
-        </Field>
-      </Block>
-
-      <Block title={t("appearance.view")}>
-        <Field label={t("appearance.phoneView")}>
-          <Segmented
-            value={layout.mobile.view}
-            options={[
-              ["grid", "home.viewGrid"],
-              ["categories", "home.viewCategories"],
-            ]}
-            onChange={(view) => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, view } }))}
-            testId="phone-view"
-          />
-        </Field>
-        <Field label={t("appearance.pcView")}>
-          <Segmented
-            value={layout.desktop.view}
-            options={[
-              ["grid", "home.viewGrid"],
-              ["categories", "home.viewCategories"],
-            ]}
-            onChange={(view) => setDesktop({ view })}
-            testId="desktop-view"
-          />
-        </Field>
-        <Field label={t("appearance.sort")}>
-          <Segmented
-            value={layout.desktop.sort}
-            options={[
-              ["manual", "appearance.sortManual"],
-              ["name", "appearance.sortName"],
-            ]}
-            onChange={(sort) => setDesktop({ sort })}
-            testId="desktop-sort"
-          />
-        </Field>
-      </Block>
-
-      {showReset && (
+      {parts.includes("reset") && (
         <Block title={t("appearance.reset")} hint={t("appearance.resetHint")}>
           <Button variant="secondary" onClick={() => setConfirmReset(true)} data-testid="layout-reset">
             {t("appearance.reset")}
@@ -236,13 +244,14 @@ function Segmented<V extends string>({
 
 const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
   white: "wallpaper.white",
-  glow: "wallpaper.glow",
-  mist: "wallpaper.mist",
   aura: "wallpaper.aura",
-  "wave-violet": "wallpaper.waveViolet",
+  mist: "wallpaper.mist",
+  "wave-light": "wallpaper.waveLight",
   "wave-milk": "wallpaper.waveMilk",
   "wave-milk-violet": "wallpaper.waveMilkViolet",
-  "wave-gray-violet": "wallpaper.waveGrayViolet",
+  "wave-gray": "wallpaper.waveGray",
+  "wave-gray-purple": "wallpaper.waveGrayPurple",
+  "wave-milk-gray-purple": "wallpaper.waveMilkGrayPurple",
 };
 
 function sameWallpaper(a: Wallpaper, b: Wallpaper) {
@@ -348,15 +357,15 @@ function WallpaperPicker({ current, onPick }: { current: Wallpaper; onPick: (w: 
   );
 }
 
-/** The brush on the home screen opens this. */
+/** Brush menu → Wallpaper (and the desktop's right-click "Wallpaper") opens this. */
 export function AppearanceSheet() {
   const t = useT();
   const ff = useFormFactor();
   const open = useHomeUi((s) => s.appearanceOpen);
   const setOpen = useHomeUi((s) => s.setAppearanceOpen);
   return (
-    <Sheet open={open} onClose={() => setOpen(false)} title={t("appearance.title")} width={ff === "desktop" ? 560 : 480} testId="appearance-sheet">
-      <AppearancePanel />
+    <Sheet open={open} onClose={() => setOpen(false)} title={t("appearance.wallpaper")} width={ff === "desktop" ? 560 : 480} testId="appearance-sheet">
+      <AppearancePanel parts={["wallpaper"]} />
     </Sheet>
   );
 }

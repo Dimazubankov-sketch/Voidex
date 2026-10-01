@@ -3,16 +3,15 @@ import { AppearancePanel } from "@/os/home/appearance-panel";
 import { SectionTitle } from "../kit";
 
 /**
- * Settings → Desktop: wallpaper, background colour, icon label text and size,
- * app arrangement and desktop view. The same panel as the brush on the home
- * screen; the text options change desktop labels only, not the whole system.
+ * Settings → Desktop: wallpaper and glass, view, scale (PC) or icons per row
+ * (phone), dock. The same panel the brush menu on the home screen uses.
  */
 export function DesktopSection() {
   const t = useT();
   return (
     <div data-testid="settings-desktop">
       <SectionTitle>{t("settings.desktop")}</SectionTitle>
-      <AppearancePanel showReset />
+      <AppearancePanel />
     </div>
   );
 }

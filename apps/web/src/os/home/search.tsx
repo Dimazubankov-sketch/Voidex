@@ -60,8 +60,11 @@ function ResultRow({ app, layout, active, onOpen }: { app: InstalledAppDto; layo
   );
 }
 
-/** PC: the search field at the bottom of the desktop. */
-export function DesktopSearchBar({ apps, layout }: { apps: InstalledAppDto[]; layout: WorkspaceLayout }) {
+/**
+ * PC: the search field of the dock. Inside the dock's glass it is a quiet inset
+ * field; alone (nothing in the dock) it is a glass field of its own.
+ */
+export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: InstalledAppDto[]; layout: WorkspaceLayout; inDock?: boolean; height?: number }) {
   const t = useT();
   const lang = useLanguage();
   const [q, setQ] = useState("");
@@ -81,11 +84,11 @@ export function DesktopSearchBar({ apps, layout }: { apps: InstalledAppDto[]; la
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-[440px]" data-no-home-gesture>
+    <div className={cx("relative", inDock ? "w-[clamp(170px,18vw,250px)]" : "w-[min(440px,calc(100vw-48px))]")} data-no-home-gesture>
       <AnimatePresence>
         {open && (
           <motion.div
-            className="vx-glass-strong absolute inset-x-0 bottom-full mb-2 max-h-[50vh] overflow-auto rounded-[22px] p-1.5"
+            className={cx("vx-glass-strong absolute bottom-full max-h-[50vh] min-w-[300px] overflow-auto rounded-[22px] p-1.5", inDock ? "left-0 mb-4" : "inset-x-0 mb-2")}
             initial={{ opacity: 0, y: 6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4 }}
@@ -100,7 +103,13 @@ export function DesktopSearchBar({ apps, layout }: { apps: InstalledAppDto[]; la
           </motion.div>
         )}
       </AnimatePresence>
-      <label className="vx-glass flex h-11 items-center gap-2.5 rounded-full px-4 transition-shadow focus-within:shadow-float">
+      <label
+        className={cx(
+          "flex items-center gap-2.5 rounded-full px-4 transition-shadow",
+          inDock ? "vx-dock-field" : "vx-glass focus-within:shadow-float",
+        )}
+        style={{ height }}
+      >
         <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
         <input
           ref={input}

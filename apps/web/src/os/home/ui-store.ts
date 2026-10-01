@@ -11,6 +11,8 @@ export type ContextTarget =
   | { kind: "desktop" }
   | { kind: "launcher-app"; id: AppId }
   | { kind: "dock-app"; id: AppId }
+  | { kind: "dock-desktops" }
+  | { kind: "widget"; id: string }
   | { kind: "space"; id: string };
 
 export type RenameTarget = { kind: "app"; id: AppId } | { kind: "space"; id: string };
@@ -39,6 +41,10 @@ export interface DragState {
   overDock?: number;
   /** PC dock: dragged up and out of the dock — released, it is unpinned. */
   unpin?: boolean;
+  /** PC dock reorder preview: where the dragged dock app would land (committed on drop only). */
+  dockIndex?: number;
+  /** PC free placement: the drop position (fractions of the desktop area). */
+  freePos?: { x: number; y: number };
 }
 
 interface HomeUi {
@@ -50,6 +56,11 @@ interface HomeUi {
   menu: ContextMenuState | null;
   search: { open: boolean; query: string };
   appearanceOpen: boolean;
+  /** The brush menu (Wallpaper / View / Widgets), anchored at the brush. */
+  brushOpen: boolean;
+  widgetsOpen: boolean;
+  /** Phone: the page overview opened by the round "Desktops" button. */
+  spacesOpen: boolean;
   launcherOpen: boolean;
   drag: DragState | null;
   setEditing: (v: boolean) => void;
@@ -61,6 +72,9 @@ interface HomeUi {
   closeMenu: () => void;
   setSearch: (s: Partial<HomeUi["search"]>) => void;
   setAppearanceOpen: (v: boolean) => void;
+  setBrushOpen: (v: boolean) => void;
+  setWidgetsOpen: (v: boolean) => void;
+  setSpacesOpen: (v: boolean) => void;
   setLauncherOpen: (v: boolean) => void;
   setDrag: (d: DragState | null) => void;
   patchDrag: (d: Partial<DragState>) => void;
@@ -75,9 +89,12 @@ export const useHomeUi = create<HomeUi>((set) => ({
   menu: null,
   search: { open: false, query: "" },
   appearanceOpen: false,
+  brushOpen: false,
+  widgetsOpen: false,
+  spacesOpen: false,
   launcherOpen: false,
   drag: null,
-  setEditing: (editing) => set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null }),
+  setEditing: (editing) => set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null, brushOpen: false }),
   setMobilePage: (mobilePage) => set({ mobilePage }),
   setOpenFolder: (openFolder) => set(openFolder ? { openFolder, menu: null } : { openFolder, menu: null, renamingFolder: null }),
   setRenamingFolder: (renamingFolder) => set({ renamingFolder }),
@@ -85,7 +102,10 @@ export const useHomeUi = create<HomeUi>((set) => ({
   openMenu: (menu) => set({ menu: { ...menu, seq: ++menuSeq } }),
   closeMenu: () => set({ menu: null }),
   setSearch: (s) => set((st) => ({ search: { ...st.search, ...s } })),
-  setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false }),
+  setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false, brushOpen: false }),
+  setBrushOpen: (brushOpen) => set({ brushOpen, menu: null, launcherOpen: false }),
+  setWidgetsOpen: (widgetsOpen) => set({ widgetsOpen, menu: null, launcherOpen: false, brushOpen: false }),
+  setSpacesOpen: (spacesOpen) => set({ spacesOpen, menu: null }),
   setLauncherOpen: (launcherOpen) => set({ launcherOpen, menu: null }),
   setDrag: (drag) => set({ drag }),
   patchDrag: (d) => set((st) => (st.drag ? { drag: { ...st.drag, ...d } } : {})),

@@ -1,5 +1,5 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { MOBILE_PAGES_MAX, moveItem, pinToDock, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
+import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeItem, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
 import type { FormFactor } from "@/lib/form-factor";
 import { useWM } from "../window-manager";
 import { itemKey, mergeInto, parseItem } from "./actions";
@@ -15,7 +15,8 @@ import { useHomeUi } from "./ui-store";
  *   long press on an icon     phone: context menu; moving on picks the icon up
  *   long press on free space  edit mode (icons wiggle)
  *   drag (mouse: right away; touch: in edit mode or after a long press)
- *                             reorder live · hold over an icon → folder ·
+ *                             reorder live (free placement: drop anywhere) ·
+ *                             hold over an icon → folder ·
  *                             hold at a screen edge → other / new page ·
  *                             hold over a PC desktop tab → move there ·
  *                             drag out of an open folder → take it out
@@ -35,6 +36,8 @@ export interface GestureOptions {
   ff: FormFactor;
   /** Icons can be rearranged here (manual order, grid view). Menus work regardless. */
   canArrange: boolean;
+  /** PC free placement: a drop puts the icon exactly where it was released. */
+  free?: boolean;
   pager?: { move: (dx: number) => void; end: (dx: number, vx: number) => void };
   onPullDown?: () => void;
 }
@@ -205,6 +208,25 @@ export function useHomeGestures(opts: GestureOptions) {
         if (d.overDock !== undefined) ui().patchDrag({ overDock: undefined });
       }
 
+      // PC free placement: the icon goes where it is released (inside the area).
+      if (optsRef.current.free) {
+        const area = find("[data-home-freearea]");
+        if (area) {
+          unschedule();
+          const r = area.getBoundingClientRect();
+          const cell = document.querySelector<HTMLElement>("[data-free-item]")?.getBoundingClientRect();
+          const cw = cell?.width ?? 100;
+          const chh = cell?.height ?? 110;
+          const pos = {
+            x: Math.max(0, Math.min(1, (x - cw / 2 - r.left) / Math.max(1, r.width - cw))),
+            y: Math.max(0, Math.min(1, (y - chh / 2 - r.top) / Math.max(1, r.height - chh))),
+          };
+          ui().patchDrag({ freePos: pos, mergeWith: undefined });
+          return;
+        }
+        if (d.freePos) ui().patchDrag({ freePos: undefined });
+      }
+
       // PC: hold over a desktop tab → switch to it and bring the icon along.
       const tab = find("[data-home-space]");
       if (tab) {
@@ -257,9 +279,14 @@ export function useHomeGestures(opts: GestureOptions) {
       const d = ui().drag;
       document.body.style.cursor = "";
       if (d && commit && d.item.kind === "app" && d.overDock !== undefined) {
+        // Pinning adds the app to the dock; its desktop icon stays where it was.
         const app = d.item.id;
         const index = d.overDock;
         updateLayout((l) => pinToDock(l, app, index));
+      } else if (d && commit && d.freePos) {
+        const item = d.item;
+        const pos = d.freePos;
+        updateLayout((l) => placeItem(l, item, pos));
       } else if (d && commit && d.mergeWith && d.item.kind === "app") {
         const target = parseItem(d.mergeWith);
         if (target) mergeInto(d.item.id, target);
@@ -336,18 +363,31 @@ export function useHomeGestures(opts: GestureOptions) {
       mode = "done";
     };
 
-    const up = (ev: PointerEvent) => {
+    const detach = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
+      window.removeEventListener("keydown", key, true);
       window.clearTimeout(timer);
+    };
+    const up = (ev: PointerEvent) => {
+      detach();
       if (mode === "drag") finishDrag(ev.type === "pointerup");
       else if (mode === "swipe") optsRef.current.pager?.end(ev.clientX - start.x, vx);
+    };
+    // Esc during a drag cancels it: the pending drop (dock, free position, folder) is dropped.
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape" || mode !== "drag") return;
+      ev.stopPropagation();
+      detach();
+      mode = "done";
+      finishDrag(false);
     };
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
+    window.addEventListener("keydown", key, true);
   }, []);
 
   const onClickCapture = useCallback((e: ReactMouseEvent) => {

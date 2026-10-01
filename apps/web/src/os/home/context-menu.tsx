@@ -5,7 +5,6 @@ import {
   RiAddLine,
   RiArrowLeftSLine,
   RiArrowRightSLine,
-  RiBrushLine,
   RiCheckLine,
   RiDeleteBinLine,
   RiEditLine,
@@ -21,12 +20,30 @@ import {
   RiShareBoxLine,
   RiPushpinLine,
   RiUnpinLine,
+  RiImageLine,
+  RiDragMove2Line,
+  RiApps2Fill,
 } from "@remixicon/react";
-import { APP_CATEGORIES, addSpace, moveItem, pinToDock, removeFromFolder, removeSpace, sameItem, setCategory, unpinFromDock, type AppId, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
+import {
+  APP_CATEGORIES,
+  addSpace,
+  moveItem,
+  pinToDock,
+  removeFromFolder,
+  removeSpace,
+  removeWidget,
+  sameItem,
+  setCategory,
+  unpinFromDock,
+  type AppId,
+  type LayoutItem,
+  type WorkspaceLayout,
+} from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { useWM } from "../window-manager";
+import { currentView, setArrange, setView } from "./brush-menu";
 import { CATEGORY_LABEL, addToDesktop, addToFolder, appCategory, createFolderWith, openApp, removeFromDesktop, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { useHomeUi, type ContextTarget } from "./ui-store";
@@ -40,9 +57,11 @@ interface Entry {
   icon?: ReactNode;
   onSelect?: () => void;
   /** Opens a second level instead of acting. */
-  sub?: "folders" | "category" | "spaces";
+  sub?: "folders" | "category" | "spaces" | "view";
   danger?: boolean;
   checked?: boolean;
+  /** Applies in place and leaves the menu open (view switches). */
+  keepOpen?: boolean;
 }
 
 export function spaceLabel(t: ReturnType<typeof useT>, l: WorkspaceLayout, id: string) {
@@ -176,6 +195,15 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           { id: "unpin", label: t("dock.unpin"), icon: <RiUnpinLine />, onSelect: () => updateLayout((l) => unpinFromDock(l, id)) },
         ];
       }
+      case "dock-desktops":
+        return [{ id: "unpin", label: t("dock.unpin"), icon: <RiUnpinLine />, onSelect: () => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, dockDesktops: false } })) }];
+      case "widget": {
+        const id = target.id;
+        return [
+          { id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) },
+          { id: "remove-widget", label: t("widgets.remove"), icon: <RiDeleteBinLine />, danger: true, onSelect: () => updateLayout((l) => removeWidget(l, id)) },
+        ];
+      }
       case "space": {
         const id = target.id;
         const first = layout.desktop.spaces[0]?.id === id;
@@ -185,19 +213,28 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         ];
       }
       case "desktop": {
+        // Wallpaper · View · Widgets — the same choices as the brush menu.
         const list: Entry[] = [
+          { id: "appearance", label: t("home.wallpaper"), icon: <RiImageLine />, onSelect: () => ui().setAppearanceOpen(true) },
+          {
+            id: "view",
+            label: t("home.view"),
+            icon: currentView(layout, ff) === "grid" ? <RiLayoutGridLine /> : <RiListUnordered />,
+            sub: "view",
+          },
+          { id: "widgets", label: t("widgets.title"), icon: <RiApps2Fill />, onSelect: () => ui().setWidgetsOpen(true) },
           { id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) },
-          { id: "appearance", label: t("home.appearance"), icon: <RiBrushLine />, onSelect: () => ui().setAppearanceOpen(true) },
         ];
         if (!mobile) {
-          const cat = layout.desktop.view === "categories";
-          list.push({
-            id: "view",
-            label: cat ? t("home.viewGrid") : t("home.viewCategories"),
-            icon: cat ? <RiLayoutGridLine /> : <RiListUnordered />,
-            onSelect: () => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, view: cat ? "grid" : "categories" } })),
-          });
           if (layout.desktop.spaces.length < 6) list.push({ id: "new-space", label: t("home.newSpace"), icon: <RiAddLine />, onSelect: newSpace });
+          if (!layout.desktop.dockDesktops) {
+            list.push({
+              id: "dock-desktops",
+              label: t("dock.showDesktops"),
+              icon: <RiPushpinLine />,
+              onSelect: () => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, dockDesktops: true } })),
+            });
+          }
         }
         return list;
       }
@@ -211,6 +248,18 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
   }
 
   function subEntries(): Entry[] {
+    if (sub === "view") {
+      const view = currentView(layout, ff);
+      const list: Entry[] = [
+        { id: "view-grid", label: t("home.viewGrid"), icon: <RiLayoutGridLine />, checked: view === "grid", keepOpen: true, onSelect: () => setView(ff, "grid") },
+        { id: "view-categories", label: t("home.viewCategories"), icon: <RiListUnordered />, checked: view === "categories", keepOpen: true, onSelect: () => setView(ff, "categories") },
+      ];
+      if (ff === "desktop" && view === "grid") {
+        const free = layout.desktop.arrange === "free";
+        list.push({ id: "view-free", label: t("appearance.arrangeFree"), icon: <RiDragMove2Line />, checked: free, keepOpen: true, onSelect: () => setArrange(free ? "grid" : "free") });
+      }
+      return list;
+    }
     if (target.kind !== "app" && target.kind !== "folder") return [];
     const item: LayoutItem = target.kind === "app" ? { kind: "app", id: target.id } : { kind: "folder", id: target.id };
     if (sub === "folders" && target.kind === "app") {
@@ -239,7 +288,8 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
   }
 
   const shown = sub ? subEntries() : entries;
-  const subTitle = sub === "folders" ? t("home.addToFolder") : sub === "category" ? t("home.category") : sub === "spaces" ? t("home.moveToSpace") : "";
+  const subTitle =
+    sub === "folders" ? t("home.addToFolder") : sub === "category" ? t("home.category") : sub === "spaces" ? t("home.moveToSpace") : sub === "view" ? t("appearance.view") : "";
 
   return (
     <motion.div
@@ -268,11 +318,12 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           <button
             key={e.id}
             type="button"
-            role="menuitem"
+            role={e.checked !== undefined ? "menuitemradio" : "menuitem"}
+            aria-checked={e.checked}
             data-testid={`menu-${e.id}`}
             onClick={() => {
               if (e.sub) return setSub(e.sub);
-              close();
+              if (!e.keepOpen) close();
               e.onSelect?.();
             }}
             className={cx(

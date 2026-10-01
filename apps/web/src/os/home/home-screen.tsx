@@ -1,27 +1,29 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
-import { RiAddLine, RiBrushLine, RiCheckLine, RiLayoutGridLine, RiListUnordered, RiMoreFill } from "@remixicon/react";
-import { APP_CATEGORIES, DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
+import { RiBrushLine, RiCheckLine } from "@remixicon/react";
+import { APP_CATEGORIES, layoutItemKey, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, useLanguage, useT } from "@/lib/i18n";
 import { IconButton } from "@/ui/controls";
-import { Popover, usePopover } from "@/ui/overlays";
-import { WorkspaceMenu } from "../system-menu";
+import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { CATEGORY_LABEL, appCategory, appLabel, itemKey, openApp } from "./actions";
 import { labelTone, useWallpaperImage, wallpaperStyle, type LabelTone } from "./appearance";
 import { AppearanceSheet } from "./appearance-panel";
-import { ContextMenu, newSpace, spaceLabel } from "./context-menu";
+import { BrushMenu } from "./brush-menu";
+import { ContextMenu } from "./context-menu";
 import { FolderOverlay } from "./folder-overlay";
 import { useHomeGestures } from "./gestures";
-import { DOCK_ZONE } from "./dock";
+import { dockZone } from "./dock";
 import { DragGhost, HomeItem, type IconMetrics, type LabelStyle } from "./icons";
 import { Launcher } from "./launcher";
-import { updateLayout, useWorkspaceLayout } from "./layout";
+import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
+import { DesktopsGlyph, SpacesList, useSpacesTitle } from "./spaces";
 import { useHomeUi } from "./ui-store";
+import { DesktopWidgets, MobileWidgets, WidgetsPanel } from "./widgets";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -30,10 +32,14 @@ interface Pager {
   end: (dx: number, vx: number) => void;
 }
 
-const DENSITY: Record<WorkspaceLayout["desktop"]["density"], IconMetrics> = {
-  compact: { tile: 60, cell: 100, gapX: 8, gapY: 14 },
-  normal: { tile: 72, cell: 118, gapX: 16, gapY: 22 },
-  spacious: { tile: 84, cell: 136, gapX: 28, gapY: 32 },
+/**
+ * PC scale (Settings → "Scale"): icon, cell and label sizes together. Small is
+ * really compact, large only moderately bigger than the standard.
+ */
+const SCALE: Record<WorkspaceLayout["desktop"]["density"], IconMetrics & { name: number; caption: number }> = {
+  compact: { tile: 52, cell: 90, gapX: 6, gapY: 10, name: 12, caption: 11 },
+  normal: { tile: 64, cell: 106, gapX: 12, gapY: 16, name: 13, caption: 11.5 },
+  spacious: { tile: 74, cell: 120, gapX: 16, gapY: 22, name: 14, caption: 12 },
 };
 
 /**
@@ -47,19 +53,30 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
   const { layout, apps, ready } = useWorkspaceLayout();
   const editing = useHomeUi((s) => s.editing);
   const drag = useHomeUi((s) => s.drag);
-  const menu = usePopover();
+  const brushBtn = useRef<HTMLButtonElement>(null);
   const image = useWallpaperImage(layout.appearance.wallpaper);
   const wp = wallpaperStyle(layout.appearance.wallpaper, image.data);
   const plain = layout.appearance.wallpaper.kind === "default";
-  const tone = labelTone(layout.appearance, wp.dark);
-  const label: LabelStyle = useMemo(() => ({ tone, size: layout.appearance.labelSize, captions: layout.appearance.captions }), [tone, layout.appearance.labelSize, layout.appearance.captions]);
+  const tone = labelTone(wp.dark);
+  const scale = SCALE[layout.desktop.density];
+  const cols4 = layout.mobile.columns === 4;
+  // Label sizes follow the scale (PC) or the icons per row (phone) — no separate setting.
+  const label: LabelStyle = useMemo(
+    () => (ff === "mobile" ? { tone, name: cols4 ? 12 : 13, caption: cols4 ? 10.5 : 11, captions: layout.appearance.captions } : { tone, name: scale.name, caption: scale.caption, captions: layout.appearance.captions }),
+    [ff, tone, cols4, scale, layout.appearance.captions],
+  );
   const pagerRef = useRef<Pager | null>(null);
   const mobileCategories = ff === "mobile" && layout.mobile.view === "categories";
-  const canArrange = ff === "mobile" ? !mobileCategories : layout.desktop.view === "grid" && layout.desktop.sort === "manual";
+  const free = layout.desktop.arrange === "free";
+  const canArrange = ff === "mobile" ? !mobileCategories : layout.desktop.view === "grid" && (free || layout.desktop.sort === "manual");
+  // The icon being dragged leaves an empty slot — but only a drag that started on
+  // the home screen: dragging inside the dock never hides the desktop icon.
+  const dragKey = drag && !drag.fromFolder && !drag.fromDock ? itemKey(drag.item) : null;
 
   const gestures = useHomeGestures({
     ff,
     canArrange,
+    free: ff === "desktop" && free && layout.desktop.view === "grid",
     pager: ff === "mobile" && !mobileCategories ? { move: (dx) => pagerRef.current?.move(dx), end: (dx, vx) => pagerRef.current?.end(dx, vx) } : undefined,
     onPullDown: ff === "mobile" && !mobileCategories ? () => useHomeUi.getState().setSearch({ open: true, query: "" }) : undefined,
   });
@@ -91,7 +108,18 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
       // Escape closes only the top layer: edit mode ends when nothing is open above it.
       // (Dialogs close themselves on the same key and may already be closing.)
       const layerOpen =
-        ui.openFolder || ui.menu || ui.appearanceOpen || ui.renaming || ui.launcherOpen || ui.search.open || ui.drag || document.querySelector('[role="dialog"], [role="menu"]');
+        ui.openFolder ||
+        ui.menu ||
+        ui.appearanceOpen ||
+        ui.brushOpen ||
+        ui.widgetsOpen ||
+        ui.spacesOpen ||
+        ui.renaming ||
+        ui.launcherOpen ||
+        ui.search.open ||
+        ui.drag ||
+        document.querySelector('[role="dialog"], [role="menu"]');
+      if (e.key === "Escape" && ui.brushOpen) ui.setBrushOpen(false);
       if (e.key === "Escape" && ui.editing && !layerOpen) ui.setEditing(false);
       // PC: Ctrl+Alt+← / → switches desktops.
       if (ff === "desktop" && e.ctrlKey && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
@@ -107,6 +135,7 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
   }, [ff, layout.desktop.spaces]);
 
   const glassBtn = plain ? undefined : "vx-glass text-text hover:bg-white/75";
+  const brushOpen = useHomeUi((s) => s.brushOpen);
 
   return (
     <motion.main
@@ -120,6 +149,7 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
       transition={{ duration: 0.4, ease: EASE }}
       aria-hidden={hidden || undefined}
       data-testid="home"
+      data-system-ui
       data-editing={editing || undefined}
       onPointerDown={gestures.onPointerDown}
       onClickCapture={gestures.onClickCapture}
@@ -140,30 +170,32 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
       <header className="relative z-10 flex h-16 shrink-0 items-center gap-2 px-4 sm:px-6">
         <AnimatePresence mode="popLayout" initial={false}>
           {editing ? (
-            <motion.div key="brush" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }} transition={{ duration: 0.18 }}>
-              <IconButton label={t("home.appearance")} onClick={() => useHomeUi.getState().setAppearanceOpen(true)} data-testid="home-appearance" tone="surface" className="text-primary">
+            <motion.div key="brush" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.16 }}>
+              <IconButton
+                ref={brushBtn}
+                label={t("home.appearance")}
+                onClick={() => useHomeUi.getState().setBrushOpen(!useHomeUi.getState().brushOpen)}
+                aria-expanded={brushOpen}
+                data-testid="home-appearance"
+                tone="surface"
+                className="text-primary"
+              >
                 <RiBrushLine className="size-5" />
               </IconButton>
             </motion.div>
           ) : (
-            <motion.div key="clock" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} className="pl-1">
+            <motion.div key="clock" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }} className="pl-1">
               <Clock tone={plain ? "dark" : tone} />
             </motion.div>
           )}
         </AnimatePresence>
         <div className="flex-1" />
-        {ff === "mobile" && !editing && <ViewToggle view={layout.mobile.view} glass={!plain} />}
-        {ff === "desktop" && (
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <SpaceTabs layout={layout} />
-          </div>
-        )}
         {editing ? (
           <motion.button
             type="button"
-            initial={{ opacity: 0, scale: 0.6 }}
+            initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.16 }}
             onClick={() => useHomeUi.getState().setEditing(false)}
             aria-label={t("home.done")}
             title={t("home.done")}
@@ -173,20 +205,15 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
             <RiCheckLine className="size-6" />
           </motion.button>
         ) : (
-          <>
-            <IconButton ref={menu.anchor} label={t("os.menu")} onClick={menu.toggle} data-testid="workspace-menu" className={glassBtn}>
-              <RiMoreFill className="size-5" />
-            </IconButton>
-            <IconButton
-              ref={launcherBtn}
-              label={t("os.launcher")}
-              onClick={() => useHomeUi.getState().setLauncherOpen(!useHomeUi.getState().launcherOpen)}
-              data-testid="launcher-button"
-              className={glassBtn}
-            >
-              <NineDots />
-            </IconButton>
-          </>
+          <IconButton
+            ref={launcherBtn}
+            label={t("os.launcher")}
+            onClick={() => useHomeUi.getState().setLauncherOpen(!useHomeUi.getState().launcherOpen)}
+            data-testid="launcher-button"
+            className={glassBtn}
+          >
+            <NineDots />
+          </IconButton>
         )}
       </header>
 
@@ -197,19 +224,20 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
           ))}
         </div>
       ) : ff === "mobile" ? (
-        <MobileHome layout={layout} label={label} editing={editing} dragKey={drag && !drag.fromFolder ? itemKey(drag.item) : null} merge={drag?.mergeWith} onOpen={onOpen} pagerRef={pagerRef} />
+        <MobileHome layout={layout} label={label} editing={editing} dragKey={dragKey} merge={drag?.mergeWith} onOpen={onOpen} pagerRef={pagerRef} />
       ) : (
-        <DesktopHome layout={layout} label={label} editing={editing} dragKey={drag && !drag.fromFolder ? itemKey(drag.item) : null} merge={drag?.mergeWith} onOpen={onOpen} />
+        <DesktopHome layout={layout} metrics={scale} label={label} editing={editing} dragKey={dragKey} merge={drag?.mergeWith} onOpen={onOpen} />
       )}
 
       {ff === "desktop" && ready && (
-        // Room for the PC bottom bar (search + dock, rendered above windows by the workspace).
-        <div className="shrink-0" style={{ height: DOCK_ZONE - 14 }} aria-hidden />
+        // Room for the dock (rendered above windows by the workspace).
+        <div className="shrink-0" style={{ height: dockZone(layout.desktop.dockScale) - 14 }} aria-hidden />
       )}
+      {ff === "mobile" && ready && <MobileSpacesButton glass={!plain} />}
 
-      <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} width={250} testId="workspace-menu-popover">
-        <WorkspaceMenu onDone={menu.close} />
-      </Popover>
+      <BrushMenu anchor={brushBtn} layout={layout} />
+      <WidgetsPanel />
+      {ff === "mobile" && <MobileSpacesSheet layout={layout} />}
       <Launcher anchor={launcherBtn} apps={apps} layout={layout} />
       <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />
       <ContextMenu layout={layout} />
@@ -218,6 +246,41 @@ export function HomeScreen({ receded, hidden, launcherBtn }: { receded: boolean;
       {ff === "mobile" && <MobileSearch apps={apps} layout={layout} />}
       <DragGhost layout={layout} />
     </motion.main>
+  );
+}
+
+/**
+ * Phone: the round glass "Desktops" button at the bottom centre — the same
+ * system app as the PC dock item; it opens the pages overview.
+ */
+function MobileSpacesButton({ glass }: { glass: boolean }) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      onClick={() => useHomeUi.getState().setSpacesOpen(true)}
+      aria-label={t("home.pages")}
+      title={t("home.pages")}
+      data-home-control
+      className={cx(
+        "pressable absolute bottom-3 left-1/2 z-10 flex size-[54px] -translate-x-1/2 items-center justify-center rounded-full",
+        glass ? "vx-glass" : "vx-glass bg-surface-secondary",
+      )}
+      data-testid="mobile-spaces"
+    >
+      <DesktopsGlyph className="size-7" />
+    </button>
+  );
+}
+
+function MobileSpacesSheet({ layout }: { layout: WorkspaceLayout }) {
+  const open = useHomeUi((s) => s.spacesOpen);
+  const title = useSpacesTitle();
+  const close = () => useHomeUi.getState().setSpacesOpen(false);
+  return (
+    <Sheet open={open} onClose={close} title={title} width={480} testId="mobile-spaces-sheet">
+      <SpacesList layout={layout} onPicked={close} testPrefix="mobile-page" />
+    </Sheet>
   );
 }
 
@@ -283,7 +346,7 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
   if (layout.mobile.view === "categories") {
     // Apps grouped by category, scrolling vertically (arranging happens in the grid view).
     return (
-      <div ref={box} className="scroll-area min-h-0 flex-1 touch-pan-y px-2 pb-8 pt-3" data-home-free>
+      <div ref={box} className="scroll-area min-h-0 flex-1 touch-pan-y px-2 pb-24 pt-3" data-home-free>
         {width > 0 && (
           <CategoryView
             layout={layout}
@@ -308,6 +371,7 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
           <motion.div className="flex h-full" style={{ x }}>
             {pages.map((items, i) => (
               <div key={i} className="h-full shrink-0 overflow-hidden px-2 pt-3" style={{ width }} data-home-free data-testid={`home-page-${i}`}>
+                <MobileWidgets layout={layout} page={i} editing={editing} />
                 <div className="grid" style={{ gridTemplateColumns: `repeat(${cols}, ${cell}px)`, rowGap: metrics.gapY }} data-home-container={`mobile:${i}`}>
                   {items.map((item, j) => (
                     <HomeItem
@@ -330,42 +394,8 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
         )}
       </div>
       <PageDots count={pages.length} page={page} tone={label.tone} />
-    </div>
-  );
-}
-
-/** Phone: how apps are shown — icon pages or by category. Saved with the account. */
-function ViewToggle({ view, glass }: { view: "grid" | "categories"; glass: boolean }) {
-  const t = useT();
-  const set = (v: "grid" | "categories") => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, view: v } }));
-  return (
-    <div
-      className={cx("flex items-center rounded-full p-0.5", glass ? "vx-glass" : "bg-surface-secondary")}
-      role="radiogroup"
-      aria-label={t("appearance.view")}
-      data-home-control
-      data-testid="home-view"
-    >
-      {(
-        [
-          ["grid", RiLayoutGridLine, "home.viewGrid"],
-          ["categories", RiListUnordered, "home.viewCategories"],
-        ] as const
-      ).map(([v, Icon, key]) => (
-        <button
-          key={v}
-          type="button"
-          role="radio"
-          aria-checked={view === v}
-          aria-label={t(key)}
-          title={t(key)}
-          onClick={() => set(v)}
-          className={cx("pressable flex size-8 items-center justify-center rounded-full", view === v ? "bg-surface text-text shadow-sm" : "text-text-secondary")}
-          data-testid={`home-view-${v}`}
-        >
-          <Icon className="size-[17px]" />
-        </button>
-      ))}
+      {/* room for the round Desktops button */}
+      <div className="h-[66px] shrink-0" aria-hidden />
     </div>
   );
 }
@@ -397,14 +427,14 @@ function PageDots({ count, page, tone }: { count: number; page: number; tone: La
 // ---------------------------------------------------------------------------
 // PC: centred grid (or categories) on the current virtual desktop.
 
-function DesktopHome({ layout, label, editing, dragKey, merge, onOpen }: SurfaceProps) {
+function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpen }: SurfaceProps & { metrics: IconMetrics }) {
   const t = useT();
   const lang = useLanguage();
   const space = useWM((s) => s.space);
   const current = layout.desktop.spaces.find((s) => s.id === space) ?? layout.desktop.spaces[0]!;
-  const m = DENSITY[layout.desktop.density];
   const cols = layout.desktop.columns;
   const manual = layout.desktop.sort === "manual";
+  const free = layout.desktop.arrange === "free" && layout.desktop.view === "grid";
 
   // The desktop this device was on was removed elsewhere: fall back to the first.
   useEffect(() => {
@@ -416,8 +446,8 @@ function DesktopHome({ layout, label, editing, dragKey, merge, onOpen }: Surface
     [layout],
   );
   const items = useMemo(
-    () => (manual ? current.items : [...current.items].sort((a, b) => nameOf(a).localeCompare(nameOf(b), lang))),
-    [manual, current.items, nameOf, lang],
+    () => (manual || free ? current.items : [...current.items].sort((a, b) => nameOf(a).localeCompare(nameOf(b), lang))),
+    [manual, free, current.items, nameOf, lang],
   );
 
   const item = (i: LayoutItem, j: number) => (
@@ -436,35 +466,84 @@ function DesktopHome({ layout, label, editing, dragKey, merge, onOpen }: Surface
   );
 
   return (
-    <div className="scroll-area relative min-h-0 flex-1 px-8 pb-6 pt-[3vh]" data-home-free>
+    <div className="relative min-h-0 flex-1">
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={current.id}
-          initial={{ opacity: 0, x: 30 }}
+          initial={{ opacity: 0, x: 24 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -30 }}
-          transition={{ duration: 0.24, ease: EASE }}
-          className="min-h-full"
+          exit={{ opacity: 0, x: -24 }}
+          transition={{ duration: 0.22, ease: EASE }}
+          className="absolute inset-0"
           data-home-free
         >
-          {layout.desktop.view === "categories" ? (
-            <CategoryView layout={layout} items={items} maxWidth={cols * m.cell + (cols - 1) * m.gapX} tone={label.tone} render={item} />
+          {free ? (
+            <FreeArea layout={layout} items={items} metrics={m} label={label} render={item} spaceId={current.id} />
           ) : (
-            <div
-              className="mx-auto flex flex-wrap justify-center pt-[3vh]"
-              style={{ maxWidth: cols * m.cell + (cols - 1) * m.gapX + 1, columnGap: m.gapX, rowGap: m.gapY }}
-              data-home-container={manual ? `desktop:${current.id}` : undefined}
-              data-home-free
-              data-testid="desktop-grid"
-            >
-              {items.map(item)}
+            <div className="scroll-area absolute inset-0 px-8 pb-6 pt-[3vh]" data-home-free>
+              {layout.desktop.view === "categories" ? (
+                <CategoryView layout={layout} items={items} maxWidth={cols * m.cell + (cols - 1) * m.gapX} tone={label.tone} render={item} />
+              ) : (
+                <div
+                  className="mx-auto flex flex-wrap justify-center pt-[3vh]"
+                  style={{ maxWidth: cols * m.cell + (cols - 1) * m.gapX + 1, columnGap: m.gapX, rowGap: m.gapY }}
+                  data-home-container={manual ? `desktop:${current.id}` : undefined}
+                  data-home-free
+                  data-testid="desktop-grid"
+                >
+                  {items.map(item)}
+                </div>
+              )}
+              {!items.length && (
+                <p className={cx("mx-auto mt-10 max-w-[360px] text-center text-[14px]", label.tone === "light" ? "text-white/85" : "text-text-secondary")}>{t("home.empty")}</p>
+              )}
             </div>
           )}
-          {!items.length && (
-            <p className={cx("mx-auto mt-10 max-w-[360px] text-center text-[14px]", label.tone === "light" ? "text-white/85" : "text-text-secondary")}>{t("home.empty")}</p>
-          )}
+          <DesktopWidgets layout={layout} space={current.id} editing={editing} />
         </motion.div>
       </AnimatePresence>
+    </div>
+  );
+}
+
+/** Height of one icon cell (tile + label lines) in the free area. */
+const cellHeight = (m: IconMetrics, label: LabelStyle) => m.tile + Math.round(label.name * 1.3) + (label.captions ? Math.round(label.caption * 1.3) : 0) + 22;
+
+/**
+ * Free placement: every icon at its own spot. Positions are fractions of the
+ * free area (minus one cell), so any position stays on screen at any window
+ * size; icons never placed yet flow in a grid from the top-left.
+ */
+function FreeArea({ layout, items, metrics: m, label, render, spaceId }: { layout: WorkspaceLayout; items: LayoutItem[]; metrics: IconMetrics; label: LabelStyle; render: (i: LayoutItem, j: number) => ReactNode; spaceId: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => el.isConnected && setSize({ w: el.clientWidth, h: el.clientHeight }));
+    ro.observe(el);
+    setSize({ w: el.clientWidth, h: el.clientHeight });
+    return () => ro.disconnect();
+  }, []);
+  const ch = cellHeight(m, label);
+  const freeW = Math.max(1, size.w - m.cell);
+  const freeH = Math.max(1, size.h - ch);
+  const perCol = Math.max(1, Math.floor(size.h / (ch + 4)));
+
+  return (
+    <div ref={box} className="absolute inset-x-4 bottom-2 top-2" data-home-free data-home-freearea={spaceId} data-testid="desktop-free">
+      {size.w > 0 &&
+        items.map((it, j) => {
+          const stored = layout.desktop.positions[layoutItemKey(it)];
+          // Not placed yet: columns from the top-left, like a classic desktop.
+          const auto = { x: (Math.floor(j / perCol) * (m.cell + m.gapX)) / freeW, y: ((j % perCol) * (ch + 4)) / freeH };
+          const p = stored ?? { x: Math.min(1, auto.x), y: Math.min(1, auto.y) };
+          return (
+            <div key={layoutItemKey(it)} className="absolute" style={{ left: Math.round(p.x * freeW), top: Math.round(p.y * freeH), width: m.cell }} data-free-item>
+              {render(it, j)}
+            </div>
+          );
+        })}
     </div>
   );
 }
@@ -509,65 +588,6 @@ function CategoryView({
           )}
         </section>
       ))}
-    </div>
-  );
-}
-
-/** PC virtual desktops: tabs in the header. Drag an icon onto a tab to move it there. */
-function SpaceTabs({ layout }: { layout: WorkspaceLayout }) {
-  const t = useT();
-  const space = useWM((s) => s.space);
-  const setSpace = useWM((s) => s.setSpace);
-  const dragging = useHomeUi((s) => !!s.drag);
-  const spaces = layout.desktop.spaces;
-  return (
-    <div
-      className={cx(
-        "vx-glass flex items-center gap-1 rounded-full p-1 transition-transform",
-        dragging && "scale-105",
-      )}
-      role="tablist"
-      aria-label={t("home.spaces")}
-      data-testid="space-tabs"
-    >
-      {spaces.map((s, i) => (
-        <button
-          key={s.id}
-          type="button"
-          role="tab"
-          aria-selected={s.id === space}
-          data-home-space={s.id}
-          data-home-control
-          onClick={() => setSpace(s.id)}
-          onDoubleClick={() => useHomeUi.getState().setRenaming({ kind: "space", id: s.id })}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            useHomeUi.getState().openMenu({ x: e.clientX, y: e.clientY, target: { kind: "space", id: s.id } });
-          }}
-          title={spaceLabel(t, layout, s.id)}
-          className={cx(
-            "pressable h-8 min-w-8 max-w-[140px] truncate rounded-full px-3 text-[13px] font-semibold",
-            s.id === space ? "bg-primary text-white shadow-glow" : "text-text-secondary hover:bg-surface-hover hover:text-text",
-          )}
-          data-testid={`space-${i + 1}`}
-        >
-          {s.name || i + 1}
-        </button>
-      ))}
-      {spaces.length < DESKTOP_SPACES_MAX && (
-        <button
-          type="button"
-          onClick={newSpace}
-          aria-label={t("home.newSpace")}
-          title={t("home.newSpace")}
-          data-home-control
-          className="pressable flex size-8 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover hover:text-text"
-          data-testid="space-add"
-        >
-          <RiAddLine className="size-[18px]" />
-        </button>
-      )}
     </div>
   );
 }

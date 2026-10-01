@@ -10,7 +10,7 @@ import { AppTile } from "@/brand/brand";
 import { CLIENT_APPS } from "../app-registry";
 import { useWM } from "../window-manager";
 import { appLabel, itemKey, removeFromDesktop, ungroupFolder } from "./actions";
-import { LABEL_SIZES, type LabelTone } from "./appearance";
+import type { LabelTone } from "./appearance";
 import { updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 
@@ -30,7 +30,9 @@ export interface IconMetrics {
 
 export interface LabelStyle {
   tone: LabelTone;
-  size: WorkspaceLayout["appearance"]["labelSize"];
+  /** Font sizes follow the interface scale (PC) or icons per row (phone). */
+  name: number;
+  caption: number;
   captions: boolean;
 }
 
@@ -135,7 +137,6 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
   const folder = item.kind === "folder" ? layout.folders.find((f) => f.id === item.id) : undefined;
   if (item.kind === "folder" && !folder) return null;
   const name = item.kind === "app" ? appLabel(layout, item.id) : folder!.name || t("home.folder");
-  const sizes = LABEL_SIZES[label.size];
   const wiggle: CSSProperties | undefined = editing ? { animationDelay: `${-((index * 137) % 300)}ms` } : undefined;
 
   return (
@@ -190,11 +191,11 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
             />
           )}
         </span>
-        <span className={cx("max-w-full truncate px-0.5 font-semibold leading-tight", labelClass(label.tone))} style={{ fontSize: sizes.name }}>
+        <span className={cx("max-w-full truncate px-0.5 font-semibold leading-tight", labelClass(label.tone))} style={{ fontSize: label.name }}>
           {name}
         </span>
         {label.captions && item.kind === "app" && (
-          <span className={cx("-mt-1 max-w-full truncate leading-tight", captionClass(label.tone))} style={{ fontSize: sizes.caption }}>
+          <span className={cx("-mt-1 max-w-full truncate leading-tight", captionClass(label.tone))} style={{ fontSize: label.caption }}>
             <AppCaption id={item.id} />
           </span>
         )}
