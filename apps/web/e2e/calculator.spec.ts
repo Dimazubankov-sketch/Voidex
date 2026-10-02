@@ -139,8 +139,10 @@ test("calculator: dock pin / unpin on PC; maximize uses the area between the sys
   await expect(dock.getByTestId("dock-app-calculator")).toBeVisible();
   await openApp(page, "calculator");
   const win = page.getByTestId("window-calculator");
+  // The window opens with a scale animation from its launcher: measure once it has settled.
+  await expect.poll(async () => (await win.boundingBox())!.width).toBeGreaterThanOrEqual(360);
+  await page.waitForTimeout(400);
   const box = (await win.boundingBox())!;
-  expect(box.width).toBeGreaterThanOrEqual(360);
   expect(box.height).toBeGreaterThanOrEqual(560);
   await win.getByTestId("calculator-app").locator("> div").first().dblclick({ position: { x: 300, y: 20 } });
   await expect.poll(async () => (await win.boundingBox())!.width).toBeGreaterThan(box.width + 100);
