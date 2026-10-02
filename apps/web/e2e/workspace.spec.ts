@@ -51,7 +51,8 @@ async function resting(page: Page, l: Locator) {
     const before = await center(l);
     await page.waitForTimeout(200);
     p = await center(l);
-    expect(p).toEqual(before);
+    // Wiggling icons move by a fraction of a pixel; a glide moves by many.
+    expect(Math.hypot(p.x - before.x, p.y - before.y)).toBeLessThan(2);
   }).toPass({ timeout: 10_000 });
   return p;
 }
