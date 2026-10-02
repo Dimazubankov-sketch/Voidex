@@ -327,11 +327,21 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await page.waitForTimeout(400);
   const order = () => overlay.locator("[data-home-item]").evaluateAll((els) => els.map((e) => e.getAttribute("data-home-item")));
   const before = await order();
-  const a = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
   const b = await center(overlay.locator("[data-home-item]").nth(1).locator("[data-tile]"));
-  await finger.down(a);
-  // Wait for the long press itself (its menu), not a fixed time: a busy machine fires the timer late.
-  await expect(page.getByTestId("home-context-menu")).toBeVisible();
+  // Hold until the long press has registered (its menu, or edit mode), not for a fixed time:
+  // a busy machine fires the timer late. A press that didn't register is released and repeated.
+  let a = { x: 0, y: 0 };
+  await expect(async () => {
+    a = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
+    await finger.down(a);
+    const held = async () => (await page.getByTestId("home-context-menu").isVisible()) || (await page.getByTestId("home").getAttribute("data-editing")) === "true";
+    try {
+      await expect.poll(held, { timeout: 3000 }).toBe(true);
+    } catch (e) {
+      await finger.up();
+      throw e;
+    }
+  }).toPass({ timeout: 30_000 });
   await finger.moveTo(a, { x: b.x + 40, y: b.y }, 10);
   await page.waitForTimeout(400);
   await finger.up();
