@@ -325,14 +325,14 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await page.waitForTimeout(300);
   await finger.up();
   await expect(overlay).toHaveCount(0);
-  // The folder of one dissolves: Mail, Settings and Vibex are on the page again.
+  // The folder of one dissolves: Mail, Settings, Vibex and Calculator are on the page again.
   const top = page.locator('[data-home-container="mobile:0"] [data-home-item]');
-  await expect(top).toHaveCount(3);
+  await expect(top).toHaveCount(4);
   // Step 2.3 grid: the dropped icon glides into its cell (layout animation) — tap once everything rests.
   await page.waitForTimeout(500);
   const app = page.locator('[data-home-container="mobile:0"] [data-testid^="app-"]').first();
   await finger.tap(await center(app.getByTestId("home-remove-badge")));
-  await expect(top).toHaveCount(2);
+  await expect(top).toHaveCount(3);
 });
 
 test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, empty dock leaves only search", async ({ page }) => {
