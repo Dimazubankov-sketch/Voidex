@@ -246,6 +246,9 @@ test("phone: brush → View toggles in one tap; the Calculator widget works; the
   await expect.poll(async () => Number((await cellOf(page, "vibex"))?.split(",")[1])).toBeGreaterThan(2);
   await page.getByTestId("home-done").click();
   const kept = await cellOf(page, "vibex");
+  // The layout is saved to the account shortly after the drop: reload only once the server has it.
+  const [c, r] = kept!.split(",").map(Number);
+  await expect.poll(async () => (await layoutOf(page)).mobile.cells["app:vibex"] ?? null).toEqual({ c, r });
   await page.reload();
   await expect(page.getByTestId("app-vibex")).toBeVisible();
   expect(await cellOf(page, "vibex")).toBe(kept);
