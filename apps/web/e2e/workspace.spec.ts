@@ -44,6 +44,18 @@ class Finger {
   }
 }
 
+/** Centre of an element once it has stopped moving (layout animations). */
+async function resting(page: Page, l: Locator) {
+  let p = { x: 0, y: 0 };
+  await expect(async () => {
+    const before = await center(l);
+    await page.waitForTimeout(200);
+    p = await center(l);
+    expect(p).toEqual(before);
+  }).toPass({ timeout: 10_000 });
+  return p;
+}
+
 /**
  * A phone swipe / pull on the home screen. A loaded test machine can deliver the first move after
  * the long-press time; the hold then (correctly) enters edit mode instead. Leave it and try again.
@@ -327,16 +339,15 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await page.waitForTimeout(400);
   const order = () => overlay.locator("[data-home-item]").evaluateAll((els) => els.map((e) => e.getAttribute("data-home-item")));
   const before = await order();
-  const b = await center(overlay.locator("[data-home-item]").nth(1).locator("[data-tile]"));
-  // Hold until the long press has registered (its menu, or edit mode), not for a fixed time:
-  // a busy machine fires the timer late. A press that didn't register is released and repeated.
-  let a = { x: 0, y: 0 };
+  // Icons glide into place when the folder opens; press only once they rest (a press that misses
+  // lands on the backdrop and closes the folder). Then hold until the long-press menu shows.
+  const tile = (i: number) => overlay.locator("[data-home-item]").nth(i).locator("[data-tile]");
+  const a = await resting(page, tile(0));
+  const b = await center(tile(1));
   await expect(async () => {
-    a = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
     await finger.down(a);
-    const held = async () => (await page.getByTestId("home-context-menu").isVisible()) || (await page.getByTestId("home").getAttribute("data-editing")) === "true";
     try {
-      await expect.poll(held, { timeout: 3000 }).toBe(true);
+      await expect(page.getByTestId("home-context-menu")).toBeVisible({ timeout: 3000 });
     } catch (e) {
       await finger.up();
       throw e;
@@ -348,7 +359,7 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await expect.poll(order).toEqual([...before].reverse());
 
   // Drag the first app out of the folder, then the very first tap on "−" works.
-  const c = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
+  const c = await resting(page, tile(0));
   const out = { x: c.x, y: (page.viewportSize()?.height ?? 900) - 120 };
   await finger.down(c);
   await finger.moveTo(c, out, 14);
