@@ -44,6 +44,22 @@ class Finger {
   }
 }
 
+/**
+ * A phone swipe / pull on the home screen. A loaded test machine can deliver the first move after
+ * the long-press time; the hold then (correctly) enters edit mode instead. Leave it and try again.
+ */
+async function phoneGesture(page: Page, run: () => Promise<void>) {
+  await expect(async () => {
+    if ((await page.getByTestId("home").getAttribute("data-editing")) === "true") {
+      await page.getByTestId("home-done").click();
+      await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
+      await page.waitForTimeout(400);
+    }
+    if (await page.getByTestId("home-context-menu").isVisible()) await page.keyboard.press("Escape");
+    await run();
+  }).toPass({ timeout: 30_000 });
+}
+
 test("phone home screen: edit mode, remove & restore, pages, folders, search, wallpaper — saved to the account", async ({ page }) => {
   test.skip(!isMobile(page), "phone gestures");
   await signUpViaApi(page, "Ева", "Ли");
@@ -107,19 +123,12 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
   await page.waitForTimeout(400);
   const p1 = await center(page.getByTestId("home-page-1"));
-  // A loaded test machine can deliver the first move after the long-press time; the hold then
-  // (correctly) enters edit mode instead of swiping. Leave edit mode and swipe again in that case.
-  await expect(async () => {
-    if ((await page.getByTestId("home").getAttribute("data-editing")) === "true") {
-      await page.getByTestId("home-done").click();
-      await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
-      await page.waitForTimeout(400);
-    }
+  await phoneGesture(page, async () => {
     await finger.down({ x: p1.x - 150, y: p1.y + 200 });
     await finger.moveTo({ x: p1.x - 150, y: p1.y + 200 }, { x: p1.x + 120, y: p1.y + 200 }, 6);
     await finger.up();
     await expect(page.getByTestId("page-dots").getByRole("tab").first()).toHaveAttribute("aria-selected", "true", { timeout: 3000 });
-  }).toPass({ timeout: 30_000 });
+  });
   await page.getByTestId("page-dots").getByRole("tab").nth(1).click();
   await expect(page.getByTestId("app-settings")).toBeInViewport({ ratio: 1 });
   await page.waitForTimeout(400); // page slide finished
@@ -131,10 +140,12 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
 
   // Pull down → quick search.
   const mid = { x: box.x + box.width / 2 };
-  await finger.down({ x: mid.x, y: box.y + 40 });
-  await finger.moveTo({ x: mid.x, y: box.y + 40 }, { x: mid.x, y: box.y + 200 }, 6);
-  await finger.up();
-  await expect(page.getByTestId("home-search-overlay")).toBeVisible();
+  await phoneGesture(page, async () => {
+    await finger.down({ x: mid.x, y: box.y + 40 });
+    await finger.moveTo({ x: mid.x, y: box.y + 40 }, { x: mid.x, y: box.y + 200 }, 6);
+    await finger.up();
+    await expect(page.getByTestId("home-search-overlay")).toBeVisible({ timeout: 3000 });
+  });
   await page.getByTestId("home-search").fill("почт");
   await expect(page.getByTestId("search-result-mail")).toBeVisible();
   await page.getByTestId("home-search-cancel").click();
