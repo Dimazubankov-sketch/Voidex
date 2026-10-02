@@ -97,7 +97,7 @@ export async function newPage(browser: Browser, mobile: boolean) {
   return ctx.newPage();
 }
 
-export async function openApp(page: Page, id: "mail" | "settings" | "vibex") {
+export async function openApp(page: Page, id: "mail" | "settings" | "vibex" | "calculator") {
   await page.getByTestId(`app-${id}`).click();
   await expect(page.locator(`[data-testid="window-${id}"][data-state="open"]`)).toBeVisible();
 }

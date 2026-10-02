@@ -56,7 +56,7 @@ const cellOf = (page: Page, id: string) => page.locator(`[data-cell]:has([data-t
 /** The account's stored layout (the default one until the user first customises the desktop). */
 async function layoutOf(page: Page): Promise<WorkspaceLayout> {
   const me = await api<{ preferences: { workspace: { layout?: WorkspaceLayout } } }>(page, "GET", "/api/me");
-  return normalizeLayout(me.body.preferences.workspace.layout ?? null, ["settings", "mail", "vibex"]);
+  return normalizeLayout(me.body.preferences.workspace.layout ?? null, ["settings", "mail", "vibex", "calculator"]);
 }
 
 // ---------------------------------------------------------------- account

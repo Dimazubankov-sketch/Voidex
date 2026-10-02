@@ -190,5 +190,5 @@ purpose with its own quota).
 - **Widgets**: the Workspaces widget is removed (stored ones are dropped by
   `normalizeLayout`); new **Calculator** widget, 2 × 2 cells, a working mini
   calculator (`shared/mini-calc.ts`, + − × ÷ with precedence, %, ±, ⌫,
-  division by zero → "Error"); its title opens the Calculator app once it is
-  integrated. It loads nothing heavy.
+  division by zero → "Error"); its title opens the Calculator app (docs/CALCULATOR.md).
+  The widget itself loads nothing heavy (no KaTeX, mathjs or OCR).
