@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { APP_LABEL_MAX, APP_REGISTRY, SPACE_NAME_MAX, renameApp, renameSpace, type WorkspaceLayout } from "@voidex/shared";
 import { useLanguage, useT } from "@/lib/i18n";
 import { Button, TextField } from "@/ui/controls";
@@ -14,10 +14,13 @@ export function RenameSheet({ layout }: { layout: WorkspaceLayout }) {
   const target = useHomeUi((s) => s.renaming);
   const close = () => useHomeUi.getState().setRenaming(null);
   const [value, setValue] = useState("");
-  useEffect(() => {
-    if (!target) return;
-    setValue(target.kind === "app" ? appLabel(layout, target.id) : (layout.desktop.spaces.find((s) => s.id === target.id)?.name ?? ""));
-  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The current name is set while rendering (not in an effect), so the field never shows
+  // empty for a frame: typing into it right away can't land after a late "Mail".
+  const [shownFor, setShownFor] = useState<typeof target>(null);
+  if (target !== shownFor) {
+    setShownFor(target);
+    if (target) setValue(target.kind === "app" ? appLabel(layout, target.id) : (layout.desktop.spaces.find((s) => s.id === target.id)?.name ?? ""));
+  }
 
   const save = () => {
     if (!target) return;
