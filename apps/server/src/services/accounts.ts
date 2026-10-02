@@ -1,13 +1,12 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
+  APP_IDS,
   APP_REGISTRY,
   DEFAULT_PREFERENCES,
   ErrorCode,
   LEGAL_DOCUMENTS,
   PreferencesPatchSchema,
-  isAppId,
   normalizeLayout,
-  type AppId,
   type MeDto,
   type Preferences,
   type UsernameCheckDto,
@@ -479,7 +478,9 @@ export class AccountService {
     if (patch.workspace?.layout) {
       // The server keeps the desktop consistent with what is really installed.
       const installed = await this.ctx.db.query.installedApps.findMany({ where: eq(installedApps.userId, userId) });
-      const ids = installed.map((r) => r.appId).filter((id): id is AppId => isAppId(id) && APP_REGISTRY[id].status === "available");
+      // Registry order (rows come back in no guaranteed order): missing apps are appended in this order.
+      const have = new Set(installed.map((r) => r.appId));
+      const ids = APP_IDS.filter((id) => have.has(id) && APP_REGISTRY[id].status === "available");
       next.workspace.layout = normalizeLayout(patch.workspace.layout, ids);
     }
     await this.ctx.db

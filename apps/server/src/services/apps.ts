@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { APP_REGISTRY, isAppId, type InstalledAppDto } from "@voidex/shared";
+import { APP_IDS, APP_REGISTRY, isAppId, type InstalledAppDto } from "@voidex/shared";
 import { installedApps } from "../db/schema.js";
 import type { Ctx } from "./context.js";
 
@@ -20,8 +20,11 @@ export class AppsService {
       .onConflictDoNothing();
 
     const rows = await this.ctx.db.query.installedApps.findMany({ where: eq(installedApps.userId, userId) });
+    // Registry order, not row order (PostgreSQL returns rows in no guaranteed order):
+    // apps the desktop doesn't know yet are appended in this order.
     return rows
       .filter((r) => isAppId(r.appId) && APP_REGISTRY[r.appId].status === "available")
+      .sort((a, b) => APP_IDS.indexOf(a.appId as InstalledAppDto["id"]) - APP_IDS.indexOf(b.appId as InstalledAppDto["id"]))
       .map((r) => ({
         id: r.appId as InstalledAppDto["id"],
         installedAt: r.installedAt.toISOString(),
