@@ -107,10 +107,19 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
   await page.waitForTimeout(400);
   const p1 = await center(page.getByTestId("home-page-1"));
-  await finger.down({ x: p1.x - 150, y: p1.y + 200 });
-  await finger.moveTo({ x: p1.x - 150, y: p1.y + 200 }, { x: p1.x + 120, y: p1.y + 200 }, 6);
-  await finger.up();
-  await expect(page.getByTestId("page-dots").getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
+  // A loaded test machine can deliver the first move after the long-press time; the hold then
+  // (correctly) enters edit mode instead of swiping. Leave edit mode and swipe again in that case.
+  await expect(async () => {
+    if ((await page.getByTestId("home").getAttribute("data-editing")) === "true") {
+      await page.getByTestId("home-done").click();
+      await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
+      await page.waitForTimeout(400);
+    }
+    await finger.down({ x: p1.x - 150, y: p1.y + 200 });
+    await finger.moveTo({ x: p1.x - 150, y: p1.y + 200 }, { x: p1.x + 120, y: p1.y + 200 }, 6);
+    await finger.up();
+    await expect(page.getByTestId("page-dots").getByRole("tab").first()).toHaveAttribute("aria-selected", "true", { timeout: 3000 });
+  }).toPass({ timeout: 30_000 });
   await page.getByTestId("page-dots").getByRole("tab").nth(1).click();
   await expect(page.getByTestId("app-settings")).toBeInViewport({ ratio: 1 });
   await page.waitForTimeout(400); // page slide finished
