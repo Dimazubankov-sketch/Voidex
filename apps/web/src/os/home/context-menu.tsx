@@ -21,7 +21,6 @@ import {
   RiPushpinLine,
   RiUnpinLine,
   RiImageLine,
-  RiDragMove2Line,
   RiApps2Fill,
 } from "@remixicon/react";
 import {
@@ -43,7 +42,7 @@ import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { useWM } from "../window-manager";
-import { currentView, setArrange, setView } from "./brush-menu";
+import { currentView, setView } from "./brush-menu";
 import { CATEGORY_LABEL, addToDesktop, addToFolder, appCategory, createFolderWith, openApp, removeFromDesktop, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { useHomeUi, type ContextTarget } from "./ui-store";
@@ -265,10 +264,6 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         { id: "view-grid", label: t("home.viewGrid"), icon: <RiLayoutGridLine />, checked: view === "grid", keepOpen: true, onSelect: () => setView(ff, "grid") },
         { id: "view-categories", label: t("home.viewCategories"), icon: <RiListUnordered />, checked: view === "categories", keepOpen: true, onSelect: () => setView(ff, "categories") },
       ];
-      if (ff === "desktop" && view === "grid") {
-        const free = layout.desktop.arrange === "free";
-        list.push({ id: "view-free", label: t("appearance.arrangeFree"), icon: <RiDragMove2Line />, checked: free, keepOpen: true, onSelect: () => setArrange(free ? "grid" : "free") });
-      }
       return list;
     }
     if (target.kind !== "app" && target.kind !== "folder") return [];

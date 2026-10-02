@@ -23,6 +23,8 @@ import {
   addWidget,
   moveWidget,
   removeWidget,
+  placeInCell,
+  placementOf,
   type LayoutItem,
   type WorkspaceLayout,
 } from "./workspace.js";
@@ -219,8 +221,8 @@ describe("workspace layout model", () => {
     let l = norm(defaultLayout(APPS));
     const added = addSpace(l, () => 0.5)!;
     l = norm(added.layout);
-    l = norm(addWidget(l, "desktops", { surface: "desktop", space: added.id, x: 0.2, y: 0.3 }, "w_test01"));
-    l = norm(addWidget(l, "desktops", { surface: "mobile", page: 0 }, "w_test02"));
+    l = norm(addWidget(l, "calculator", { surface: "desktop", space: added.id, x: 0.2, y: 0.3 }, "w_test01"));
+    l = norm(addWidget(l, "calculator", { surface: "mobile", page: 0 }, "w_test02"));
     expect(l.widgets.map((w) => [w.id, w.surface, w.container])).toEqual([
       ["w_test01", "desktop", added.id],
       ["w_test02", "mobile", "0"],
@@ -231,8 +233,106 @@ describe("workspace layout model", () => {
     expect(l.widgets[0]!.container).toBe("d_1");
     l = norm(removeWidget(l, "w_test02"));
     expect(l.widgets.map((w) => w.id)).toEqual(["w_test01"]);
-    const bogus = { ...l, widgets: [...l.widgets, { id: "w_test01", type: "desktops", surface: "desktop", container: "d_9", x: 0, y: 0 }] } as WorkspaceLayout;
+    const bogus = { ...l, widgets: [...l.widgets, { id: "w_test01", type: "calculator", surface: "desktop", container: "d_9", x: 0, y: 0 }] } as WorkspaceLayout;
     expect(norm(bogus).widgets).toHaveLength(1); // duplicate id dropped
-    expect(WorkspaceLayoutSchema.safeParse({ ...l, widgets: [{ ...l.widgets[0]!, type: "clock" }] }).success).toBe(false);
+    // Unknown / retired widget types (the Step 2.2 "desktops" widget) are accepted in stored data and dropped.
+    const legacy = { ...l, widgets: [{ ...l.widgets[0]!, type: "desktops" }] } as WorkspaceLayout;
+    expect(WorkspaceLayoutSchema.safeParse(legacy).success).toBe(true);
+    expect(norm(legacy).widgets).toEqual([]);
+    expect(norm(legacy).desktop.cells).toEqual({});
+  });
+});
+
+describe("step 2.3: grid cells, labels, system bar", () => {
+  const MANY: AppId[] = ["mail", "settings", "vibex"];
+  const n3 = (l: WorkspaceLayout) => normalizeLayout(l, MANY);
+  const key = (id: AppId) => `app:${id}`;
+  const desk = { surface: "desktop" as const, space: "d_1" };
+
+  it("older layouts get the new defaults; free arrange is retired to the grid", () => {
+    const old = n3(defaultLayout(MANY));
+    const raw = JSON.parse(JSON.stringify(old));
+    delete raw.appearance.showLabels;
+    delete raw.appearance.systemBar;
+    delete raw.desktop.cells;
+    delete raw.mobile.cells;
+    raw.desktop.arrange = "free";
+    const parsed = WorkspaceLayoutSchema.parse(raw);
+    const l = n3(parsed);
+    expect(l.appearance).toMatchObject({ showLabels: true, systemBar: "glass" });
+    expect(l.desktop.arrange).toBe("grid");
+    expect(l.desktop.cells).toEqual({});
+  });
+
+  it("without stored cells items flow in reading order", () => {
+    const l = n3(defaultLayout(MANY));
+    const p = placementOf(l, desk);
+    expect([key("mail"), key("settings"), key("vibex")].map((k) => [p.get(k)!.c, p.get(k)!.r])).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ]);
+  });
+
+  it("an item dropped on an empty cell takes it; nothing else moves; empty cells stay empty", () => {
+    let l = n3(defaultLayout(MANY));
+    l = n3(placeInCell(l, key("vibex"), desk, { c: 3, r: 2 }));
+    const p = placementOf(l, desk);
+    expect(p.get(key("vibex"))).toMatchObject({ c: 3, r: 2 });
+    expect(p.get(key("mail"))).toMatchObject({ c: 0, r: 0 });
+    expect(p.get(key("settings"))).toMatchObject({ c: 1, r: 0 });
+    // [2,0] is empty now and stays empty.
+    expect([...p.values()].some((x) => x.c === 2 && x.r === 0)).toBe(false);
+    // Down, left, up.
+    l = n3(placeInCell(l, key("vibex"), desk, { c: 0, r: 4 }));
+    expect(placementOf(l, desk).get(key("vibex"))).toMatchObject({ c: 0, r: 4 });
+  });
+
+  it("an item dropped on an occupied cell swaps with it", () => {
+    let l = n3(defaultLayout(MANY));
+    l = n3(placeInCell(l, key("vibex"), desk, { c: 0, r: 0 }));
+    const p = placementOf(l, desk);
+    expect(p.get(key("vibex"))).toMatchObject({ c: 0, r: 0 });
+    expect(p.get(key("mail"))).toMatchObject({ c: 2, r: 0 });
+  });
+
+  it("phone: moving to another page carries the item there", () => {
+    let l = n3(defaultLayout(MANY));
+    l = n3(moveItem(l, app("mail"), { surface: "mobile", page: 1 }, 0)); // creates page 2
+    expect(l.mobile.pages).toHaveLength(2);
+    l = n3(placeInCell(l, key("vibex"), { surface: "mobile", page: 1 }, { c: 2, r: 3 }));
+    expect(l.mobile.pages[1]!.map((i) => i.id)).toEqual(["mail", "vibex"]);
+    expect(placementOf(l, { surface: "mobile", page: 1 }).get(key("vibex"))).toMatchObject({ c: 2, r: 3 });
+  });
+
+  it("fewer columns: cells that no longer fit re-flow into free cells in their old order, nothing is lost", () => {
+    let l = n3(defaultLayout(MANY));
+    l = n3({ ...l, desktop: { ...l.desktop, columns: 8 } });
+    l = n3(placeInCell(l, key("vibex"), desk, { c: 7, r: 0 }));
+    expect(placementOf(l, desk).get(key("vibex"))).toMatchObject({ c: 7, r: 0 });
+    l = n3({ ...l, desktop: { ...l.desktop, columns: 3 } });
+    const p = placementOf(l, desk);
+    expect(p.size).toBe(3);
+    expect(p.get(key("vibex"))).toMatchObject({ c: 2, r: 0 });
+  });
+
+  it("a 2×2 widget takes four cells; icons flow around it and never push it", () => {
+    let l = n3(defaultLayout(MANY));
+    l = n3(addWidget(l, "calculator", { surface: "desktop", space: "d_1" }, "w_calc01"));
+    const p = placementOf(l, desk);
+    expect(p.get("widget:w_calc01")).toMatchObject({ c: 0, r: 0, w: 2, h: 2 });
+    for (const k of [key("mail"), key("settings"), key("vibex")]) {
+      const c = p.get(k)!;
+      expect(c.c >= 2 || c.r >= 2).toBe(true);
+    }
+    // An icon dropped onto the widget is refused.
+    expect(placeInCell(l, key("mail"), desk, { c: 1, r: 1 })).toBe(l);
+    // Removing the widget forgets its cells.
+    expect(n3(removeWidget(l, "w_calc01")).desktop.cells["widget:w_calc01"]).toBeUndefined();
+  });
+
+  it("labels and system bar settings are kept", () => {
+    const l = n3({ ...defaultLayout(MANY), appearance: { ...defaultLayout(MANY).appearance, showLabels: false, systemBar: "off" } });
+    expect(l.appearance).toMatchObject({ showLabels: false, systemBar: "off" });
   });
 });

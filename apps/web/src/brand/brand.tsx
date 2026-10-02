@@ -103,6 +103,11 @@ export function VibexGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-vibex.png" className={className} />;
 }
 
+/** Calculator: the user's logo (Step 2.3), extracted from the delivered artwork without redrawing. */
+export function CalculatorGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-calculator.png" className={className} />;
+}
+
 /** Share of the tile the logo's content box fills — the same for every app. */
 export const GLYPH_BOX = "52%";
 

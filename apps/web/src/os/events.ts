@@ -9,6 +9,7 @@ import { useSession } from "@/lib/session";
 import { toast } from "@/ui/overlays";
 import { visibleChats } from "@/apps/vibex/store";
 import { layoutEpoch, mergeServerUser } from "./home/layout";
+import { notificationsChanged, receiveNotification } from "./notifications/store";
 import { useWM } from "./window-manager";
 
 export const useConnection = create<{ connected: boolean; online: boolean }>(() => ({
@@ -100,6 +101,16 @@ function handle(event: ServerEvent) {
     case "vibex.chats":
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
       if (event.conversationId) void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
+      break;
+    case "notification.new":
+      receiveNotification(event.notification);
+      break;
+    case "notifications.changed":
+      notificationsChanged();
+      break;
+    case "vibex.profile":
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "profile", event.userId] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "me"] });
       break;
     case "account.updated":
     case "preferences.updated":

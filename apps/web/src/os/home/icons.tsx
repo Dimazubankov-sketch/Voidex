@@ -34,6 +34,8 @@ export interface LabelStyle {
   name: number;
   caption: number;
   captions: boolean;
+  /** Step 2.3: app names under desktop icons (off: icons only; the name stays the accessible label). */
+  show?: boolean;
 }
 
 function labelClass(tone: LabelTone) {
@@ -191,10 +193,12 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
             />
           )}
         </span>
-        <span className={cx("max-w-full truncate px-0.5 font-semibold leading-tight", labelClass(label.tone))} style={{ fontSize: label.name }}>
-          {name}
-        </span>
-        {label.captions && item.kind === "app" && (
+        {label.show !== false && (
+          <span className={cx("max-w-full truncate px-0.5 font-semibold leading-tight", labelClass(label.tone))} style={{ fontSize: label.name }} data-testid="home-label">
+            {name}
+          </span>
+        )}
+        {label.show !== false && label.captions && item.kind === "app" && (
           <span className={cx("-mt-1 max-w-full truncate leading-tight", captionClass(label.tone))} style={{ fontSize: label.caption }}>
             <AppCaption id={item.id} />
           </span>
@@ -218,7 +222,7 @@ export function AppGlyph({ id }: { id: AppId }) {
 /** Floating copy of the icon under the finger / cursor while dragging. */
 export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
   const drag = useHomeUi((s) => s.drag);
-  if (!drag) return null;
+  if (!drag || drag.widget) return null;
   const folder = drag.item.kind === "folder" ? layout.folders.find((f) => f.id === drag.item.id) : undefined;
   return createPortal(
     <motion.div

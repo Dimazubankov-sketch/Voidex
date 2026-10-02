@@ -1,9 +1,11 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeItem, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
+import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeInCell, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
 import type { FormFactor } from "@/lib/form-factor";
 import { useWM } from "../window-manager";
 import { itemKey, mergeInto, parseItem } from "./actions";
 import { dockIndexAt } from "./dock";
+import { cellAt, placeOfGrid } from "./grid";
+import { inTopEdge } from "../metrics";
 import { ghost } from "./icons";
 import { currentLayout, updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
@@ -15,7 +17,7 @@ import { useHomeUi } from "./ui-store";
  *   long press on an icon     phone: context menu; moving on picks the icon up
  *   long press on free space  edit mode (icons wiggle)
  *   drag (mouse: right away; touch: in edit mode or after a long press)
- *                             reorder live (free placement: drop anywhere) ·
+ *                             drop into any grid cell (empty: taken, occupied: swap) ·
  *                             hold over an icon → folder ·
  *                             hold at a screen edge → other / new page ·
  *                             hold over a PC desktop tab → move there ·
@@ -36,8 +38,6 @@ export interface GestureOptions {
   ff: FormFactor;
   /** Icons can be rearranged here (manual order, grid view). Menus work regardless. */
   canArrange: boolean;
-  /** PC free placement: a drop puts the icon exactly where it was released. */
-  free?: boolean;
   pager?: { move: (dx: number) => void; end: (dx: number, vx: number) => void };
   onPullDown?: () => void;
 }
@@ -95,6 +95,8 @@ export function useHomeGestures(opts: GestureOptions) {
     lastPointer.current = e.pointerType;
     suppressClick.current = false;
     if (e.button !== 0) return;
+    // A touch from the very top edge belongs to the Notification Center (see notifications/gesture.ts).
+    if (optsRef.current.ff === "mobile" && inTopEdge(e.clientY)) return;
     const target = e.target as HTMLElement;
     if (target.closest("[data-home-control], input, textarea, select, [data-no-home-gesture]")) return;
     const ui = useHomeUi.getState;
@@ -208,25 +210,6 @@ export function useHomeGestures(opts: GestureOptions) {
         if (d.overDock !== undefined) ui().patchDrag({ overDock: undefined });
       }
 
-      // PC free placement: the icon goes where it is released (inside the area).
-      if (optsRef.current.free) {
-        const area = find("[data-home-freearea]");
-        if (area) {
-          unschedule();
-          const r = area.getBoundingClientRect();
-          const cell = document.querySelector<HTMLElement>("[data-free-item]")?.getBoundingClientRect();
-          const cw = cell?.width ?? 100;
-          const chh = cell?.height ?? 110;
-          const pos = {
-            x: Math.max(0, Math.min(1, (x - cw / 2 - r.left) / Math.max(1, r.width - cw))),
-            y: Math.max(0, Math.min(1, (y - chh / 2 - r.top) / Math.max(1, r.height - chh))),
-          };
-          ui().patchDrag({ freePos: pos, mergeWith: undefined });
-          return;
-        }
-        if (d.freePos) ui().patchDrag({ freePos: undefined });
-      }
-
       // PC: hold over a desktop tab → switch to it and bring the icon along.
       const tab = find("[data-home-space]");
       if (tab) {
@@ -253,6 +236,34 @@ export function useHomeGestures(opts: GestureOptions) {
           }
         }
       }
+
+      // Step 2.3 grid: any cell — an empty one is taken, an occupied one swaps on release.
+      // Resting on another icon's centre still makes a folder.
+      // Over the grid itself, or anywhere on the page / desktop that hosts it (below the last row).
+      const cells = find("[data-home-grid]") ?? find("[data-grid-host]")?.querySelector<HTMLElement>("[data-home-grid]") ?? null;
+      if (cells) {
+        const draggedKey = itemKey(d.item);
+        const over = els.map((el) => el.closest<HTMLElement>("[data-home-item]")).find((el) => el && el.dataset.homeItem !== draggedKey);
+        if (over && d.item.kind === "app") {
+          const tile = (over.querySelector("[data-tile]") ?? over).getBoundingClientRect();
+          const inset = tile.width * 0.2;
+          if (x > tile.left + inset && x < tile.right - inset && y > tile.top + inset && y < tile.bottom - inset) {
+            const merge = over.dataset.homeItem!;
+            if (d.cell) ui().patchDrag({ cell: undefined });
+            schedule(`merge:${merge}`, 260, () => {
+              ui().patchDrag({ mergeWith: merge });
+              haptic();
+            });
+            return;
+          }
+        }
+        unschedule();
+        const at = cellAt(cells, x, y);
+        const grid = cells.dataset.homeGrid!;
+        if (d.mergeWith || d.cell?.grid !== grid || d.cell.c !== at.c || d.cell.r !== at.r) ui().patchDrag({ mergeWith: undefined, cell: { grid, ...at } });
+        return;
+      }
+      if (d.cell) ui().patchDrag({ cell: undefined });
 
       const grid = find("[data-home-container]");
       const place = grid ? placeOf(grid.dataset.homeContainer!) : null;
@@ -283,13 +294,14 @@ export function useHomeGestures(opts: GestureOptions) {
         const app = d.item.id;
         const index = d.overDock;
         updateLayout((l) => pinToDock(l, app, index));
-      } else if (d && commit && d.freePos) {
-        const item = d.item;
-        const pos = d.freePos;
-        updateLayout((l) => placeItem(l, item, pos));
       } else if (d && commit && d.mergeWith && d.item.kind === "app") {
         const target = parseItem(d.mergeWith);
         if (target) mergeInto(d.item.id, target);
+      } else if (d && commit && d.cell) {
+        const place = placeOfGrid(d.cell.grid);
+        const key = itemKey(d.item);
+        const cell = { c: d.cell.c, r: d.cell.r };
+        if (place) updateLayout((l) => placeInCell(l, key, place, cell));
       }
       ui().setDrag(null);
     };
@@ -375,7 +387,7 @@ export function useHomeGestures(opts: GestureOptions) {
       if (mode === "drag") finishDrag(ev.type === "pointerup");
       else if (mode === "swipe") optsRef.current.pager?.end(ev.clientX - start.x, vx);
     };
-    // Esc during a drag cancels it: the pending drop (dock, free position, folder) is dropped.
+    // Esc during a drag cancels it: the pending drop (dock, cell, folder) is dropped.
     const key = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape" || mode !== "drag") return;
       ev.stopPropagation();

@@ -144,6 +144,21 @@ function Tooltip({ label, show }: { label: string; show: boolean }) {
   );
 }
 
+/**
+ * Dock click (Step 2.3), through the one window manager:
+ *   closed → open · in the background → focus · focused → minimize (and a
+ *   second click restores it). A window on another desktop comes here.
+ */
+export function dockClick(id: AppId, el?: Element | null) {
+  const wm = useWM.getState();
+  const win = Object.values(wm.windows).find((w) => w.appId === id);
+  if (!win) return openApp(id, el);
+  const visible = win.state !== "minimized" && win.space === wm.space;
+  if (visible && wm.focusedId === win.id) wm.minimize(win.id);
+  else if (win.space !== wm.space) wm.open(id);
+  else wm.focus(win.id);
+}
+
 function DockApp({ id, layout, mouseX, tile }: { id: AppId; layout: WorkspaceLayout; mouseX: MotionValue<number>; tile: number }) {
   const ref = useRef<HTMLButtonElement>(null);
   const scale = useMagnify(mouseX, ref, tile);
@@ -217,7 +232,7 @@ function DockApp({ id, layout, mouseX, tile }: { id: AppId; layout: WorkspaceLay
       onDragStart={(e) => e.preventDefault()}
       onClick={(e) => {
         if (moved.current) return;
-        openApp(id, e.currentTarget);
+        dockClick(id, e.currentTarget);
       }}
       onContextMenu={(e) => {
         e.preventDefault();

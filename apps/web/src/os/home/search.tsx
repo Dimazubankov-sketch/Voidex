@@ -103,12 +103,16 @@ export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: 
           </motion.div>
         )}
       </AnimatePresence>
-      <label
+      {/* Dock: the same soft hover lift as the dock apps — a transform only, the dock never reflows. */}
+      <motion.label
         className={cx(
           "flex items-center gap-2.5 rounded-full px-4 transition-shadow",
-          inDock ? "vx-dock-field" : "vx-glass focus-within:shadow-float",
+          inDock ? "vx-dock-field hover:shadow-[inset_0_0_0_1px_rgba(20,20,40,0.08),0_4px_14px_rgba(20,20,40,0.08)]" : "vx-glass focus-within:shadow-float",
         )}
-        style={{ height }}
+        style={{ height, originY: 1 }}
+        whileHover={inDock ? { scale: 1.035, y: -1 } : undefined}
+        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.4 }}
+        data-testid={inDock ? "dock-search" : undefined}
       >
         <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
         <input
@@ -132,7 +136,7 @@ export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: 
           className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
           data-testid="home-search"
         />
-      </label>
+      </motion.label>
     </div>
   );
 }

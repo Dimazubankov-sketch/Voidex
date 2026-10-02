@@ -59,12 +59,32 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
                 testId="glass"
               />
             </Field>
+            {pc && (
+              <Field label={t("appearance.systemBar")}>
+                <Segmented
+                  value={a.systemBar}
+                  options={[
+                    ["glass", "appearance.systemBarGlass"],
+                    ["off", "appearance.systemBarOff"],
+                  ]}
+                  onChange={(systemBar) => setAppearance({ systemBar })}
+                  testId="system-bar-style"
+                />
+              </Field>
+            )}
           </Block>
         </>
       )}
 
       {parts.includes("view") && (
         <Block title={t("appearance.view")}>
+          <div className="flex items-center gap-3" data-testid="show-labels">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] text-text">{t("appearance.showLabels")}</span>
+              <span className="block text-[12.5px] text-text-tertiary">{t("appearance.showLabelsHint")}</span>
+            </span>
+            <Switch checked={a.showLabels} onChange={(showLabels) => setAppearance({ showLabels })} label={t("appearance.showLabels")} />
+          </div>
           <Field label={t("appearance.view")}>
             <Segmented
               value={pc ? layout.desktop.view : layout.mobile.view}
@@ -100,17 +120,6 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
                   })}
                   onChange={(v) => setDesktop({ columns: Number(v) })}
                   testId="pc-columns"
-                />
-              </Field>
-              <Field label={t("appearance.arrange")}>
-                <Segmented
-                  value={layout.desktop.arrange}
-                  options={[
-                    ["grid", "appearance.arrangeGrid"],
-                    ["free", "appearance.arrangeFree"],
-                  ]}
-                  onChange={(arrange) => setDesktop({ arrange })}
-                  testId="arrange"
                 />
               </Field>
               <Field label={t("appearance.sort")}>

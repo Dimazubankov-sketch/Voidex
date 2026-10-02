@@ -43,8 +43,10 @@ export interface DragState {
   unpin?: boolean;
   /** PC dock reorder preview: where the dragged dock app would land (committed on drop only). */
   dockIndex?: number;
-  /** PC free placement: the drop position (fractions of the desktop area). */
-  freePos?: { x: number; y: number };
+  /** Step 2.3 grid: the cell the dragged item would land in (grid id + column / row). */
+  cell?: { grid: string; c: number; r: number };
+  /** A widget (not an icon) is being dragged: its own card moves, there is no floating copy. */
+  widget?: string;
 }
 
 interface HomeUi {

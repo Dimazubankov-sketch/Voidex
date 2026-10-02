@@ -7,6 +7,8 @@ import { AppTile } from "@/brand/brand";
 import { IconButton } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
 import { useWM, type AppWindow } from "./window-manager";
+import { useHomeUi } from "./home/ui-store";
+import { DesktopsGlyph } from "./home/spaces";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const GAP = 16;
@@ -24,11 +26,48 @@ export function AppSwitcher() {
   const wm = useWM();
   const open = wm.switcherOpen;
   const items = [...wm.order].reverse().map((id) => wm.windows[id]!).filter(Boolean);
-  useEffect(() => {
-    if (open && items.length === 0) wm.setSwitcher(false);
-  }, [open, items.length, wm]);
+  return <AnimatePresence>{open && (items.length > 0 ? <Deck items={items} /> : <EmptyDeck key="empty" />)}</AnimatePresence>;
+}
 
-  return <AnimatePresence>{open && items.length > 0 && <Deck items={items} />}</AnimatePresence>;
+/** The home-screen pages, from the switcher (Step 2.3: the round button opens the switcher). */
+function PagesButton() {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        useWM.getState().setSwitcher(false);
+        useHomeUi.getState().setSpacesOpen(true);
+      }}
+      className="vx-glass pressable flex h-10 items-center gap-2 rounded-full px-4 text-[14px] font-medium text-text"
+      data-testid="switcher-pages"
+    >
+      <DesktopsGlyph className="size-5" />
+      {t("home.pages")}
+    </button>
+  );
+}
+
+function EmptyDeck() {
+  const t = useT();
+  const wm = useWM();
+  return (
+    <motion.div
+      className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-background/80 backdrop-blur-xl"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22 }}
+      onClick={() => wm.goHome()}
+      data-testid="app-switcher"
+    >
+      <span className="text-[15px] text-text-secondary" data-testid="switcher-empty">
+        {t("os.switcherEmpty")}
+      </span>
+      <PagesButton />
+    </motion.div>
+  );
 }
 
 function Deck({ items }: { items: AppWindow[] }) {
@@ -151,6 +190,9 @@ function Deck({ items }: { items: AppWindow[] }) {
           />
         ))}
       </motion.div>
+      <div className="absolute inset-x-0 bottom-[max(var(--safe-bottom),20px)] flex justify-center" style={{ marginBottom: hint ? 40 : 0 }}>
+        <PagesButton />
+      </div>
       <AnimatePresence>
         {hint && (
           <motion.div
