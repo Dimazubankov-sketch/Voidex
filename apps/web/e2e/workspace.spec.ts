@@ -109,7 +109,8 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   // Drag Settings to the right edge and hold → a new page is created for it.
   const from = await center(page.getByTestId("app-settings"));
   await finger.down(from);
-  await page.waitForTimeout(600); // long press: menu, then moving picks the icon up
+  // Long press: the menu shows (the long-press timer fired), then moving picks the icon up.
+  await expect(page.getByTestId("home-context-menu")).toBeVisible();
   const edge = { x: box.x + box.width - 8, y: from.y };
   await finger.moveTo(from, edge);
   await page.waitForTimeout(1000);
@@ -329,7 +330,8 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   const a = await center(overlay.locator("[data-home-item]").first().locator("[data-tile]"));
   const b = await center(overlay.locator("[data-home-item]").nth(1).locator("[data-tile]"));
   await finger.down(a);
-  await page.waitForTimeout(600);
+  // Wait for the long press itself (its menu), not a fixed time: a busy machine fires the timer late.
+  await expect(page.getByTestId("home-context-menu")).toBeVisible();
   await finger.moveTo(a, { x: b.x + 40, y: b.y }, 10);
   await page.waitForTimeout(400);
   await finger.up();
