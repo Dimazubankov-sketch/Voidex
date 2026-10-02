@@ -1,8 +1,14 @@
 import { useInfiniteQuery, useMutation, useQuery, type InfiniteData } from "@tanstack/react-query";
 import {
   VIBEX_FILE_MAX_BYTES,
+  VIBEX_MEDIA_MAX_BYTES,
   VIBEX_POST_IMAGE_TYPES,
+  VIBEX_POST_VIDEO_TYPES,
   attachmentMimeType,
+  type MeDto,
+  type VibexMediaItemDto,
+  type VibexSettings,
+  type VibexUploadPurpose,
   type VibexChatDto,
   type VibexCommentDto,
   type VibexMeDto,
@@ -16,6 +22,7 @@ import {
   type VibexProfileDto,
 } from "@voidex/shared";
 import { api, qs } from "@/lib/api";
+import { applyMe } from "@/lib/account";
 import { queryClient } from "@/lib/query";
 
 /** Query keys: everything under ["vibex"] so a reconnect / sign-out refreshes it all. */
@@ -34,20 +41,114 @@ export const vk = {
   file: (id: string) => ["vibex", "file", id] as const,
   me: ["vibex", "me"] as const,
   comments: (id: string) => ["vibex", "comments", id] as const,
+  media: (id: string, kind: "photo" | "video") => ["vibex", "media", id, kind] as const,
+  cover: (id: string, version: number) => ["vibex", "cover", id, version] as const,
+  follows: (id: string, which: "followers" | "following") => ["vibex", "follows", id, which] as const,
 };
 
-// ------------------------------------------------------------ vibex sign-in
+// ------------------------------------------------------- me and settings
 
-/** Is Vibex activated for this VOIDEX account? */
+/** My Vibex profile and settings — the VOIDEX session is the identity (no Vibex sign-in). */
 export function useVibexMe() {
   return useQuery({ queryKey: vk.me, queryFn: () => api.get<VibexMeDto>("/api/vibex/me"), staleTime: 60_000 });
 }
 
-export async function activateVibex(email: string, password: string) {
-  const me = await api.post<VibexMeDto>("/api/vibex/activate", { email, password });
-  queryClient.setQueryData(vk.me, me);
-  void queryClient.invalidateQueries({ queryKey: vk.all });
+type SettingsPatch = { [K in keyof VibexSettings]?: Partial<VibexSettings[K]> };
+
+export function useUpdateSettings() {
+  return useMutation({
+    mutationFn: (patch: SettingsPatch) => api.patch<VibexSettings>("/api/vibex/settings", patch),
+    onMutate: (patch) => {
+      const prev = queryClient.getQueryData<VibexMeDto>(vk.me);
+      if (prev) {
+        const s = prev.settings;
+        queryClient.setQueryData<VibexMeDto>(vk.me, {
+          ...prev,
+          settings: { privacy: { ...s.privacy, ...patch.privacy }, notifications: { ...s.notifications, ...patch.notifications }, media: { ...s.media, ...patch.media } },
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && queryClient.setQueryData(vk.me, ctx.prev),
+    onSuccess: (settings) => queryClient.setQueryData<VibexMeDto>(vk.me, (m) => m && { ...m, settings }),
+  });
+}
+
+// ---------------------------------------------------------------- profile
+
+export function useUpdateProfile() {
+  return useMutation({
+    mutationFn: (v: { firstName?: string; lastName?: string; bio?: string; website?: string; city?: string }) => api.patch<VibexProfileDto>("/api/vibex/profile", v),
+    onSuccess: (p) => {
+      queryClient.setQueryData(vk.profile(p.person.id), p);
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
+      void queryClient.invalidateQueries({ queryKey: vk.me });
+    },
+  });
+}
+
+/** Avatar = the VOIDEX account's avatar (one identity); the editor uploads the cropped picture. */
+export async function uploadAvatar(blob: Blob) {
+  const me = await api.put<MeDto>("/api/account/avatar", blob, { headers: { "Content-Type": "image/jpeg" } });
+  applyMe(me);
+  void queryClient.invalidateQueries({ queryKey: ["vibex", "profile"] });
   return me;
+}
+
+export async function uploadCover(blob: Blob) {
+  const p = await api.put<VibexProfileDto>("/api/vibex/profile/cover", blob, { headers: { "Content-Type": "application/octet-stream" } });
+  queryClient.setQueryData(vk.profile(p.person.id), p);
+  return p;
+}
+
+export async function removeCover() {
+  const p = await api.delete<VibexProfileDto>("/api/vibex/profile/cover");
+  queryClient.setQueryData(vk.profile(p.person.id), p);
+  return p;
+}
+
+/** A profile cover picture (blob URL), only when the profile has one. */
+export function useCoverUrl(userId: string, version: number) {
+  return useQuery({
+    queryKey: vk.cover(userId, version),
+    enabled: version > 0,
+    staleTime: Infinity,
+    gcTime: 10 * 60_000,
+    queryFn: async () => URL.createObjectURL(await api.get<Blob>(`/api/vibex/people/${userId}/cover`)),
+  });
+}
+
+export function useFollow(userId: string) {
+  return useMutation({
+    mutationFn: (on: boolean) => (on ? api.post<VibexProfileDto>(`/api/vibex/people/${userId}/follow`) : api.delete<VibexProfileDto>(`/api/vibex/people/${userId}/follow`)),
+    onMutate: (on) => {
+      const prev = queryClient.getQueryData<VibexProfileDto>(vk.profile(userId));
+      if (prev && prev.followed !== on) queryClient.setQueryData(vk.profile(userId), { ...prev, followed: on, followers: Math.max(0, prev.followers + (on ? 1 : -1)) });
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => ctx?.prev && queryClient.setQueryData(vk.profile(userId), ctx.prev),
+    onSuccess: (p) => {
+      queryClient.setQueryData(vk.profile(userId), p);
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "follows"] });
+      void queryClient.invalidateQueries({ queryKey: vk.posts });
+    },
+  });
+}
+
+export function useFollowList(userId: string, which: "followers" | "following", enabled: boolean) {
+  return useQuery({ queryKey: vk.follows(userId, which), enabled, queryFn: () => api.get<VibexPersonDto[]>(`/api/vibex/people/${userId}/${which}`) });
+}
+
+/** Photos / videos of a person's posts (profile "Photo / Video"). */
+export function usePersonMedia(userId: string, kind: "photo" | "video", enabled = true) {
+  return useInfiniteQuery({
+    queryKey: vk.media(userId, kind),
+    enabled,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexPage<VibexMediaItemDto>>(`/api/vibex/people/${userId}/media${qs({ kind, before: pageParam })}`),
+    getNextPageParam: (last) => last.next,
+    staleTime: 0,
+  });
 }
 
 export type HistoryKind = "liked" | "bookmarks";
@@ -155,7 +256,7 @@ export function applyPins(list: VibexChatDto[], pinnedIds: string[]): VibexChatD
 // ----------------------------------------------------------------- files
 
 export const filesApi = {
-  upload: (file: File, purpose: "message" | "post") =>
+  upload: (file: File, purpose: VibexUploadPurpose) =>
     api.post<VibexFileDto>(`/api/vibex/files${qs({ purpose })}`, file, {
       headers: { "Content-Type": "application/octet-stream", "X-File-Name": encodeURIComponent(file.name) },
     }),
@@ -166,8 +267,8 @@ export const filesApi = {
 /** Client-side check (the server re-validates everything). Returns an error code or null. */
 export function checkVibexFile(file: File, purpose: "message" | "post"): "attachment_type_not_allowed" | "attachment_too_large" | null {
   const mime = attachmentMimeType(file.name);
-  if (!mime || (purpose === "post" && !VIBEX_POST_IMAGE_TYPES.includes(mime))) return "attachment_type_not_allowed";
-  if (file.size > VIBEX_FILE_MAX_BYTES) return "attachment_too_large";
+  if (!mime || (purpose === "post" && !VIBEX_POST_IMAGE_TYPES.includes(mime) && !VIBEX_POST_VIDEO_TYPES.includes(mime))) return "attachment_type_not_allowed";
+  if (file.size > (purpose === "post" ? VIBEX_MEDIA_MAX_BYTES : VIBEX_FILE_MAX_BYTES)) return "attachment_too_large";
   return null;
 }
 
@@ -327,9 +428,14 @@ function bumpComments(postId: string, by: number) {
 
 export function useAddComment(postId: string) {
   return useMutation({
-    mutationFn: (text: string) => api.post<VibexCommentDto>(`/api/vibex/posts/${postId}/comments`, { text }),
+    mutationFn: (v: { text: string; replyToId?: string }) => api.post<VibexCommentDto>(`/api/vibex/posts/${postId}/comments`, v),
     onSuccess: (c) => {
-      queryClient.setQueryData<VibexCommentDto[]>(vk.comments(postId), (list) => (list?.some((x) => x.id === c.id) ? list : [...(list ?? []), c]));
+      queryClient.setQueryData<VibexCommentDto[]>(vk.comments(postId), (list) => {
+        if (list?.some((x) => x.id === c.id)) return list;
+        const next = [...(list ?? []), c];
+        // A reply bumps its thread's counter.
+        return c.rootId ? next.map((x) => (x.id === c.rootId ? { ...x, replies: x.replies + 1 } : x)) : next;
+      });
       bumpComments(postId, 1);
     },
   });
@@ -339,7 +445,12 @@ export function useDeleteComment(postId: string) {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/api/vibex/comments/${id}`),
     onSuccess: (_r, id) => {
-      queryClient.setQueryData<VibexCommentDto[]>(vk.comments(postId), (list) => list?.filter((c) => c.id !== id));
+      // A removed top-level comment takes its replies with it.
+      queryClient.setQueryData<VibexCommentDto[]>(vk.comments(postId), (list) => {
+        const gone = list?.find((c) => c.id === id);
+        return list?.filter((c) => c.id !== id && c.rootId !== id).map((c) => (gone?.rootId && c.id === gone.rootId ? { ...c, replies: Math.max(0, c.replies - 1) } : c));
+      });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "post", postId] });
       bumpComments(postId, -1);
     },
   });

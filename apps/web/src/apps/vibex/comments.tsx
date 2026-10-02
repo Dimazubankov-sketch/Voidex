@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
-import { RiArrowLeftLine, RiChat1Line, RiDeleteBinLine, RiSendPlane2Fill } from "@remixicon/react";
-import { VIBEX_COMMENT_MAX } from "@voidex/shared";
+import { AnimatePresence, motion } from "motion/react";
+import { RiArrowLeftLine, RiChat1Line, RiCloseLine, RiDeleteBinLine, RiSendPlane2Fill } from "@remixicon/react";
+import { VIBEX_COMMENT_MAX, type VibexCommentDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -35,8 +35,13 @@ function Screen({ postId }: { postId: string }) {
   const add = useAddComment(postId);
   const del = useDeleteComment(postId);
   const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<{ id: string; rootId: string; name: string } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const input = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const items = comments.data ?? [];
+  const roots = items.filter((c) => !c.rootId);
+  const repliesOf = (id: string) => items.filter((c) => c.rootId === id);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close(null);
@@ -44,19 +49,72 @@ function Screen({ postId }: { postId: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close]);
   useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [items.length]);
+    if (!replyTo) list.current?.scrollTo({ top: list.current.scrollHeight });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roots.length]);
+
+  const toggle = (id: string, open?: boolean) =>
+    setExpanded((s) => {
+      const n = new Set(s);
+      if (open ?? !n.has(id)) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+
+  const answer = (c: VibexCommentDto) => {
+    setReplyTo({ id: c.id, rootId: c.rootId ?? c.id, name: c.author.name });
+    input.current?.focus();
+  };
 
   const send = async () => {
     const v = text.trim();
     if (!v || add.isPending) return;
     try {
-      await add.mutateAsync(v);
+      await add.mutateAsync({ text: v, replyToId: replyTo?.id });
+      if (replyTo) toggle(replyTo.rootId, true);
       setText("");
+      setReplyTo(null);
     } catch (e) {
       toast({ title: errorMessage(t, e), tone: "danger" });
     }
   };
+
+  /** One comment row (top-level or reply); replies are one level deep, TikTok-style. */
+  const row = (c: VibexCommentDto, reply: boolean) => (
+    <div key={c.id} className={cx("group flex gap-2.5", reply && "pl-11")} data-testid={reply ? "comment-reply" : "comment"} data-comment={c.id}>
+      <button type="button" onClick={() => (close(null), push({ kind: "person", id: c.author.id }))} className="shrink-0 self-start rounded-full">
+        <Avatar name={c.author.name} userId={c.author.id} version={c.author.avatarVersion} size={reply ? 28 : 34} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold text-text-secondary">{c.author.name}</p>
+        <p className="whitespace-pre-wrap break-words text-[14.5px] leading-snug text-text" data-selectable>
+          {c.replyTo && c.replyTo.commentId !== c.rootId && (
+            <span className="mr-1 font-medium text-primary" data-testid="comment-mention">
+              @{c.replyTo.person.name}
+            </span>
+          )}
+          {c.text}
+        </p>
+        <div className="mt-1 flex items-center gap-3 text-[12px] text-text-tertiary">
+          <span>{formatRelative(c.createdAt, lang)}</span>
+          <button type="button" onClick={() => answer(c)} className="font-semibold hover:text-text" data-testid="comment-reply-button">
+            {t("vibex.comments.reply")}
+          </button>
+        </div>
+      </div>
+      {(c.mine || post.data?.mine) && (
+        <button
+          type="button"
+          onClick={() => del.mutate(c.id)}
+          aria-label={t("common.remove")}
+          className="flex size-8 shrink-0 items-center justify-center self-start rounded-full text-text-tertiary opacity-60 hover:bg-surface-hover hover:text-danger group-hover:opacity-100"
+          data-testid="comment-delete"
+        >
+          <RiDeleteBinLine className="size-4" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <motion.div
@@ -98,34 +156,31 @@ function Screen({ postId }: { postId: string }) {
           <div className="flex flex-col gap-3 p-4" data-testid="comments-list">
             {comments.isPending ? (
               <Spinner className="mx-auto text-text-tertiary" />
-            ) : items.length ? (
-              items.map((c) => (
-                <div key={c.id} className="group flex gap-3" data-testid="comment">
-                  <button type="button" onClick={() => (close(null), push({ kind: "person", id: c.author.id }))} className="shrink-0 rounded-full">
-                    <Avatar name={c.author.name} userId={c.author.id} version={c.author.avatarVersion} size={34} />
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <div className="rounded-2xl bg-surface-secondary px-3.5 py-2">
-                      <p className="text-[13px] font-semibold">{c.author.name}</p>
-                      <p className="whitespace-pre-wrap break-words text-[14px] leading-snug text-text" data-selectable>
-                        {c.text}
-                      </p>
-                    </div>
-                    <p className="mt-1 px-1 text-[12px] text-text-tertiary">{formatRelative(c.createdAt, lang)}</p>
+            ) : roots.length ? (
+              roots.map((c) => {
+                const replies = repliesOf(c.id);
+                const open = expanded.has(c.id);
+                return (
+                  <div key={c.id} className="flex flex-col gap-2.5" data-testid="comment-thread">
+                    {row(c, false)}
+                    {replies.length > 0 && (
+                      <>
+                        <AnimatePresence initial={false}>
+                          {open && (
+                            <motion.div className="flex flex-col gap-2.5 overflow-hidden" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: EASE }}>
+                              {replies.map((r) => row(r, true))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <button type="button" onClick={() => toggle(c.id)} className="ml-11 flex items-center gap-2 self-start text-[12.5px] font-semibold text-text-tertiary hover:text-text" data-testid="comment-replies-toggle">
+                          <span className="h-px w-6 bg-border-strong" />
+                          {open ? t("vibex.comments.hideReplies") : t("vibex.comments.showReplies", { n: replies.length })}
+                        </button>
+                      </>
+                    )}
                   </div>
-                  {(c.mine || post.data?.mine) && (
-                    <button
-                      type="button"
-                      onClick={() => del.mutate(c.id)}
-                      aria-label={t("common.remove")}
-                      className="flex size-8 shrink-0 items-center justify-center self-center rounded-full text-text-tertiary opacity-60 hover:bg-surface-hover hover:text-danger group-hover:opacity-100"
-                      data-testid="comment-delete"
-                    >
-                      <RiDeleteBinLine className="size-4" />
-                    </button>
-                  )}
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="flex flex-col items-center gap-2 py-10 text-text-tertiary">
                 <RiChat1Line className="size-7" />
@@ -143,9 +198,18 @@ function Screen({ postId }: { postId: string }) {
           void send();
         }}
       >
+        {replyTo && (
+          <div className="mx-auto mb-2 flex w-full max-w-[640px] items-center gap-2 rounded-xl bg-surface-secondary px-3 py-1.5 text-[13px] text-text-secondary" data-testid="comment-replying">
+            <span className="min-w-0 flex-1 truncate">{t("vibex.comments.replyingTo", { name: replyTo.name })}</span>
+            <button type="button" onClick={() => setReplyTo(null)} aria-label={t("common.cancel")} className="flex size-6 items-center justify-center rounded-full hover:bg-surface-hover">
+              <RiCloseLine className="size-4" />
+            </button>
+          </div>
+        )}
         <div className="mx-auto flex w-full max-w-[640px] items-end gap-2">
           <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
           <textarea
+            ref={input}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

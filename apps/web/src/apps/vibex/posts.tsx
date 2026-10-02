@@ -17,7 +17,7 @@ import {
   RiRepeat2Line,
   RiShareForwardLine,
 } from "@remixicon/react";
-import { VIBEX_FILES_MAX, VIBEX_POST_IMAGE_TYPES, VIBEX_POST_MAX, detectLanguage, type VibexFileDto, type VibexPersonDto, type VibexPostDto } from "@voidex/shared";
+import { VIBEX_FILES_MAX, VIBEX_POST_IMAGE_TYPES, VIBEX_POST_VIDEO_TYPES, VIBEX_POST_MAX, detectLanguage, type VibexFileDto, type VibexPersonDto, type VibexPostDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -38,7 +38,7 @@ import {
   usePostAction,
   useRepost,
 } from "./data";
-import { MediaGrid, VibexImage } from "./media";
+import { MediaGrid, VibexImage, VibexVideoTile } from "./media";
 import { useVibex } from "./store";
 
 // ------------------------------------------------------------------ pieces
@@ -554,7 +554,7 @@ export function PostComposer() {
             type="file"
             className="hidden"
             multiple
-            accept={VIBEX_POST_IMAGE_TYPES.join(",")}
+            accept={[...VIBEX_POST_IMAGE_TYPES, ...VIBEX_POST_VIDEO_TYPES].join(",")}
             onChange={(e) => {
               void add(e.target.files);
               e.target.value = "";
@@ -593,7 +593,7 @@ export function PostComposer() {
           <motion.div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}>
             {media.map((m) => (
               <div key={m.id} className="relative">
-                <VibexImage file={m} className="aspect-square w-full rounded-2xl" />
+                {m.kind === "video" ? <VibexVideoTile file={m} className="aspect-square w-full rounded-2xl" /> : <VibexImage file={m} className="aspect-square w-full rounded-2xl" />}
                 <button
                   type="button"
                   className="absolute right-1 top-1 flex size-6 items-center justify-center rounded-full bg-[rgba(20,20,30,0.6)] text-white"

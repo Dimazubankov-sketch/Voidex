@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiMusic2Line } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiMusic2Line, RiPlayFill } from "@remixicon/react";
 import type { VibexFileDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -9,7 +9,7 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { formatBytes } from "@/apps/mail/attachments";
 import { Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
-import { saveFile, useFileUrl } from "./data";
+import { saveFile, useFileUrl, useVibexMe } from "./data";
 
 function FileIcon({ mime, className }: { mime: string; className?: string }) {
   if (mime.startsWith("video/")) return <RiFilmLine className={className} />;
@@ -75,61 +75,117 @@ export function FileChip({ file, tone = "default" }: { file: VibexFileDto; tone?
   );
 }
 
-/** 1–10 pictures: one large, or a tidy grid. Click opens the viewer. */
+/** A video from Vibex: shown from a blob URL (fetched with the access token). */
+export function VibexVideoTile({ file, className, onClick, autoplay }: { file: VibexFileDto; className?: string; onClick?: () => void; autoplay?: boolean }) {
+  const { data: src, isError } = useFileUrl(file.id);
+  return (
+    <button type="button" onClick={onClick} className={cx("relative block overflow-hidden bg-black/80", className)} aria-label={file.filename} data-testid="vibex-video">
+      {src ? (
+        <video src={src} className="size-full object-cover" muted playsInline loop autoPlay={autoplay} preload="metadata" />
+      ) : (
+        <span className="absolute inset-0 flex items-center justify-center text-white/70">{isError ? <RiFilmLine className="size-6" /> : <Spinner className="text-white" />}</span>
+      )}
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="flex size-11 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur">
+          <RiPlayFill className="size-6" />
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** 1–10 pictures / videos: one large, or a tidy grid. Click opens the viewer. */
 export function MediaGrid({ media, className }: { media: VibexFileDto[]; className?: string }) {
   const [open, setOpen] = useState<number | null>(null);
-  const images = media.filter((m) => m.kind === "image");
-  if (!images.length) return null;
-  const n = images.length;
+  const autoplay = useVibexMe().data?.settings.media.autoplay ?? true;
+  const items = media.filter((m) => m.kind === "image" || m.kind === "video");
+  if (!items.length) return null;
+  const n = items.length;
   return (
     <>
       <div
         className={cx("grid gap-1 overflow-hidden rounded-2xl", n === 1 ? "grid-cols-1" : n === 2 || n === 4 ? "grid-cols-2" : "grid-cols-3", className)}
         data-testid="vibex-media"
       >
-        {images.map((m, i) => (
-          <VibexImage
-            key={m.id}
-            file={m}
-            onClick={() => setOpen(i)}
-            className={cx(n === 1 ? "aspect-[4/3] max-h-[420px] w-full" : "aspect-square w-full", n === 3 && i === 0 && "col-span-3 aspect-[16/9]")}
-          />
-        ))}
+        {items.map((m, i) => {
+          const cls = cx(n === 1 ? "aspect-[4/3] max-h-[420px] w-full" : "aspect-square w-full", n === 3 && i === 0 && "col-span-3 aspect-[16/9]");
+          return m.kind === "video" ? (
+            <VibexVideoTile key={m.id} file={m} onClick={() => setOpen(i)} className={cls} autoplay={autoplay} />
+          ) : (
+            <VibexImage key={m.id} file={m} onClick={() => setOpen(i)} className={cls} />
+          );
+        })}
       </div>
-      <Lightbox files={images} index={open} onIndex={setOpen} />
+      <Lightbox files={items} index={open} onIndex={setOpen} />
     </>
   );
 }
 
+/**
+ * The media viewer: pictures and videos of one post or of a profile gallery.
+ *   phone  swipe left / right between items, tap outside to close
+ *   PC     arrow buttons and keyboard ← →, Esc closes
+ * No author caption over the picture — the context (post, profile) is known.
+ */
 export function Lightbox({ files, index, onIndex }: { files: VibexFileDto[]; index: number | null; onIndex: (i: number | null) => void }) {
   const t = useT();
   const file = index === null ? null : files[index];
   const { data: src } = useFileUrl(file?.id ?? null);
+  const autoplay = useVibexMe().data?.settings.media.autoplay ?? true;
+  const go = (d: number) => index !== null && onIndex(Math.max(0, Math.min(files.length - 1, index + d)));
+
+  useEffect(() => {
+    if (index === null) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
+      else if (e.key === "Escape") onIndex(null);
+      else return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    window.addEventListener("keydown", key, true);
+    return () => window.removeEventListener("keydown", key, true);
+  });
+
   return createPortal(
     <AnimatePresence>
       {file && (
         <motion.div
-          className="fixed inset-0 z-[260] flex items-center justify-center bg-[rgba(10,10,18,0.86)]"
+          className="fixed inset-0 z-[260] flex items-center justify-center bg-[rgba(10,10,18,0.9)]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={() => onIndex(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={t("vibex.media.viewer")}
           data-testid="vibex-lightbox"
+          data-index={index}
         >
-          {src ? (
-            <motion.img
-              key={file.id}
-              src={src}
-              alt=""
-              className="max-h-[88dvh] max-w-[94vw] rounded-xl object-contain shadow-window"
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              onClick={(e) => e.stopPropagation()}
-              draggable={false}
-            />
-          ) : (
-            <Spinner className="text-white" />
-          )}
+          <motion.div
+            key={file.id}
+            className="flex max-h-[88dvh] max-w-[94vw] touch-pan-y items-center justify-center"
+            initial={{ scale: 0.97, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            drag={files.length > 1 ? "x" : false}
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.6}
+            onDragEnd={(_, info) => {
+              if (info.offset.x < -80 || info.velocity.x < -500) go(1);
+              else if (info.offset.x > 80 || info.velocity.x > 500) go(-1);
+            }}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="vibex-lightbox-item"
+          >
+            {!src ? (
+              <Spinner className="text-white" />
+            ) : file.kind === "video" ? (
+              <video src={src} className="max-h-[88dvh] max-w-[94vw] rounded-xl shadow-window" controls playsInline autoPlay={autoplay} data-testid="vibex-lightbox-video" />
+            ) : (
+              <img src={src} alt="" className="pointer-events-none max-h-[88dvh] max-w-[94vw] rounded-xl object-contain shadow-window" draggable={false} />
+            )}
+          </motion.div>
           <div className="absolute right-3 top-[max(var(--safe-top),12px)] flex gap-2">
             <button
               className="pressable flex size-10 items-center justify-center rounded-full bg-white/12 text-white"
@@ -141,31 +197,36 @@ export function Lightbox({ files, index, onIndex }: { files: VibexFileDto[]; ind
             >
               <RiDownload2Line className="size-5" />
             </button>
-            <button className="pressable flex size-10 items-center justify-center rounded-full bg-white/12 text-white" aria-label={t("common.close")} onClick={() => onIndex(null)}>
+            <button className="pressable flex size-10 items-center justify-center rounded-full bg-white/12 text-white" aria-label={t("common.close")} onClick={() => onIndex(null)} data-testid="vibex-lightbox-close">
               <RiCloseLine className="size-6" />
             </button>
           </div>
           {files.length > 1 && (
             <>
+              <span className="absolute bottom-[max(var(--safe-bottom),16px)] rounded-full bg-white/12 px-3 py-1 text-[13px] text-white/85">
+                {index! + 1} / {files.length}
+              </span>
               <button
-                className="pressable absolute left-3 flex size-11 items-center justify-center rounded-full bg-white/12 text-white disabled:opacity-30"
-                aria-label={t("common.back")}
+                className="pressable absolute left-3 hidden size-11 items-center justify-center rounded-full bg-white/12 text-white disabled:opacity-30 sm:flex"
+                aria-label={t("vibex.media.previous")}
                 disabled={index === 0}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onIndex(Math.max(0, index! - 1));
+                  go(-1);
                 }}
+                data-testid="vibex-lightbox-prev"
               >
                 <RiArrowLeftSLine className="size-7" />
               </button>
               <button
-                className="pressable absolute right-3 flex size-11 items-center justify-center rounded-full bg-white/12 text-white disabled:opacity-30"
-                aria-label={t("common.next")}
+                className="pressable absolute right-3 hidden size-11 items-center justify-center rounded-full bg-white/12 text-white disabled:opacity-30 sm:flex"
+                aria-label={t("vibex.media.next")}
                 disabled={index === files.length - 1}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onIndex(Math.min(files.length - 1, index! + 1));
+                  go(1);
                 }}
+                data-testid="vibex-lightbox-next"
               >
                 <RiArrowRightSLine className="size-7" />
               </button>

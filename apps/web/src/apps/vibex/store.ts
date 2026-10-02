@@ -3,7 +3,7 @@ import { createStore, useStore, type StoreApi } from "zustand";
 import type { VibexPostDto } from "@voidex/shared";
 import type { HistoryKind } from "./data";
 
-export type VibexSection = "feed" | "chats" | "people" | "me" | "history";
+export type VibexSection = "feed" | "chats" | "people" | "me" | "history" | "bookmarks" | "settings";
 
 /** A page pushed on top of a section (phones slide it in; desktop shows it in the main pane). */
 export type VibexPage = { kind: "chat"; id: string } | { kind: "person"; id: string } | { kind: "post"; id: string };

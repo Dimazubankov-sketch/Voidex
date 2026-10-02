@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   RiAddCircleFill,
@@ -16,49 +16,33 @@ import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
-import { IconButton, Spinner } from "@/ui/controls";
+import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
-import { VibexAuth } from "./auth";
 import { ChatList, Conversation } from "./chats";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
-import { HistorySection, MePage, PeopleSection, PersonPage, PostPage } from "./people";
+import { HistorySection, PeopleSection, PostPage } from "./people";
+import { MePage, PersonPage } from "./profile";
+import { VibexSettingsScreen } from "./settings";
+import { useEdgeSwipe } from "./edge-swipe";
 import { ShareSheet } from "./share-sheet";
 import { SidebarDrawer, SidebarPanel } from "./sidebar";
-import { useChats, useFeed, useVibexMe } from "./data";
+import { useChats, useFeed } from "./data";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** Vibex — messenger and feed of VOIDEX, in the Voyzen layout. */
+/**
+ * Vibex — messenger and feed of VOIDEX, in the Voyzen layout. Identity is the
+ * VOIDEX session (Step 2.3): no sign-in, no second account inside the app.
+ */
 export function VibexApp() {
   const [store] = useState(createVibexStore);
   return (
     <VibexStoreContext.Provider value={store}>
-      <VibexGate />
+      <VibexShell />
     </VibexStoreContext.Provider>
   );
-}
-
-/** Vibex opens after its own sign-in (email + password of this VOIDEX account), once. */
-function VibexGate() {
-  const me = useVibexMe();
-  if (me.isPending) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-text-tertiary">
-        <Spinner />
-      </div>
-    );
-  }
-  if (me.data && !me.data.activated) {
-    return (
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <WindowHeader className="absolute inset-x-0 top-0 z-10" />
-        <VibexAuth />
-      </div>
-    );
-  }
-  return <VibexShell />;
 }
 
 function VibexShell() {
@@ -66,11 +50,15 @@ function VibexShell() {
   const win = useWindow();
   const store = useVibexStore();
 
-  // Deep links: a "new message" banner → the chat; a shared link → the post.
+  // Deep links: notifications / banners → a chat, a post (or its comments), a person; shared links → the post.
   useEffect(() => {
-    const { chatId, postId } = win.params;
-    if (typeof chatId === "string") store.getState().openChat(chatId);
-    else if (typeof postId === "string") store.getState().push({ kind: "post", id: postId });
+    const { chatId, postId, userId, comments } = win.params;
+    const s = store.getState();
+    if (typeof chatId === "string") s.openChat(chatId);
+    else if (typeof postId === "string") {
+      s.push({ kind: "post", id: postId });
+      if (typeof comments === "string") s.openComments(postId);
+    } else if (typeof userId === "string") s.push({ kind: "person", id: userId });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [win.paramsVersion]);
 
@@ -89,6 +77,8 @@ const SECTION_TITLE: Record<VibexSection, MessageKey> = {
   people: "vibex.nav.search",
   chats: "vibex.nav.messages",
   history: "vibex.nav.history",
+  bookmarks: "vibex.nav.bookmarks",
+  settings: "vibex.nav.settings",
   me: "vibex.nav.profile",
 };
 
@@ -109,7 +99,11 @@ function SectionBody({ section }: { section: VibexSection }) {
     case "people":
       return <PeopleSection />;
     case "history":
-      return <HistorySection />;
+      return <HistorySection kind="liked" />;
+    case "bookmarks":
+      return <HistorySection kind="bookmarks" />;
+    case "settings":
+      return <VibexSettingsScreen />;
     case "me":
       return <MePage />;
     default:
@@ -222,6 +216,9 @@ function MobileVibex() {
   const drawer = useVibex((s) => s.drawer);
   const setDrawer = useVibex((s) => s.setDrawer);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
+  const root = useRef<HTMLDivElement>(null);
+  // Swipe from the left edge opens the side menu (only on the main screens, not over a chat / page).
+  useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true) });
 
   const tabs = [
     { key: "feed" as const, label: "vibex.nav.home" as const, line: RiHome5Line, fill: RiHome5Fill },
@@ -230,7 +227,7 @@ function MobileVibex() {
   ];
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <WindowHeader className="border-b bg-surface">
         <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
           <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
