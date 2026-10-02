@@ -139,3 +139,45 @@ the original Voyzen.
 
 Migration `0005_vibex_social.sql` (additive): `vibex_profiles`, `vibex_comments`,
 `vibex_hidden_posts`, `vibex_reports`, `vibex_posts.edited_at`.
+
+## Step 2.3 — one identity, profile, follows, threads, media, recordings
+
+- **Account model**: one VOIDEX account = one Vibex profile, created on first
+  use. No Vibex sign-in, no account switching, no second identity; the session
+  is the identity. `POST /api/vibex/activate` remains as a no-op answering like
+  `/me` for older clients. People search lists every active VOIDEX account.
+- **Profile** (`vibex_profiles`: bio, website, city, cover, settings): editor in
+  the Voyzen layout; names are the VOIDEX account's (`PATCH /vibex/profile`
+  forwards them to the account), the avatar is the VOIDEX avatar. Avatar and
+  cover go through the fullscreen "Adjust photo" editor (`photo-editor.tsx`:
+  round / wide mask, drag, pinch / wheel / slider zoom, rotate); the visible
+  crop is rendered to a JPEG and uploaded (no crop metadata to keep in sync).
+- **Follows** (`vibex_follows`): follow / unfollow, counters, followers /
+  following lists, "follows you".
+- **Settings** (Vibex's own screen, `vibex_profiles.settings`): who can write
+  (everyone / followers / nobody), who sees the profile details and the posts
+  (everyone / followers), read receipts (both ways), blocked people (no
+  messages, no follow); which notifications are sent; media autoplay and
+  quality preference. Enforced by `VibexService`.
+- **Profile tabs**: Posts · Reposts · Photo / Video (Photo | Video), built from
+  the person's posts automatically (`GET /people/:id/media`); posts can carry
+  videos (mp4 / webm / mov, ≤ 25 MB). Media viewer: swipe (phone), arrows and
+  keyboard (PC), no author caption.
+- **Comments**: TikTok-style threads — `root_id`, `reply_to_id`,
+  `reply_to_user_id`; every reply belongs to one top-level comment, shows
+  "@name" when it answers another reply; "View replies (N)" / hide.
+- **Chats**: replies (quote), voice messages and video circles recorded with
+  MediaRecorder (purposes `voice` / `circle`, type and size checked server
+  side, circles ≤ 60 s), pinned chats as before.
+- **Calls**: audio / video buttons and a sheet that says calls are not
+  available yet — there is no signalling / TURN infrastructure, and no call is
+  ever faked. The data model and the UI hook (`calls.tsx`) are the foundation.
+- **Notifications**: message (one card per chat), comment, reply, like, follow →
+  Notification Center (docs/NOTIFICATIONS.md); a tap opens the chat, the post
+  with its comments or the profile.
+- **Side menu**: Home, My page, Messages, Search, Bookmarks, History | Settings;
+  left-edge swipe opens it on phones.
+- **Demo data** (`pnpm --filter @voidex/server db:seed:dev [address]`, refuses
+  production): Demo Anna / Alex / Mia with avatars, covers, details, photo posts,
+  a comment thread, follows, chats (pinned, reply, file, voice). Video posts are
+  not seeded (no sample video is generated).

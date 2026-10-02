@@ -156,3 +156,39 @@ purpose with its own quota).
   `data-system-ui` / `data-system-asset`: no save-image callout, no native drag. User content
   (Vibex / Mail pictures, attachments) is not marked.
 * **Logo intro**: short VOIDEX intro on full page load only; skipped with reduced motion.
+
+## Step 2.3 — system bar, grid cells, labels, calculator widget
+
+- **PC system bar** (`os/system-bar.tsx`, 40 px): clock and date, the bell
+  (Notification Center, unread badge) and the app menu, both small. Background
+  `layout.appearance.systemBar`: `glass` or `off`. Windows live between the bar
+  and the dock — the window layer starts below the bar and ends above the dock,
+  so maximized windows never cover either.
+- **Glass**: one material (`.vx-glass` / `.vx-glass-strong`) for the bar, dock,
+  Notification Center, brush menu, widgets and floating buttons — real
+  translucency (backdrop blur + saturation, thin light edge, inner highlight,
+  very light shadow); the Off / Medium / On setting still applies.
+- **App names**: `layout.appearance.showLabels` (Settings → Desktop → "Show app
+  names"). Off: icons only on the home screen (the name stays the accessible
+  label); search, dock and menus always show names.
+- **Grid cells** (`gridPlacement`, `placeInCell` in `shared/workspace.ts`,
+  `os/home/grid.tsx`): phone pages and PC desktops are grids of cells;
+  `mobile.cells` / `desktop.cells` map item / widget keys to `{ c, r }`. A drop
+  on an empty cell takes it; on an occupied cell the two swap; resting on an
+  icon's centre still makes a folder; empty cells stay empty. Items without a
+  stored cell (new apps, cells that no longer fit after the column count
+  changed, collisions) flow into the first free cells in reading order, items
+  that had a cell first — nothing is lost. Categories view arranges itself
+  (no manual placement). The Step 2.2 free pixel placement is retired
+  (`arrange` is always `grid`; stored `positions` are ignored).
+- **Brush → View** is a one-tap toggle (Grid ⇄ Categories), no second panel.
+- **Dock click**: closed → open, in the background → focus, focused →
+  minimize (next click restores). The search field has the dock's hover lift.
+- **Phone**: the round button at the bottom of the home screen opens the app
+  switcher (open apps as cards, swipe up to close, tap to open; empty state and
+  "Pages" from there). It exists only on the home screen.
+- **Widgets**: the Workspaces widget is removed (stored ones are dropped by
+  `normalizeLayout`); new **Calculator** widget, 2 × 2 cells, a working mini
+  calculator (`shared/mini-calc.ts`, + − × ÷ with precedence, %, ±, ⌫,
+  division by zero → "Error"); its title opens the Calculator app once it is
+  integrated. It loads nothing heavy.

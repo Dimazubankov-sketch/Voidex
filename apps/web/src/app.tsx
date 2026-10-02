@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { refreshSession } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useT } from "@/lib/i18n";
@@ -31,8 +31,9 @@ export function App() {
     if (status === "signedOut") queryClient.clear();
   }, [status]);
 
+  // Every motion animation follows the system "reduce motion" setting.
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       {status === "signedIn" ? (
         // Unmounted immediately on sign-out: nothing of the previous account may
         // keep rendering (or crash) while an exit animation plays.
@@ -61,7 +62,7 @@ export function App() {
       )}
       <ToastViewport />
       <LogoIntro />
-    </>
+    </MotionConfig>
   );
 }
 
