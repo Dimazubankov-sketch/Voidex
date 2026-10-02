@@ -15,6 +15,11 @@ import {
   RiShareForwardLine,
   RiUnpinLine,
   RiUserLine,
+  RiCameraLensLine,
+  RiMicLine,
+  RiPhoneLine,
+  RiReplyLine,
+  RiVidiconLine,
 } from "@remixicon/react";
 import { VIBEX_FILES_MAX, VIBEX_MESSAGE_MAX, type VibexChatDto, type VibexFileDto, type VibexMessageDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -27,7 +32,11 @@ import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
 import { checkVibexFile, filesApi, markRead, useChat, useChats, useMessages, useSendMessage, useSetPins } from "./data";
-import { FileChip, Lightbox, VibexImage } from "./media";
+import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
+import { CircleBubble, VoiceBubble } from "./media-bubbles";
+import { CircleRecorder, VoiceRecordingBar, recordingSupported, useRecorder, type RecordKind } from "./recorder";
+import { CallSheet, type CallKind } from "./calls";
+import { useSession } from "@/lib/session";
 import { NestedPost, UnavailablePost } from "./posts";
 import { markVisible, useVibex } from "./store";
 
@@ -42,7 +51,11 @@ function Preview({ chat }: { chat: VibexChatDto }) {
   const t = useT();
   const m = chat.lastMessage;
   if (!m) return <span className="text-text-tertiary">{t("vibex.chat.empty", { name: chat.peer.firstName })}</span>;
-  const what = m.text
+  const what = m.kind === "voice"
+    ? t("vibex.voice.message")
+    : m.kind === "circle"
+      ? t("vibex.circle.message")
+      : m.text
     ? m.text
     : m.sharedPost !== undefined
       ? t("vibex.chats.sharedPost")
@@ -52,7 +65,7 @@ function Preview({ chat }: { chat: VibexChatDto }) {
   return (
     <>
       {m.mine && <span className="text-text-secondary">{t("vibex.chats.you")} </span>}
-      {!m.text && m.files.length > 0 &&
+      {m.kind === "text" && !m.text && m.files.length > 0 &&
         (m.files.some((f) => f.kind === "image") ? (
           <RiImageLine className="-mt-0.5 mr-1 inline size-3.5 text-text-tertiary" />
         ) : (
@@ -428,16 +441,66 @@ function Ticks({ msg, peerReadAt }: { msg: VibexMessageDto; peerReadAt: string |
   );
 }
 
-function Bubble({ msg, peerReadAt, tail }: { msg: VibexMessageDto; peerReadAt: string | null; tail: boolean }) {
+/** Quote of the message a reply answers. */
+function ReplyQuote({ reply, mine, peerName }: { reply: NonNullable<VibexMessageDto["replyTo"]>; mine: boolean; peerName: string }) {
+  const t = useT();
+  const me = useSession((s) => s.user)!;
+  const who = reply.senderId === me.id ? t("vibex.chats.you") : peerName;
+  const what = reply.kind === "voice" ? t("vibex.voice.message") : reply.kind === "circle" ? t("vibex.circle.message") : reply.text || t("vibex.chats.file");
+  return (
+    <div className={cx("mx-1.5 mt-1 rounded-[14px] border-l-[3px] px-2.5 py-1 text-[12.5px]", mine ? "border-white/70 bg-white/15" : "border-primary bg-primary/[0.07]")} data-testid="message-reply-quote">
+      <span className={cx("block font-semibold", mine ? "text-white" : "text-primary")}>{who}</span>
+      <span className={cx("line-clamp-1", mine ? "text-white/85" : "text-text-secondary")}>{what}</span>
+    </div>
+  );
+}
+
+function Bubble({ msg, peerReadAt, tail, peerName, onReply }: { msg: VibexMessageDto; peerReadAt: string | null; tail: boolean; peerName: string; onReply: (m: VibexMessageDto) => void }) {
   const t = useT();
   const lang = useLanguage();
   const [viewer, setViewer] = useState<number | null>(null);
-  const images = msg.files.filter((f) => f.kind === "image");
-  const files = msg.files.filter((f) => f.kind === "file");
+  const images = msg.files.filter((f) => f.kind === "image" || (msg.kind === "text" && f.kind === "video"));
+  const files = msg.files.filter((f) => (f.kind === "file" || f.kind === "audio") && msg.kind === "text");
   const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(msg.createdAt));
   const mine = msg.mine;
+  // Phones: press and hold a message to reply to it (a mouse uses the reply button).
+  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && onReply(msg), ms: 450 }).handlers;
+  const meta = (
+    <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mine ? "text-white/75" : "text-text-tertiary")}>
+      {time}
+      {mine && <Ticks msg={msg} peerReadAt={peerReadAt} />}
+    </span>
+  );
+  const replyButton = (
+    <button
+      type="button"
+      onClick={() => onReply(msg)}
+      aria-label={t("vibex.chat.reply")}
+      title={t("vibex.chat.reply")}
+      className="flex size-8 shrink-0 items-center justify-center self-center rounded-full text-text-tertiary opacity-0 transition hover:bg-surface-hover hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
+      data-testid="message-reply"
+    >
+      <RiReplyLine className="size-4" />
+    </button>
+  );
+
+  if (msg.kind === "circle" && msg.files[0]) {
+    return (
+      <div className={cx("group flex w-full items-end gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind="circle" {...hold}>
+        {mine && replyButton}
+        <div className="flex flex-col items-end gap-1">
+          {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} peerName={peerName} />}
+          <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} />
+          <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
+        </div>
+        {!mine && replyButton}
+      </div>
+    );
+  }
+
   return (
-    <div className={cx("flex w-full", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine}>
+    <div className={cx("group flex w-full items-center gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind={msg.kind} {...hold}>
+      {mine && replyButton}
       <div
         className={cx(
           "flex max-w-[min(78%,520px)] flex-col gap-1.5 overflow-hidden px-1 py-1",
@@ -446,11 +509,17 @@ function Bubble({ msg, peerReadAt, tail }: { msg: VibexMessageDto; peerReadAt: s
           tail && (mine ? "rounded-br-[8px]" : "rounded-bl-[8px]"),
         )}
       >
+        {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} peerName={peerName} />}
+        {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
         {images.length > 0 && (
           <div className={cx("grid gap-1 overflow-hidden rounded-[18px]", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-            {images.map((f, i) => (
-              <VibexImage key={f.id} file={f} onClick={() => setViewer(i)} className={cx(images.length === 1 ? "max-h-[320px] min-h-[140px] w-[260px] max-w-full" : "aspect-square w-[130px] max-w-full")} />
-            ))}
+            {images.map((f, i) =>
+              f.kind === "video" ? (
+                <VibexVideoTile key={f.id} file={f} onClick={() => setViewer(i)} className={cx(images.length === 1 ? "max-h-[320px] min-h-[140px] w-[260px] max-w-full" : "aspect-square w-[130px] max-w-full")} />
+              ) : (
+                <VibexImage key={f.id} file={f} onClick={() => setViewer(i)} className={cx(images.length === 1 ? "max-h-[320px] min-h-[140px] w-[260px] max-w-full" : "aspect-square w-[130px] max-w-full")} />
+              ),
+            )}
           </div>
         )}
         {files.map((f) => (
@@ -470,18 +539,16 @@ function Bubble({ msg, peerReadAt, tail }: { msg: VibexMessageDto; peerReadAt: s
               {msg.text}
             </p>
           )}
-          <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mine ? "text-white/75" : "text-text-tertiary")}>
-            {time}
-            {mine && <Ticks msg={msg} peerReadAt={peerReadAt} />}
-          </span>
+          {meta}
         </div>
       </div>
+      {!mine && replyButton}
       <Lightbox files={images} index={viewer} onIndex={setViewer} />
     </div>
   );
 }
 
-function Messages({ chat }: { chat: VibexChatDto }) {
+function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMessageDto) => void }) {
   const t = useT();
   const lang = useLanguage();
   const q = useMessages(chat.id);
@@ -533,7 +600,7 @@ function Messages({ chat }: { chat: VibexChatDto }) {
                 <span className="vx-glass rounded-full px-3 py-1 text-[12px] font-medium text-text-secondary">{formatDate(m.createdAt, lang, { day: "numeric", month: "long" })}</span>
               </div>
             )}
-            <Bubble msg={m} peerReadAt={chat.peerReadAt} tail={tail} />
+            <Bubble msg={m} peerReadAt={chat.peerReadAt} tail={tail} peerName={chat.peer.name} onReply={onReply} />
           </div>
         );
       })}
@@ -546,10 +613,14 @@ function Messages({ chat }: { chat: VibexChatDto }) {
 
 type Pending = { key: string; name: string };
 
-function MessageComposer({ chatId }: { chatId: string }) {
+function MessageComposer({ chatId, replyTo, onClearReply, peerName }: { chatId: string; replyTo: VibexMessageDto | null; onClearReply: () => void; peerName: string }) {
   const t = useT();
   const ff = useFormFactor();
+  const me = useSession((s) => s.user)!;
   const send = useSendMessage(chatId);
+  const voice = useRecorder("voice");
+  const circle = useRecorder("circle");
+  const [sendingRec, setSendingRec] = useState(false);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<VibexFileDto[]>([]);
   const [pending, setPending] = useState<Pending[]>([]);
@@ -587,9 +658,10 @@ function MessageComposer({ chatId }: { chatId: string }) {
   const canSend = (text.trim().length > 0 || files.length > 0) && !pending.length && !send.isPending;
   const submit = async () => {
     if (!canSend) return;
-    const body = { text, fileIds: files.map((f) => f.id) };
+    const body = { text, fileIds: files.map((f) => f.id), ...(replyTo ? { replyToId: replyTo.id } : {}) };
     setText("");
     setFiles([]);
+    onClearReply();
     try {
       await send.mutateAsync(body);
     } catch (e) {
@@ -598,6 +670,34 @@ function MessageComposer({ chatId }: { chatId: string }) {
     }
     area.current?.focus();
   };
+
+  /** Starts a voice message / video circle (microphone / camera permission is asked by the browser). */
+  const record = async (kind: RecordKind) => {
+    if (!recordingSupported(kind)) {
+      toast({ title: t("vibex.voice.unsupported"), tone: "danger" });
+      return;
+    }
+    try {
+      await (kind === "voice" ? voice : circle).start();
+    } catch {
+      toast({ title: t(kind === "voice" ? "vibex.voice.noMic" : "vibex.circle.noCamera"), tone: "danger" });
+    }
+  };
+  const sendRecording = async (kind: RecordKind) => {
+    setSendingRec(true);
+    try {
+      const rec = await (kind === "voice" ? voice : circle).stop();
+      if (!rec) return;
+      const dto = await filesApi.upload(rec.file, kind);
+      await send.mutateAsync({ text: "", fileIds: [dto.id], kind, durationMs: rec.durationMs, ...(replyTo ? { replyToId: replyTo.id } : {}) });
+      onClearReply();
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setSendingRec(false);
+    }
+  };
+  const empty = !text.trim() && !files.length && !pending.length;
 
   return (
     <div className="shrink-0 px-3 pb-[max(var(--safe-bottom),10px)] pt-2 sm:px-4">
@@ -635,6 +735,26 @@ function MessageComposer({ chatId }: { chatId: string }) {
           </motion.div>
         )}
       </AnimatePresence>
+      {replyTo && (
+        <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface px-3 py-1.5 shadow-tile" data-testid="composer-reply">
+          <RiReplyLine className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 text-[13px]">
+            <span className="block font-semibold text-primary">{replyTo.senderId === me.id ? t("vibex.chats.you") : peerName}</span>
+            <span className="line-clamp-1 text-text-secondary">
+              {replyTo.kind === "voice" ? t("vibex.voice.message") : replyTo.kind === "circle" ? t("vibex.circle.message") : replyTo.text || t("vibex.chats.file")}
+            </span>
+          </span>
+          <button type="button" onClick={onClearReply} aria-label={t("common.cancel")} className="flex size-7 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover" data-testid="composer-reply-cancel">
+            <RiCloseLine className="size-4" />
+          </button>
+        </div>
+      )}
+      <AnimatePresence>
+        {circle.state !== "idle" && <CircleRecorder stream={circle.stream} elapsed={circle.elapsed} max={circle.max} onCancel={circle.cancel} onSend={() => void sendRecording("circle")} sending={sendingRec} />}
+      </AnimatePresence>
+      {voice.state === "recording" ? (
+        <VoiceRecordingBar elapsed={voice.elapsed} levels={voice.levels.current} onCancel={voice.cancel} onSend={() => void sendRecording("voice")} sending={sendingRec} />
+      ) : (
       <div className="vx-glass-strong flex items-end gap-1 rounded-[26px] p-1.5">
         <input
           ref={input}
@@ -667,18 +787,38 @@ function MessageComposer({ chatId }: { chatId: string }) {
           className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.35] outline-none placeholder:text-text-tertiary"
           data-testid="chat-input"
         />
-        <motion.button
-          type="button"
-          onClick={submit}
-          disabled={!canSend}
-          className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
-          whileTap={{ scale: 0.9 }}
-          aria-label={t("vibex.chat.send")}
-          data-testid="chat-send"
-        >
-          {send.isPending ? <Spinner size={16} /> : <RiSendPlaneFill className="size-[18px]" />}
-        </motion.button>
+        {empty ? (
+          <>
+            <IconButton label={t("vibex.circle.record")} onClick={() => void record("circle")} data-testid="chat-circle">
+              <RiCameraLensLine className="size-5" />
+            </IconButton>
+            <motion.button
+              type="button"
+              onClick={() => void record("voice")}
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white"
+              whileTap={{ scale: 0.9 }}
+              aria-label={t("vibex.voice.record")}
+              title={t("vibex.voice.record")}
+              data-testid="chat-voice"
+            >
+              {voice.state === "starting" ? <Spinner size={16} /> : <RiMicLine className="size-[19px]" />}
+            </motion.button>
+          </>
+        ) : (
+          <motion.button
+            type="button"
+            onClick={submit}
+            disabled={!canSend}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
+            whileTap={{ scale: 0.9 }}
+            aria-label={t("vibex.chat.send")}
+            data-testid="chat-send"
+          >
+            {send.isPending ? <Spinner size={16} /> : <RiSendPlaneFill className="size-[18px]" />}
+          </motion.button>
+        )}
       </div>
+      )}
     </div>
   );
 }
@@ -687,6 +827,8 @@ export function Conversation({ chatId, onBack }: { chatId: string; onBack?: () =
   const t = useT();
   const chat = useChat(chatId);
   const push = useVibex((s) => s.push);
+  const [replyTo, setReplyTo] = useState<VibexMessageDto | null>(null);
+  const [call, setCall] = useState<CallKind | null>(null);
   useEffect(() => markVisible(chatId), [chatId]);
   if (!chat.data) {
     return (
@@ -711,11 +853,18 @@ export function Conversation({ chatId, onBack }: { chatId: string; onBack?: () =
             <span className="block truncate text-[12px] text-text-tertiary">{c.peer.address}</span>
           </span>
         </button>
+        <IconButton label={t("vibex.call.audio")} onClick={() => setCall("audio")} data-testid="chat-call-audio">
+          <RiPhoneLine className="size-5" />
+        </IconButton>
+        <IconButton label={t("vibex.call.video")} onClick={() => setCall("video")} data-testid="chat-call-video">
+          <RiVidiconLine className="size-5" />
+        </IconButton>
       </WindowHeader>
       <div className="flex min-h-0 flex-1 flex-col bg-surface-secondary/50">
-        <Messages chat={c} />
-        <MessageComposer chatId={chatId} key={chatId} />
+        <Messages chat={c} onReply={setReplyTo} />
+        <MessageComposer chatId={chatId} key={chatId} replyTo={replyTo} onClearReply={() => setReplyTo(null)} peerName={c.peer.name} />
       </div>
+      <CallSheet kind={call} peer={c.peer} onClose={() => setCall(null)} />
     </div>
   );
 }

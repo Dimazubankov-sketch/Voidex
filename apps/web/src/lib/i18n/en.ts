@@ -726,6 +726,22 @@ export const en = {
   "vibex.settings.qualityAuto": "Auto",
   "vibex.settings.qualityHigh": "High",
   "vibex.settings.qualitySaver": "Saver",
+  "vibex.chat.reply": "Reply",
+  "vibex.voice.message": "Voice message",
+  "vibex.voice.record": "Record a voice message",
+  "vibex.voice.cancel": "Cancel recording",
+  "vibex.voice.play": "Play",
+  "vibex.voice.pause": "Pause",
+  "vibex.voice.noMic": "No access to the microphone",
+  "vibex.voice.unsupported": "Recording isn't supported in this browser",
+  "vibex.circle.message": "Video message",
+  "vibex.circle.record": "Record a video circle",
+  "vibex.circle.recording": "Recording a video message",
+  "vibex.circle.play": "Play video message",
+  "vibex.circle.noCamera": "No access to the camera",
+  "vibex.call.audio": "Audio call",
+  "vibex.call.video": "Video call",
+  "vibex.call.unavailable": "Calls are not available yet: they need a connection service that is still being built. Meanwhile, send a voice message or a video circle.",
 } as const;
 
 export type MessageKey = keyof typeof en;

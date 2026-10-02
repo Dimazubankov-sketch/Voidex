@@ -204,7 +204,8 @@ type MessagesData = InfiniteData<VibexPage<VibexMessageDto>>;
 
 export function useSendMessage(chatId: string) {
   return useMutation({
-    mutationFn: (v: { text: string; fileIds: string[] }) => api.post<VibexMessageDto>(`/api/vibex/chats/${chatId}/messages`, v),
+    mutationFn: (v: { text: string; fileIds: string[]; kind?: "text" | "voice" | "circle"; durationMs?: number; replyToId?: string }) =>
+      api.post<VibexMessageDto>(`/api/vibex/chats/${chatId}/messages`, v),
     onSuccess: (msg) => {
       // Show it right away; the server event then refreshes every device.
       queryClient.setQueryData<MessagesData>(vk.messages(chatId), (d) => {
