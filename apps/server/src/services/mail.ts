@@ -28,6 +28,7 @@ import type { Tx } from "../db/client.js";
 import { mailAccounts, mailAttachments, mailEntries, mailMessages, mailRecipients, mailThreads, users } from "../db/schema.js";
 import { looksLike } from "../lib/file-types.js";
 import { fail, notFound } from "../lib/errors.js";
+import type { NotificationService } from "./notifications.js";
 import type { Ctx } from "./context.js";
 
 type Account = typeof mailAccounts.$inferSelect & { displayName: string };
@@ -82,7 +83,10 @@ function decodeCursor(cursor: string | undefined): { at: Date; id: string } | nu
  * nothing and changes nothing.
  */
 export class MailService {
-  constructor(private readonly ctx: Ctx) {}
+  constructor(
+    private readonly ctx: Ctx,
+    private readonly notifications?: NotificationService,
+  ) {}
 
   // ---------------------------------------------------------------- accounts
 
@@ -775,6 +779,16 @@ export class MailService {
         from: { address: acc.address, name: acc.displayName },
         subject: result.subject,
         snippet: result.snippet,
+      });
+      // Notification Center: "new mail" → this letter.
+      await this.notifications?.tryNotify({
+        userId: uid,
+        app: "mail",
+        type: "mail.new",
+        title: acc.displayName || acc.address,
+        body: result.subject || result.snippet,
+        actorId: userId,
+        target: { threadId: result.threadId, messageId: draftId, from: acc.address },
       });
     }
     return { messageId: draftId, threadId: result.threadId };

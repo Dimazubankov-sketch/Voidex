@@ -1,3 +1,4 @@
+import type { NotificationDto } from "./notifications.js";
 import type { AppId, AppManifest } from "./apps.js";
 import type { Preferences } from "./api.js";
 import type { LegalDocumentKey } from "./legal.js";
@@ -224,6 +225,12 @@ export type ServerEvent =
   | { type: "approval.requested"; approvalId: string }
   | { type: "approval.resolved"; approvalId: string }
   | { type: "mail.changed"; threadIds?: string[] }
+  /** Notification Center: a new notification for this account. */
+  | { type: "notification.new"; notification: NotificationDto }
+  /** Notification Center: read / cleared elsewhere — refresh. */
+  | { type: "notifications.changed" }
+  /** Vibex: follows / profile of this person changed. */
+  | { type: "vibex.profile"; userId: string }
   /** Vibex: a new chat message (to every member's devices). */
   | { type: "vibex.message"; conversationId: string; messageId: string; senderId: string; senderName: string; snippet: string }
   /** Vibex: chats changed (read receipts, pins) — refresh the list. */

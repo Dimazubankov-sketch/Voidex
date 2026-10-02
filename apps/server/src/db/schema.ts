@@ -483,6 +483,10 @@ export const vibexMessages = pgTable(
     /** A post shared into the chat ("Share → send in a message"). */
     sharedPostId: uuid("shared_post_id").references(() => vibexPosts.id, { onDelete: "set null" }),
     sharedPost: boolean("shared_post").notNull().default(false),
+    /** Step 2.3: text (with optional files), a voice message or a video circle. */
+    kind: text("kind", { enum: ["text", "voice", "circle"] }).notNull().default("text"),
+    durationMs: integer("duration_ms"),
+    replyToId: uuid("reply_to_id").references((): AnyPgColumn => vibexMessages.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
   (t) => [index("vibex_messages_conversation_idx").on(t.conversationId, t.createdAt)],
@@ -496,7 +500,7 @@ export const vibexFiles = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    purpose: text("purpose", { enum: ["message", "post"] }).notNull(),
+    purpose: text("purpose", { enum: ["message", "post", "voice", "circle"] }).notNull(),
     /** Set when the message / post is sent; until then only the owner sees it. */
     messageId: uuid("message_id").references(() => vibexMessages.id, { onDelete: "cascade" }),
     postId: uuid("post_id").references(() => vibexPosts.id, { onDelete: "cascade" }),
@@ -551,8 +555,33 @@ export const vibexProfiles = pgTable("vibex_profiles", {
   userId: uuid("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),
+  /** Step 2.3: created automatically the first time the account uses Vibex (no separate sign-in). */
   activatedAt: ts("activated_at").notNull().defaultNow(),
+  bio: text("bio").notNull().default(""),
+  website: text("website").notNull().default(""),
+  city: text("city").notNull().default(""),
+  /** Profile cover (blob key); `coverVersion` changes with every new picture. */
+  coverKey: text("cover_key"),
+  coverMime: text("cover_mime"),
+  coverVersion: integer("cover_version").notNull().default(0),
+  /** Privacy / notification / media settings (VibexSettings, defaults filled in by the service). */
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
 });
+
+/** Who follows whom (Vibex). */
+export const vibexFollows = pgTable(
+  "vibex_follows",
+  {
+    followerId: uuid("follower_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    followeeId: uuid("followee_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ name: "vibex_follows_pk", columns: [t.followerId, t.followeeId] }), index("vibex_follows_followee_idx").on(t.followeeId, t.createdAt)],
+);
 
 export const vibexComments = pgTable(
   "vibex_comments",
@@ -565,10 +594,15 @@ export const vibexComments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     text: text("text").notNull(),
+    /** Step 2.3 threads: the top-level comment a reply belongs to (null: it is top-level). */
+    rootId: uuid("root_id").references((): AnyPgColumn => vibexComments.id, { onDelete: "cascade" }),
+    /** The comment (root or reply) this one answers, and its author (for "@name"). */
+    replyToId: uuid("reply_to_id").references((): AnyPgColumn => vibexComments.id, { onDelete: "set null" }),
+    replyToUserId: uuid("reply_to_user_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     deletedAt: ts("deleted_at"),
   },
-  (t) => [index("vibex_comments_post_idx").on(t.postId, t.createdAt)],
+  (t) => [index("vibex_comments_post_idx").on(t.postId, t.createdAt), index("vibex_comments_root_idx").on(t.rootId, t.createdAt)],
 );
 
 /** "Not interested": the post leaves this person's feed. */
@@ -601,4 +635,31 @@ export const vibexReports = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("vibex_reports_once_uq").on(t.reporterId, t.postId)],
+);
+
+/* ==========================================================================
+   Notification Center (Step 2.3)
+   ========================================================================== */
+
+/**
+ * One notification for one account, from an app (Mail, Vibex) or the system.
+ * `target` says what a tap opens (e.g. { threadId } / { chatId } / { postId }).
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    app: text("app").notNull(),
+    type: text("type").notNull(),
+    title: text("title").notNull().default(""),
+    body: text("body").notNull().default(""),
+    actorId: uuid("actor_id").references(() => users.id, { onDelete: "set null" }),
+    target: jsonb("target").$type<Record<string, string>>().notNull().default({}),
+    readAt: ts("read_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
 );

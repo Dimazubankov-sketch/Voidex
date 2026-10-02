@@ -11,3 +11,4 @@ export * from "./validation/username.js";
 export * from "./validation/password.js";
 export * from "./vibex.js";
 export * from "./language-detect.js";
+export * from "./notifications.js";

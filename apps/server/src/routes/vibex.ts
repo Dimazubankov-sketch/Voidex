@@ -1,7 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
   ErrorCode,
-  VIBEX_FILE_MAX_BYTES,
   VibexCreatePostSchema,
   VibexCursorQuerySchema,
   VibexHistoryQuerySchema,
@@ -10,58 +9,87 @@ import {
   VibexPinsSchema,
   VibexSendMessageSchema,
   VibexShareSchema,
-  VibexActivateSchema,
   VibexCommentSchema,
   VibexEditPostSchema,
   VibexReportSchema,
+  VIBEX_COVER_MAX_BYTES,
+  VIBEX_MEDIA_MAX_BYTES,
+  VibexMediaQuerySchema,
+  VibexProfileUpdateSchema,
+  VibexSettingsUpdateSchema,
+  VibexUploadPurposeSchema,
 } from "@voidex/shared";
 import { z } from "zod";
-import { parse, requestMeta } from "../http.js";
+import { parse } from "../http.js";
 import { fail } from "../lib/errors.js";
+import { sniffImage } from "../lib/file-types.js";
 
 const idParam = z.object({ id: z.string().uuid() });
-const purposeQuery = z.object({ purpose: z.enum(["message", "post"]).default("message") });
+const purposeQuery = z.object({ purpose: VibexUploadPurposeSchema.default("message") });
 
-/** Vibex API: chats, files and the feed. Every call acts as the signed-in user (VibexService enforces ownership). */
+/**
+ * Vibex API: chats, files, the feed and profiles. Identity is the VOIDEX
+ * session — there is no Vibex sign-in (Step 2.3): one VOIDEX account = one
+ * Vibex profile, created on first use. Every call acts as the signed-in user
+ * (VibexService enforces ownership and privacy).
+ */
 export const vibexRoutes: FastifyPluginAsync = async (app) => {
-  const { vibex } = app.services;
+  const { vibex, accounts } = app.services;
   const scale = app.ctx.config.rateLimitScale;
   const limit = (max: number) => ({ config: { rateLimit: { max: max * scale, timeWindow: "1 minute" } } });
   // Uploads: raw bytes, file name in the X-File-Name header (URI-encoded).
-  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: VIBEX_FILE_MAX_BYTES }, (_req, body, done) => done(null, body));
+  app.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: VIBEX_MEDIA_MAX_BYTES }, (_req, body, done) => done(null, body));
   app.addHook("preHandler", app.authenticate);
-  // Vibex is activated per VOIDEX account (its own sign-in screen); until then only /me and /activate answer.
-  app.addHook("preHandler", async (req) => {
-    const path = req.routeOptions.url ?? "";
-    if (path.endsWith("/me") || path.endsWith("/activate")) return;
-    if (!(await vibex.isActivated(req.auth!.userId))) throw fail(ErrorCode.VibexNotActivated, "Sign in to Vibex first.", { status: 403 });
-  });
 
   // ------------------------------------------------------------- profile
   app.get("/me", async (req) => vibex.me(req.auth!.userId));
 
-  /**
-   * Vibex sign-in / registration: the email (VOIDEX Mail address) and password
-   * of THIS VOIDEX account. One account = one Vibex profile. Another account's
-   * email is answered with vibex_other_account (the client then switches
-   * accounts through the normal VOIDEX sign-in); an unknown one as wrong credentials.
-   */
-  app.post("/activate", limit(10), async (req) => {
-    const body = parse(VibexActivateSchema, req.body);
-    const { accounts } = app.services;
-    const owner = await accounts.findByIdentifier(body.email);
-    if (owner && owner.id !== req.auth!.userId && owner.status === "active") {
-      throw fail(ErrorCode.VibexOtherAccount, "This email belongs to another VOIDEX account.", { status: 409 });
+  /** Retired Step 2.2 sign-in: Vibex uses the VOIDEX session. Answers like /me for older clients. */
+  app.post("/activate", async (req) => vibex.me(req.auth!.userId));
+
+  app.get("/settings", async (req) => vibex.settings(req.auth!.userId));
+  app.patch("/settings", limit(60), async (req) => vibex.updateSettings(req.auth!.userId, parse(VibexSettingsUpdateSchema, req.body)));
+
+  /** Profile editor: names go to the VOIDEX account (one identity), the rest to the Vibex profile. */
+  app.patch("/profile", limit(30), async (req) => {
+    const body = parse(VibexProfileUpdateSchema, req.body);
+    if (body.firstName !== undefined || body.lastName !== undefined) {
+      await accounts.updateProfile(req.auth!.userId, { firstName: body.firstName, lastName: body.lastName });
     }
-    if (!owner || !body.email.includes("@")) throw fail(ErrorCode.InvalidCredentials, "Incorrect email or password.");
-    await accounts.verifyCredentials(body.email, body.password, requestMeta(req));
-    return vibex.activate(req.auth!.userId);
+    return vibex.updateProfile(req.auth!.userId, body);
   });
+
+  app.put("/profile/cover", { bodyLimit: VIBEX_COVER_MAX_BYTES, ...limit(20) }, async (req) => {
+    const body = req.body;
+    if (!Buffer.isBuffer(body) || body.length === 0 || body.length > VIBEX_COVER_MAX_BYTES) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
+    const mime = sniffImage(body);
+    if (!mime) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
+    return vibex.setCover(req.auth!.userId, mime, body);
+  });
+  app.delete("/profile/cover", async (req) => vibex.deleteCover(req.auth!.userId));
 
   // ---------------------------------------------------------------- people
   app.get("/people", async (req) => vibex.people(req.auth!.userId, parse(VibexPeopleQuerySchema, req.query).q));
 
   app.get("/people/:id", async (req) => vibex.profile(req.auth!.userId, parse(idParam, req.params).id));
+
+  app.get("/people/:id/cover", async (req, reply) => {
+    const cover = await vibex.cover(req.auth!.userId, parse(idParam, req.params).id);
+    reply.header("Cache-Control", "private, max-age=300");
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.type(cover.mimeType).send(cover.data);
+  });
+
+  app.post("/people/:id/follow", limit(120), async (req) => vibex.follow(req.auth!.userId, parse(idParam, req.params).id, true));
+  app.delete("/people/:id/follow", limit(120), async (req) => vibex.follow(req.auth!.userId, parse(idParam, req.params).id, false));
+  app.get("/people/:id/followers", async (req) => vibex.followList(req.auth!.userId, parse(idParam, req.params).id, "followers"));
+  app.get("/people/:id/following", async (req) => vibex.followList(req.auth!.userId, parse(idParam, req.params).id, "following"));
+
+  app.get("/people/:id/media", async (req) => {
+    const { id } = parse(idParam, req.params);
+    const q = parse(VibexMediaQuerySchema, req.query);
+    return vibex.media(req.auth!.userId, id, q.kind, q.before, q.limit);
+  });
 
   app.get("/people/:id/posts", async (req) => {
     const { id } = parse(idParam, req.params);
@@ -93,7 +121,7 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
   app.post("/chats/:id/read", async (req) => vibex.read(req.auth!.userId, parse(idParam, req.params).id));
 
   // ----------------------------------------------------------------- files
-  app.post("/files", { bodyLimit: VIBEX_FILE_MAX_BYTES, ...limit(60) }, async (req, reply) => {
+  app.post("/files", { bodyLimit: VIBEX_MEDIA_MAX_BYTES, ...limit(60) }, async (req, reply) => {
     const { purpose } = parse(purposeQuery, req.query);
     if (!Buffer.isBuffer(req.body)) throw fail(ErrorCode.ValidationFailed, "Send the file as application/octet-stream.");
     let filename = "";
@@ -154,7 +182,8 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
   app.post("/posts/:id/comments", limit(60), async (req, reply) => {
     const { id } = parse(idParam, req.params);
     reply.status(201);
-    return vibex.addComment(req.auth!.userId, id, parse(VibexCommentSchema, req.body).text);
+    const body = parse(VibexCommentSchema, req.body);
+    return vibex.addComment(req.auth!.userId, id, body.text, body.replyToId);
   });
 
   app.delete("/comments/:id", limit(60), async (req) => vibex.deleteComment(req.auth!.userId, parse(idParam, req.params).id));

@@ -13,6 +13,7 @@ import {
 } from "@voidex/shared";
 import { z } from "zod";
 import { devices, mailAccounts, securityEvents, sessions as sessionsTable } from "../db/schema.js";
+import { sniffImage } from "../lib/file-types.js";
 import { parse, requestMeta } from "../http.js";
 import { fail, notFound } from "../lib/errors.js";
 
@@ -21,12 +22,6 @@ const AVATAR_MAX = 512 * 1024;
 /** Wallpapers arrive downscaled by the client; this is a hard ceiling. */
 const WALLPAPER_MAX = 8 * 1024 * 1024;
 
-function sniffImage(buf: Buffer): string | null {
-  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
-  if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
-  if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
-  return null;
-}
 
 /**
  * Everything here runs as the authenticated user. Identity always comes from

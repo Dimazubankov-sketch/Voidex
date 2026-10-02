@@ -62,6 +62,8 @@ export const MAIL_ATTACHMENT_TYPES: Record<string, string> = {
   m4a: "audio/mp4",
   wav: "audio/wav",
   ogg: "audio/ogg",
+  oga: "audio/ogg",
+  weba: "audio/webm",
   mp4: "video/mp4",
   mov: "video/quicktime",
   webm: "video/webm",

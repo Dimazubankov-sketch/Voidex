@@ -22,11 +22,13 @@ import { OtpComSmsProvider, createSmsProvider, type SmsProvider } from "./servic
 import { PgBlobStorage } from "./services/blobs.js";
 import { VerificationService } from "./services/verification.js";
 import { VibexService } from "./services/vibex.js";
+import { NotificationService } from "./services/notifications.js";
 import { createTranslator, type Translator } from "./services/translate.js";
 import { accountRoutes } from "./routes/account.js";
 import { authRoutes } from "./routes/auth.js";
 import { mailRoutes } from "./routes/mail.js";
 import { systemRoutes } from "./routes/system.js";
+import { notificationRoutes } from "./routes/notifications.js";
 import { vibexRoutes } from "./routes/vibex.js";
 
 declare module "fastify" {
@@ -50,6 +52,7 @@ export interface Services {
   legal: LegalService;
   mail: MailService;
   vibex: VibexService;
+  notifications: NotificationService;
 }
 
 export interface BuildOptions {
@@ -90,6 +93,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
   const sessions = new SessionService(ctx);
   const verification = new VerificationService(ctx);
   const accounts = new AccountService(ctx, sessions, verification);
+  const notifications = new NotificationService(ctx);
   const services: Services = {
     sessions,
     verification,
@@ -97,8 +101,9 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
     challenges: new ChallengeService(ctx, sessions, verification, accounts),
     apps: new AppsService(ctx),
     legal: new LegalService(),
-    mail: new MailService(ctx),
-    vibex: new VibexService(ctx),
+    mail: new MailService(ctx, notifications),
+    vibex: new VibexService(ctx, notifications),
+    notifications,
   };
   app.decorate("services", services);
   app.decorate("ctx", ctx);
@@ -214,6 +219,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
       await api.register(accountRoutes);
       await api.register(mailRoutes, { prefix: "/mail" });
       await api.register(vibexRoutes, { prefix: "/vibex" });
+      await api.register(notificationRoutes, { prefix: "/notifications" });
     },
     { prefix: "/api" },
   );

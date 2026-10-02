@@ -268,29 +268,25 @@ describe("vibex feed", () => {
 });
 
 describe("vibex step 2.2: sign-in, comments, edit, hide, report, translate", () => {
-  it("Vibex sign-in = this VOIDEX account (email + password); nothing works before it; one account = one profile", async () => {
+  it("one VOIDEX account = one Vibex profile: no Vibex sign-in, the session is the identity", async () => {
+    // Never "activated": Vibex works right away with the VOIDEX session.
     const a = await user("Vera", { activate: false });
-    const other = await user("Oleg");
-    expect((await a.d.get("/api/vibex/me")).body).toMatchObject({ activated: false, person: { id: a.id, address: a.address } });
-    const blocked = await a.d.get("/api/vibex/feed");
-    expect(blocked.status).toBe(403);
-    expect(blocked.body.error.code).toBe("vibex_not_activated");
-    // Not activated people can't be found or messaged.
-    expect((await other.d.get(`/api/vibex/people?q=${a.username}`)).body).toHaveLength(0);
-    expect((await other.d.post("/api/vibex/chats/direct", { userId: a.id })).status).toBe(404);
-
-    expect((await a.d.post("/api/vibex/activate", { email: a.address, password: "wrong-password-1" })).body.error.code).toBe("invalid_credentials");
-    expect((await a.d.post("/api/vibex/activate", { email: "nobody-here@voidops.ru", password: STRONG_PASSWORD })).body.error.code).toBe("invalid_credentials");
-    // Someone else's email is never a second identity: the client switches accounts instead.
-    const foreign = await a.d.post("/api/vibex/activate", { email: other.address, password: STRONG_PASSWORD });
-    expect(foreign.status).toBe(409);
-    expect(foreign.body.error.code).toBe("vibex_other_account");
-
-    const ok = await a.d.post("/api/vibex/activate", { email: a.address.toUpperCase(), password: STRONG_PASSWORD });
-    expect(ok.body).toMatchObject({ activated: true, person: { id: a.id } });
-    expect((await a.d.post("/api/vibex/activate", { email: a.address, password: STRONG_PASSWORD })).status).toBe(200); // idempotent
+    const other = await user("Oleg", { activate: false });
+    expect((await a.d.get("/api/vibex/me")).body).toMatchObject({ activated: true, person: { id: a.id, address: a.address }, settings: { privacy: { messages: "everyone" } } });
     expect((await a.d.get("/api/vibex/feed")).status).toBe(200);
+    // Found and messaged without any activation.
     expect((await other.d.get(`/api/vibex/people?q=${a.username}`)).body.map((p: { id: string }) => p.id)).toContain(a.id);
+    expect((await other.d.post("/api/vibex/chats/direct", { userId: a.id })).status).toBe(200);
+    // The retired activation endpoint never takes credentials or another identity: it answers like /me.
+    const legacy = await a.d.post("/api/vibex/activate", { email: other.address, password: "whatever-1" });
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.person.id).toBe(a.id);
+    // One profile row per account.
+    const rows = await env.app.ctx.db.execute<{ n: number }>(sql`SELECT count(*)::int AS n FROM vibex_profiles WHERE user_id = ${a.id}::uuid`);
+    expect(rows.rows[0]!.n).toBe(1);
+    // Without a session: 401.
+    const anon = await env.app.inject({ method: "GET", url: "/api/vibex/feed", headers: { "x-voidex-client": "web" } });
+    expect(anon.statusCode).toBe(401);
   });
 
   it("account switch: signing in to another account with replaceSession ends the current session", async () => {
@@ -368,5 +364,180 @@ describe("vibex step 2.2: sign-in, comments, edit, hide, report, translate", () 
     const off = await b.d.post(`/api/vibex/posts/${post.id}/translate`);
     expect(off.status).toBe(503);
     expect(off.body.error.code).toBe("service_unavailable");
+  });
+});
+
+describe("vibex step 2.3: follows, profile, privacy, threads, media, voice, notifications", () => {
+  it("A follows B: counters, B gets a follow notification live; unfollow", async () => {
+    const a = await user("Anna");
+    const b = await user("Boris");
+    const live = listen(b);
+    const f = await a.d.post(`/api/vibex/people/${b.id}/follow`);
+    expect(f.status).toBe(200);
+    expect(f.body).toMatchObject({ followed: true, followers: 1 });
+    live.stop();
+    expect(live.events).toContainEqual(expect.objectContaining({ type: "notification.new", notification: expect.objectContaining({ app: "vibex", type: "vibex.follow", target: { userId: a.id } }) }));
+    const seenByB = (await b.d.get(`/api/vibex/people/${b.id}`)).body;
+    expect(seenByB).toMatchObject({ followers: 1, following: 0, me: true });
+    expect((await b.d.get(`/api/vibex/people/${a.id}`)).body).toMatchObject({ followsMe: true, followed: false, following: 1 });
+    expect((await b.d.get(`/api/vibex/people/${b.id}/followers`)).body.map((p: { id: string }) => p.id)).toEqual([a.id]);
+    // Following twice notifies once.
+    await a.d.post(`/api/vibex/people/${b.id}/follow`);
+    const notes = (await b.d.get("/api/notifications")).body;
+    expect(notes.items.filter((n: { type: string }) => n.type === "vibex.follow")).toHaveLength(1);
+    expect(notes.unread).toBeGreaterThanOrEqual(1);
+    const un = await a.d.delete(`/api/vibex/people/${b.id}/follow`);
+    expect(un.body).toMatchObject({ followed: false, followers: 0 });
+    expect((await a.d.post(`/api/vibex/people/${a.id}/follow`)).status).toBe(400);
+  });
+
+  it("profile editor: names on the VOIDEX account, bio / site / city on the profile; a cover only for its owner", async () => {
+    const a = await user("Ira");
+    const b = await user("Gleb");
+    const r = await a.d.patch("/api/vibex/profile", { firstName: "Irina", lastName: "Petrova", bio: " Hello ", website: "void-code.ru", city: "Moscow" });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ bio: "Hello", website: "void-code.ru", city: "Moscow", person: { firstName: "Irina", lastName: "Petrova" } });
+    expect((await a.d.get("/api/me")).body.firstName).toBe("Irina");
+    expect((await a.d.patch("/api/vibex/profile", { website: "not a site" })).status).toBe(400);
+    expect((await a.d.patch("/api/vibex/profile", { bio: "x".repeat(241) })).status).toBe(400);
+    // Cover: images only, by content.
+    expect((await a.d.request("PUT", "/api/vibex/profile/cover", PDF, { headers: { "content-type": "application/octet-stream" } })).status).toBe(400);
+    const cov = await a.d.request("PUT", "/api/vibex/profile/cover", PNG, { headers: { "content-type": "application/octet-stream" } });
+    expect(cov.body.coverVersion).toBe(1);
+    const seen = await env.app.inject({ method: "GET", url: `/api/vibex/people/${a.id}/cover`, headers: { "x-voidex-client": "web", "x-test-client": b.d.testClientId, authorization: `Bearer ${b.d.accessToken}` } });
+    expect(seen.statusCode).toBe(200);
+    expect(seen.headers["content-type"]).toContain("image/png");
+    // There is no way to edit someone else's profile: the route only ever acts on the caller.
+    await b.d.patch("/api/vibex/profile", { bio: "B's own" });
+    expect((await b.d.get(`/api/vibex/people/${a.id}`)).body.bio).toBe("Hello");
+    expect((await a.d.delete("/api/vibex/profile/cover")).body.coverVersion).toBe(0);
+  });
+
+  it("privacy: followers-only posts / profile, who can write, blocked people, read receipts", async () => {
+    const a = await user("Polina");
+    const b = await user("Roman");
+    await a.d.post("/api/vibex/posts", { text: "for followers" });
+    await a.d.patch("/api/vibex/profile", { bio: "secret bio" });
+    await a.d.patch("/api/vibex/settings", { privacy: { posts: "followers", profile: "followers", messages: "followers" } });
+    expect((await b.d.get(`/api/vibex/people/${a.id}/posts`)).body.items).toHaveLength(0);
+    expect((await b.d.get(`/api/vibex/people/${a.id}`)).body).toMatchObject({ bio: "", visible: false, canMessage: false, posts: 0 });
+    const chat = (await b.d.post("/api/vibex/chats/direct", { userId: a.id })).body;
+    expect((await b.d.post(`/api/vibex/chats/${chat.id}/messages`, { text: "hi" })).status).toBe(403);
+    await b.d.post(`/api/vibex/people/${a.id}/follow`);
+    expect((await b.d.get(`/api/vibex/people/${a.id}/posts`)).body.items).toHaveLength(1);
+    expect((await b.d.get(`/api/vibex/people/${a.id}`)).body).toMatchObject({ bio: "secret bio", visible: true, canMessage: true });
+    expect((await b.d.post(`/api/vibex/chats/${chat.id}/messages`, { text: "hi" })).status).toBe(201);
+    // Blocked: no messages, no follow.
+    await a.d.patch("/api/vibex/settings", { privacy: { blocked: [b.id] } });
+    expect((await b.d.post(`/api/vibex/chats/${chat.id}/messages`, { text: "again" })).status).toBe(403);
+    // Read receipts off: nobody sees them.
+    await a.d.patch("/api/vibex/settings", { privacy: { blocked: [], readReceipts: false } });
+    await a.d.post(`/api/vibex/chats/${chat.id}/read`);
+    expect((await b.d.get(`/api/vibex/chats/${chat.id}`)).body.peerReadAt).toBeNull();
+    // Only my own settings change.
+    expect((await b.d.get("/api/vibex/settings")).body.privacy.readReceipts).toBe(true);
+  });
+
+  it("comment threads: root, reply, reply to a reply — one level, @name, counts, notifications", async () => {
+    const a = await user("Alla");
+    const b = await user("Bogdan");
+    const c = await user("Vika");
+    const post = (await a.d.post("/api/vibex/posts", { text: "Thread me" })).body;
+    const liveA = listen(a);
+    const root = (await b.d.post(`/api/vibex/posts/${post.id}/comments`, { text: "root" })).body;
+    liveA.stop();
+    expect(liveA.events).toContainEqual(expect.objectContaining({ type: "notification.new", notification: expect.objectContaining({ type: "vibex.comment", target: expect.objectContaining({ postId: post.id }) }) }));
+    const liveB = listen(b);
+    const r1 = (await c.d.post(`/api/vibex/posts/${post.id}/comments`, { text: "reply 1", replyToId: root.id })).body;
+    liveB.stop();
+    expect(liveB.events).toContainEqual(expect.objectContaining({ type: "notification.new", notification: expect.objectContaining({ type: "vibex.reply" }) }));
+    const r2 = (await b.d.post(`/api/vibex/posts/${post.id}/comments`, { text: "reply to reply", replyToId: r1.id })).body;
+    expect(r1).toMatchObject({ rootId: root.id, replyTo: { commentId: root.id, person: { id: b.id } } });
+    expect(r2).toMatchObject({ rootId: root.id, replyTo: { commentId: r1.id, person: { id: c.id } } });
+    const list = (await a.d.get(`/api/vibex/posts/${post.id}/comments`)).body;
+    expect(list.find((x: { id: string }) => x.id === root.id).replies).toBe(2);
+    // A reply to a comment of another post is refused.
+    const other = (await a.d.post("/api/vibex/posts", { text: "Other" })).body;
+    expect((await c.d.post(`/api/vibex/posts/${other.id}/comments`, { text: "x", replyToId: root.id })).status).toBe(404);
+    // Removing the root takes its thread with it.
+    await b.d.delete(`/api/vibex/comments/${root.id}`);
+    expect((await a.d.get(`/api/vibex/posts/${post.id}/comments`)).body).toHaveLength(0);
+  });
+
+  it("profile media: post photos and videos appear automatically; others' media follow privacy", async () => {
+    const a = await user("Maya");
+    const b = await user("Nikita");
+    const img = (await upload(a, "pic.png", PNG, "post")).body;
+    const webm = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(64)]);
+    const vid = await upload(a, "clip.webm", webm, "post");
+    expect(vid.status).toBe(201);
+    expect(vid.body.kind).toBe("video");
+    await a.d.post("/api/vibex/posts", { text: "media", mediaIds: [img.id, vid.body.id] });
+    const photos = (await b.d.get(`/api/vibex/people/${a.id}/media?kind=photo`)).body;
+    expect(photos.items.map((i: { file: { id: string } }) => i.file.id)).toEqual([img.id]);
+    const videos = (await b.d.get(`/api/vibex/people/${a.id}/media?kind=video`)).body;
+    expect(videos.items.map((i: { file: { id: string } }) => i.file.id)).toEqual([vid.body.id]);
+    expect((await download(b, img.id)).statusCode).toBe(200);
+    await a.d.patch("/api/vibex/settings", { privacy: { posts: "followers" } });
+    expect((await b.d.get(`/api/vibex/people/${a.id}/media?kind=photo`)).body.items).toHaveLength(0);
+    expect((await download(b, img.id)).statusCode).toBe(404);
+    // A PDF is never a post medium.
+    expect((await upload(a, "doc.pdf", PDF, "post")).status).toBe(415);
+  });
+
+  it("voice messages and video circles: one recorded file of the right type; replies; notification collapses per chat", async () => {
+    const a = await user("Olya");
+    const b = await user("Petr");
+    const chat = (await a.d.post("/api/vibex/chats/direct", { userId: b.id })).body;
+    const webm = Buffer.concat([Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), Buffer.alloc(64)]);
+    const voice = (await upload(a, "voice.weba", webm, "voice" as "message")).body;
+    expect(voice.kind).toBe("audio");
+    // A voice message has exactly one file and no text.
+    expect((await a.d.post(`/api/vibex/chats/${chat.id}/messages`, { kind: "voice", fileIds: [voice.id], text: "x", durationMs: 3000 })).status).toBe(400);
+    const sent = await a.d.post(`/api/vibex/chats/${chat.id}/messages`, { kind: "voice", fileIds: [voice.id], durationMs: 3200 });
+    expect(sent.status).toBe(201);
+    expect(sent.body).toMatchObject({ kind: "voice", durationMs: 3200, files: [{ kind: "audio" }] });
+    // A chat file can't be sent as a circle (purpose is checked).
+    const doc = (await upload(a, "doc.pdf", PDF)).body;
+    expect((await a.d.post(`/api/vibex/chats/${chat.id}/messages`, { kind: "circle", fileIds: [doc.id], durationMs: 1000 })).status).toBe(404);
+    const circle = (await upload(a, "circle.webm", webm, "circle" as "message")).body;
+    expect((await a.d.post(`/api/vibex/chats/${chat.id}/messages`, { kind: "circle", fileIds: [circle.id], durationMs: 61_000 })).status).toBe(400);
+    const c = await a.d.post(`/api/vibex/chats/${chat.id}/messages`, { kind: "circle", fileIds: [circle.id], durationMs: 5000, replyToId: sent.body.id });
+    expect(c.body).toMatchObject({ kind: "circle", replyTo: { id: sent.body.id, kind: "voice" } });
+    // B: one (collapsed) unread notification for this chat; opening the chat reads it.
+    const notes = (await b.d.get("/api/notifications")).body;
+    const forChat = notes.items.filter((n: { target: { chatId?: string } }) => n.target.chatId === chat.id);
+    expect(forChat).toHaveLength(1);
+    expect(forChat[0]).toMatchObject({ app: "vibex", type: "vibex.message", read: false });
+    await b.d.post(`/api/vibex/chats/${chat.id}/read`);
+    expect((await b.d.get("/api/notifications")).body.items.find((n: { id: string }) => n.id === forChat[0].id).read).toBe(true);
+  });
+});
+
+describe("notification center", () => {
+  it("mail → notification for the recipient; read, read all, remove, clear; nobody touches another's", async () => {
+    const a = await user("Mark");
+    const b = await user("Nina");
+    const draft = await a.d.post("/api/mail/drafts", { to: [b.address], subject: "Hello Nina", body: "Text" });
+    const sent = await a.d.post(`/api/mail/drafts/${draft.body.id}/send`);
+    expect(sent.status).toBeLessThan(300);
+    const list = (await b.d.get("/api/notifications")).body;
+    const mail = list.items.find((n: { app: string }) => n.app === "mail");
+    expect(mail).toMatchObject({ type: "mail.new", body: "Hello Nina", read: false, target: { threadId: sent.body.threadId }, actor: { id: a.id } });
+    // A can't read or remove B's notifications.
+    expect((await a.d.post(`/api/notifications/${mail.id}/read`)).status).toBe(404);
+    expect((await a.d.delete(`/api/notifications/${mail.id}`)).status).toBe(404);
+    expect((await b.d.post(`/api/notifications/${mail.id}/read`)).status).toBe(200);
+    expect((await b.d.get("/api/notifications")).body.unread).toBe(0);
+    await b.d.post("/api/notifications/dev/system-update", { title: "VOIDEX 2.3", body: "New features", version: "2.3" });
+    const sys = (await b.d.get("/api/notifications")).body.items.find((n: { app: string }) => n.app === "system");
+    expect(sys).toMatchObject({ type: "system.update", title: "VOIDEX 2.3", target: { version: "2.3" } });
+    await b.d.post("/api/notifications/read-all");
+    expect((await b.d.get("/api/notifications")).body.unread).toBe(0);
+    expect((await b.d.delete(`/api/notifications/${sys.id}`)).status).toBe(200);
+    await b.d.delete("/api/notifications");
+    expect((await b.d.get("/api/notifications")).body.items).toHaveLength(0);
+    const anon = await env.app.inject({ method: "GET", url: "/api/notifications", headers: { "x-voidex-client": "web" } });
+    expect(anon.statusCode).toBe(401);
   });
 });
