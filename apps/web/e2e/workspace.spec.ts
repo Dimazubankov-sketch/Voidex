@@ -103,6 +103,9 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
 
   // Swipe back to page 1, then add Settings to the folder from its menu.
   await page.getByTestId("home-done").click();
+  // Swipe once edit mode has fully ended (icons stop wiggling, the page settles).
+  await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
+  await page.waitForTimeout(400);
   const p1 = await center(page.getByTestId("home-page-1"));
   await finger.down({ x: p1.x - 150, y: p1.y + 200 });
   await finger.moveTo({ x: p1.x - 150, y: p1.y + 200 }, { x: p1.x + 120, y: p1.y + 200 }, 6);
