@@ -10,3 +10,4 @@ playwright-report/
 apps/server/storage/
 .DS_Store
 *.bundle
+apps/web/public/apps/calculator/ocr/

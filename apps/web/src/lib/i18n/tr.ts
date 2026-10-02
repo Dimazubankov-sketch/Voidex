@@ -711,4 +711,7 @@ export const tr: Record<MessageKey, string> = {
   "vibex.call.audio": "Sesli arama",
   "vibex.call.video": "Görüntülü arama",
   "vibex.call.unavailable": "Aramalar henüz kullanılamıyor: gereken bağlantı hizmeti hâlâ geliştiriliyor. Bu arada sesli mesaj veya yuvarlak video gönderebilirsin.",
+  "calc.history": "Geçmiş",
+  "calc.help": "Nasıl girilir",
+  "calc.solution": "Adım adım çözüm",
 };

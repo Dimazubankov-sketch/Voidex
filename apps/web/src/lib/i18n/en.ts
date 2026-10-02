@@ -742,6 +742,9 @@ export const en = {
   "vibex.call.audio": "Audio call",
   "vibex.call.video": "Video call",
   "vibex.call.unavailable": "Calls are not available yet: they need a connection service that is still being built. Meanwhile, send a voice message or a video circle.",
+  "calc.history": "History",
+  "calc.help": "How to enter",
+  "calc.solution": "Step-by-step solution",
 } as const;
 
 export type MessageKey = keyof typeof en;

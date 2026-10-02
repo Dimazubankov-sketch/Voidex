@@ -711,4 +711,7 @@ export const de: Record<MessageKey, string> = {
   "vibex.call.audio": "Sprachanruf",
   "vibex.call.video": "Videoanruf",
   "vibex.call.unavailable": "Anrufe sind noch nicht verfügbar: Dafür wird ein Verbindungsdienst benötigt, der noch entsteht. Sende bis dahin eine Sprachnachricht oder einen Videokreis.",
+  "calc.history": "Verlauf",
+  "calc.help": "Eingabehilfe",
+  "calc.solution": "Lösungsweg",
 };

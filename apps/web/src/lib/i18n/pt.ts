@@ -711,4 +711,7 @@ export const pt: Record<MessageKey, string> = {
   "vibex.call.audio": "Chamada de voz",
   "vibex.call.video": "Chamada de vídeo",
   "vibex.call.unavailable": "As chamadas ainda não estão disponíveis: precisam de um serviço de conexão que ainda está em desenvolvimento. Enquanto isso, envie uma mensagem de voz ou um vídeo circular.",
+  "calc.history": "Histórico",
+  "calc.help": "Como digitar",
+  "calc.solution": "Solução passo a passo",
 };

@@ -11,6 +11,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
+COPY packages/calculator/package.json packages/calculator/
 RUN pnpm install --frozen-lockfile
 COPY apps ./apps
 COPY packages ./packages

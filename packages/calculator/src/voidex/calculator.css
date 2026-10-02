@@ -1,0 +1,177 @@
+/* VOIDEX Calculator — the original src/style.css, scoped to the window root
+   (.vxc) and laid out for a resizable window that never scrolls as a page:
+   only the solution steps and the history list scroll. Colours, radii and
+   typography are the original ones. Page chrome (.os, .osbar, .window,
+   .bottom-label, .window-footer) is not used inside VOIDEX. */
+.vxc{--purple:#6940f7;--muted:#8b8999;--line:#ebe9f0;--key:#f0eff3;--lavender:#ebe4ff;--key-min:44px;--key-max:clamp(48px,9.5cqh,72px);--sci-min:34px;--sci-max:clamp(36px,5.6cqh,44px);--gap:8px;
+  position:relative;container:vxc/size;height:100%;width:100%;overflow:hidden;outline:none;color:#171721;background:radial-gradient(ellipse at 100% 0,#efe8ff,transparent 60%),#fbfaff;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-synthesis:none;-webkit-tap-highlight-color:transparent}
+.vxc *{box-sizing:border-box}
+.vxc button,.vxc input,.vxc textarea{font:inherit}
+.vxc button{border:0;cursor:pointer;color:inherit;transition:background .15s,transform .12s;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.vxc button:hover{filter:brightness(.975)}
+.vxc button:active{transform:scale(.97)}
+.vxc button:focus-visible,.vxc textarea:focus-visible{outline:3px solid #b09aff;outline-offset:3px}
+.vxc button:disabled{opacity:.5;cursor:default}
+.vxc svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.vxc [hidden]{display:none!important}
+.vxc h2{font-size:20px;font-weight:600;letter-spacing:-.5px;margin:8px 0 0}
+.vxc .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.vxc .icon-button{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#f3f2f6;color:#777584;font-size:26px;flex:none}
+
+/* ---- layout: keypad column + solution pane ---------------------------------------- */
+.vxc .vxc-workspace{--pad:16px;display:grid;grid-template-columns:clamp(320px,46cqw,440px) minmax(0,1fr);gap:28px;height:100%;padding:4px 24px 20px}
+.vxc .calculator{min-width:0;min-height:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.vxc .display{background:#f5f4f8;border-radius:23px;padding:16px 22px 14px;flex:1 0 auto;min-height:0;display:flex;flex-direction:column;justify-content:flex-end}
+.vxc .display-top{display:flex;align-items:center;justify-content:space-between;color:#aaa6b5;letter-spacing:.085em;font-size:11px;margin-bottom:auto}
+.vxc .small-button{background:transparent;color:#888493;font-size:23px;padding:0 3px;line-height:1.2}
+.vxc #vxc-expression{display:block;resize:none;background:transparent;border:0;color:#787283;text-align:right;width:100%;font-size:22px;padding:10px 0 0;line-height:1.35;outline:none;min-height:40px;max-height:105px;overflow:auto;scrollbar-width:none}
+.vxc .answer{display:block;font-size:clamp(36px,8cqh,58px);font-weight:600;letter-spacing:-2px;text-align:right;line-height:1.25;overflow-wrap:anywhere;margin-top:2px}
+.vxc .answer.compact{font-size:clamp(24px,5cqh,32px);letter-spacing:-1px}
+.vxc .answer-detail{text-align:right;font-size:14px;color:var(--muted);min-height:17px;overflow-wrap:anywhere}
+.vxc .math-preview{text-align:right;overflow-x:auto;overflow-y:hidden;max-width:100%;padding-top:6px;scrollbar-width:thin}
+.vxc .math-preview:empty{display:none}
+.vxc .math-preview .katex{font-size:1.15em}
+.vxc .mode-switch{padding:4px;background:#f1f0f5;display:flex;border-radius:17px;gap:4px;margin:12px 0;flex:none}
+.vxc .mode-switch button{flex:1;border-radius:14px;padding:10px 4px;color:#84808e;background:transparent;font-size:16px;font-weight:500}
+.vxc .mode-switch button.selected{background:#fff;color:var(--purple);box-shadow:0 2px 6px #21163910}
+/* keys shrink from their comfortable size down to a touch-safe minimum before the layout changes */
+.vxc .keypad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(var(--key-min),var(--key-max));gap:var(--gap);flex:0 1 auto;min-height:0}
+.vxc .key{height:100%;background:var(--key);border-radius:17px;font-size:clamp(22px,4.2cqh,27px);font-weight:500}
+.vxc .key.function,.vxc .key.operator{background:var(--lavender);color:#6735ec}
+.vxc .key.equals{background:linear-gradient(135deg,#a17cff,#5c2cee);color:#fff;font-size:clamp(26px,5cqh,36px);position:relative;overflow:hidden}
+.vxc .key.equals:before{content:'';position:absolute;width:90px;height:90px;border-radius:50%;background:#ffffff12;top:-55px;left:0}
+.vxc .keypad button.equals.science-equals{font-size:18px}
+.vxc .key.zero{grid-column:span 2}
+.vxc .scientific-tools{flex:0 1 auto;min-height:min-content;display:flex;flex-direction:column}
+.vxc .science-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:#92899e;margin:0 2px 8px;min-height:28px}
+.vxc .science-heading-actions{display:flex;align-items:center;gap:6px;margin-left:auto}
+.vxc .angle-button{font-size:12px;font-weight:600;color:var(--purple);padding:5px 10px;background:var(--lavender);border-radius:8px}
+.vxc .pad-tabs{display:none;padding:3px;background:#f1f0f5;border-radius:10px;gap:3px}
+.vxc .pad-tabs button{border-radius:8px;padding:4px 12px;font-size:13px;color:#84808e;background:transparent;min-height:28px}
+.vxc .pad-tabs button.selected{background:#fff;color:var(--purple)}
+.vxc .mini-photo{display:none;align-items:center;justify-content:center;width:34px;height:30px;border-radius:9px;background:#f6f3fd;color:#7655bf}
+.vxc .mini-photo svg{width:18px;height:18px}
+.vxc .science-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-rows:minmax(var(--sci-min),var(--sci-max));gap:6px;margin-bottom:10px;flex:0 1 auto;min-height:0}
+.vxc .science-key{height:100%;border-radius:11px;background:#f5f1fe;color:#7353b7;font-size:16px}
+.vxc .solve-key{display:none;grid-column:1/-1;background:linear-gradient(135deg,#a17cff,#5c2cee);color:#fff;font-weight:500}
+.vxc.science[data-fit="2"] .solve-key,.vxc.science[data-fit="3"] .solve-key{display:block}
+.vxc .photo-actions{display:flex;gap:8px;margin-top:12px;flex:none}
+.vxc .photo-actions button{display:flex;align-items:center;justify-content:center;gap:9px;flex:1;background:#f6f3fd;padding:10px 4px;border-radius:13px;color:#7655bf;font-size:14px;min-height:44px}
+.vxc .photo-actions svg{width:19px;height:19px}
+.vxc .keyboard-hint{font-size:12px;color:#aaa5b0;text-align:center;margin:12px 0 0;flex:none}
+.vxc.science{--key-max:clamp(44px,7.4cqh,60px)}
+.vxc.science .key{font-size:clamp(20px,3.6cqh,24px)}
+.vxc.science .answer{font-size:clamp(30px,6cqh,40px)}
+.vxc.science .answer.compact{font-size:clamp(22px,4.4cqh,27px)}
+
+/* ---- solution pane (the only scrolling area besides history) ----------------------- */
+.vxc .solution-pane{padding:4px 0 0 28px;border-left:1px solid var(--line);min-width:0;min-height:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.vxc .solution-header{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex:none}
+.vxc .solution-title{flex:1;min-width:0}
+.vxc .solution-back{display:none}
+.vxc .eyebrow{font-size:11px;color:#a29cae;letter-spacing:.13em}
+.vxc .solution-header .icon-button{width:36px;height:36px;background:transparent;color:#a099ad}
+.vxc .steps{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin}
+.vxc .step{display:grid;grid-template-columns:27px minmax(0,1fr);gap:12px;padding-bottom:22px;position:relative}
+.vxc .step:before{content:'';position:absolute;top:29px;bottom:3px;left:13px;width:1px;background:#eee9f6}
+.vxc .step:last-child:before{display:none}
+.vxc .step-index{width:27px;height:27px;border-radius:50%;background:#efe9ff;color:#8a65d2;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.vxc .step-title{font-size:14px;color:#8a8196;line-height:27px}
+.vxc .step-math{font-size:18px;margin:8px 0 0;overflow-x:auto;overflow-y:hidden;max-width:100%;color:#393042;line-height:1.7}
+.vxc .step-math .katex{font-size:1.08em}
+.vxc .solution-pane .katex-display{margin:0}
+.vxc .result-card{background:linear-gradient(120deg,#f0eaff,#f8f5ff);border-radius:17px;padding:17px 20px;margin:2px 0 18px}
+.vxc .result-card>span{display:block;color:#a18cbf;font-size:12px;margin-bottom:7px}
+.vxc .result-card strong{display:block;font-size:24px;color:#6a38e3;font-weight:500;overflow-wrap:anywhere;overflow-x:auto}
+.vxc .result-card p{font-size:12px;color:#9687a9;margin:9px 0 0}
+.vxc .empty-solution{padding:18px 8px 32px;color:#aaa1b3;line-height:1.6;font-size:15px}
+.vxc .error{background:#fff1ee;border-radius:15px;padding:17px;color:#9c5147;font-size:14px;line-height:1.6}
+.vxc .try-examples{flex:none;padding-top:14px}
+.vxc .examples{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.vxc .examples button{background:#f7f6f9;border-radius:13px;text-align:left;padding:11px 13px;font-size:12px;color:#95889f;min-width:0}
+.vxc .examples span{display:block;margin-top:6px;color:#655672;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- dialogs inside the window: scrim + centred panel ------------------------------- */
+.vxc .vxc-scrim{position:absolute;inset:0;z-index:20;background:#251b4036;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);opacity:0;pointer-events:none;transition:opacity .18s}
+.vxc.dialog-open .vxc-scrim{opacity:1;pointer-events:auto}
+.vxc dialog{position:absolute;z-index:21;inset:0;margin:auto;width:min(540px,calc(100% - 24px));height:fit-content;max-height:calc(100% - 24px);border:1px solid #fff;border-radius:25px;padding:22px;background:#fff;box-shadow:0 24px 80px #22123b30;color:#211e29;overflow:hidden;flex-direction:column}
+.vxc dialog[open]{display:flex}
+.vxc .dialog-head{display:flex;justify-content:space-between;align-items:center;flex:none}
+.vxc .dialog-head h2{margin:0}
+.vxc #vxc-helpDialog{overflow-y:auto;overscroll-behavior:contain;display:none}
+.vxc #vxc-helpDialog[open]{display:block}
+.vxc #vxc-photoDialog[open]{display:block;overflow-y:auto;overscroll-behavior:contain}
+.vxc .muted{font-size:14px;color:#9a8fa6;line-height:1.6}
+.vxc .note{font-size:12px}
+.vxc .photo-preview{width:100%;border-radius:17px;overflow:hidden;background:#f5f3f9;max-height:min(300px,32cqh);position:relative;touch-action:none;display:flex}
+.vxc .photo-preview img{width:auto;max-width:100%;height:auto;max-height:min(300px,32cqh);margin:auto;display:block;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.vxc .photo-preview.cropping{cursor:crosshair}
+.vxc .crop-selection{position:absolute;border:2px solid var(--purple);background:#8866ff22;pointer-events:none}
+.vxc .crop-row{display:flex;gap:10px;margin-top:13px}
+.vxc .crop-row button{padding:12px;border-radius:12px;background:#f1edf8;font-size:14px;min-height:44px}
+.vxc .primary{background:var(--purple)!important;color:#fff!important;border-radius:13px;padding:13px 18px;font-size:15px}
+.vxc .full{width:100%;margin-top:8px;flex:none}
+.vxc .secondary{background:#f3effa;padding:13px;border-radius:13px;color:#8464b9}
+.vxc .field-label{display:block;font-size:14px;margin:12px 0 8px}
+.vxc #vxc-ocrText{width:100%;background:#f8f6fc;border:1px solid #e7def4;border-radius:12px;padding:12px 14px;resize:none;min-height:72px;font-size:18px;color:inherit}
+.vxc progress{width:100%;accent-color:var(--purple)}
+.vxc .history-list{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;margin-top:6px}
+.vxc .history-item{display:block;width:100%;background:#f8f6fb;text-align:left;margin:10px 0;padding:15px;border-radius:14px}
+.vxc .history-item span{display:block;font-size:14px;color:#9b8ba7;overflow-wrap:anywhere}
+.vxc .history-item strong{display:block;font-size:22px;color:#75529e;margin-top:8px;overflow-wrap:anywhere}
+.vxc dt{margin-top:15px;font-size:15px;color:#665674}
+.vxc dd{margin:6px 0;font-size:14px;line-height:1.7;color:#95869f}
+.vxc code{background:#f5f1fa;padding:2px 4px;border-radius:4px}
+.vxc .toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:#33263feb;color:#fff;padding:12px 20px;border-radius:13px;opacity:0;pointer-events:none;transition:.2s;font-size:14px;z-index:30;max-width:90%;text-align:center}
+.vxc .toast.visible{opacity:1;transform:translateX(-50%)}
+
+/* ---- fit levels: set by mount.js when the keypad column would overflow -------------- */
+.vxc[data-fit="1"],.vxc[data-fit="2"],.vxc[data-fit="3"]{--key-min:40px;--sci-min:32px;--gap:6px}
+.vxc[data-fit="1"] .keyboard-hint,.vxc[data-fit="2"] .keyboard-hint,.vxc[data-fit="3"] .keyboard-hint{display:none}
+.vxc[data-fit="1"] .mode-switch,.vxc[data-fit="2"] .mode-switch,.vxc[data-fit="3"] .mode-switch{margin:8px 0}
+.vxc[data-fit="1"] .mode-switch button,.vxc[data-fit="2"] .mode-switch button,.vxc[data-fit="3"] .mode-switch button{padding:8px 4px;font-size:15px}
+.vxc[data-fit="1"] .display,.vxc[data-fit="2"] .display,.vxc[data-fit="3"] .display{padding:12px 18px 10px;border-radius:20px}
+.vxc[data-fit="1"] .photo-actions,.vxc[data-fit="2"] .photo-actions,.vxc[data-fit="3"] .photo-actions{margin-top:8px}
+.vxc.science[data-fit="1"] .display{padding:10px 16px 8px}
+.vxc.science[data-fit="1"] .answer{font-size:30px}
+.vxc.science[data-fit="1"] .answer.compact{font-size:22px}
+.vxc.science[data-fit="1"] #vxc-expression{font-size:20px;min-height:34px;padding-top:4px}
+.vxc.science[data-fit="1"] .science-heading{margin-bottom:6px}
+.vxc.science[data-fit="1"] .science-grid{margin-bottom:6px;--sci-max:32px}
+.vxc.science[data-fit="1"] .vxc-workspace{padding-bottom:12px}
+.vxc.science[data-fit="1"] .mode-switch{margin:6px 0}
+.vxc.science[data-fit="1"] .photo-actions button{min-height:40px;padding:8px 4px}
+/* 2: science mode shares one area between functions and digits (tabs); photo buttons move up */
+.vxc.science[data-fit="2"] .pad-tabs,.vxc.science[data-fit="3"] .pad-tabs{display:flex}
+.vxc.science[data-fit="2"] .science-label,.vxc.science[data-fit="3"] .science-label{display:none}
+.vxc.science[data-fit="2"] .mini-photo,.vxc.science[data-fit="3"] .mini-photo{display:flex}
+.vxc.science[data-fit="2"] .photo-actions,.vxc.science[data-fit="3"] .photo-actions{display:none!important}
+.vxc.science[data-fit="2"]:not(.pad-digits) .keypad,.vxc.science[data-fit="3"]:not(.pad-digits) .keypad{display:none}
+.vxc.science[data-fit="2"].pad-digits .science-grid,.vxc.science[data-fit="3"].pad-digits .science-grid{display:none}
+.vxc.science[data-fit="2"] .science-grid,.vxc.science[data-fit="3"] .science-grid{--sci-min:40px;--sci-max:clamp(44px,9cqh,64px);margin-bottom:0}
+/* 3: the smallest windows — tighter display */
+.vxc[data-fit="3"]{--key-min:38px;--gap:5px}
+.vxc[data-fit="3"] .math-preview,.vxc[data-fit="3"] .answer-detail:empty{display:none}
+.vxc[data-fit="3"] .answer{font-size:30px}
+.vxc[data-fit="3"] .answer.compact{font-size:22px}
+.vxc[data-fit="3"] #vxc-expression{font-size:19px;min-height:32px;padding-top:4px}
+
+/* ---- narrow windows and phones: one column, the solution is a panel over the keypad -- */
+@container vxc (max-width:679px){
+  .vxc .vxc-workspace{display:block;padding:4px var(--pad) 12px;position:relative}
+  .vxc .solution-pane{position:absolute;inset:0;z-index:10;border-left:0;padding:8px var(--pad) 12px;background:#fbfaff;transform:translateX(102%);visibility:hidden;transition:transform .26s cubic-bezier(.22,1,.36,1),visibility 0s .26s}
+  .vxc.show-solution .solution-pane{transform:none;visibility:visible;transition:transform .26s cubic-bezier(.22,1,.36,1)}
+  .vxc .solution-back{display:flex}
+  .vxc .keyboard-hint{display:none}
+  .vxc .solution-header{margin-bottom:12px}
+}
+@container vxc (max-width:379px){
+  .vxc .vxc-workspace{--pad:12px}
+  .vxc .science-key{font-size:15px}
+  .vxc .science-grid{gap:5px}
+  .vxc .examples span{font-size:13px}
+}
+@container vxc (max-height:520px){
+  .vxc .try-examples{display:none}
+}
+@media(prefers-reduced-motion:reduce){.vxc *{transition:none!important}}

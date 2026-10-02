@@ -711,4 +711,7 @@ export const es: Record<MessageKey, string> = {
   "vibex.call.audio": "Llamada de voz",
   "vibex.call.video": "Videollamada",
   "vibex.call.unavailable": "Las llamadas aún no están disponibles: necesitan un servicio de conexión que todavía se está creando. Mientras tanto, envía un mensaje de voz o un videomensaje.",
+  "calc.history": "Historial",
+  "calc.help": "Cómo escribir",
+  "calc.solution": "Solución paso a paso",
 };

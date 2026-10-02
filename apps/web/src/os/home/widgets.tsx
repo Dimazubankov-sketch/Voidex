@@ -7,12 +7,10 @@ import {
   addWidget,
   display,
   emptyCalc,
-  isAppId,
   placeInCell,
   press,
   removeWidget,
   widgetKey,
-  type AppId,
   type Widget,
   type WidgetType,
   type WorkspaceLayout,
@@ -25,6 +23,7 @@ import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { CalculatorGlyph } from "@/brand/brand";
 import { cellAt, placeOfGrid } from "./grid";
+import { openApp } from "./actions";
 import { updateLayout, useWorkspaceLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 
@@ -54,9 +53,7 @@ function CalculatorWidget({ preview }: { preview?: boolean }) {
   const t = useT();
   const [state, setState] = useState(emptyCalc);
   const shown = display(state);
-  const openFull = () => {
-    if (isAppId("calculator")) useWM.getState().open("calculator" as AppId);
-  };
+  const openFull = (e: React.MouseEvent<HTMLElement>) => openApp("calculator", e.currentTarget);
   return (
     <div className={cx("flex h-full min-h-0 flex-col gap-1.5 p-2.5", preview && "pointer-events-none")} data-testid="calc-widget">
       <button type="button" onClick={openFull} className="flex items-center gap-1.5 self-start rounded-lg px-1 text-left" data-testid="calc-widget-open" aria-label={t("widgets.calculatorOpen")}>

@@ -726,4 +726,7 @@ export const ru: Record<MessageKey, string> = {
   "vibex.call.audio": "Аудиозвонок",
   "vibex.call.video": "Видеозвонок",
   "vibex.call.unavailable": "Звонки пока недоступны: для них нужен сервис соединения, который ещё в разработке. Пока можно отправить голосовое сообщение или кружок.",
+  "calc.history": "История",
+  "calc.help": "Как вводить",
+  "calc.solution": "Решение по шагам",
 };

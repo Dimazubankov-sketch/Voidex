@@ -711,4 +711,7 @@ export const ko: Record<MessageKey, string> = {
   "vibex.call.audio": "음성 통화",
   "vibex.call.video": "영상 통화",
   "vibex.call.unavailable": "통화는 아직 사용할 수 없습니다. 필요한 연결 서비스가 아직 개발 중입니다. 대신 음성 메시지나 원형 영상을 보내세요.",
+  "calc.history": "기록",
+  "calc.help": "입력 방법",
+  "calc.solution": "단계별 풀이",
 };

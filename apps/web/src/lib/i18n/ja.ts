@@ -711,4 +711,7 @@ export const ja: Record<MessageKey, string> = {
   "vibex.call.audio": "音声通話",
   "vibex.call.video": "ビデオ通話",
   "vibex.call.unavailable": "通話はまだ利用できません。必要な接続サービスを開発中です。代わりにボイスメッセージか丸いビデオを送れます。",
+  "calc.history": "履歴",
+  "calc.help": "入力方法",
+  "calc.solution": "ステップごとの解答",
 };

@@ -140,7 +140,9 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
+        // 'wasm-unsafe-eval' lets the Calculator compile its local OCR engine (Tesseract
+        // WebAssembly); it does not allow eval() of JavaScript.
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         fontSrc: ["'self'", "data:"],
         imgSrc: ["'self'", "data:", "blob:"],

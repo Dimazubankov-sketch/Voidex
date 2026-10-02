@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail" | "vibex";
+export type AppId = "settings" | "mail" | "vibex" | "calculator";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -127,6 +127,32 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
       tr: ["mesajlaşma", "sohbet", "mesajlar", "akış", "gönderiler", "sosyal"],
     },
     window: { defaultWidth: 1120, defaultHeight: 740, minWidth: 720, minHeight: 500, singleton: true },
+  },
+  calculator: {
+    id: "calculator",
+    name: { en: "Calculator", ru: "Калькулятор", es: "Calculadora", de: "Rechner", fr: "Calculatrice", pt: "Calculadora", zh: "计算器", ja: "電卓", ko: "계산기", tr: "Hesap Makinesi" },
+    caption: { en: "Maths & equations", ru: "Математика и уравнения", es: "Matemáticas y ecuaciones", de: "Mathe & Gleichungen", fr: "Maths et équations", pt: "Matemática e equações", zh: "数学与方程", ja: "数学と方程式", ko: "수학 및 방정식", tr: "Matematik ve denklemler" },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    // Works entirely on the device: no account data, photos are recognised locally.
+    permissions: [],
+    status: "available",
+    category: "tools",
+    keywords: {
+      en: ["calc", "maths", "math", "equation", "fractions", "scientific", "solver", "ocr"],
+      ru: ["калькулятор", "математика", "уравнение", "дроби", "научный", "решение", "вычисления"],
+      es: ["calculadora", "matemáticas", "ecuación", "fracciones", "científica", "resolver"],
+      de: ["Taschenrechner", "Mathe", "Gleichung", "Brüche", "wissenschaftlich", "lösen"],
+      fr: ["calculette", "maths", "équation", "fractions", "scientifique", "résoudre"],
+      pt: ["calculadora", "matemática", "equação", "frações", "científica", "resolver"],
+      zh: ["计算", "数学", "方程", "分数", "科学计算器", "解题"],
+      ja: ["計算機", "数学", "方程式", "分数", "関数電卓", "計算"],
+      ko: ["계산", "수학", "방정식", "분수", "공학용", "풀이"],
+      tr: ["hesap", "matematik", "denklem", "kesirler", "bilimsel", "çözüm"],
+    },
+    window: { defaultWidth: 900, defaultHeight: 740, minWidth: 360, minHeight: 560, singleton: true },
   },
 };
 

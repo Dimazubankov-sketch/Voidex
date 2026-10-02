@@ -711,4 +711,7 @@ export const zh: Record<MessageKey, string> = {
   "vibex.call.audio": "语音通话",
   "vibex.call.video": "视频通话",
   "vibex.call.unavailable": "通话暂不可用：它需要的连接服务仍在开发中。现在可以发送语音消息或圆形视频。",
+  "calc.history": "历史记录",
+  "calc.help": "输入说明",
+  "calc.solution": "分步解答",
 };

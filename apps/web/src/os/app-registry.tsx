@@ -1,6 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import type { AppId } from "@voidex/shared";
-import { MailGlyph, SettingsGlyph, VibexGlyph } from "@/brand/brand";
+import { CalculatorGlyph, MailGlyph, SettingsGlyph, VibexGlyph } from "@/brand/brand";
 
 /**
  * Client half of the App Registry: how each registered app is drawn and
@@ -27,5 +27,10 @@ export const CLIENT_APPS: Record<AppId, ClientApp> = {
   vibex: {
     Icon: VibexGlyph,
     Component: lazy(() => import("@/apps/vibex/vibex-app").then((m) => ({ default: m.VibexApp }))),
+  },
+  calculator: {
+    Icon: CalculatorGlyph,
+    // KaTeX, mathjs and the calculator itself load with this chunk only; Tesseract (OCR) even later.
+    Component: lazy(() => import("@/apps/calculator/calculator-app").then((m) => ({ default: m.CalculatorApp }))),
   },
 };
