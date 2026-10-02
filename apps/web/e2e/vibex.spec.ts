@@ -223,17 +223,26 @@ test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regu
   // A regular chat is not draggable: press-and-hold opens its menu instead, nothing moves.
   const regular = page.locator('[data-testid=chat-row][data-pinned="false"]');
   await expect(regular).toHaveCount(1);
-  const rb = (await regular.boundingBox())!;
-  if (isMobile(page)) {
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: rb.x + rb.width / 2, y: rb.y + rb.height / 2 }] });
-    await page.waitForTimeout(500);
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  } else {
-    await regular.click({ button: "right" });
-  }
-  await expect(page.getByTestId("chat-menu")).toBeVisible();
-  await page.getByTestId("menu-pin").click();
+  const openMenu = async () => {
+    const rb = (await regular.boundingBox())!;
+    if (isMobile(page)) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: rb.x + rb.width / 2, y: rb.y + rb.height / 2 }] });
+      await page.waitForTimeout(500);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } else {
+      await regular.click({ button: "right" });
+    }
+    await expect(page.getByTestId("chat-menu")).toBeVisible();
+  };
+  await openMenu();
+  // The chat list can re-render under the open menu (live updates); pin again only if it did not take.
+  await expect(async () => {
+    if ((await regular.count()) === 0) return; // pinned
+    if (!(await page.getByTestId("chat-menu").isVisible())) await openMenu();
+    await page.getByTestId("menu-pin").click({ timeout: 4000 });
+    await expect(regular).toHaveCount(0, { timeout: 3000 });
+  }).toPass({ timeout: 30_000 });
   // Pinning puts it on top of the pinned group.
   await expect.poll(order).toEqual([chats[3], chats[2], chats[0], chats[1]]);
 });
