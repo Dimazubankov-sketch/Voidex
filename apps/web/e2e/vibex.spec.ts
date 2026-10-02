@@ -45,16 +45,10 @@ async function apiAccount(request: APIRequestContext, first: string) {
 }
 
 /** Opens Vibex; the first time, signs in to Vibex with the account's email (prefilled) and password. */
+/** Vibex opens with the VOIDEX session (Step 2.3: no Vibex sign-in). */
 async function openVibex(page: Page) {
   await openApp(page, "vibex");
-  const auth = page.getByTestId("vibex-auth");
-  const app = page.getByTestId("vibex-app");
-  await expect(auth.or(app)).toBeVisible();
-  if (await auth.isVisible()) {
-    await page.getByTestId("vibex-auth-password").fill(PASSWORD);
-    await page.getByTestId("vibex-auth-submit").click();
-  }
-  await expect(app).toBeVisible();
+  await expect(page.getByTestId("vibex-app")).toBeVisible();
 }
 
 function isMobile(page: Page) {
@@ -62,7 +56,7 @@ function isMobile(page: Page) {
 }
 
 /** The Voyzen side menu: a rail on PC, a drawer from the avatar on phones. */
-async function nav(page: Page, section: "feed" | "chats" | "people" | "history" | "me") {
+async function nav(page: Page, section: "feed" | "chats" | "people" | "history" | "bookmarks" | "me") {
   if (isMobile(page)) {
     // Close a chat / page first, then open the drawer.
     for (const id of ["chat-back", "vibex-back"]) {
@@ -128,11 +122,11 @@ test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a ch
   await expect(page.locator(`[data-testid=post-card][data-post-id="${postId}"] [data-testid=post-like]`)).toContainText("1");
 
   // Bookmarks are private: A has none, B has the post.
-  await nav(page, "history");
-  await page.getByTestId("history-bookmarks").click();
+  // Step 2.3: Bookmarks is its own section of the side menu.
+  await nav(page, "bookmarks");
+  await expect(page.getByTestId("bookmarks")).toBeVisible();
   await expect(page.getByTestId("history-list")).toHaveCount(0);
-  await nav(bPage, "history");
-  await bPage.getByTestId("history-bookmarks").click();
+  await nav(bPage, "bookmarks");
   await expect(bPage.getByTestId("history-list").getByTestId("post-card")).toHaveCount(1);
 
   // A has the shared post in the chat, answers with a file; B gets it, and read receipts work.
@@ -162,9 +156,8 @@ test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a ch
   await page.getByTestId("confirm-action").click();
   await expect(mine).toHaveCount(0);
 
-  await nav(bPage, "history");
-  await bPage.getByTestId("history-bookmarks").click();
-  await expect(bPage.getByTestId("history").getByTestId("post-unavailable")).toBeVisible();
+  await nav(bPage, "bookmarks");
+  await expect(bPage.getByTestId("bookmarks").getByTestId("post-unavailable")).toBeVisible();
   await nav(bPage, "me");
   await bPage.getByTestId("profile-tab-reposts").click(); // Voyzen profile: Posts / Reposts
   await expect(bPage.locator("[data-testid=post-card][data-kind=repost]").first().getByTestId("post-unavailable")).toBeVisible();
@@ -245,34 +238,28 @@ test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regu
   await expect.poll(order).toEqual([chats[3], chats[2], chats[0], chats[1]]);
 });
 
-test("vibex 2.2: own sign-in (email + password, no phone), comments both ways, edit, translate, profile, sidebar, account switch", async ({ page, browser, request }) => {
+test("vibex: the VOIDEX session is the identity (no Vibex sign-in); comments both ways, edit, translate, profile, sidebar", async ({ page, browser, request }) => {
   const a = await signUpViaApi(page, "Аня", "Вход");
   const b = await apiAccount(request, "Бен");
 
-  // First open: Vibex's own sign-in, email prefilled, no phone field.
+  // Step 2.3: Vibex opens straight away — no sign-in screen, no account switching.
   await openApp(page, "vibex");
-  await expect(page.getByTestId("vibex-auth")).toBeVisible();
-  await expect(page.getByTestId("vibex-auth-email")).toHaveValue(a.address);
-  await expect(page.getByTestId("vibex-auth").getByTestId("phone-input")).toHaveCount(0);
-  await page.getByTestId("vibex-auth-password").fill("wrong-password-x");
-  await page.getByTestId("vibex-auth-submit").click();
-  await expect(page.getByTestId("vibex-auth")).toContainText("Неверн");
-  // Another account's email is not a second identity: Vibex offers to switch.
-  await page.getByTestId("vibex-auth-email").fill(b.address);
-  await page.getByTestId("vibex-auth-password").fill(PASSWORD);
-  await page.getByTestId("vibex-auth-submit").click();
-  await expect(page.getByTestId("vibex-auth-other")).toBeVisible();
-  await page.getByTestId("vibex-auth-email").fill(a.address);
-  await page.getByTestId("vibex-auth-submit").click();
   await expect(page.getByTestId("vibex-app")).toBeVisible();
+  await expect(page.getByTestId("vibex-auth")).toHaveCount(0);
 
-  // Sidebar: Voyzen sections only, history only here; no dark mode / Plus / analytics.
+  // Sidebar: dense sections, Vibex's own settings; no account switch / sign-out, no Plus / analytics.
   if (isMobile(page)) await page.getByTestId("vibex-menu").click();
   const sidebar = page.getByTestId("vibex-sidebar");
-  for (const id of ["vibex-nav-feed", "vibex-nav-people", "vibex-nav-chats", "vibex-nav-history", "vibex-me", "vibex-switch-account", "vibex-settings"]) await expect(sidebar.getByTestId(id)).toBeVisible();
+  for (const id of ["vibex-nav-feed", "vibex-nav-me", "vibex-nav-chats", "vibex-nav-people", "vibex-nav-bookmarks", "vibex-nav-history", "vibex-nav-settings", "vibex-me"]) await expect(sidebar.getByTestId(id)).toBeVisible();
+  await expect(sidebar.getByTestId("vibex-switch-account")).toHaveCount(0);
+  await expect(sidebar.getByTestId("vibex-sign-out")).toHaveCount(0);
   await expect(sidebar).not.toContainText(/Plus|Premium|Аналитика|Монетизация|Тёмная|Поддержка/);
   await expect(page.getByTestId("vibex-sidebar")).toContainText("Vibex");
-  if (isMobile(page)) await page.getByTestId("vibex-drawer").getByRole("button", { name: "Закрыть" }).click();
+  // Settings → Vibex Settings (not the VOIDEX Settings app).
+  await sidebar.getByTestId("vibex-nav-settings").click();
+  await expect(page.getByTestId("vibex-settings")).toBeVisible();
+  await expect(page.locator('[data-testid="window-settings"]')).toHaveCount(0);
+  await nav(page, "feed");
 
   // A posts in Russian (no Translate for a Russian interface) and in English (Translate offered).
   const tag = uniq("");
@@ -314,23 +301,5 @@ test("vibex 2.2: own sign-in (email + password, no phone), comments both ways, e
   await expect(page.getByTestId("profile-email")).toHaveText(a.address);
   await expect(page.getByTestId("profile-tab-posts")).toHaveAttribute("aria-selected", "true");
 
-  // Switch account (VOIDEX sessions): sign in as B from the switcher; this device is new for B → SMS code.
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
-  await page.getByTestId("vibex-switch-account").click();
-  await expect(page.getByTestId("vibex-account-current")).toContainText(a.address);
-  await page.getByTestId("vibex-add-account").click();
-  await page.getByTestId("vibex-switch-email").fill(b.address);
-  await page.getByTestId("vibex-switch-password").fill(PASSWORD);
-  await page.getByTestId("vibex-switch-submit").click();
-  await page.getByTestId("challenge-sms").click();
-  const code = await page.getByTestId("dev-code").getAttribute("data-code");
-  await page.getByTestId("otp-input").fill(code!);
-  // Now B on this device; Vibex reopens for B (already signed in to Vibex).
-  await expect(page.getByTestId("vibex-app")).toBeVisible();
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
-  await expect(page.getByTestId("vibex-sidebar").getByTestId("vibex-me")).toContainText(b.address);
-  // A's old session on this device is gone.
-  const old = await request.get("/api/me", { headers: { authorization: `Bearer ${a.token}`, "x-voidex-client": "web" } });
-  expect(old.status()).toBe(401);
   void browser;
 });

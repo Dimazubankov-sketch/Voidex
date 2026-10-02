@@ -204,7 +204,7 @@ export function useHomeGestures(opts: GestureOptions) {
         if (find("[data-dock]")) {
           unschedule();
           const index = dockIndexAt(x);
-          if (d.overDock !== index || d.mergeWith) ui().patchDrag({ overDock: index, mergeWith: undefined });
+          if (d.overDock !== index || d.mergeWith || d.cell) ui().patchDrag({ overDock: index, mergeWith: undefined, cell: undefined });
           return;
         }
         if (d.overDock !== undefined) ui().patchDrag({ overDock: undefined });
@@ -214,7 +214,7 @@ export function useHomeGestures(opts: GestureOptions) {
       const tab = find("[data-home-space]");
       if (tab) {
         const space = tab.dataset.homeSpace!;
-        ui().patchDrag({ mergeWith: undefined });
+        ui().patchDrag({ mergeWith: undefined, cell: undefined });
         schedule(`space:${space}`, 420, () => {
           updateLayout((l) => moveItem(l, d.item, { surface: "desktop", space }, Number.MAX_SAFE_INTEGER));
           useWM.getState().setSpace(space);
@@ -230,7 +230,8 @@ export function useHomeGestures(opts: GestureOptions) {
           const r = pager.getBoundingClientRect();
           const dir = x < r.left + EDGE ? -1 : x > r.right - EDGE ? 1 : 0;
           if (dir) {
-            ui().patchDrag({ mergeWith: undefined });
+            // Holding at the edge carries the icon to another page: no cell on this one.
+            ui().patchDrag({ mergeWith: undefined, cell: undefined });
             schedule(`edge:${dir}:${ui().mobilePage}`, 600, () => turnPage(dir, d.item));
             return;
           }

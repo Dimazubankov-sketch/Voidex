@@ -229,7 +229,8 @@ export function HomeScreen({
         // Room for the dock (rendered above windows by the workspace).
         <div className="shrink-0" style={{ height: dockZone(layout.desktop.dockScale) - 14 }} aria-hidden />
       )}
-      {ff === "mobile" && ready && <MobileSwitcherButton />}
+      {/* Only on the home screen itself: never under / over an open app. */}
+      {ff === "mobile" && ready && !hidden && <MobileSwitcherButton />}
 
       <BrushMenu anchor={brushBtn} layout={layout} />
       <WidgetsPanel />

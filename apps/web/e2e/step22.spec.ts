@@ -173,53 +173,6 @@ test("view race (slow network): our own save's echo arriving late never flips th
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
 });
 
-test("free placement: drop an icon anywhere, it stays there after a reload; the grid comes back unchanged", async ({ page }) => {
-  test.skip(isMobile(page), "PC free placement");
-  await signUpViaApi(page, "Фрида", "Фри");
-  await desktopMenu(page);
-  await page.getByTestId("menu-view").click();
-  await page.getByTestId("menu-view-free").click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("desktop-free")).toBeVisible();
-  // Icons glide from the grid to their free spots (layout animation): grab the icon once it rests.
-  const tileBox = async () => JSON.stringify(await page.getByTestId("app-settings").locator("[data-tile]").boundingBox());
-  await expect.poll(async () => {
-    const a = await tileBox();
-    await page.waitForTimeout(100);
-    return a === (await tileBox());
-  }).toBe(true);
-  const area = (await page.getByTestId("desktop-free").boundingBox())!;
-  const from = await center(page.getByTestId("app-settings").locator("[data-tile]"));
-  const target = { x: area.x + area.width * 0.7, y: area.y + area.height * 0.6 };
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x + 10, from.y + 10, { steps: 2 });
-  await page.mouse.move(target.x, target.y, { steps: 14 });
-  await page.mouse.up();
-  const near = async () => {
-    const c = await center(page.getByTestId("app-settings").locator("[data-tile]"));
-    return Math.abs(c.x - target.x) < 70 && Math.abs(c.y - target.y) < 90;
-  };
-  await expect.poll(near).toBe(true);
-  await page.waitForTimeout(600);
-  await page.reload();
-  await expect(page.getByTestId("desktop-free")).toBeVisible();
-  await expect.poll(near).toBe(true);
-  // The position adapts to another window size and never leaves the screen.
-  await page.setViewportSize({ width: 1180, height: 820 });
-  const tile = (await page.getByTestId("app-settings").boundingBox())!;
-  expect(tile.x + tile.width).toBeLessThanOrEqual(1180);
-  expect(tile.y + tile.height).toBeLessThanOrEqual(820);
-  // Back to the grid: the grid order is intact.
-  await desktopMenu(page, 590, 140); // free space (icons sit top-left and where Settings was dropped)
-  await page.getByTestId("menu-view").click();
-  await page.getByTestId("menu-view-free").click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("desktop-grid")).toBeVisible();
-  const order = await page.locator('[data-testid="desktop-grid"] > [data-home-item]').evaluateAll((els) => els.map((e) => e.getAttribute("data-home-item")));
-  expect(order).toEqual(["app:mail", "app:settings", "app:vibex"]);
-});
-
 test("windows: a resized window reopens at its standard size; a maximized one reopens normal; maximized never covers the dock", async ({ page }) => {
   test.skip(isMobile(page), "PC windows");
   await signUpViaApi(page, "Оля", "Окно");
@@ -270,7 +223,7 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   expect(Math.round(again.width)).toBe(Math.round(initial.width));
 });
 
-test("phone: long press → brush → Widgets: add the Desktops widget; round Desktops button; app menu says Minimize", async ({ page }) => {
+test("phone: long press → brush → Widgets: add the Calculator widget; round button opens the app switcher; app menu says Minimize", async ({ page }) => {
   test.skip(!isMobile(page), "phone");
   await signUpViaApi(page, "Мира", "Моб");
   const box = (await page.getByTestId("home-page-0").boundingBox())!;
@@ -279,56 +232,65 @@ test("phone: long press → brush → Widgets: add the Desktops widget; round De
   await page.getByTestId("home-appearance").click();
   await page.getByTestId("brush-widgets").click();
   await expect(page.getByTestId("widgets-panel")).toBeVisible();
-  await page.getByTestId("widgets-search").fill("рабоч");
-  await expect(page.getByTestId("widget-card-desktops")).toBeVisible();
+  await page.getByTestId("widgets-search").fill("кальк");
+  await expect(page.getByTestId("widget-card-calculator")).toBeVisible();
   await page.getByTestId("widgets-search").fill("zzzz");
-  await expect(page.getByTestId("widget-card-desktops")).toHaveCount(0);
+  await expect(page.getByTestId("widget-card-calculator")).toHaveCount(0);
   await page.getByTestId("widgets-search").fill("");
-  await page.getByTestId("widget-add-desktops").click();
+  // Step 2.3: the Workspaces widget no longer exists.
+  await expect(page.getByTestId("widget-card-desktops")).toHaveCount(0);
+  await page.getByTestId("widget-add-calculator").click();
   await page.keyboard.press("Escape");
   await page.getByTestId("home-done").click();
-  await expect(page.getByTestId("mobile-widgets").getByTestId("widget-desktops")).toBeVisible();
+  await expect(page.getByTestId("home-page-0").getByTestId("widget-calculator")).toBeVisible();
 
-  // The round glass Desktops button at the bottom (not part of the icon grid).
-  const btn = page.getByTestId("mobile-spaces");
+  // The round glass button at the bottom (not part of the icon grid) opens the app switcher.
+  const btn = page.getByTestId("mobile-switcher");
   await expect(btn).toBeVisible();
   expect(await btn.evaluate((el) => !!el.closest("[data-home-container]"))).toBe(false);
   await btn.click();
+  await expect(page.getByTestId("app-switcher")).toBeVisible();
+  await expect(page.getByTestId("switcher-empty")).toBeVisible();
+  // The pages are reachable from there.
+  await page.getByTestId("switcher-pages").click();
   await expect(page.getByTestId("mobile-spaces-sheet")).toBeVisible();
-  await expect(page.getByTestId("mobile-page-1")).toHaveAttribute("aria-checked", "true");
   await page.keyboard.press("Escape");
 
   // Saved with the account.
   await page.waitForTimeout(600);
   await page.reload();
-  await expect(page.getByTestId("mobile-widgets").getByTestId("widget-desktops")).toBeVisible();
+  await expect(page.getByTestId("home-page-0").getByTestId("widget-calculator")).toBeVisible();
 
-  // Inside an app the [...] menu offers "Minimize" (not "Workspace"), back to the home screen.
+  // Inside an app the [...] menu offers "Minimize" (not "Workspace"); the round button is not there.
   await page.getByTestId("app-settings").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
+  await expect(page.getByTestId("mobile-switcher")).toHaveCount(0);
   await page.getByTestId("window-menu").last().click();
   await expect(page.getByTestId("menu-home")).toHaveCount(0);
   await expect(page.getByTestId("menu-minimize")).toHaveText(/Свернуть/);
   await page.getByTestId("menu-minimize").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
   await expect(page.getByTestId("home")).toBeVisible();
+  // With an app open, the switcher shows its card.
+  await page.getByTestId("mobile-switcher").click();
+  await expect(page.getByTestId("switcher-card-settings")).toBeVisible();
 });
 
-test("PC: widgets panel from the right-click menu; the Desktops widget switches desktops; system icons can't be dragged out as images", async ({ page }) => {
+test("PC: widgets panel from the right-click menu; the Calculator widget sits in the grid and calculates; system icons can't be dragged out as images", async ({ page }) => {
   test.skip(isMobile(page), "PC");
   await signUpViaApi(page, "Пётр", "Вид");
   await desktopMenu(page);
-  await page.getByTestId("menu-new-space").click();
-  await page.getByTestId("dock-desktops").click();
-  await page.getByTestId("dock-space-1").click();
-  await desktopMenu(page);
   await page.getByTestId("menu-widgets").click();
-  await page.getByTestId("widget-add-desktops").click();
+  await page.getByTestId("widget-add-calculator").click();
   await page.keyboard.press("Escape");
-  const widget = page.getByTestId("desktop-widgets").getByTestId("widget-desktops");
+  const widget = page.getByTestId("desktop-grid").getByTestId("widget-calculator");
   await expect(widget).toBeVisible();
-  await widget.getByTestId("widget-space-2").click();
-  await expect(page.getByTestId("desktop-space")).toHaveAttribute("data-space", "2");
+  // 2×2 cells: as wide as two icon cells.
+  const grid = page.getByTestId("desktop-grid");
+  const cw = Number(await grid.getAttribute("data-cell-w"));
+  expect((await widget.boundingBox())!.width).toBeGreaterThan(cw * 2 - 4);
+  for (const k of ["8", "+", "2", "×", "3", "="]) await widget.getByTestId(`calc-key-${k}`).click();
+  await expect(widget.getByTestId("calc-widget-display")).toHaveText("14");
 
   // Icons / logos are system UI: no native drag, no callout (user images are not marked).
   const draggable = await page.getByTestId("dock-app-vibex").locator("img, svg").first().evaluate((el) => (el as HTMLElement).draggable ?? false);

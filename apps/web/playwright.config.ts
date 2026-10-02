@@ -21,7 +21,10 @@ export default defineConfig({
       // Without a UTF-8 locale (bare CI containers) Chromium saves non-ASCII
       // download names as "download"; real browsers keep them.
       env: { ...process.env, LANG: process.env.LANG || "C.UTF-8" },
+      // Step 2.3: voice messages / video circles are recorded from a fake microphone and camera.
+      args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
     },
+    permissions: ["microphone", "camera"],
   },
   projects: [
     { name: "mobile", use: { ...devices["Pixel 7"], browserName: "chromium" } },

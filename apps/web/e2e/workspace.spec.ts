@@ -323,8 +323,10 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await finger.up();
   await expect(overlay).toHaveCount(0);
   // The folder of one dissolves: Mail, Settings and Vibex are on the page again.
-  const top = page.locator('[data-home-container="mobile:0"] > [data-home-item]');
+  const top = page.locator('[data-home-container="mobile:0"] [data-home-item]');
   await expect(top).toHaveCount(3);
+  // Step 2.3 grid: the dropped icon glides into its cell (layout animation) — tap once everything rests.
+  await page.waitForTimeout(500);
   const app = page.locator('[data-home-container="mobile:0"] [data-testid^="app-"]').first();
   await finger.tap(await center(app.getByTestId("home-remove-badge")));
   await expect(top).toHaveCount(2);
@@ -395,7 +397,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   expect(await dockOrder()).toEqual(["settings"]);
 });
 
-test("phone: long press → brush → View switches Grid / Categories in place, menu stays open; saved to the account", async ({ page }) => {
+test("phone: long press → brush → View toggles Grid / Categories in one tap, menu stays open; saved to the account", async ({ page }) => {
   test.skip(!isMobile(page), "phone home");
   await signUpViaApi(page, "Ли", "Ван");
   const finger = await Finger.on(page);
@@ -406,8 +408,10 @@ test("phone: long press → brush → View switches Grid / Categories in place, 
   await finger.longPress({ x: box.x + box.width / 2, y: box.y + box.height - 80 });
   await page.getByTestId("home-appearance").click();
   for (const id of ["brush-wallpaper", "brush-view-row", "brush-widgets"]) await expect(page.getByTestId(id)).toBeVisible();
-  await expect(page.getByTestId("brush-view-grid")).toHaveAttribute("aria-checked", "true");
-  await page.getByTestId("brush-view-categories").click();
+  // Step 2.3: the row itself is the toggle — no second panel.
+  await expect(page.getByTestId("brush-view-row")).toHaveAttribute("data-view", "grid");
+  await expect(page.getByTestId("brush-view-grid")).toHaveCount(0);
+  await page.getByTestId("brush-view-row").click();
   await expect(page.getByTestId("home-categories")).toBeVisible();
   await expect(page.getByTestId("brush-menu")).toBeVisible(); // still open
   await expect(page.getByTestId("brush-view-row")).toContainText("По категориям");

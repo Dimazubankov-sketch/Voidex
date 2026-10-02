@@ -420,7 +420,8 @@ function bumpComments(postId: string, by: number) {
   const fix = (p: VibexPostDto): VibexPostDto =>
     p.id === postId ? { ...p, comments: Math.max(0, p.comments + by) } : p.repostOf?.id === postId ? { ...p, repostOf: { ...p.repostOf, comments: Math.max(0, p.repostOf.comments + by) } } : p;
   for (const [key, data] of queryClient.getQueriesData<PostsData>({ queryKey: vk.all })) {
-    if (data && "pages" in data && Array.isArray(data.pages) && data.pages[0] && "items" in data.pages[0]) {
+    // Only post lists: other Vibex queries hold blob URLs (strings), people, chats…
+    if (data && typeof data === "object" && "pages" in data && Array.isArray(data.pages) && data.pages[0] && typeof data.pages[0] === "object" && "items" in data.pages[0]) {
       queryClient.setQueryData<PostsData>(key, { ...data, pages: data.pages.map((pg) => ({ ...pg, items: pg.items.map((x) => (x && "kind" in x ? fix(x) : x)) })) });
     }
   }
