@@ -218,6 +218,28 @@ export function useSendMessage(chatId: string) {
   });
 }
 
+/** Step 2.5: the sender deletes their message for everyone (a placeholder stays). */
+export function useDeleteMessage(chatId: string) {
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/vibex/messages/${id}`),
+    onSuccess: (_r, id) => {
+      queryClient.setQueryData<MessagesData>(vk.messages(chatId), (d) =>
+        d
+          ? {
+              ...d,
+              pages: d.pages.map((p) => ({
+                ...p,
+                items: p.items.map((m) => (m.id === id ? { ...m, deleted: true, text: "", files: [], durationMs: null, replyTo: null, sharedPost: undefined } : m)),
+              })),
+            }
+          : d,
+      );
+      void queryClient.invalidateQueries({ queryKey: vk.messages(chatId) });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
+    },
+  });
+}
+
 export function markRead(chatId: string) {
   return api.post(`/api/vibex/chats/${chatId}/read`).then(() => {
     queryClient.setQueryData<VibexChatDto[]>(vk.chats, (list) => list?.map((c) => (c.id === chatId ? { ...c, unread: 0 } : c)));

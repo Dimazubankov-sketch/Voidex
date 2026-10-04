@@ -9,6 +9,33 @@ import { formatDuration } from "./recorder";
 
 const BARS = 36;
 
+/** Step 2.5: one voice message / circle plays at a time — starting one pauses the others. */
+let playingNow: HTMLMediaElement | null = null;
+function takeOver(el: HTMLMediaElement) {
+  if (playingNow && playingNow !== el && !playingNow.paused) playingNow.pause();
+  playingNow = el;
+}
+
+/** Step 2.5: voice messages I have listened to (this device), for the "unplayed" dot. */
+const PLAYED_KEY = "vx.vibex.played";
+function playedSet(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(PLAYED_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+function markPlayed(id: string) {
+  try {
+    const s = playedSet();
+    if (s.has(id)) return;
+    s.add(id);
+    localStorage.setItem(PLAYED_KEY, JSON.stringify([...s].slice(-2000)));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** A stable pseudo-waveform from the file id (used until / unless the audio is decoded). */
 function seededBars(id: string): number[] {
   let h = 2166136261;
@@ -61,6 +88,7 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
+  const [played, setPlayed] = useState(() => mine || playedSet().has(file.id));
   const total = durationMs ?? 0;
 
   const toggle = () => {
@@ -69,15 +97,25 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
     if (a.paused) void a.play();
     else a.pause();
   };
-  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+  const length = () => {
     const a = audio.current;
-    if (!a || !Number.isFinite(a.duration)) return;
+    return a && Number.isFinite(a.duration) && a.duration > 0 ? a.duration : total / 1000;
+  };
+  const seekTo = (fraction: number) => {
+    const a = audio.current;
+    const d = length();
+    if (!a || !d) return;
+    const f = Math.max(0, Math.min(1, fraction));
+    a.currentTime = f * d;
+    setPos(f);
+  };
+  const seek = (e: React.PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    a.currentTime = ((e.clientX - r.left) / r.width) * a.duration;
+    seekTo((e.clientX - r.left) / r.width);
   };
 
   return (
-    <div className="flex w-[240px] max-w-full items-center gap-2.5 px-1.5 py-1" data-testid="voice-message">
+    <div className="flex w-[240px] max-w-full items-center gap-2.5 px-1.5 py-1" data-testid="voice-message" data-played={played || undefined} data-playing={playing || undefined}>
       <button
         type="button"
         onClick={toggle}
@@ -89,7 +127,30 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
         {!src ? <Spinner size={14} /> : playing ? <RiPauseFill className="size-5" /> : <RiPlayFill className="size-5" />}
       </button>
       <div className="min-w-0 flex-1">
-        <div className="flex h-7 cursor-pointer items-center gap-[2px]" onClick={seek} aria-hidden>
+        <div
+          className="flex h-7 cursor-pointer touch-none items-center gap-[2px] rounded outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          role="slider"
+          tabIndex={src ? 0 : -1}
+          aria-label={t("vibex.voice.position")}
+          aria-valuemin={0}
+          aria-valuemax={Math.round(total / 1000)}
+          aria-valuenow={Math.round((pos * total) / 1000)}
+          aria-valuetext={formatDuration(pos * total)}
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            seek(e);
+          }}
+          onPointerMove={(e) => e.buttons && seek(e)}
+          onKeyDown={(e) => {
+            const step = 5 / Math.max(1, length());
+            if (e.key === "ArrowRight") seekTo(pos + step);
+            else if (e.key === "ArrowLeft") seekTo(pos - step);
+            else if (e.key === " " || e.key === "Enter") toggle();
+            else return;
+            e.preventDefault();
+          }}
+          data-testid="voice-wave"
+        >
           {peaks.map((v, i) => (
             <span
               key={i}
@@ -98,8 +159,9 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
             />
           ))}
         </div>
-        <span className={cx("text-[11.5px] tabular-nums", mine ? "text-white/80" : "text-text-tertiary")} data-testid="voice-duration">
-          {formatDuration(playing || pos > 0 ? pos * total : total)}
+        <span className={cx("flex items-center gap-1.5 text-[11.5px] tabular-nums", mine ? "text-white/80" : "text-text-tertiary")}>
+          <span data-testid="voice-duration">{formatDuration(playing || pos > 0 ? pos * total : total)}</span>
+          {!played && <span className="size-1.5 rounded-full bg-primary" aria-label={t("vibex.voice.unplayed")} data-testid="voice-unplayed" />}
         </span>
       </div>
       {src && (
@@ -107,7 +169,14 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
           ref={audio}
           src={src}
           preload="metadata"
-          onPlay={() => setPlaying(true)}
+          onPlay={(e) => {
+            takeOver(e.currentTarget);
+            setPlaying(true);
+            if (!played) {
+              markPlayed(file.id);
+              setPlayed(true);
+            }
+          }}
           onPause={() => setPlaying(false)}
           onEnded={() => {
             setPlaying(false);
@@ -157,7 +226,10 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
           playsInline
           preload="metadata"
           className="size-full rounded-full bg-black object-cover"
-          onPlay={() => setPlaying(true)}
+          onPlay={(e) => {
+            takeOver(e.currentTarget);
+            setPlaying(true);
+          }}
           onPause={() => setPlaying(false)}
           onEnded={() => {
             setPlaying(false);
@@ -188,5 +260,19 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
         <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] tabular-nums text-white">{formatDuration(durationMs)}</span>
       )}
     </button>
+  );
+}
+
+/**
+ * Step 2.5: the "video circle" glyph for the composer — a round message with
+ * its progress ring and a play mark. Deliberately not a camera.
+ */
+export function CircleMessageGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden data-testid="circle-glyph">
+      <circle cx="12" cy="12" r="8.6" stroke="currentColor" strokeWidth="1.7" opacity="0.38" />
+      <path d="M12 3.4a8.6 8.6 0 0 1 8.6 8.6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M10.3 9.1v5.8a.5.5 0 0 0 .76.43l4.6-2.9a.5.5 0 0 0 0-.85l-4.6-2.9a.5.5 0 0 0-.76.42Z" fill="currentColor" />
+    </svg>
   );
 }

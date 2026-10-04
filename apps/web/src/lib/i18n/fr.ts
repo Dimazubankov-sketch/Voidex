@@ -854,4 +854,12 @@ export const fr: Record<MessageKey, string> = {
   "home.removeConfirmTitle2": "Vraiment supprimer les apps sélectionnées ?",
   "home.removeConfirmText2": "Cette action retire les apps sélectionnées du bureau VOIDEX. Les données des apps ne seront pas supprimées.",
   "home.removedManyFromDesktop": "{n} apps retirées du bureau. Elles restent dans le menu des apps.",
+  "vibex.chat.delete": "Supprimer",
+  "vibex.chat.deleted": "Message supprimé",
+  "vibex.chat.deleteTitle": "Supprimer ce message ?",
+  "vibex.chat.deleteBody": "Il sera supprimé pour tout le monde. Les réponses restent.",
+  "vibex.circle.flip": "Changer de caméra",
+  "vibex.voice.position": "Position de lecture",
+  "vibex.voice.unplayed": "Pas encore écouté",
+  "vibex.post.views": "Vues",
 };

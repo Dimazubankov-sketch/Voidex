@@ -91,6 +91,10 @@ function handle(event: ServerEvent) {
       if (prefs?.sound) playChime();
       break;
     }
+    case "vibex.message.deleted":
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
+      break;
     case "notes.changed":
       useNotesSync.setState({ revision: event.revision });
       break;

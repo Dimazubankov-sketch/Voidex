@@ -15,7 +15,7 @@ import {
   RiMoreFill,
   RiPencilLine,
   RiRepeat2Line,
-  RiShareForwardLine,
+  RiEyeLine,
 } from "@remixicon/react";
 import { VIBEX_FILES_MAX, VIBEX_POST_IMAGE_TYPES, VIBEX_POST_VIDEO_TYPES, VIBEX_POST_MAX, detectLanguage, type VibexFileDto, type VibexPersonDto, type VibexPostDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -23,6 +23,7 @@ import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
 import { formatRelative, useLanguage, useT } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { api } from "@/lib/api";
 import { Button, EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { ConfirmDialog, MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
 import {
@@ -105,9 +106,21 @@ function PostText({ post }: { post: VibexPostDto }) {
   );
 }
 
+/** Step 2.5: Vibex's own share mark — a post handed on to others (linked circles), not an arrow. */
+export function ShareGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden data-testid="share-glyph">
+      <circle cx="17.5" cy="5.5" r="2.6" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="6.5" cy="12" r="2.6" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17.5" cy="18.5" r="2.6" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8.8 10.7 15.2 6.8M8.8 13.3l6.4 3.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Icon + number, nothing else: every column the same width, the number always shown (also 0). */
 function ActionButton({
   icon,
-  label,
   aria,
   count,
   onClick,
@@ -115,83 +128,88 @@ function ActionButton({
   activeClass = "text-primary",
   testId,
   pressed,
-  wide,
 }: {
   icon: ReactNode;
-  label: string;
-  aria?: string;
-  count?: number;
+  aria: string;
+  count: number;
   onClick: () => void;
   active?: boolean;
   activeClass?: string;
   testId: string;
   pressed?: boolean;
-  /** The text button ("Share"): a bit more room than the icon + counter ones. */
-  wide?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={pressed}
-      aria-label={aria}
+      aria-label={`${aria}: ${count}`}
       title={aria}
       className={cx(
-        "flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-xl px-1.5 text-[14px] font-medium leading-none transition-colors hover:bg-surface-secondary active:bg-surface-hover",
-        wide && "flex-[1.6]",
+        "flex h-10 min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 rounded-xl px-1 text-[14px] font-medium leading-none transition-colors hover:bg-surface-secondary active:bg-surface-hover",
         active ? activeClass : "text-text-secondary",
       )}
       data-testid={testId}
     >
       <span className="flex shrink-0">{icon}</span>
-      {/* Very narrow cards keep the icon only (the button keeps its accessible name). */}
-      {label && <span className={cx("min-w-0 truncate", wide && "@max-[260px]:hidden")}>{label}</span>}
-      {!!count && <span className="shrink-0 text-[13px] tabular-nums text-text-tertiary">{count}</span>}
+      <span className="min-w-[1.5ch] text-left tabular-nums" data-testid={`${testId}-count`}>
+        {formatCount(count)}
+      </span>
     </button>
   );
 }
 
-/** Voyzen's action row: ❤ · 💬 · Share — always about the original post. */
+/** 999 → "999", 1200 → "1.2K" (compact, locale-aware). */
+function formatCount(n: number) {
+  return n < 1000 ? String(n) : new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
+/**
+ * Like · comment · share — icons with real counts from the server (0 too),
+ * equal columns; views (unique signed-in viewers) sit apart on the right.
+ * Always about the original post.
+ */
 function PostActions({ post }: { post: VibexPostDto }) {
   const t = useT();
   const action = usePostAction();
   const share = useVibex((s) => s.share);
   const comment = useVibex((s) => s.openComments);
   return (
-    // Inside the card, under the divider: a padded row of fixed height, so the buttons (and
-    // their hover background) never leave the card, whatever the width or the label length.
-    <div className="@container flex h-[52px] items-center gap-1 border-t px-2" data-testid="post-actions">
-      <ActionButton
-        icon={
-          <motion.span key={String(post.liked)} initial={post.liked ? { scale: 0.6 } : false} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 520, damping: 16 }} className="flex">
-            {post.liked ? <RiHeart3Fill className="size-5" /> : <RiHeart3Line className="size-5" />}
-          </motion.span>
-        }
-        label={post.likes ? String(post.likes) : ""}
-        aria={t("vibex.post.like")}
-        active={post.liked}
-        activeClass="text-[#e0457b]"
-        pressed={post.liked}
-        onClick={() => action.mutate({ post, action: post.liked ? "unlike" : "like" })}
-        testId="post-like"
-      />
-      <ActionButton
-        icon={<RiChat1Line className="size-5" />}
-        label={post.comments ? String(post.comments) : ""}
-        aria={t("vibex.post.comment")}
-        onClick={() => comment(post.id)}
-        testId="post-comment"
-      />
-      <ActionButton
-        icon={<RiShareForwardLine className="size-5" />}
-        label={t("vibex.post.share")}
-        aria={t("vibex.post.share")}
-        wide
-        count={post.reposts}
-        active={post.reposted}
-        onClick={() => share(post)}
-        testId="post-share"
-      />
+    <div className="flex h-[52px] items-center gap-1 border-t px-2" data-testid="post-actions">
+      <div className="flex min-w-0 flex-[3] items-center gap-1">
+        <ActionButton
+          icon={
+            <motion.span key={String(post.liked)} initial={post.liked ? { scale: 0.6 } : false} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 520, damping: 16 }} className="flex">
+              {post.liked ? <RiHeart3Fill className="size-5" /> : <RiHeart3Line className="size-5" />}
+            </motion.span>
+          }
+          count={post.likes}
+          aria={t("vibex.post.like")}
+          active={post.liked}
+          activeClass="text-[#e0457b]"
+          pressed={post.liked}
+          onClick={() => action.mutate({ post, action: post.liked ? "unlike" : "like" })}
+          testId="post-like"
+        />
+        <ActionButton icon={<RiChat1Line className="size-5" />} count={post.comments} aria={t("vibex.post.comment")} onClick={() => comment(post.id)} testId="post-comment" />
+        <ActionButton
+          icon={<ShareGlyph className="size-5" />}
+          count={post.shares ?? post.reposts}
+          aria={t("vibex.post.share")}
+          active={post.reposted}
+          onClick={() => share(post)}
+          testId="post-share"
+        />
+      </div>
+      <span
+        className="ml-1 flex shrink-0 items-center gap-1 border-l pl-3 pr-2 text-[13px] tabular-nums text-text-tertiary"
+        aria-label={`${t("vibex.post.views")}: ${post.views ?? 0}`}
+        title={t("vibex.post.views")}
+        data-testid="post-views"
+      >
+        <RiEyeLine className="size-4" aria-hidden />
+        {formatCount(post.views ?? 0)}
+      </span>
     </div>
   );
 }
@@ -385,10 +403,13 @@ export function NestedPost({ post, actions }: { post: VibexPostDto; actions?: bo
 export function PostCard({ post }: { post: VibexPostDto }) {
   const t = useT();
   const shell = "overflow-hidden rounded-2xl border border-border bg-surface shadow-tile";
+  // Step 2.5: a view counts once the post (the original, for a repost) was really on screen.
+  const target = post.kind === "repost" ? post.repostOf : post;
+  const seen = useSeen(target && !target.mine ? target.id : null);
   if (post.kind === "repost") {
     const orig = post.repostOf;
     return (
-      <article className={shell} data-testid="post-card" data-kind="repost" data-post-id={post.id}>
+      <article ref={seen} className={shell} data-testid="post-card" data-kind="repost" data-post-id={post.id}>
         <div className="flex items-start gap-2 p-4 pb-3">
           <PersonLine person={post.author} at={post.createdAt} note={t("vibex.post.sharedBy")} />
           {orig && <PostMenu post={orig} wrapper={post} />}
@@ -399,7 +420,7 @@ export function PostCard({ post }: { post: VibexPostDto }) {
     );
   }
   return (
-    <article className={shell} data-testid="post-card" data-kind="post" data-post-id={post.id}>
+    <article ref={seen} className={shell} data-testid="post-card" data-kind="post" data-post-id={post.id}>
       <div className="flex items-start gap-2 p-4 pb-3">
         <PersonLine person={post.author} at={post.createdAt} edited={!!post.editedAt} />
         <PostMenu post={post} />
@@ -413,6 +434,46 @@ export function PostCard({ post }: { post: VibexPostDto }) {
       <PostActions post={post} />
     </article>
   );
+}
+
+// ------------------------------------------------------------------- views
+
+/** Posts seen on this device in this session (sent once), and the batch waiting to go. */
+const sentViews = new Set<string>();
+let pendingViews: string[] = [];
+let viewTimer: number | undefined;
+function queueView(id: string) {
+  if (sentViews.has(id)) return;
+  sentViews.add(id);
+  pendingViews.push(id);
+  window.clearTimeout(viewTimer);
+  viewTimer = window.setTimeout(() => {
+    const postIds = pendingViews.splice(0, 50);
+    pendingViews = pendingViews.slice(0);
+    if (postIds.length) void api.post("/api/vibex/views", { postIds }).catch(() => postIds.forEach((p) => sentViews.delete(p)));
+  }, 1500);
+}
+
+/** Reports a view when at least half of the card stays visible for a second. */
+function useSeen(id: string | null) {
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!el || !id || sentViews.has(id)) return;
+    let timer: number | undefined;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        window.clearTimeout(timer);
+        if (e?.isIntersecting && document.visibilityState === "visible") timer = window.setTimeout(() => queueView(id), 1000);
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(el);
+    return () => {
+      window.clearTimeout(timer);
+      io.disconnect();
+    };
+  }, [el, id]);
+  return setEl;
 }
 
 // ------------------------------------------------------------------- lists

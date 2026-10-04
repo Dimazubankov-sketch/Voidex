@@ -854,4 +854,12 @@ export const tr: Record<MessageKey, string> = {
   "home.removeConfirmTitle2": "Seçili uygulamalar gerçekten silinsin mi?",
   "home.removeConfirmText2": "Bu işlem seçili uygulamaları VOIDEX masaüstünden kaldırır. Uygulama verileri silinmez.",
   "home.removedManyFromDesktop": "{n} uygulama masaüstünden kaldırıldı. Uygulama menüsünde duruyorlar.",
+  "vibex.chat.delete": "Sil",
+  "vibex.chat.deleted": "Mesaj silindi",
+  "vibex.chat.deleteTitle": "Bu mesaj silinsin mi?",
+  "vibex.chat.deleteBody": "Sohbetteki herkes için silinir. Yanıtlar kalır.",
+  "vibex.circle.flip": "Kamerayı değiştir",
+  "vibex.voice.position": "Oynatma konumu",
+  "vibex.voice.unplayed": "Henüz dinlenmedi",
+  "vibex.post.views": "Görüntülenme",
 };

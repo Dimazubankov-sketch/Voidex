@@ -869,4 +869,12 @@ export const ru: Record<MessageKey, string> = {
   "home.removeConfirmTitle2": "Точно удалить выбранные приложения?",
   "home.removeConfirmText2": "Это действие удалит выбранные приложения с рабочего стола VOIDEX. Данные приложений не будут удалены.",
   "home.removedManyFromDesktop": "Приложения убраны с рабочего стола: {n}. Они остались в меню приложений.",
+  "vibex.chat.delete": "Удалить",
+  "vibex.chat.deleted": "Сообщение удалено",
+  "vibex.chat.deleteTitle": "Удалить сообщение?",
+  "vibex.chat.deleteBody": "Сообщение удалится у всех участников чата. Ответы на него останутся.",
+  "vibex.circle.flip": "Сменить камеру",
+  "vibex.voice.position": "Позиция воспроизведения",
+  "vibex.voice.unplayed": "Ещё не прослушано",
+  "vibex.post.views": "Просмотры",
 };

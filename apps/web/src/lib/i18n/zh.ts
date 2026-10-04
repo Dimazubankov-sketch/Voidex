@@ -854,4 +854,12 @@ export const zh: Record<MessageKey, string> = {
   "home.removeConfirmTitle2": "确定删除所选应用？",
   "home.removeConfirmText2": "此操作会将所选应用从 VOIDEX 桌面移除。应用数据不会被删除。",
   "home.removedManyFromDesktop": "已从桌面移除 {n} 个应用。它们仍在应用菜单中。",
+  "vibex.chat.delete": "删除",
+  "vibex.chat.deleted": "消息已删除",
+  "vibex.chat.deleteTitle": "删除这条消息？",
+  "vibex.chat.deleteBody": "将为聊天中的所有人删除。回复会保留。",
+  "vibex.circle.flip": "切换摄像头",
+  "vibex.voice.position": "播放位置",
+  "vibex.voice.unplayed": "尚未收听",
+  "vibex.post.views": "浏览量",
 };

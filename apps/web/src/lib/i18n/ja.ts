@@ -854,4 +854,12 @@ export const ja: Record<MessageKey, string> = {
   "home.removeConfirmTitle2": "本当に選択したアプリを削除しますか？",
   "home.removeConfirmText2": "この操作で選択したアプリが VOIDEX のデスクトップから削除されます。アプリのデータは削除されません。",
   "home.removedManyFromDesktop": "{n} 個のアプリをデスクトップから削除しました。アプリメニューには残っています。",
+  "vibex.chat.delete": "削除",
+  "vibex.chat.deleted": "メッセージは削除されました",
+  "vibex.chat.deleteTitle": "このメッセージを削除しますか？",
+  "vibex.chat.deleteBody": "チャットの全員から削除されます。返信は残ります。",
+  "vibex.circle.flip": "カメラを切り替え",
+  "vibex.voice.position": "再生位置",
+  "vibex.voice.unplayed": "未再生",
+  "vibex.post.views": "閲覧数",
 };

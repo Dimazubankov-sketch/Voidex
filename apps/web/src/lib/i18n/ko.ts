@@ -854,4 +854,12 @@ export const ko: Record<MessageKey, string> = {
   "home.removeConfirmTitle2": "선택한 앱을 정말 삭제할까요?",
   "home.removeConfirmText2": "이 작업은 선택한 앱을 VOIDEX 바탕화면에서 삭제합니다. 앱 데이터는 삭제되지 않습니다.",
   "home.removedManyFromDesktop": "바탕화면에서 앱 {n}개를 삭제했습니다. 앱 메뉴에는 남아 있습니다.",
+  "vibex.chat.delete": "삭제",
+  "vibex.chat.deleted": "메시지가 삭제됨",
+  "vibex.chat.deleteTitle": "이 메시지를 삭제할까요?",
+  "vibex.chat.deleteBody": "채팅의 모든 사람에게서 삭제됩니다. 답장은 남습니다.",
+  "vibex.circle.flip": "카메라 전환",
+  "vibex.voice.position": "재생 위치",
+  "vibex.voice.unplayed": "아직 듣지 않음",
+  "vibex.post.views": "조회수",
 };

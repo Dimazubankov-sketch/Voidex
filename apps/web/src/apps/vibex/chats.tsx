@@ -6,6 +6,7 @@ import {
   RiCheckDoubleLine,
   RiCheckLine,
   RiCloseLine,
+  RiDeleteBinLine,
   RiFileLine,
   RiImageLine,
   RiMoreFill,
@@ -15,7 +16,6 @@ import {
   RiShareForwardLine,
   RiUnpinLine,
   RiUserLine,
-  RiCameraLensLine,
   RiMicLine,
   RiPhoneLine,
   RiReplyLine,
@@ -30,10 +30,10 @@ import { formatDate, formatShortDate, useLanguage, useT } from "@/lib/i18n";
 import { ATTACHMENT_ACCEPT } from "@/apps/mail/attachments";
 import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
-import { MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
-import { checkVibexFile, filesApi, markRead, useChat, useChats, useMessages, useSendMessage, useSetPins } from "./data";
+import { ConfirmDialog, MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
+import { checkVibexFile, filesApi, markRead, useChat, useChats, useDeleteMessage, useMessages, useSendMessage, useSetPins } from "./data";
 import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
-import { CircleBubble, VoiceBubble } from "./media-bubbles";
+import { CircleBubble, CircleMessageGlyph, VoiceBubble } from "./media-bubbles";
 import { CircleRecorder, VoiceRecordingBar, recordingSupported, useRecorder, type RecordKind } from "./recorder";
 import { CallSheet, type CallKind } from "./calls";
 import { useSession } from "@/lib/session";
@@ -54,7 +54,9 @@ function Preview({ chat }: { chat: VibexChatDto }) {
   if (!m) return <span className="text-text-tertiary">{chat.group ? t("vibex.group.created") : t("vibex.chat.empty", { name: chat.peer?.firstName ?? "" })}</span>;
   // Groups: who wrote it.
   const author = chat.group && !m.mine ? chat.group.members.find((x) => x.id === m.senderId)?.firstName : null;
-  const what = m.kind === "voice"
+  const what = m.deleted
+    ? t("vibex.chat.deleted")
+    : m.kind === "voice"
     ? t("vibex.voice.message")
     : m.kind === "circle"
       ? t("vibex.circle.message")
@@ -69,7 +71,7 @@ function Preview({ chat }: { chat: VibexChatDto }) {
     <>
       {m.mine && <span className="text-text-secondary">{t("vibex.chats.you")} </span>}
       {author && <span className="text-text-secondary">{author}: </span>}
-      {m.kind === "text" && !m.text && m.files.length > 0 &&
+      {!m.deleted && m.kind === "text" && !m.text && m.files.length > 0 &&
         (m.files.some((f) => f.kind === "image") ? (
           <RiImageLine className="-mt-0.5 mr-1 inline size-3.5 text-text-tertiary" />
         ) : (
@@ -451,7 +453,13 @@ function ReplyQuote({ reply, mine, nameOf }: { reply: NonNullable<VibexMessageDt
   const t = useT();
   const me = useSession((s) => s.user)!;
   const who = reply.senderId === me.id ? t("vibex.chats.you") : nameOf(reply.senderId);
-  const what = reply.kind === "voice" ? t("vibex.voice.message") : reply.kind === "circle" ? t("vibex.circle.message") : reply.text || t("vibex.chats.file");
+  const what = reply.deleted
+    ? t("vibex.chat.deleted")
+    : reply.kind === "voice"
+      ? t("vibex.voice.message")
+      : reply.kind === "circle"
+        ? t("vibex.circle.message")
+        : reply.text || t("vibex.chats.file");
   return (
     <div className={cx("mx-1.5 mt-1 rounded-[14px] border-l-[3px] px-2.5 py-1 text-[12.5px]", mine ? "border-white/70 bg-white/15" : "border-primary bg-primary/[0.07]")} data-testid="message-reply-quote">
       <span className={cx("block font-semibold", mine ? "text-white" : "text-primary")}>{who}</span>
@@ -478,6 +486,7 @@ function Bubble({
   nameOf,
   author,
   onReply,
+  onDelete,
 }: {
   msg: VibexMessageDto;
   peerReadAt: string | null;
@@ -486,16 +495,19 @@ function Bubble({
   /** Groups: the sender's name above the first message of a run. */
   author?: string | null;
   onReply: (m: VibexMessageDto) => void;
+  /** Step 2.5: delete my own message (asks first). */
+  onDelete: (m: VibexMessageDto) => void;
 }) {
   const t = useT();
   const lang = useLanguage();
   const [viewer, setViewer] = useState<number | null>(null);
+  const [actions, setActions] = useState(false);
   const images = msg.files.filter((f) => f.kind === "image" || (msg.kind === "text" && f.kind === "video"));
   const files = msg.files.filter((f) => (f.kind === "file" || f.kind === "audio") && msg.kind === "text");
   const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(msg.createdAt));
   const mine = msg.mine;
-  // Phones: press and hold a message to reply to it (a mouse uses the reply button).
-  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && onReply(msg), ms: 450 }).handlers;
+  // Phones: press and hold a message for its actions (reply, delete mine); a mouse uses the buttons.
+  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && !msg.deleted && setActions(true), ms: 450 }).handlers;
   const meta = (
     <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mine ? "text-white/75" : "text-text-tertiary")}>
       {time}
@@ -514,10 +526,53 @@ function Bubble({
       <RiReplyLine className="size-4" />
     </button>
   );
+  const deleteButton = mine && (
+    <button
+      type="button"
+      onClick={() => onDelete(msg)}
+      aria-label={t("vibex.chat.delete")}
+      title={t("vibex.chat.delete")}
+      className="flex size-8 shrink-0 items-center justify-center self-center rounded-full text-text-tertiary opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+      data-testid="message-delete"
+    >
+      <RiDeleteBinLine className="size-4" />
+    </button>
+  );
+  const actionSheet = (
+    <Sheet open={actions} onClose={() => setActions(false)} testId="message-actions">
+      <MenuList
+        onDone={() => setActions(false)}
+        items={[
+          { id: "reply", label: t("vibex.chat.reply"), icon: <RiReplyLine className="size-5" />, onSelect: () => onReply(msg) },
+          ...(mine ? [{ id: "delete", label: t("vibex.chat.delete"), icon: <RiDeleteBinLine className="size-5" />, danger: true, onSelect: () => onDelete(msg) }] : []),
+        ]}
+      />
+    </Sheet>
+  );
+
+  // Step 2.5: deleted by its sender — a quiet placeholder, nothing else.
+  if (msg.deleted) {
+    return (
+      <div className={cx("flex w-full items-center", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-deleted="true">
+        <div
+          className={cx(
+            "flex items-center gap-1.5 rounded-[22px] border border-dashed px-3.5 py-2 text-[14px] italic",
+            mine ? "border-primary/35 text-primary/80" : "border-border-strong text-text-tertiary",
+          )}
+          data-testid="message-deleted"
+        >
+          <RiDeleteBinLine className="size-4 shrink-0 not-italic" aria-hidden />
+          {t("vibex.chat.deleted")}
+          <span className="ml-1 text-[11px] not-italic tabular-nums opacity-80">{time}</span>
+        </div>
+      </div>
+    );
+  }
 
   if (msg.kind === "circle" && msg.files[0]) {
     return (
       <div className={cx("group flex w-full items-end gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind="circle" {...hold}>
+        {deleteButton}
         {mine && replyButton}
         <div className="flex flex-col items-end gap-1">
           {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} nameOf={nameOf} />}
@@ -525,12 +580,14 @@ function Bubble({
           <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
         </div>
         {!mine && replyButton}
+        {actionSheet}
       </div>
     );
   }
 
   return (
     <div className={cx("group flex w-full items-center gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind={msg.kind} {...hold}>
+      {deleteButton}
       {mine && replyButton}
       <div
         className={cx(
@@ -580,6 +637,7 @@ function Bubble({
       </div>
       {!mine && replyButton}
       <Lightbox files={images} index={viewer} onIndex={setViewer} />
+      {actionSheet}
     </div>
   );
 }
@@ -591,6 +649,8 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
   const items = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
   const top = useRef<HTMLDivElement>(null);
   const nameOf = useNameOf(chat);
+  const del = useDeleteMessage(chat.id);
+  const [deleting, setDeleting] = useState<VibexMessageDto | null>(null);
 
   // Load older messages when the top comes into view.
   useEffect(() => {
@@ -644,6 +704,7 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
               nameOf={nameOf}
               author={chat.group && !m.mine && (!older || older.senderId !== m.senderId || dayBreak) ? nameOf(m.senderId) : null}
               onReply={onReply}
+              onDelete={setDeleting}
             />
           </div>
         );
@@ -651,6 +712,19 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
       <div ref={top} className="flex justify-center py-2">
         {q.isFetchingNextPage && <Spinner />}
       </div>
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          const m = deleting;
+          setDeleting(null);
+          if (m) del.mutate(m.id, { onError: (e) => toast({ title: errorMessage(t, e), tone: "danger" }) });
+        }}
+        title={t("vibex.chat.deleteTitle")}
+        message={t("vibex.chat.deleteBody")}
+        confirmLabel={t("vibex.chat.delete")}
+        danger
+      />
     </div>
   );
 }
@@ -794,7 +868,16 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
         </div>
       )}
       <AnimatePresence>
-        {circle.state !== "idle" && <CircleRecorder stream={circle.stream} elapsed={circle.elapsed} max={circle.max} onCancel={circle.cancel} onSend={() => void sendRecording("circle")} sending={sendingRec} />}
+        {circle.state !== "idle" && <CircleRecorder
+            stream={circle.stream}
+            elapsed={circle.elapsed}
+            max={circle.max}
+            onCancel={circle.cancel}
+            onSend={() => void sendRecording("circle")}
+            sending={sendingRec}
+            facing={circle.facing}
+            onFlip={circle.canFlip ? () => void circle.flip() : undefined}
+          />}
       </AnimatePresence>
       {voice.state === "recording" ? (
         <VoiceRecordingBar elapsed={voice.elapsed} levels={voice.levels.current} onCancel={voice.cancel} onSend={() => void sendRecording("voice")} sending={sendingRec} />
@@ -834,7 +917,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
         {empty ? (
           <>
             <IconButton label={t("vibex.circle.record")} onClick={() => void record("circle")} data-testid="chat-circle">
-              <RiCameraLensLine className="size-5" />
+              <CircleMessageGlyph className="size-[22px]" />
             </IconButton>
             <motion.button
               type="button"

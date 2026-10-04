@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { RiCloseLine, RiDeleteBinLine, RiSendPlaneFill } from "@remixicon/react";
+import { RiCameraSwitchLine, RiCloseLine, RiDeleteBinLine, RiSendPlaneFill } from "@remixicon/react";
+import { cx } from "@/lib/cx";
 import { VIBEX_CIRCLE_MAX_MS, VIBEX_VOICE_MAX_MS } from "@voidex/shared";
 import { useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
@@ -51,6 +52,9 @@ export function useRecorder(kind: RecordKind) {
   const levels = useRef<number[]>([]);
   const analyser = useRef<{ ctx: AudioContext; node: AnalyserNode } | null>(null);
   const resolveStop = useRef<((r: Recording | null) => void) | null>(null);
+  /** Step 2.5: which camera a circle uses (front by default) and whether there is a second one. */
+  const [facing, setFacing] = useState<"user" | "environment">("user");
+  const [canFlip, setCanFlip] = useState(false);
   const max = kind === "voice" ? VIBEX_VOICE_MAX_MS : VIBEX_CIRCLE_MAX_MS;
 
   const cleanup = useCallback(() => {
@@ -67,11 +71,12 @@ export function useRecorder(kind: RecordKind) {
 
   useEffect(() => () => cleanup(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const start = useCallback(async () => {
-    if (state !== "idle") return;
-    setState("starting");
-    try {
-      const media = await navigator.mediaDevices.getUserMedia(kind === "voice" ? { audio: true } : { audio: true, video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 480 } } });
+  const constraints = (face: "user" | "environment"): MediaStreamConstraints =>
+    kind === "voice" ? { audio: true } : { audio: true, video: { facingMode: face, width: { ideal: 480 }, height: { ideal: 480 } } };
+
+  /** Records from this stream (a fresh clip: chunks and time start over). */
+  const begin = useCallback(
+    (media: MediaStream) => {
       const type = TYPES[kind].find((t) => MediaRecorder.isTypeSupported?.(t.mime)) ?? TYPES[kind][0]!;
       const r = new MediaRecorder(media, { mimeType: type.mime, ...(kind === "circle" ? { videoBitsPerSecond: 900_000 } : { audioBitsPerSecond: 48_000 }) });
       chunks.current = [];
@@ -98,7 +103,9 @@ export function useRecorder(kind: RecordKind) {
       setStream(media);
       r.start(250);
       started.current = performance.now();
+      setElapsed(0);
       setState("recording");
+      window.clearInterval(timer.current);
       timer.current = window.setInterval(() => {
         const ms = performance.now() - started.current;
         setElapsed(ms);
@@ -112,11 +119,56 @@ export function useRecorder(kind: RecordKind) {
         }
         if (ms >= max) rec.current?.state === "recording" && rec.current.stop();
       }, 100);
+    },
+    [kind, max],
+  );
+
+  const start = useCallback(async () => {
+    if (state !== "idle") return;
+    setState("starting");
+    try {
+      setFacing("user");
+      const media = await navigator.mediaDevices.getUserMedia(constraints("user"));
+      begin(media);
+      if (kind === "circle") {
+        // Labels / devices are known once the permission is granted: offer the flip only with two cameras.
+        const cams = (await navigator.mediaDevices.enumerateDevices().catch(() => [])).filter((d) => d.kind === "videoinput");
+        setCanFlip(cams.length > 1);
+      }
     } catch (e) {
       cleanup();
       throw e;
     }
-  }, [state, kind, max, cleanup]);
+  }, [state, kind, begin, cleanup]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Step 2.5: front ↔ rear camera for a circle. The unfinished clip is
+   * dropped (a circle is one shot from one camera), the old camera and
+   * microphone are released, and recording starts over with the other camera.
+   */
+  const flip = useCallback(async () => {
+    if (kind !== "circle" || !rec.current || !canFlip) return;
+    const next = facing === "user" ? "environment" : "user";
+    const old = rec.current;
+    old.onstop = null;
+    old.ondataavailable = null;
+    if (old.state === "recording") old.stop();
+    old.stream.getTracks().forEach((t) => t.stop());
+    void analyser.current?.ctx.close().catch(() => undefined);
+    analyser.current = null;
+    rec.current = null;
+    window.clearInterval(timer.current);
+    setState("starting");
+    try {
+      const media = await navigator.mediaDevices.getUserMedia(constraints(next));
+      setFacing(next);
+      begin(media);
+    } catch {
+      // The other camera failed: back to the one that worked.
+      const media = await navigator.mediaDevices.getUserMedia(constraints(facing));
+      begin(media);
+    }
+  }, [kind, canFlip, facing, begin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Stops and returns the recording (null if nothing was captured). */
   const stop = useCallback(async (): Promise<Recording | null> => {
@@ -138,7 +190,7 @@ export function useRecorder(kind: RecordKind) {
     cleanup();
   }, [cleanup]);
 
-  return { state, elapsed, stream, levels, start, stop, cancel, max };
+  return { state, elapsed, stream, levels, start, stop, cancel, max, facing, canFlip, flip };
 }
 
 export function formatDuration(ms: number) {
@@ -180,7 +232,26 @@ export function VoiceRecordingBar({ elapsed, levels, onCancel, onSend, sending }
 }
 
 /** Fullscreen round camera preview while a video circle is being recorded. */
-export function CircleRecorder({ stream, elapsed, max, onCancel, onSend, sending }: { stream: MediaStream | null; elapsed: number; max: number; onCancel: () => void; onSend: () => void; sending: boolean }) {
+export function CircleRecorder({
+  stream,
+  elapsed,
+  max,
+  onCancel,
+  onSend,
+  sending,
+  facing = "user",
+  onFlip,
+}: {
+  stream: MediaStream | null;
+  elapsed: number;
+  max: number;
+  onCancel: () => void;
+  onSend: () => void;
+  sending: boolean;
+  facing?: "user" | "environment";
+  /** Only when the device has a second camera. */
+  onFlip?: () => void;
+}) {
   const t = useT();
   const video = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -205,7 +276,7 @@ export function CircleRecorder({ stream, elapsed, max, onCancel, onSend, sending
           <circle cx={(size + 16) / 2} cy={(size + 16) / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="4" />
           <circle cx={(size + 16) / 2} cy={(size + 16) / 2} r={r} fill="none" stroke="#8b7bff" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, elapsed / max))} />
         </svg>
-        <video ref={video} autoPlay muted playsInline className="absolute left-2 top-2 rounded-full bg-black object-cover [transform:scaleX(-1)]" style={{ width: size, height: size }} />
+        <video ref={video} autoPlay muted playsInline className={cx("absolute left-2 top-2 rounded-full bg-black object-cover", facing === "user" && "[transform:scaleX(-1)]")} style={{ width: size, height: size }} />
         {!stream && <Spinner className="absolute inset-0 m-auto text-white" />}
       </div>
       <span className="flex items-center gap-2 text-[15px] tabular-nums text-white">
@@ -216,6 +287,18 @@ export function CircleRecorder({ stream, elapsed, max, onCancel, onSend, sending
         <button type="button" onClick={onCancel} aria-label={t("vibex.voice.cancel")} className="flex size-14 items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20" data-testid="circle-cancel">
           <RiCloseLine className="size-7" />
         </button>
+        {onFlip && (
+          <button
+            type="button"
+            onClick={onFlip}
+            aria-label={t("vibex.circle.flip")}
+            title={t("vibex.circle.flip")}
+            className="flex size-14 items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20"
+            data-testid="circle-flip"
+          >
+            <RiCameraSwitchLine className="size-6" />
+          </button>
+        )}
         <button type="button" onClick={onSend} disabled={sending} aria-label={t("vibex.chat.send")} className="flex size-16 items-center justify-center rounded-full bg-primary text-white disabled:opacity-60" data-testid="circle-send">
           {sending ? <Spinner size={18} /> : <RiSendPlaneFill className="size-7" />}
         </button>

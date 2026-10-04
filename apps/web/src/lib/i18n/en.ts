@@ -885,6 +885,14 @@ export const en = {
   "home.removeConfirmTitle2": "Really delete the selected apps?",
   "home.removeConfirmText2": "This removes the selected apps from the VOIDEX desktop. The apps' data won't be deleted.",
   "home.removedManyFromDesktop": "{n} apps removed from the desktop. They're still in the app menu.",
+  "vibex.chat.delete": "Delete",
+  "vibex.chat.deleted": "Message deleted",
+  "vibex.chat.deleteTitle": "Delete this message?",
+  "vibex.chat.deleteBody": "It will be deleted for everyone in the chat. Replies to it stay.",
+  "vibex.circle.flip": "Switch camera",
+  "vibex.voice.position": "Playback position",
+  "vibex.voice.unplayed": "Not listened to yet",
+  "vibex.post.views": "Views",
 } as const;
 
 export type MessageKey = keyof typeof en;
