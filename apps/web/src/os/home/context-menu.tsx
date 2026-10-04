@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
   RiAddLine,
+  RiCloseLine,
   RiArrowLeftSLine,
   RiArrowRightSLine,
   RiCheckLine,
@@ -200,9 +201,15 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
       }
       case "dock-app": {
         const id = target.id;
+        const wm = useWM.getState();
+        const windows = Object.values(wm.windows).filter((w) => w.appId === id);
         return [
           { id: "open", label: t("home.open"), icon: <RiShareBoxLine />, onSelect: () => openApp(id) },
-          { id: "unpin", label: t("dock.unpin"), icon: <RiUnpinLine />, onSelect: () => updateLayout((l) => unpinFromDock(l, id)) },
+          // An open app that isn't pinned sits in the dock only while it runs: pin keeps it there.
+          dockEntry(id),
+          ...(windows.length
+            ? [{ id: "close-app", label: t("os.close"), icon: <RiCloseLine />, danger: true, onSelect: () => windows.forEach((w) => useWM.getState().close(w.id)) }]
+            : []),
         ];
       }
       case "dock-desktops":

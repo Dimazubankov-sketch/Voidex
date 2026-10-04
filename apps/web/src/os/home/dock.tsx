@@ -59,6 +59,8 @@ export function DesktopDock() {
   const { layout, apps: installed, ready } = useWorkspaceLayout();
   const mouseX = useMotionValue(Infinity);
   const drag = useHomeUi((s) => s.drag);
+  // Open apps that aren't pinned show up after the pinned ones while they run, and leave when closed.
+  const running = useRunningUnpinned(layout.desktop.dock ?? [], installed.map((a) => a.id));
   if (!ready) return null;
   const scale = layout.desktop.dockScale;
   const tile = DOCK_TILE[scale];
@@ -66,7 +68,7 @@ export function DesktopDock() {
   const desktops = layout.desktop.dockDesktops;
   // A desktop icon dragged over the dock opens a gap where it would land.
   const gapAt = drag && !drag.fromDock && drag.overDock !== undefined ? drag.overDock : null;
-  const glass = apps.length > 0 || desktops;
+  const glass = apps.length > 0 || running.length > 0 || desktops;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 z-[30] flex justify-center px-6" style={{ bottom: BOTTOM }} data-testid="bottom-bar">
@@ -89,10 +91,45 @@ export function DesktopDock() {
           </DockSlot>
         ))}
         {gapAt !== null && gapAt >= apps.length && <DockSlot gap tile={tile}>{null}</DockSlot>}
+        <AnimatePresence initial={false}>
+          {running.length > 0 && (
+            <motion.span key="running-sep" className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-testid="dock-running-separator" />
+          )}
+          {running.map((id) => (
+            <motion.div
+              key={`run-${id}`}
+              layout="position"
+              className="flex items-center"
+              initial={{ opacity: 0, scale: 0.6, width: 0 }}
+              animate={{ opacity: 1, scale: 1, width: tile }}
+              exit={{ opacity: 0, scale: 0.6, width: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              data-testid={`dock-running-${id}`}
+            >
+              <DockApp id={id} layout={layout} mouseX={mouseX} tile={tile} pinned={false} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
         {desktops && <DesktopsItem layout={layout} mouseX={mouseX} tile={tile} />}
       </nav>
     </div>
   );
+}
+
+/** Apps with an open window (in the order they were opened) that aren't pinned to the dock. */
+function useRunningUnpinned(pinned: AppId[], installed: AppId[]): AppId[] {
+  const key = useWM((s) => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const w of Object.values(s.windows).sort((a, b) => a.openedAt - b.openedAt)) {
+      if (!seen.has(w.appId)) {
+        seen.add(w.appId);
+        ids.push(w.appId);
+      }
+    }
+    return ids.join(",");
+  });
+  return key ? (key.split(",") as AppId[]).filter((id) => !pinned.includes(id) && installed.includes(id)) : [];
 }
 
 function DockSlot({ gap, tile, children }: { gap: boolean; tile: number; children: ReactNode }) {
@@ -159,7 +196,7 @@ export function dockClick(id: AppId, el?: Element | null) {
   else wm.focus(win.id);
 }
 
-function DockApp({ id, layout, mouseX, tile }: { id: AppId; layout: WorkspaceLayout; mouseX: MotionValue<number>; tile: number }) {
+function DockApp({ id, layout, mouseX, tile, pinned = true }: { id: AppId; layout: WorkspaceLayout; mouseX: MotionValue<number>; tile: number; pinned?: boolean }) {
   const ref = useRef<HTMLButtonElement>(null);
   const scale = useMagnify(mouseX, ref, tile);
   const running = useWM((s) => Object.values(s.windows).some((w) => w.appId === id));
@@ -223,7 +260,9 @@ function DockApp({ id, layout, mouseX, tile }: { id: AppId; layout: WorkspaceLay
     <button
       ref={ref}
       type="button"
-      data-dock-app={id}
+      // Pinned icons carry data-dock-app (their order is the dock's order); running-only ones are separate.
+      data-dock-app={pinned ? id : undefined}
+      data-dock-running={pinned ? undefined : id}
       className={cx("relative flex flex-col items-center outline-none", dragging && "opacity-0")}
       style={{ width: tile }}
       onPointerDown={onPointerDown}

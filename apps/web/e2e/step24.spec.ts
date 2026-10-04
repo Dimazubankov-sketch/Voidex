@@ -243,3 +243,44 @@ test("Vibex: the pencil starts a group (people, name) and a direct chat as befor
   await page.getByTestId("new-chat-next").click();
   await expect(page.getByTestId("chat-call-audio")).toBeVisible();
 });
+
+test("PC dock: an open app that isn't pinned shows while it runs and leaves when closed; pinned apps always stay", async ({ page }) => {
+  test.skip(isMobile(page), "PC dock");
+  await signUpViaApi(page, "Дора", "Доков");
+  const pinned = () => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
+  // Unpin Calculator: it leaves the dock.
+  await page.getByTestId("dock-app-calculator").click({ button: "right" });
+  await page.getByTestId("menu-unpin").click();
+  await expect.poll(pinned).not.toContain("calculator");
+  await expect(page.getByTestId("dock-running-calculator")).toHaveCount(0);
+  // Open it from the desktop: it appears in the dock (after the pinned apps) while it runs.
+  await openApp(page, "calculator");
+  await expect(page.getByTestId("dock-running-calculator")).toBeVisible();
+  await expect(page.getByTestId("dock-running-separator")).toBeVisible();
+  // Minimized it stays (still running); a click on it brings the window back.
+  await page.getByTestId("window-menu").last().click();
+  await page.getByTestId("menu-minimize").click();
+  await expect(page.getByTestId("dock-running-calculator")).toBeVisible();
+  await page.getByTestId("dock-running-calculator").locator("button").click();
+  await expect(page.locator('[data-testid="window-calculator"][data-state="open"]')).toBeVisible();
+  // Closed: it leaves the dock.
+  await page.getByTestId("dock-running-calculator").locator("button").click({ button: "right" });
+  await page.getByTestId("menu-close-app").click();
+  await expect(page.getByTestId("dock-running-calculator")).toHaveCount(0);
+  await expect(page.getByTestId("dock-running-separator")).toHaveCount(0);
+  // A pinned app stays when it is closed.
+  await openApp(page, "mail");
+  await page.getByTestId("dock-app-mail").click({ button: "right" });
+  await page.getByTestId("menu-close-app").click();
+  await expect(page.locator('[data-testid="window-mail"]')).toHaveCount(0);
+  await expect(page.getByTestId("dock-app-mail")).toBeVisible();
+  // Running and pinned from its menu: it moves to the pinned apps and stays after closing.
+  await openApp(page, "calculator");
+  await page.getByTestId("dock-running-calculator").locator("button").click({ button: "right" });
+  await page.getByTestId("menu-pin").click();
+  await expect.poll(pinned).toContain("calculator");
+  await expect(page.getByTestId("dock-running-calculator")).toHaveCount(0);
+  await page.getByTestId("dock-app-calculator").click({ button: "right" });
+  await page.getByTestId("menu-close-app").click();
+  await expect(page.getByTestId("dock-app-calculator")).toBeVisible();
+});

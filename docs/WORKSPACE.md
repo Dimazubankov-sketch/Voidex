@@ -219,3 +219,11 @@ purpose with its own quota).
   section cards with a line of description ("Приложение", "Безопасность и
   конфиденциальность"). The profile page has personal and account sections
   plus sign-out.
+- **Running apps in the PC dock**: an app with an open window (also
+  minimized) that isn't pinned shows in the dock after the pinned ones,
+  behind a thin divider and in the order it was opened. When its last window
+  closes it leaves the dock. Pinned apps always stay. The menu of a running
+  icon offers "Закрепить в доке" (it moves to the pinned apps) and "Закрыть".
+  Dragging a running icon into the pinned row pins it there. Only pinned
+  icons carry `data-dock-app` (the dock order); running-only ones carry
+  `data-dock-running`.
