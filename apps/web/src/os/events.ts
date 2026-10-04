@@ -11,6 +11,7 @@ import { visibleChats } from "@/apps/vibex/store";
 import { layoutEpoch, mergeServerUser } from "./home/layout";
 import { notificationsChanged, receiveNotification } from "./notifications/store";
 import { useWM } from "./window-manager";
+import { lockInFlight } from "./lock/auto-lock";
 
 export const useConnection = create<{ connected: boolean; online: boolean }>(() => ({
   connected: false,
@@ -128,7 +129,7 @@ function handle(event: ServerEvent) {
       break;
     case "session.locked":
       // This device was locked (another tab, inactivity, the server): the lock screen takes over.
-      if (event.sessionId === session.sessionId) session.lockLocal();
+      if (event.sessionId === session.sessionId && !lockInFlight()) session.lockLocal();
       break;
     case "security.updated":
       void queryClient.invalidateQueries({ queryKey: qk.security });

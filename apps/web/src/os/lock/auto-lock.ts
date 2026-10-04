@@ -3,14 +3,26 @@ import { api, rawPost } from "@/lib/api";
 import { useSecurityStatus } from "@/lib/security";
 import { useSession } from "@/lib/session";
 
+let locking = false;
+/**
+ * True while this tab's own lock request is in flight. Its "session.locked"
+ * event can arrive before the response; the lock screen then waits for the
+ * response, or a quick unlock (Face ID) could be followed by a stale re-lock.
+ */
+export const lockInFlight = () => locking;
+
 /** Locks this device now (only with a code-password: without one there is nothing to unlock with). */
 export async function lockNow(): Promise<boolean> {
+  if (locking || useSession.getState().locked) return false;
+  locking = true;
   try {
     const r = await rawPost<{ locked: boolean }>("/api/auth/lock");
     if (r.locked) useSession.getState().lockLocal();
     return r.locked;
   } catch {
     return false;
+  } finally {
+    locking = false;
   }
 }
 
