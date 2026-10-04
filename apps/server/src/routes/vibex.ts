@@ -5,6 +5,8 @@ import {
   VibexCursorQuerySchema,
   VibexHistoryQuerySchema,
   VibexOpenChatSchema,
+  VibexCreateGroupSchema,
+  VibexUpdateGroupSchema,
   VibexPeopleQuerySchema,
   VibexPinsSchema,
   VibexSendMessageSchema,
@@ -101,6 +103,14 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
   app.get("/chats", async (req) => vibex.chats(req.auth!.userId));
 
   app.post("/chats/direct", limit(60), async (req) => vibex.openDirect(req.auth!.userId, parse(VibexOpenChatSchema, req.body).userId));
+
+  // Step 2.4 group chats.
+  app.post("/groups", limit(20), async (req, reply) => {
+    reply.status(201);
+    return vibex.createGroup(req.auth!.userId, parse(VibexCreateGroupSchema, req.body));
+  });
+  app.patch("/groups/:id", limit(60), async (req) => vibex.updateGroup(req.auth!.userId, parse(idParam, req.params).id, parse(VibexUpdateGroupSchema, req.body)));
+  app.post("/groups/:id/leave", limit(30), async (req) => vibex.leaveGroup(req.auth!.userId, parse(idParam, req.params).id));
 
   app.put("/chats/pins", limit(120), async (req) => vibex.setPins(req.auth!.userId, parse(VibexPinsSchema, req.body).conversationIds));
 

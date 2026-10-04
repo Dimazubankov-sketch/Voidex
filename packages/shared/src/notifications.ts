@@ -16,7 +16,7 @@ import { z } from "zod";
  */
 export const NOTIFICATION_SOURCES = {
   mail: ["mail.new"],
-  vibex: ["vibex.message", "vibex.comment", "vibex.reply", "vibex.like", "vibex.follow"],
+  vibex: ["vibex.message", "vibex.group", "vibex.comment", "vibex.reply", "vibex.like", "vibex.follow"],
   system: ["system.update"],
 } as const;
 

@@ -5,6 +5,8 @@ import {
   VIBEX_AUDIO_TYPES,
   VIBEX_CIRCLE_TYPES,
   VIBEX_FILES_MAX,
+  VIBEX_COVER_MAX_BYTES,
+  VIBEX_GROUP_MEMBERS_MAX,
   VIBEX_FILE_MAX_BYTES,
   VIBEX_MEDIA_MAX_BYTES,
   VIBEX_POST_IMAGE_TYPES,
@@ -115,7 +117,11 @@ const UPLOAD_RULES: Record<VibexUploadPurpose, { types: string[] | null; max: nu
   post: { types: [...VIBEX_POST_IMAGE_TYPES, ...VIBEX_POST_VIDEO_TYPES], max: VIBEX_MEDIA_MAX_BYTES },
   voice: { types: VIBEX_AUDIO_TYPES, max: VIBEX_MEDIA_MAX_BYTES },
   circle: { types: VIBEX_CIRCLE_TYPES, max: VIBEX_MEDIA_MAX_BYTES },
+  // Step 2.4: a group chat's picture.
+  group: { types: ["image/jpeg", "image/png", "image/webp"], max: VIBEX_COVER_MAX_BYTES },
 };
+/** An uploaded file is still "pending" (cleanable) unless a group uses it as its picture. */
+const notAGroupPicture = sql`NOT EXISTS (SELECT 1 FROM vibex_conversations c WHERE c.avatar_file_id = ${vibexFiles.id})`;
 const PURPOSE_OF_KIND: Record<VibexMessageKind, VibexUploadPurpose> = { text: "message", voice: "voice", circle: "circle" };
 
 /**
@@ -458,6 +464,7 @@ export class VibexService {
             isNull(vibexFiles.messageId),
             isNull(vibexFiles.postId),
             lt(vibexFiles.createdAt, new Date(now.getTime() - PENDING_TTL_MS)),
+            notAGroupPicture,
           ),
         )
         .returning({ key: vibexFiles.storageKey });
@@ -471,7 +478,7 @@ export class VibexService {
   async discardUpload(ownerId: string, fileId: string) {
     const [row] = await this.ctx.db
       .delete(vibexFiles)
-      .where(and(eq(vibexFiles.id, fileId), eq(vibexFiles.ownerId, ownerId), isNull(vibexFiles.messageId), isNull(vibexFiles.postId)))
+      .where(and(eq(vibexFiles.id, fileId), eq(vibexFiles.ownerId, ownerId), isNull(vibexFiles.messageId), isNull(vibexFiles.postId), notAGroupPicture))
       .returning();
     if (!row) throw notFound("File");
     await this.ctx.blobs.delete([row.storageKey]);
@@ -490,6 +497,14 @@ export class VibexService {
         .innerJoin(vibexMembers, and(eq(vibexMembers.conversationId, vibexMessages.conversationId), eq(vibexMembers.userId, viewerId)))
         .where(eq(vibexMessages.id, row.messageId));
       allowed = !!m;
+    } else if (row.purpose === "group") {
+      // A group picture: every member of a group that uses it (and its uploader).
+      const [g] = await this.ctx.db
+        .select({ id: vibexMembers.userId })
+        .from(vibexConversations)
+        .innerJoin(vibexMembers, and(eq(vibexMembers.conversationId, vibexConversations.id), eq(vibexMembers.userId, viewerId)))
+        .where(eq(vibexConversations.avatarFileId, row.id));
+      allowed = !!g || row.ownerId === viewerId;
     } else if (row.postId) {
       const [p] = await this.ctx.db.select().from(vibexPosts).where(eq(vibexPosts.id, row.postId));
       allowed = !!p && (p.authorId === viewerId || (!p.deletedAt && (await this.canSee(viewerId, p.authorId, "posts"))));
@@ -920,6 +935,97 @@ export class VibexService {
     return this.chat(userId, id);
   }
 
+  // ---------------------------------------------------------------- groups (Step 2.4)
+
+  /** A new group chat: me (owner) and the people I pick, each of whom accepts messages from me. */
+  async createGroup(creatorId: string, input: { title: string; memberIds: string[]; avatarFileId?: string }): Promise<VibexChatDto> {
+    const memberIds = [...new Set(input.memberIds)].filter((id) => id !== creatorId);
+    if (!memberIds.length) throw fail(ErrorCode.ValidationFailed, "Add at least one person.");
+    if (memberIds.length > VIBEX_GROUP_MEMBERS_MAX) throw fail(ErrorCode.ValidationFailed, "Too many people.", { details: { max: VIBEX_GROUP_MEMBERS_MAX } });
+    const found = await this.ctx.db.select({ id: users.id }).from(users).where(and(inArray(users.id, memberIds), eq(users.status, "active")));
+    if (found.length !== memberIds.length) throw notFound("User");
+    const settings = await this.settingsOf(memberIds);
+    for (const id of memberIds) {
+      if (!(await this.canMessage(creatorId, id, settings.get(id)))) {
+        const p = await this.person(id);
+        throw fail(ErrorCode.Forbidden, `${p.name} doesn't accept messages from you.`, { status: 403, details: { userId: id } });
+      }
+    }
+    await this.ensureProfile(creatorId);
+    for (const id of memberIds) await this.ensureProfile(id);
+    const now = this.ctx.now();
+    const id = await this.ctx.db.transaction(async (tx) => {
+      if (input.avatarFileId) await this.checkGroupPicture(tx, creatorId, input.avatarFileId);
+      const [conv] = await tx
+        .insert(vibexConversations)
+        .values({ kind: "group", title: input.title.trim(), avatarFileId: input.avatarFileId ?? null, createdBy: creatorId, createdAt: now, lastMessageAt: now })
+        .returning();
+      await tx.insert(vibexMembers).values([
+        { conversationId: conv!.id, userId: creatorId, role: "owner" as const, lastReadAt: now },
+        ...memberIds.map((u) => ({ conversationId: conv!.id, userId: u, role: "member" as const })),
+      ]);
+      return conv!.id;
+    });
+    const creator = await this.person(creatorId);
+    for (const u of [creatorId, ...memberIds]) this.ctx.events.toUser(u, { type: "vibex.chats", conversationId: id });
+    for (const u of memberIds) {
+      await this.notifications?.tryNotify({
+        userId: u,
+        app: "vibex",
+        type: "vibex.group",
+        title: input.title.trim(),
+        body: `${creator.name} added you to the group`,
+        actorId: creatorId,
+        target: { chatId: id },
+        collapseOn: "chatId",
+      });
+    }
+    return this.chat(creatorId, id);
+  }
+
+  /** Renames the group or changes its picture (its creator only). */
+  async updateGroup(userId: string, conversationId: string, input: { title?: string; avatarFileId?: string | null }): Promise<VibexChatDto> {
+    const me = await this.membership(userId, conversationId);
+    const [conv] = await this.ctx.db.select().from(vibexConversations).where(eq(vibexConversations.id, conversationId));
+    if (!conv || conv.kind !== "group") throw notFound("Chat");
+    if (me.role !== "owner") throw fail(ErrorCode.Forbidden, "Only the group's creator can change it.", { status: 403 });
+    await this.ctx.db.transaction(async (tx) => {
+      if (input.avatarFileId) await this.checkGroupPicture(tx, userId, input.avatarFileId);
+      await tx
+        .update(vibexConversations)
+        .set({ ...(input.title !== undefined ? { title: input.title.trim() } : {}), ...(input.avatarFileId !== undefined ? { avatarFileId: input.avatarFileId } : {}) })
+        .where(eq(vibexConversations.id, conversationId));
+    });
+    const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
+    for (const m of members) this.ctx.events.toUser(m.userId, { type: "vibex.chats", conversationId });
+    return this.chat(userId, conversationId);
+  }
+
+  /** Leaves a group; the creator's role passes to the longest-standing member; an empty group is removed. */
+  async leaveGroup(userId: string, conversationId: string) {
+    const me = await this.membership(userId, conversationId);
+    const [conv] = await this.ctx.db.select({ kind: vibexConversations.kind }).from(vibexConversations).where(eq(vibexConversations.id, conversationId));
+    if (!conv || conv.kind !== "group") throw notFound("Chat");
+    const rest = await this.ctx.db.transaction(async (tx) => {
+      await tx.delete(vibexMembers).where(and(eq(vibexMembers.conversationId, conversationId), eq(vibexMembers.userId, userId)));
+      const left = await tx.select().from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId)).orderBy(asc(vibexMembers.joinedAt));
+      if (!left.length) {
+        await tx.delete(vibexConversations).where(eq(vibexConversations.id, conversationId));
+      } else if (me.role === "owner") {
+        await tx.update(vibexMembers).set({ role: "owner" }).where(and(eq(vibexMembers.conversationId, conversationId), eq(vibexMembers.userId, left[0]!.userId)));
+      }
+      return left.map((m) => m.userId);
+    });
+    for (const u of [userId, ...rest]) this.ctx.events.toUser(u, { type: "vibex.chats", conversationId });
+    return { ok: true };
+  }
+
+  /** A group picture: an image I uploaded for this purpose. */
+  private async checkGroupPicture(tx: Tx, ownerId: string, fileId: string) {
+    const [f] = await tx.select({ id: vibexFiles.id }).from(vibexFiles).where(and(eq(vibexFiles.id, fileId), eq(vibexFiles.ownerId, ownerId), eq(vibexFiles.purpose, "group")));
+    if (!f) throw notFound("File");
+  }
+
   async chat(userId: string, conversationId: string): Promise<VibexChatDto> {
     await this.membership(userId, conversationId);
     const [c] = await this.chatDtos(userId, [conversationId]);
@@ -932,7 +1038,7 @@ export class VibexService {
     const mine = await this.ctx.db.select({ id: vibexMembers.conversationId }).from(vibexMembers).where(eq(vibexMembers.userId, userId));
     const list = await this.chatDtos(userId, mine.map((m) => m.id));
     return list
-      .filter((c) => c.lastMessage || c.pinnedPosition !== null)
+      .filter((c) => c.lastMessage || c.pinnedPosition !== null || c.kind === "group")
       .sort((a, b) => {
         if (a.pinnedPosition !== null || b.pinnedPosition !== null) {
           if (a.pinnedPosition === null) return 1;
@@ -960,7 +1066,7 @@ export class VibexService {
     const lastByConv = new Map(lastRows.map((m) => [m.conversationId, lastDtos.get(m.id)!]));
     const mineByConv = new Map(members.filter((m) => m.userId === userId).map((m) => [m.conversationId, m]));
     const peerByConv = new Map(members.filter((m) => m.userId !== userId).map((m) => [m.conversationId, m]));
-    const people = await this.persons([...peerByConv.values()].map((m) => m.userId));
+    const people = await this.persons([...new Set(members.map((m) => m.userId))]);
     const settings = await this.settingsOf([userId, ...[...peerByConv.values()].map((m) => m.userId)]);
     const myReceipts = settings.get(userId)!.privacy.readReceipts;
     // Unread: messages from others after my read marker.
@@ -979,12 +1085,38 @@ export class VibexService {
     const unreadBy = new Map(unread.map((u) => [u.id, u.n]));
     const out: VibexChatDto[] = [];
     for (const c of convs) {
-      const peer = peerByConv.get(c.id);
       const me = mineByConv.get(c.id);
-      if (!peer || !me || !people.get(peer.userId)) continue;
+      if (!me) continue;
+      if (c.kind === "group") {
+        const inGroup = members.filter((m) => m.conversationId === c.id);
+        out.push({
+          id: c.id,
+          kind: "group",
+          peer: null,
+          group: {
+            title: c.title ?? "",
+            avatarFileId: c.avatarFileId,
+            // The creator first, then by joining time.
+            members: inGroup
+              .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : a.joinedAt.getTime() - b.joinedAt.getTime()))
+              .map((m) => people.get(m.userId))
+              .filter((p): p is VibexPersonDto => !!p),
+            role: me.role,
+          },
+          lastMessage: lastByConv.get(c.id) ?? null,
+          lastMessageAt: c.lastMessageAt.toISOString(),
+          unread: unreadBy.get(c.id) ?? 0,
+          pinnedPosition: me.pinnedPosition,
+          peerReadAt: null,
+        });
+        continue;
+      }
+      const peer = peerByConv.get(c.id);
+      if (!peer || !people.get(peer.userId)) continue;
       out.push({
         id: c.id,
         kind: "direct",
+        group: null,
         peer: people.get(peer.userId)!,
         lastMessage: lastByConv.get(c.id) ?? null,
         lastMessageAt: c.lastMessageAt.toISOString(),
@@ -1051,10 +1183,15 @@ export class VibexService {
     const kind = input.kind ?? "text";
     const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
     if (!members.some((m) => m.userId === userId)) throw notFound("Chat");
+    const [conv] = await this.ctx.db.select({ kind: vibexConversations.kind, title: vibexConversations.title }).from(vibexConversations).where(eq(vibexConversations.id, conversationId));
+    const isGroup = conv?.kind === "group";
     const others = members.filter((m) => m.userId !== userId).map((m) => m.userId);
     const settings = await this.settingsOf(others);
-    for (const other of others) {
-      if (!(await this.canMessage(userId, other, settings.get(other)))) throw fail(ErrorCode.Forbidden, "This person doesn't accept messages from you.", { status: 403 });
+    // Direct chats follow the other person's "who can message me"; in a group it was checked when they were added.
+    if (!isGroup) {
+      for (const other of others) {
+        if (!(await this.canMessage(userId, other, settings.get(other)))) throw fail(ErrorCode.Forbidden, "This person doesn't accept messages from you.", { status: 403 });
+      }
     }
     const row = await this.ctx.db.transaction(async (tx) => {
       let replyToId: string | null = null;
@@ -1101,8 +1238,8 @@ export class VibexService {
         userId: other,
         app: "vibex",
         type: "vibex.message",
-        title: sender.name,
-        body: kind === "text" ? row.text.slice(0, 200) || (dto.files.length ? `📎 ${dto.files[0]!.filename}` : "") : "",
+        title: isGroup ? conv!.title ?? sender.name : sender.name,
+        body: (isGroup ? `${sender.firstName}: ` : "") + (kind === "text" ? row.text.slice(0, 200) || (dto.files.length ? `📎 ${dto.files[0]!.filename}` : "") : kind === "voice" ? "🎤" : kind === "circle" ? "⏺" : ""),
         actorId: userId,
         target: { chatId: conversationId, messageId: row.id, kind },
         collapseOn: "chatId",

@@ -88,10 +88,24 @@ export interface VibexMessageDto {
   createdAt: string;
 }
 
+/** Step 2.4: a group chat (several people, a name, an optional picture). */
+export interface VibexGroupDto {
+  title: string;
+  /** Group picture (a Vibex file of purpose "group"), null: initials. */
+  avatarFileId: string | null;
+  /** Everyone in the group, me included. */
+  members: VibexPersonDto[];
+  /** My role: the creator ("owner") can rename the group and change its picture. */
+  role: "owner" | "member";
+}
+
 export interface VibexChatDto {
   id: string;
-  kind: "direct";
-  peer: VibexPersonDto;
+  kind: "direct" | "group";
+  /** Direct chats: the other person. Groups: null (see `group`). */
+  peer: VibexPersonDto | null;
+  /** Groups only. */
+  group: VibexGroupDto | null;
   lastMessage: VibexMessageDto | null;
   lastMessageAt: string;
   unread: number;
@@ -241,6 +255,21 @@ export const VibexCursorQuerySchema = z.object({
 
 export const VibexOpenChatSchema = z.object({ userId: z.string().uuid() });
 
+/** Step 2.4 group chats. */
+export const VIBEX_GROUP_TITLE_MAX = 64;
+/** People in a group besides its creator. */
+export const VIBEX_GROUP_MEMBERS_MAX = 49;
+export const VibexCreateGroupSchema = z.object({
+  title: z.string().trim().min(1).max(VIBEX_GROUP_TITLE_MAX),
+  memberIds: z.array(z.string().uuid()).min(1).max(VIBEX_GROUP_MEMBERS_MAX),
+  avatarFileId: z.string().uuid().optional(),
+});
+export const VibexUpdateGroupSchema = z.object({
+  title: z.string().trim().min(1).max(VIBEX_GROUP_TITLE_MAX).optional(),
+  /** null removes the picture. */
+  avatarFileId: z.string().uuid().nullable().optional(),
+});
+
 export const VibexSendMessageSchema = z
   .object({
     text: z.string().max(VIBEX_MESSAGE_MAX).default(""),
@@ -268,7 +297,7 @@ export const VibexShareSchema = z.object({
   text: z.string().max(VIBEX_MESSAGE_MAX).default(""),
 });
 
-export const VibexUploadPurposeSchema = z.enum(["message", "post", "voice", "circle"]);
+export const VibexUploadPurposeSchema = z.enum(["message", "post", "voice", "circle", "group"]);
 export type VibexUploadPurpose = z.infer<typeof VibexUploadPurposeSchema>;
 
 export const VibexHistoryQuerySchema = VibexCursorQuerySchema.extend({ kind: z.enum(["liked", "bookmarks"]) });

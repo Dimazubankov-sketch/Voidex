@@ -48,7 +48,7 @@ describe("Vibex demo seed (development / test only)", () => {
     expect(chats.filter((c) => c.pinnedPosition !== null)).toHaveLength(1);
     expect(chats.some((c) => c.unread === 0 && c.lastMessage)).toBe(true);
     expect(chats.some((c) => c.unread >= 3)).toBe(true);
-    const sofia = chats.find((c) => c.peer.firstName === "Sofia")!;
+    const sofia = chats.find((c) => c.peer?.firstName === "Sofia")!;
     const msgs = (await d.get(`/api/vibex/chats/${sofia.id}/messages`)).body.items as VibexMessageDto[];
     expect(msgs.some((m) => m.files.some((f) => f.mimeType.startsWith("image/")))).toBe(true);
     expect(msgs.some((m) => m.files.some((f) => !f.mimeType.startsWith("image/")))).toBe(true);

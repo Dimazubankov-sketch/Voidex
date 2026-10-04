@@ -548,7 +548,7 @@ export const vibexFiles = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    purpose: text("purpose", { enum: ["message", "post", "voice", "circle"] }).notNull(),
+    purpose: text("purpose", { enum: ["message", "post", "voice", "circle", "group"] }).notNull(),
     /** Set when the message / post is sent; until then only the owner sees it. */
     messageId: uuid("message_id").references(() => vibexMessages.id, { onDelete: "cascade" }),
     postId: uuid("post_id").references(() => vibexPosts.id, { onDelete: "cascade" }),
