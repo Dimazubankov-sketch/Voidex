@@ -265,7 +265,7 @@ test("app names on / off from Settings → Desktop (icons only), synced to the a
   await expect(page.getByTestId("app-mail")).toBeVisible();
   await expect(page.getByTestId("home-label")).toHaveCount(0);
   // The icon keeps its accessible name; search still shows names.
-  await expect(page.getByTestId("app-mail")).toHaveAttribute("aria-label", "Почта");
+  await expect(page.getByTestId("app-mail")).toHaveAttribute("aria-label", "Почта VoidOps");
 });
 
 test("PC: dock click — closed → open, focused → minimize, again → restore; system bar above windows, maximized stays between bar and dock", async ({ page }) => {

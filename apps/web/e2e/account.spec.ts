@@ -10,7 +10,7 @@ test("new user: sign up, see data in Settings, edit, sign out, sign back in, ses
 
   await openApp(page, "settings");
   const isMobile = (page.viewportSize()?.width ?? 1000) < 900;
-  if (isMobile) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("settings-nav-account").first().click();
   await expect(page.getByTestId("account-name").last()).toHaveText("Анна Волкова");
   await expect(page.getByText(address).first()).toBeVisible();
 
@@ -22,7 +22,7 @@ test("new user: sign up, see data in Settings, edit, sign out, sign back in, ses
 
   // Sign out and back in on the same (trusted) device: no extra confirmation needed.
   if (isMobile) await page.getByTestId("settings-back").last().click();
-  else await page.getByTestId("settings-nav-account").click();
+  else await page.getByTestId("settings-nav-account").first().click();
   await page.getByTestId("sign-out").last().click();
   await expect(page.getByTestId("welcome-signin")).toBeVisible();
   await page.getByTestId("welcome-signin").click();
@@ -34,7 +34,7 @@ test("new user: sign up, see data in Settings, edit, sign out, sign back in, ses
   await next(page);
   await expect(page.getByTestId("workspace")).toBeVisible();
   await openApp(page, "settings");
-  if (isMobile) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("settings-nav-account").first().click();
   await expect(page.getByTestId("account-name").last()).toHaveText("Мария Волкова");
 });
 
@@ -52,6 +52,7 @@ test("second device: SMS confirmation, then approval from a trusted device; devi
   await pc.getByTestId("otp-input").fill(await devCode(pc));
   await expect(pc.getByTestId("workspace")).toBeVisible();
   await openApp(pc, "settings");
+  await pc.getByTestId("settings-nav-account").first().click();
   await expect(pc.getByTestId("account-name")).toHaveText("Ирина Лебедева");
 
   // Device 3 — confirmed by approving on device 1 (real-time prompt).
@@ -71,7 +72,7 @@ test("second device: SMS confirmation, then approval from a trusted device; devi
   const isMobile = (page.viewportSize()?.width ?? 1000) < 900;
   // Account sections live in the profile (not in the Settings list).
   await expect(page.getByTestId("settings-nav-devices")).toHaveCount(0);
-  if (isMobile) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("settings-nav-account").first().click();
   await page.getByTestId("row-devices").last().click();
   await expect(page.getByTestId("session-row")).toHaveCount(3);
   await page.getByTestId("session-revoke").first().click();
@@ -110,7 +111,7 @@ test("forgot password: SMS recovery signs in and signs other devices out", async
 test("change password in Settings", async ({ page }) => {
   await signUpViaApi(page, "Вера", "Новикова");
   await openApp(page, "settings");
-  if ((page.viewportSize()?.width ?? 1000) < 900) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("settings-nav-account").first().click();
   await page.getByTestId("row-password").last().click();
   await page.getByTestId("current-password").last().fill("Not-The-Password-1");
   await page.getByTestId("new-password").last().fill("Another-Strong-99");

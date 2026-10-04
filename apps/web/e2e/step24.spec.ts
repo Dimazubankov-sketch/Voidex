@@ -37,10 +37,14 @@ test("first setup: the code-password is required (weak and mismatched codes refu
   await page.keyboard.type("246800");
   await expect(page.getByTestId("setup-pad-create")).toBeVisible();
   await expect(page.getByTestId("passcode-error")).toContainText("Коды не совпали");
-  // The pad on screen works too.
-  for (const d of PASSCODE) await page.getByTestId(`key-${d}`).click();
+  // The pad on screen works too (phones: the keypad; PC: the keyboard-first field, Step 2.5).
+  const enter = async () => {
+    if (isMobile(page)) for (const d of PASSCODE) await page.getByTestId(`key-${d}`).click();
+    else await page.keyboard.type(PASSCODE);
+  };
+  await enter();
   await expect(page.getByTestId("setup-pad-confirm")).toBeVisible();
-  for (const d of PASSCODE) await page.getByTestId(`key-${d}`).click();
+  await enter();
   // Face ID step: on this address the browser can't offer it — said honestly, and it is skippable.
   await expect(page.getByTestId("face-setup")).toBeVisible();
   await expect(page.getByTestId("setup-step")).toHaveText("Шаг 3 из 3");
@@ -73,12 +77,12 @@ test("lock screen: lock, wrong code refused with no access, right code unlocks; 
 test("step-up: personal data asks for the code-password once the confirmation window is over", async ({ page }) => {
   const a = await signUpViaApi(page, "Стас", "Шагов");
   await openApp(page, "settings");
-  if (isMobile(page)) await page.getByTestId("settings-nav-account").click();
+  await page.getByTestId("settings-nav-account").first().click();
   // Fresh sign-in: no extra question.
   await page.getByTestId("row-personal").last().click();
   await expect(page.getByTestId("settings-first-name").last()).toBeVisible();
   if (isMobile(page)) await page.getByTestId("settings-back").last().click();
-  else await page.getByTestId("settings-nav-account").click();
+  else await page.getByTestId("settings-nav-account").first().click();
   expireStepUp(a.id);
   await page.getByTestId("row-personal").last().click();
   await expect(page.getByTestId("step-up")).toBeVisible();

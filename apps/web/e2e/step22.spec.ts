@@ -58,7 +58,7 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await signUpViaApi(page, "Дора", "Док");
   const desktopMail = page.getByTestId("app-mail");
   await expect(desktopMail).toBeVisible();
-  expect(await dockOrder(page)).toEqual(["mail", "settings", "vibex", "calculator"]);
+  expect(await dockOrder(page)).toEqual(["mail", "settings", "vibex", "calculator", "notes"]);
 
   // Drag Mail inside the dock: the desktop icon stays fully visible the whole time.
   const a = await center(page.getByTestId("dock-app-mail"));
@@ -74,7 +74,7 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await page.keyboard.press("Escape");
   await page.mouse.up();
   await expect(page.getByTestId("drag-ghost")).toHaveCount(0);
-  await expect.poll(() => dockOrder(page)).toEqual(["mail", "settings", "vibex", "calculator"]);
+  await expect.poll(() => dockOrder(page)).toEqual(["mail", "settings", "vibex", "calculator", "notes"]);
   await expect(desktopMail).toBeVisible();
 
   // A real drop reorders (and is saved). Let the preview settle before letting go, like a hand does.
@@ -85,7 +85,7 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await page.waitForTimeout(250);
   await page.mouse.move(b.x + 31, b.y);
   await page.mouse.up();
-  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator"]);
+  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator", "notes"]);
   await expect(desktopMail).toBeVisible();
 
   // Drag up and out of the dock → unpinned; the desktop icon is still there.
@@ -95,7 +95,7 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await page.mouse.move(v.x, v.y - 20, { steps: 2 });
   await page.mouse.move(v.x, v.y - 220, { steps: 10 });
   await page.mouse.up();
-  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "calculator"]);
+  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "calculator", "notes"]);
   await expect(page.getByTestId("app-vibex")).toBeVisible();
 
   // Drag the desktop icon onto the dock → pinned again, the desktop icon stays.
@@ -106,12 +106,12 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await page.mouse.move(from.x + 10, from.y, { steps: 2 });
   await page.mouse.move(to.x + 30, to.y, { steps: 14 });
   await page.mouse.up();
-  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator"]);
+  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator", "notes"]);
   await expect(page.getByTestId("app-vibex")).toBeVisible();
 
   await page.waitForTimeout(600);
   await reloadUnlocked(page);
-  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator"]);
+  await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator", "notes"]);
 });
 
 test("view: Grid ↔ Categories switched many times stays on the last choice (no flip-back) and survives a reload", async ({ page }) => {

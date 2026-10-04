@@ -88,7 +88,7 @@ test("sending to a non-VOIDEX address is refused and the draft is kept", async (
   await page.getByTestId("composer-to").fill("someone@gmail.com ");
   await page.getByTestId("composer-body").fill("x");
   await page.getByTestId("composer-send").click();
-  await expect(page.getByText("Пока VOIDEX Mail доставляет письма только на адреса VOIDEX.")).toBeVisible();
+  await expect(page.getByText("Пока Почта VoidOps доставляет письма только на адреса VOIDEX.")).toBeVisible();
 });
 
 test("attachments: attach files and a picture, remove one before sending; the recipient previews and downloads", async ({ page, browser }) => {
