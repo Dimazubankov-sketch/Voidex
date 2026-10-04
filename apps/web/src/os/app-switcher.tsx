@@ -7,8 +7,6 @@ import { AppTile } from "@/brand/brand";
 import { IconButton } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
 import { useWM, type AppWindow } from "./window-manager";
-import { useHomeUi } from "./home/ui-store";
-import { DesktopsGlyph } from "./home/spaces";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const GAP = 16;
@@ -19,7 +17,8 @@ const HINT_MS = 2600;
  *
  * Swipe left/right to move between cards, swipe a card up to close it, tap a
  * card to switch to it, tap the empty space around the cards to go back to
- * the workspace. The deck is moved by our own pan handling instead of native
+ * the workspace. Only the cards: no "Desktops" button and no pages menu here
+ * (Step 2.3.1 — phone pages are reached by swiping the home screen). The deck is moved by our own pan handling instead of native
  * overflow scrolling, so iOS never draws its scroll indicator under the cards.
  */
 export function AppSwitcher() {
@@ -27,26 +26,6 @@ export function AppSwitcher() {
   const open = wm.switcherOpen;
   const items = [...wm.order].reverse().map((id) => wm.windows[id]!).filter(Boolean);
   return <AnimatePresence>{open && (items.length > 0 ? <Deck items={items} /> : <EmptyDeck key="empty" />)}</AnimatePresence>;
-}
-
-/** The home-screen pages, from the switcher (Step 2.3: the round button opens the switcher). */
-function PagesButton() {
-  const t = useT();
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        useWM.getState().setSwitcher(false);
-        useHomeUi.getState().setSpacesOpen(true);
-      }}
-      className="vx-glass pressable flex h-10 items-center gap-2 rounded-full px-4 text-[14px] font-medium text-text"
-      data-testid="switcher-pages"
-    >
-      <DesktopsGlyph className="size-5" />
-      {t("home.pages")}
-    </button>
-  );
 }
 
 function EmptyDeck() {
@@ -65,7 +44,6 @@ function EmptyDeck() {
       <span className="text-[15px] text-text-secondary" data-testid="switcher-empty">
         {t("os.switcherEmpty")}
       </span>
-      <PagesButton />
     </motion.div>
   );
 }
@@ -190,9 +168,6 @@ function Deck({ items }: { items: AppWindow[] }) {
           />
         ))}
       </motion.div>
-      <div className="absolute inset-x-0 bottom-[max(var(--safe-bottom),20px)] flex justify-center" style={{ marginBottom: hint ? 40 : 0 }}>
-        <PagesButton />
-      </div>
       <AnimatePresence>
         {hint && (
           <motion.div

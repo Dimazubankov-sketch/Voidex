@@ -140,9 +140,4 @@ export function SpacesList({ layout, onPicked, compact, testPrefix = "dock-space
   );
 }
 
-/** Title for the Desktops UI on this device (PC: desktops, phone: pages). */
-export function useSpacesTitle() {
-  const t = useT();
-  return useFormFactor() === "mobile" ? t("home.pages") : t("home.spaces");
-}
 

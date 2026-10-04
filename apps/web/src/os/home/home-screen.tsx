@@ -6,7 +6,6 @@ import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, useLanguage, useT } from "@/lib/i18n";
 import { IconButton } from "@/ui/controls";
-import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { CATEGORY_LABEL, appCategory, appLabel, itemKey, openApp } from "./actions";
 import { labelTone, useWallpaperImage, wallpaperStyle, type LabelTone } from "./appearance";
@@ -22,7 +21,6 @@ import { Launcher } from "./launcher";
 import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
-import { SpacesList, useSpacesTitle } from "./spaces";
 import { useHomeUi } from "./ui-store";
 import { GridWidget, WidgetStrip, WidgetsPanel } from "./widgets";
 import { SYSTEM_BAR_H } from "../metrics";
@@ -128,7 +126,6 @@ export function HomeScreen({
         ui.appearanceOpen ||
         ui.brushOpen ||
         ui.widgetsOpen ||
-        ui.spacesOpen ||
         ui.renaming ||
         ui.launcherOpen ||
         ui.search.open ||
@@ -234,7 +231,6 @@ export function HomeScreen({
 
       <BrushMenu anchor={brushBtn} layout={layout} />
       <WidgetsPanel />
-      {ff === "mobile" && <MobileSpacesSheet layout={layout} />}
       <Launcher anchor={launcherBtn} apps={apps} layout={layout} />
       <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />
       <ContextMenu layout={layout} />
@@ -319,17 +315,6 @@ export function DoneButton({ small }: { small?: boolean }) {
     >
       <RiCheckLine className={small ? "size-5" : "size-6"} />
     </motion.button>
-  );
-}
-
-function MobileSpacesSheet({ layout }: { layout: WorkspaceLayout }) {
-  const open = useHomeUi((s) => s.spacesOpen);
-  const title = useSpacesTitle();
-  const close = () => useHomeUi.getState().setSpacesOpen(false);
-  return (
-    <Sheet open={open} onClose={close} title={title} width={480} testId="mobile-spaces-sheet">
-      <SpacesList layout={layout} onPicked={close} testPrefix="mobile-page" />
-    </Sheet>
   );
 }
 

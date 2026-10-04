@@ -61,8 +61,6 @@ interface HomeUi {
   /** The brush menu (Wallpaper / View / Widgets), anchored at the brush. */
   brushOpen: boolean;
   widgetsOpen: boolean;
-  /** Phone: the page overview opened by the round "Desktops" button. */
-  spacesOpen: boolean;
   launcherOpen: boolean;
   drag: DragState | null;
   setEditing: (v: boolean) => void;
@@ -76,7 +74,6 @@ interface HomeUi {
   setAppearanceOpen: (v: boolean) => void;
   setBrushOpen: (v: boolean) => void;
   setWidgetsOpen: (v: boolean) => void;
-  setSpacesOpen: (v: boolean) => void;
   setLauncherOpen: (v: boolean) => void;
   setDrag: (d: DragState | null) => void;
   patchDrag: (d: Partial<DragState>) => void;
@@ -93,7 +90,6 @@ export const useHomeUi = create<HomeUi>((set) => ({
   appearanceOpen: false,
   brushOpen: false,
   widgetsOpen: false,
-  spacesOpen: false,
   launcherOpen: false,
   drag: null,
   setEditing: (editing) => set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null, brushOpen: false }),
@@ -107,7 +103,6 @@ export const useHomeUi = create<HomeUi>((set) => ({
   setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false, brushOpen: false }),
   setBrushOpen: (brushOpen) => set({ brushOpen, menu: null, launcherOpen: false }),
   setWidgetsOpen: (widgetsOpen) => set({ widgetsOpen, menu: null, launcherOpen: false, brushOpen: false }),
-  setSpacesOpen: (spacesOpen) => set({ spacesOpen, menu: null }),
   setLauncherOpen: (launcherOpen) => set({ launcherOpen, menu: null }),
   setDrag: (drag) => set({ drag }),
   patchDrag: (d) => set((st) => (st.drag ? { drag: { ...st.drag, ...d } } : {})),
