@@ -146,7 +146,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const token = readRefreshToken(req);
     if (!token) throw fail(ErrorCode.Unauthenticated, "Please sign in.");
     try {
-      const r = await sessions.refresh(token, requestMeta(req));
+      // Step 2.4: { lock: true } on app start — with a passcode the lock screen comes first.
+      const lock = (req.body as { lock?: unknown } | undefined)?.lock === true;
+      const r = await sessions.refresh(token, requestMeta(req), { lock });
       return sendSession(req, reply, config, r, await accounts.me(r.userId));
     } catch (err) {
       const code = (err as { code?: string }).code;

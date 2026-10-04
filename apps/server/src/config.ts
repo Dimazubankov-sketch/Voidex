@@ -51,6 +51,12 @@ const EnvSchema = z.object({
   COOKIE_SECURE: bool.optional(),
   /** Extra origins allowed to call the API (native shells, e.g. capacitor://localhost). */
   ALLOWED_ORIGINS: z.string().default(""),
+  /**
+   * Step 2.4 Face ID (WebAuthn): the relying-party id = the site's domain.
+   * Production default voidex.su (origin https://voidex.su). In development
+   * the id comes from the browser's own origin (localhost).
+   */
+  WEBAUTHN_RP_ID: z.string().regex(/^[a-z0-9.-]+$/).default("voidex.su"),
   /** Built web client to serve in production (apps/web/dist). */
   WEB_DIST: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
@@ -144,6 +150,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     trustProxy: e.TRUST_PROXY,
     cookieSecure: e.COOKIE_SECURE ?? production,
     allowedOrigins: e.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
+    webauthnRpId: e.WEBAUTHN_RP_ID,
     webDist: e.WEB_DIST,
     logLevel: e.LOG_LEVEL,
     rateLimitScale: e.RATE_LIMIT_SCALE,

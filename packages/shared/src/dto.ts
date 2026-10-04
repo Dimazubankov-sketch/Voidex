@@ -222,6 +222,10 @@ export type ServerEvent =
   | { type: "apps.updated" }
   | { type: "sessions.updated" }
   | { type: "session.revoked"; sessionId: string }
+  /** Step 2.4: this device's session was locked (lock screen); the stream closes. */
+  | { type: "session.locked"; sessionId: string }
+  /** Step 2.4: code-password / Face ID / auto-lock settings changed. */
+  | { type: "security.updated" }
   | { type: "approval.requested"; approvalId: string }
   | { type: "approval.resolved"; approvalId: string }
   | { type: "mail.changed"; threadIds?: string[] }

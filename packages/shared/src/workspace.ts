@@ -148,6 +148,8 @@ export const AppearanceSchema = z.object({
   showLabels: z.boolean().default(true),
   /** Step 2.3: PC system bar background. */
   systemBar: z.enum(SYSTEM_BAR_STYLES).default("glass"),
+  /** Step 2.4: the lock screen's own wallpaper; null / absent = the same as the desktop. */
+  lockWallpaper: WallpaperSchema.nullable().optional(),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -215,7 +217,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass" };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -239,6 +241,7 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     glass: (GLASS_LEVELS as readonly string[]).includes(base.glass) ? base.glass : "on",
     showLabels: base.showLabels !== false,
     systemBar: base.systemBar === "off" ? "off" : "glass",
+    lockWallpaper: base.lockWallpaper ? normalizeWallpaper(base.lockWallpaper) : null,
   };
 }
 

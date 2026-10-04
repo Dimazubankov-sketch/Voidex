@@ -223,6 +223,8 @@ export class AccountService {
             phoneVerifiedAt: now,
             passwordHash,
             passwordChangedAt: now,
+            // Step 2.4: the first setup asks for a code-password before the desktop.
+            passcodeSetupRequired: true,
             createdAt: now,
             updatedAt: now,
           })
@@ -446,23 +448,27 @@ export class AccountService {
 
   // ---------------------------------------------------------------- wallpaper
 
-  /** One wallpaper image per account: a new upload replaces the previous one. */
-  async setWallpaper(userId: string, mimeType: string, data: Buffer) {
+  /**
+   * One wallpaper image per account and slot (desktop, and since Step 2.4 the
+   * lock screen): a new upload replaces the previous one in that slot.
+   */
+  async setWallpaper(userId: string, mimeType: string, data: Buffer, slot: WallpaperSlot = "desktop") {
+    const purpose = slotPurpose(slot);
     const version = await this.ctx.db.transaction(async (tx) => {
-      await this.ctx.blobs.delete(await this.ctx.blobs.keysOf(userId, "wallpaper", tx), tx);
-      const key = await this.ctx.blobs.put({ ownerUserId: userId, purpose: "wallpaper", mimeType, data }, tx);
+      await this.ctx.blobs.delete(await this.ctx.blobs.keysOf(userId, purpose, tx), tx);
+      const key = await this.ctx.blobs.put({ ownerUserId: userId, purpose, mimeType, data }, tx);
       return key.slice(-12);
     });
     return { version };
   }
 
-  async getWallpaper(userId: string) {
-    const [key] = await this.ctx.blobs.keysOf(userId, "wallpaper");
+  async getWallpaper(userId: string, slot: WallpaperSlot = "desktop") {
+    const [key] = await this.ctx.blobs.keysOf(userId, slotPurpose(slot));
     return key ? this.ctx.blobs.get(key) : null;
   }
 
-  async deleteWallpaper(userId: string) {
-    await this.ctx.blobs.delete(await this.ctx.blobs.keysOf(userId, "wallpaper"));
+  async deleteWallpaper(userId: string, slot: WallpaperSlot = "desktop") {
+    await this.ctx.blobs.delete(await this.ctx.blobs.keysOf(userId, slotPurpose(slot)));
     return { ok: true };
   }
 
@@ -508,3 +514,6 @@ export function mergePreferences(data: Partial<Preferences> | undefined | null):
     workspace: { ...DEFAULT_PREFERENCES.workspace, ...data?.workspace },
   };
 }
+
+export type WallpaperSlot = "desktop" | "lock";
+const slotPurpose = (slot: WallpaperSlot) => (slot === "lock" ? ("lock-wallpaper" as const) : ("wallpaper" as const));

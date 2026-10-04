@@ -7,10 +7,18 @@ import { randomToken, sha256 } from "../lib/crypto.js";
 import { describeDevice } from "../lib/device.js";
 import { fail } from "../lib/errors.js";
 import type { Ctx, RequestMeta } from "./context.js";
+import { AUTO_LOCK_GRACE_MS } from "./security.js";
 
 /** If the previous refresh token is presented within this window, assume a parallel-tab race, not theft. */
 const REFRESH_RACE_GRACE_MS = 20_000;
 const ACTIVITY_WRITE_THROTTLE_MS = 60_000;
+
+const locked = () => fail(ErrorCode.SessionLocked, "VOIDEX is locked. Unlock with your code-password or Face ID.");
+
+/** Auto-lock: no activity for the account's interval (+ grace for throttled activity writes). 0 = never. */
+function idleTooLong(lastActiveAt: Date, autoLockMinutes: number, now: Date) {
+  return autoLockMinutes > 0 && now.getTime() - lastActiveAt.getTime() > autoLockMinutes * 60_000 + AUTO_LOCK_GRACE_MS;
+}
 
 export interface AuthContext {
   userId: string;
@@ -107,6 +115,8 @@ export class SessionService {
         absoluteExpiresAt,
         ipAddress: meta.ip,
         userAgent: meta.userAgent?.slice(0, 400),
+        // A full sign-in (password + device / SMS check) counts as a fresh confirmation (Step 2.4).
+        stepUpAt: now,
       })
       .returning();
     await tx.insert(securityEvents).values({
@@ -167,6 +177,9 @@ export class SessionService {
         absoluteExpiresAt: sessions.absoluteExpiresAt,
         lastActiveAt: sessions.lastActiveAt,
         userStatus: users.status,
+        lockedAt: sessions.lockedAt,
+        passcodeSetAt: users.passcodeSetAt,
+        autoLockMinutes: users.autoLockMinutes,
       })
       .from(sessions)
       .innerJoin(users, eq(users.id, sessions.userId))
@@ -176,6 +189,15 @@ export class SessionService {
     if (row.revokedAt) throw fail(ErrorCode.SessionRevoked, "You were signed out on this device.");
     if (row.absoluteExpiresAt <= now) throw fail(ErrorCode.SessionExpired, "Your session has expired.");
     if (row.userStatus !== "active") throw fail(ErrorCode.Forbidden, "This account is not active.");
+    // Step 2.4: a locked session (lock screen) gets nothing until unlocked; idle ones lock themselves.
+    if (row.passcodeSetAt) {
+      if (row.lockedAt) throw locked();
+      if (idleTooLong(row.lastActiveAt, row.autoLockMinutes, now)) {
+        await this.ctx.db.update(sessions).set({ lockedAt: now, stepUpAt: null }).where(eq(sessions.id, sid));
+        this.ctx.events.toSession(sid, { type: "session.locked", sessionId: sid });
+        throw locked();
+      }
+    }
 
     if (now.getTime() - row.lastActiveAt.getTime() > ACTIVITY_WRITE_THROTTLE_MS) {
       await this.ctx.db.update(sessions).set({ lastActiveAt: now }).where(eq(sessions.id, sid));
@@ -185,7 +207,7 @@ export class SessionService {
   }
 
   /** Exchanges a refresh token for a new pair (rotation + reuse detection). */
-  async refresh(refreshToken: string, meta: RequestMeta) {
+  async refresh(refreshToken: string, meta: RequestMeta, opts: { lock?: boolean } = {}) {
     const { db } = this.ctx;
     const now = this.ctx.now();
     const hash = sha256(refreshToken);
@@ -224,6 +246,12 @@ export class SessionService {
       }
       const user = await tx.query.users.findFirst({ where: eq(users.id, session.userId) });
       if (!user || user.status !== "active") throw fail(ErrorCode.Forbidden, "This account is not active.");
+      // Step 2.4: with a passcode, a locked session (or one locked now: app start, long idle)
+      // gets no new tokens — the lock screen unlocks it first.
+      if (user.passcodeSetAt && (session.lockedAt || opts.lock || idleTooLong(session.lastActiveAt, user.autoLockMinutes, now))) {
+        if (!session.lockedAt) await tx.update(sessions).set({ lockedAt: now, stepUpAt: null }).where(eq(sessions.id, session.id));
+        return { locked: true as const, sessionId: session.id };
+      }
 
       const next = randomToken();
       const idle = new Date(now.getTime() + this.ctx.config.sessionIdleMs);
@@ -250,6 +278,10 @@ export class SessionService {
         ...access,
       };
     });
+    if ("locked" in result) {
+      this.ctx.events.toSession(result.sessionId, { type: "session.locked", sessionId: result.sessionId });
+      throw locked();
+    }
     if (result.reused) {
       this.ctx.events.toSession(result.sessionId, { type: "session.revoked", sessionId: result.sessionId });
       this.ctx.events.toUser(result.userId, { type: "sessions.updated" });

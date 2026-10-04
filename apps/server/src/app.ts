@@ -22,6 +22,8 @@ import { OtpComSmsProvider, createSmsProvider, type SmsProvider } from "./servic
 import { PgBlobStorage } from "./services/blobs.js";
 import { VerificationService } from "./services/verification.js";
 import { VibexService } from "./services/vibex.js";
+import { SecurityService } from "./services/security.js";
+import { lockRoutes, securityRoutes } from "./routes/security.js";
 import { NotificationService } from "./services/notifications.js";
 import { createTranslator, type Translator } from "./services/translate.js";
 import { accountRoutes } from "./routes/account.js";
@@ -53,6 +55,7 @@ export interface Services {
   mail: MailService;
   vibex: VibexService;
   notifications: NotificationService;
+  security: SecurityService;
 }
 
 export interface BuildOptions {
@@ -104,6 +107,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
     mail: new MailService(ctx, notifications),
     vibex: new VibexService(ctx, notifications),
     notifications,
+    security: new SecurityService(ctx, sessions),
   };
   app.decorate("services", services);
   app.decorate("ctx", ctx);
@@ -218,6 +222,8 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
     async (api) => {
       await api.register(systemRoutes);
       await api.register(authRoutes, { prefix: "/auth" });
+      await api.register(lockRoutes, { prefix: "/auth/lock" });
+      await api.register(securityRoutes, { prefix: "/security" });
       await api.register(accountRoutes);
       await api.register(mailRoutes, { prefix: "/mail" });
       await api.register(vibexRoutes, { prefix: "/vibex" });

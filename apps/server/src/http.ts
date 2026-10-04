@@ -1,3 +1,4 @@
+import type { RelyingParty } from "./services/security.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ErrorCode, type MeDto, type SessionResponse } from "@voidex/shared";
 import type { z } from "zod";
@@ -115,4 +116,25 @@ export function assertSameOrigin(req: FastifyRequest, config: Config) {
       throw fail(ErrorCode.CsrfFailed, "Request blocked: unexpected origin.");
     }
   }
+}
+
+/**
+ * Step 2.4 Face ID (WebAuthn) relying party of a request. Production: the
+ * configured domain (voidex.su) and its https origin — the browser enforces
+ * the same. Development / test: the page's own origin (localhost); IP
+ * addresses cannot be a WebAuthn RP id, so Face ID is unavailable there.
+ */
+export function relyingParty(req: FastifyRequest, config: Config): RelyingParty {
+  if (config.production) return { rpId: config.webauthnRpId, origin: `https://${config.webauthnRpId}` };
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  let rpId = "";
+  try {
+    rpId = new URL(origin).hostname;
+  } catch {
+    /* no origin */
+  }
+  if (!rpId || /^[\d.]+$/.test(rpId) || rpId.includes(":")) {
+    throw fail(ErrorCode.FaceIdUnavailable, "Face ID needs the site's domain name (not an IP address).");
+  }
+  return { rpId, origin };
 }

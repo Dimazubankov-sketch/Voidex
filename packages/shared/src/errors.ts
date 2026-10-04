@@ -25,6 +25,15 @@ export const ErrorCode = {
   ReauthRequired: "reauth_required",
   WrongPassword: "wrong_password",
 
+  // Step 2.4: lock screen, code-password, Face ID (WebAuthn)
+  SessionLocked: "session_locked",
+  StepUpRequired: "step_up_required",
+  PasscodeInvalid: "passcode_invalid",
+  PasscodeLocked: "passcode_locked",
+  PasscodeNotSet: "passcode_not_set",
+  FaceIdUnavailable: "face_id_unavailable",
+  FaceIdFailed: "face_id_failed",
+
   // registration
   PhoneTaken: "phone_taken",
   UsernameTaken: "username_taken",

@@ -50,6 +50,13 @@
       "when": 1791100000000,
       "tag": "0006_notifications_vibex_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791200000000,
+      "tag": "0007_lock_faceid_groups",
+      "breakpoints": true
     }
   ]
 }

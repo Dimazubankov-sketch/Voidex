@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import {
   ApprovalDecisionSchema,
@@ -28,7 +28,9 @@ const WALLPAPER_MAX = 8 * 1024 * 1024;
  * the access token (req.auth), never from ids in the request body.
  */
 export const accountRoutes: FastifyPluginAsync = async (app) => {
-  const { accounts, sessions, challenges, apps } = app.services;
+  const { accounts, sessions, challenges, apps, security } = app.services;
+  /** Step 2.4: sensitive changes need a recent passcode / Face ID confirmation (when a passcode is set). */
+  const stepUp = (req: FastifyRequest) => security.requireStepUp(req.auth!);
   const { db } = app.ctx;
 
   app.addContentTypeParser(["image/jpeg", "image/png", "image/webp"], { parseAs: "buffer", bodyLimit: AVATAR_MAX }, (_req, body, done) =>
@@ -44,7 +46,10 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/me", async (req) => accounts.me(req.auth!.userId));
 
-  app.patch("/account/profile", async (req) => accounts.updateProfile(req.auth!.userId, parse(ProfileUpdateSchema, req.body)));
+  app.patch("/account/profile", async (req) => {
+    await stepUp(req);
+    return accounts.updateProfile(req.auth!.userId, parse(ProfileUpdateSchema, req.body));
+  });
 
   app.put("/account/avatar", async (req) => {
     const body = req.body;
@@ -64,20 +69,20 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
       if (!Buffer.isBuffer(body) || body.length === 0) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
       const mime = sniffImage(body);
       if (!mime) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
-      return accounts.setWallpaper(req.auth!.userId, mime, body);
+      return accounts.setWallpaper(req.auth!.userId, mime, body, wallpaperSlot(req.query));
     },
   );
 
   /** Only the owner can read their wallpaper. */
   app.get("/account/wallpaper", async (req, reply) => {
-    const w = await accounts.getWallpaper(req.auth!.userId);
+    const w = await accounts.getWallpaper(req.auth!.userId, wallpaperSlot(req.query));
     if (!w) throw notFound("Wallpaper");
     reply.header("Cache-Control", "private, max-age=86400");
     reply.header("X-Content-Type-Options", "nosniff");
     return reply.type(w.mimeType).send(w.data);
   });
 
-  app.delete("/account/wallpaper", async (req) => accounts.deleteWallpaper(req.auth!.userId));
+  app.delete("/account/wallpaper", async (req) => accounts.deleteWallpaper(req.auth!.userId, wallpaperSlot(req.query)));
 
   /** Avatars are visible to any signed-in VOIDEX user (e.g. mail senders). */
   app.get("/users/:id/avatar", async (req, reply) => {
@@ -90,21 +95,22 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/account/password", { config: { rateLimit: { max: 5 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) =>
-    accounts.changePassword(req.auth!.userId, req.auth!.sessionId, parse(PasswordChangeSchema, req.body), requestMeta(req)),
+    stepUp(req).then(() => accounts.changePassword(req.auth!.userId, req.auth!.sessionId, parse(PasswordChangeSchema, req.body), requestMeta(req))),
   );
 
   app.post("/account/phone/start", { config: { rateLimit: { max: 5 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) =>
-    accounts.startPhoneChange(req.auth!.userId, parse(PhoneChangeStartSchema, req.body), requestMeta(req)),
+    stepUp(req).then(() => accounts.startPhoneChange(req.auth!.userId, parse(PhoneChangeStartSchema, req.body), requestMeta(req))),
   );
 
   app.post("/account/phone/confirm", { config: { rateLimit: { max: 15 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req) =>
-    accounts.confirmPhoneChange(req.auth!.userId, req.auth!.sessionId, parse(PhoneChangeConfirmSchema, req.body), requestMeta(req)),
+    stepUp(req).then(() => accounts.confirmPhoneChange(req.auth!.userId, req.auth!.sessionId, parse(PhoneChangeConfirmSchema, req.body), requestMeta(req))),
   );
 
   app.get("/account/consents", async (req) => accounts.consents(req.auth!.userId));
 
   /** Machine-readable copy of the account's data (privacy right of access). */
   app.get("/account/export", { config: { rateLimit: { max: 5 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req, reply) => {
+    await stepUp(req);
     const userId = req.auth!.userId;
     const [me, consentsList, sessionList, mail] = await Promise.all([
       accounts.me(userId),
@@ -162,11 +168,13 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
     // Ownership check: only sessions of the authenticated account.
     const target = await db.query.sessions.findFirst({ where: and(eq(sessionsTable.id, id), eq(sessionsTable.userId, req.auth!.userId)) });
     if (!target) throw notFound("Session");
+    if (id !== req.auth!.sessionId) await stepUp(req);
     await sessions.revoke(id, id === req.auth!.sessionId ? "logout" : "revoked_by_user");
     return { ok: true };
   });
 
   app.post("/security/sessions/revoke-others", async (req) => {
+    await stepUp(req);
     const count = await sessions.revokeAll(req.auth!.userId, "revoked_by_user", { except: req.auth!.sessionId });
     return { ok: true, revokedSessions: count };
   });
@@ -176,6 +184,8 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
   app.post("/security/approvals/:id", async (req) => {
     const { id } = parse(idParam, req.params);
     const { decision } = parse(ApprovalDecisionSchema, req.body);
+    // Letting a new device in is sensitive; turning one away is not.
+    if (decision === "approve") await stepUp(req);
     await challenges.decide(req.auth!, id, decision, requestMeta(req));
     return { ok: true };
   });
@@ -210,7 +220,7 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
     write({ type: "hello", sessionId: auth.sessionId });
     const unsubscribe = app.ctx.events.subscribe(auth.userId, auth.sessionId, (event) => {
       write(event);
-      if (event.type === "session.revoked" && event.sessionId === auth.sessionId) close();
+      if ((event.type === "session.revoked" || event.type === "session.locked") && event.sessionId === auth.sessionId) close();
     });
     const heartbeat = setInterval(() => res.write(`: ping\n\n`), 25_000);
     // Access tokens are short-lived; end the stream when this one expires so
@@ -232,3 +242,8 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
     for (const close of openStreams) close();
   });
 };
+
+/** ?slot=lock → the lock-screen wallpaper (Step 2.4); anything else → the desktop's. */
+function wallpaperSlot(query: unknown): "desktop" | "lock" {
+  return (query as { slot?: unknown } | undefined)?.slot === "lock" ? "lock" : "desktop";
+}

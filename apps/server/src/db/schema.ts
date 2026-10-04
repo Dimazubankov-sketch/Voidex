@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   customType,
   date,
@@ -45,6 +46,15 @@ export const users = pgTable(
     failedLoginCount: integer("failed_login_count").notNull().default(0),
     lockedUntil: ts("locked_until"),
     avatarVersion: integer("avatar_version").notNull().default(0),
+    /** Step 2.4: 6-digit code-password (scrypt hash), its lockout counter and window. */
+    passcodeHash: text("passcode_hash"),
+    passcodeSetAt: ts("passcode_set_at"),
+    passcodeFailedCount: integer("passcode_failed_count").notNull().default(0),
+    passcodeLockedUntil: ts("passcode_locked_until"),
+    /** Registered from Step 2.4 on: the first setup asks for a passcode before the desktop. */
+    passcodeSetupRequired: boolean("passcode_setup_required").notNull().default(false),
+    /** Auto-lock after this many minutes without activity (0 = only on start / manually). */
+    autoLockMinutes: integer("auto_lock_minutes").notNull().default(5),
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
@@ -139,6 +149,13 @@ export const sessions = pgTable(
     revokeReason: text("revoke_reason"),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
+    /** Step 2.4: the lock screen is up — no API access until unlocked (passcode / Face ID). */
+    lockedAt: ts("locked_at"),
+    /** Last confirmation for sensitive changes (passcode / Face ID); valid for a few minutes. */
+    stepUpAt: ts("step_up_at"),
+    /** Pending WebAuthn challenge of this session (one at a time, short-lived). */
+    webauthnChallenge: text("webauthn_challenge"),
+    webauthnChallengeAt: ts("webauthn_challenge_at"),
   },
   (t) => [
     uniqueIndex("sessions_refresh_uq").on(t.refreshTokenHash),
@@ -395,7 +412,7 @@ export const blobs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     /** What the blob is for: "mail" attachment content or the "wallpaper". */
-    purpose: text("purpose", { enum: ["mail", "wallpaper", "vibex"] }).notNull(),
+    purpose: text("purpose", { enum: ["mail", "wallpaper", "lock-wallpaper", "vibex"] }).notNull(),
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     data: bytea("data").notNull(),
@@ -404,18 +421,47 @@ export const blobs = pgTable(
   (t) => [index("blobs_owner_idx").on(t.ownerUserId, t.purpose)],
 );
 
+/**
+ * Step 2.4 Face ID: WebAuthn credentials of the device's own biometric
+ * authenticator (Face ID / Touch ID / Windows Hello / fingerprint). Only the
+ * public key is stored; the biometric itself never leaves the device.
+ */
+export const webauthnCredentials = pgTable(
+  "webauthn_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceId: uuid("device_id")
+      .notNull()
+      .references(() => devices.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull(),
+    publicKey: bytea("public_key").notNull(),
+    counter: bigint("counter", { mode: "number" }).notNull().default(0),
+    transports: jsonb("transports").$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+    lastUsedAt: ts("last_used_at"),
+  },
+  (t) => [uniqueIndex("webauthn_credentials_credential_uq").on(t.credentialId), index("webauthn_credentials_user_idx").on(t.userId, t.deviceId)],
+);
+
 /* ==========================================================================
    Vibex — messenger and social feed
    ========================================================================== */
 
-/** A conversation. Direct chats have one row per pair of people (direct_key). */
+/** A conversation. Direct chats have one row per pair of people (direct_key); groups have a title. */
 export const vibexConversations = pgTable(
   "vibex_conversations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    kind: text("kind", { enum: ["direct"] }).notNull().default("direct"),
+    kind: text("kind", { enum: ["direct", "group"] }).notNull().default("direct"),
     /** "<smaller user id>:<larger user id>" — one direct chat per pair. */
     directKey: text("direct_key"),
+    /** Step 2.4 groups: name, picture (a Vibex file), who created it. */
+    title: text("title"),
+    avatarFileId: uuid("avatar_file_id").references((): AnyPgColumn => vibexFiles.id, { onDelete: "set null" }),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     lastMessageAt: ts("last_message_at").notNull().defaultNow(),
   },
@@ -437,6 +483,8 @@ export const vibexMembers = pgTable(
     /** Position among this member's pinned chats; null = not pinned. */
     pinnedPosition: integer("pinned_position"),
     joinedAt: ts("joined_at").notNull().defaultNow(),
+    /** Groups: the creator is "owner" (renames, adds and removes people). */
+    role: text("role", { enum: ["owner", "member"] }).notNull().default("member"),
   },
   (t) => [primaryKey({ columns: [t.conversationId, t.userId] }), index("vibex_members_user_idx").on(t.userId)],
 );
