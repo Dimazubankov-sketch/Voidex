@@ -140,8 +140,9 @@ test("Face ID: set up with the device authenticator, unlock with it; failure fal
   await page.getByTestId("face-setup-start").click();
   await expect(page.locator('[data-testid="face-setup"][data-stage="done"]')).toBeVisible();
   await page.getByTestId("face-setup-finish").click();
-  // Lock → Face ID tries at once and unlocks.
+  // Lock → Face ID tries at once and unlocks. (First wait for the lock screen: the lock request takes a moment.)
   await page.getByTestId("lock-now").click();
+  await expect(page.getByTestId("lock-screen")).toBeAttached();
   await expect(page.getByTestId("lock-screen")).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByTestId("workspace")).toBeVisible();
   // The device doesn't confirm: "not confirmed", the code-password still works.
