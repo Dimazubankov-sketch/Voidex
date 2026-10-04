@@ -218,3 +218,25 @@ Migration `0005_vibex_social.sql` (additive): `vibex_profiles`, `vibex_comments`
 - Fix: the phone tab bar (and the chat / mail composers) added the iPhone
   safe area a second time inside a window that already keeps it below the
   app. The tab bar was squeezed, and its icons crossed the divider.
+
+## Step 2.5 — deleting messages, voice player, circles, views
+
+- **Delete my message** (`DELETE /api/vibex/messages/:id`): text, files,
+  voice and circles. Sender only (others: 403; non-members: 404). The text
+  and files are removed for good; the message stays as "Сообщение удалено"
+  so replies keep their place (their quote shows the placeholder). Members
+  get `vibex.message.deleted`; the message's notifications are removed.
+  Column `vibex_messages.deleted_at` (migration 0008).
+- **Voice player**: play / pause, progress on the waveform, drag and
+  keyboard seeking, duration; one voice message or circle plays at a time;
+  an unplayed dot until listened to (remembered on the device).
+- **Video circles**: the composer button has its own glyph (a round message
+  with its progress ring — not a camera). The front camera is used first;
+  with a second camera a switch button appears. Switching drops the
+  unfinished clip, releases the old tracks and starts again.
+- **Post views** (`POST /api/vibex/views { postIds }`): unique signed-in
+  viewers (`vibex_post_views`), never the author; a post counts once it was
+  half on screen for a second. `VibexPostDto.views`.
+- **Action row**: like · comment · share as icon + number (0 shown), equal
+  columns; views (eye) apart on the right. `shares` = reposts + sends into
+  chats. The share button is an icon only ("Поделиться" for screen readers).

@@ -227,3 +227,33 @@ purpose with its own quota).
   Dragging a running icon into the pinned row pins it there. Only pinned
   icons carry `data-dock-app` (the dock order); running-only ones carry
   `data-dock-running`.
+
+## Step 2.5
+
+- **Theme**: `appearance.theme` light (default, also for older accounts) /
+  dark / system, applied as `<html data-theme>`; all colours are tokens in
+  `styles/index.css` with a dark set and a dark glass. Notes' paper stays
+  light by design.
+- **Glass**: `appearance.dock` (glass / off) separate from
+  `appearance.systemBar`. Off removes only the background.
+- **Wallpaper sync**: `appearance.syncWallpapers`. Off keeps the device's own
+  wallpapers in localStorage (`vx.wallpapers.device`) and IndexedDB
+  (`voidex-wallpapers`), the lock screen included (`LockStateDto.syncWallpapers`);
+  the account's wallpapers stay for the other devices. `os/home/wallpapers.ts`.
+- **Badges**: no permanent dots under icons; a top-right badge (1–99+) only
+  for unread items — Mail inbox, Vibex chats — on the desktop, phone and dock.
+- **Grid bounds**: the PC grid uses at most the columns that fit the free area
+  (desktop minus system bar, dock zone, margins), re-measured on resize and
+  dock size changes; icons that don't fit flow into free cells.
+- **Removing apps** asks twice (see `os/home/remove-apps.tsx`): "−" marks,
+  "Удалить" opens the confirmation, a second explicit confirmation removes
+  the icons. Only icons; apps and data stay.
+- **Close guard**: `setBeforeClose` / `requestClose` in the window manager;
+  Notes uses it for unsaved changes (`os/close-guard.tsx`).
+- **Notification Center (phone)**: handle down = full screen, up = back /
+  close; swipe a card sideways to delete it. New soft chime (`lib/sound.ts`,
+  WebAudio, only after an interaction, respects the sound preference).
+- **No zoom on focus**: touch screens get ≥ 16px in every field; the
+  viewport keeps pinch zoom (no `user-scalable` / `maximum-scale`).
+- **PC passcode**: a keyboard-first six-cell field (phones keep the keypad).
+- **Mail** is shown as "Почта VoidOps" / "VoidOps Mail".
