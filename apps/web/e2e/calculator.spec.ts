@@ -158,10 +158,13 @@ test("calculator: dock pin / unpin on PC; maximize uses the area between the sys
   await expect(win).toHaveAttribute("data-state", "hidden");
   await dock.getByTestId("dock-app-calculator").click({ button: "right" });
   await page.getByTestId("menu-unpin").click();
-  await expect(dock.getByTestId("dock-app-calculator")).toHaveCount(0);
+  // Still open (minimized): it is no longer pinned but stays in the dock as a running app (Step 2.4).
+  await expect(dock.locator('[data-dock-app="calculator"]')).toHaveCount(0);
+  await expect(dock.getByTestId("dock-running-calculator")).toBeVisible();
   await page.getByTestId("app-calculator").click({ button: "right" });
   await page.getByTestId("menu-pin").click();
-  await expect(dock.getByTestId("dock-app-calculator")).toBeVisible();
+  await expect(dock.locator('[data-dock-app="calculator"]')).toBeVisible();
+  await expect(dock.getByTestId("dock-running-calculator")).toHaveCount(0);
 });
 
 test("calculator widget: a tap on its title opens the full Calculator app", async ({ page }) => {
