@@ -9,6 +9,12 @@ export interface NotesAdapter {
   createShare(data: Space | Project): Promise<string>;
   revokeShare(token: string): Promise<void>;
   readShare(token: string): Promise<Space | Project>;
+  /**
+   * VOIDEX: the bytes of an image path from `upload` (images are private and
+   * need the session, so <img src> can't load them directly). Without it the
+   * path is used as the image address.
+   */
+  media?(src: string): Promise<Blob>;
   listShares?(): Promise<
     {
       token: string;
@@ -17,9 +23,17 @@ export interface NotesAdapter {
     }[]
   >;
 }
+/** `save` was refused: another device saved a newer revision (nothing was overwritten). */
+export class NotesConflictError extends Error {
+  constructor(readonly revision?: number) {
+    super("Заметки изменены на другом устройстве");
+    this.name = "NotesConflictError";
+  }
+}
 async function request(url: string, init?: RequestInit) {
   const r = await fetch(url, init);
   const d: any = await r.json();
+  if (r.status === 409) throw new NotesConflictError();
   if (!r.ok) throw new Error(d.error || "Не удалось выполнить запрос");
   return d;
 }

@@ -870,6 +870,14 @@ export const en = {
   "overview.minimized": "Minimized",
   "overview.maximized": "Full screen",
   "overview.open": "Open",
+  "closeGuard.title": "Unsaved changes",
+  "closeGuard.body": "{app} has changes that aren't saved yet. Save them before closing?",
+  "closeGuard.save": "Save and close",
+  "closeGuard.discard": "Close without saving",
+  "closeGuard.saveFailed": "Couldn't save. The window stays open.",
+  "notes.name": "Notes",
+  "notes.sharedView": "A shared note — view only",
+  "notes.backToMine": "My notes",
 } as const;
 
 export type MessageKey = keyof typeof en;

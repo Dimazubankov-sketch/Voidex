@@ -839,4 +839,12 @@ export const zh: Record<MessageKey, string> = {
   "overview.minimized": "已最小化",
   "overview.maximized": "已最大化",
   "overview.open": "已打开",
+  "closeGuard.title": "有未保存的更改",
+  "closeGuard.body": "{app} 有尚未保存的更改。关闭前保存吗？",
+  "closeGuard.save": "保存并关闭",
+  "closeGuard.discard": "不保存并关闭",
+  "closeGuard.saveFailed": "无法保存。窗口保持打开。",
+  "notes.name": "笔记",
+  "notes.sharedView": "共享笔记 — 仅查看",
+  "notes.backToMine": "我的笔记",
 };

@@ -839,4 +839,12 @@ export const es: Record<MessageKey, string> = {
   "overview.minimized": "Minimizada",
   "overview.maximized": "Maximizada",
   "overview.open": "Abierta",
+  "closeGuard.title": "Cambios sin guardar",
+  "closeGuard.body": "{app} tiene cambios sin guardar. ¿Guardarlos antes de cerrar?",
+  "closeGuard.save": "Guardar y cerrar",
+  "closeGuard.discard": "Cerrar sin guardar",
+  "closeGuard.saveFailed": "No se pudo guardar. La ventana sigue abierta.",
+  "notes.name": "Notas",
+  "notes.sharedView": "Nota compartida: solo lectura",
+  "notes.backToMine": "Mis notas",
 };

@@ -6,7 +6,7 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { AppTile } from "@/brand/brand";
 import { IconButton } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
-import { useWM, type AppWindow } from "./window-manager";
+import { requestClose, useWM, type AppWindow } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const GAP = 16;
@@ -121,7 +121,12 @@ function Deck({ items }: { items: AppWindow[] }) {
       if (info.offset.y < -120 || info.velocity.y < -800) {
         if (y) void animate(y, -window.innerHeight, { duration: 0.25, ease: EASE });
         const id = g.cardId;
-        window.setTimeout(() => wm.close(id), 200);
+        // The app may object (unsaved changes): then the card comes back.
+        window.setTimeout(() => {
+          void requestClose(id).then((closed) => {
+            if (!closed && y) void animate(y, 0, { duration: 0.3, ease: EASE });
+          });
+        }, 200);
       } else if (y) {
         void animate(y, 0, { duration: 0.3, ease: EASE });
       }
@@ -164,7 +169,7 @@ function Deck({ items }: { items: AppWindow[] }) {
             index={i}
             register={(mv) => cardYs.current.set(w.id, mv)}
             onOpen={() => !gesture.current.moved && wm.focus(w.id)}
-            onClose={() => wm.close(w.id)}
+            onClose={() => void requestClose(w.id)}
           />
         ))}
       </motion.div>

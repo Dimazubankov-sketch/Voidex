@@ -854,4 +854,12 @@ export const ru: Record<MessageKey, string> = {
   "overview.minimized": "Свёрнуто",
   "overview.maximized": "Развёрнуто",
   "overview.open": "Открыто",
+  "closeGuard.title": "Есть несохранённые изменения",
+  "closeGuard.body": "В приложении «{app}» есть изменения, которые ещё не сохранены. Сохранить их перед закрытием?",
+  "closeGuard.save": "Сохранить и закрыть",
+  "closeGuard.discard": "Закрыть без сохранения",
+  "closeGuard.saveFailed": "Не удалось сохранить. Окно осталось открытым.",
+  "notes.name": "Заметки",
+  "notes.sharedView": "Общая заметка — только просмотр",
+  "notes.backToMine": "Мои заметки",
 };

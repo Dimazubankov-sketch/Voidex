@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { createContext, useState, useRef, useEffect, useCallback, useContext, useMemo } from "react";
 import {
   Plus,
   Search,
@@ -22,9 +22,6 @@ import {
   Type,
   Bold,
   Italic,
-  Quote,
-  Code,
-  CheckSquare,
   Trash2,
   Copy,
   ArrowUp,
@@ -33,7 +30,6 @@ import {
   EyeOff,
   Lock,
   Unlock,
-  Layers,
   Palette,
   Settings2,
   Upload,
@@ -46,7 +42,14 @@ import {
   Monitor,
   Smartphone,
   GripVertical,
-  Maximize2,
+  SeparatorHorizontal,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Files,
+  ScrollText,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../../components/ui/dialog";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "../../components/ui/sheet";
@@ -73,13 +76,8 @@ import { Slider } from "../../components/ui/slider";
 import { Switch } from "../../components/ui/switch";
 import { Toaster } from "../../components/ui/sonner";
 import { toast } from "sonner";
+import type { Workspace, Project, Space, Slide, Block, BlockKind } from "./model";
 import {
-  Workspace,
-  Project,
-  Space,
-  Slide,
-  Block,
-  BlockKind,
   uid,
   slide,
   space,
@@ -90,8 +88,8 @@ import {
   transitions,
   validWorkspace,
 } from "./model";
-import { NotesAdapter, httpAdapter } from "./adapter";
-import { download, exportHTML, exportProject } from "./export";
+import { type NotesAdapter, httpAdapter, NotesConflictError } from "./adapter";
+import { exportHTML, exportProject } from "./export";
 import "./notes.css";
 const names: Record<string, string> = {
   text: "Текст",
@@ -101,6 +99,13 @@ const names: Record<string, string> = {
   code: "Код",
   image: "Изображение",
 };
+/** VOIDEX: image sizes on the 12-column grid (S / M / L / full width). */
+const IMAGE_SIZES = [
+  [4, "S", "Маленькое"],
+  [6, "M", "Среднее"],
+  [8, "L", "Большое"],
+  [12, "Во всю ширину", "Во всю ширину"],
+] as const;
 function IconButton({
   label,
   children,
@@ -192,12 +197,43 @@ function Editable({
     />
   );
 }
+/**
+ * VOIDEX: images are private, so they are read through the adapter (with the
+ * session) and shown from local object URLs. One read per image per session.
+ */
+const MediaContext = createContext<NotesAdapter["media"]>(undefined);
+const mediaUrls = new Map<string, Promise<string>>();
+function useMediaUrl(src?: string): string | undefined {
+  const read = useContext(MediaContext);
+  const own = !!src && src.startsWith("/api/") && !!read;
+  const [url, setUrl] = useState<string | undefined>(own ? undefined : src);
+  useEffect(() => {
+    if (!src || !own || !read) {
+      setUrl(src);
+      return;
+    }
+    let live = true;
+    let p = mediaUrls.get(src);
+    if (!p) {
+      p = read(src).then((b) => URL.createObjectURL(b));
+      mediaUrls.set(src, p);
+      p.catch(() => mediaUrls.delete(src));
+    }
+    p.then((u) => live && setUrl(u)).catch(() => live && setUrl(undefined));
+    return () => {
+      live = false;
+    };
+  }, [src, own, read]);
+  return url;
+}
+function NoteImage({ src, alt, className }: { src?: string; alt: string; className?: string }) {
+  const url = useMediaUrl(src);
+  return url ? <img src={url} alt={alt} className={className} draggable={false} /> : <span className={"vn-image-loading " + (className || "")} aria-label={alt} />;
+}
 function Cover({ value, className = "" }: { value: string; className?: string }) {
+  const url = useMediaUrl(value.startsWith("/api/") ? value : undefined);
   return (
-    <div
-      className={"vn-cover bg-" + value + " " + className}
-      style={value.startsWith("/api/") ? { backgroundImage: `url("${value}")` } : undefined}
-    >
+    <div className={"vn-cover bg-" + value + " " + className} style={url ? { backgroundImage: `url("${url}")` } : undefined}>
       <FileText strokeWidth={1} />
     </div>
   );
@@ -221,6 +257,7 @@ function PageCanvas({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState(false);
+  const backgroundUrl = useMediaUrl(page.background.startsWith("/api/") ? page.background : undefined);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -236,11 +273,17 @@ function PageCanvas({
         ref={ref}
         className={`vn-canvas bg-${page.background} ${orientation} ${notes ? "note-canvas" : ""}`}
         style={
-          page.background.startsWith("/api/")
-            ? { backgroundImage: `linear-gradient(#ffffffbd,#ffffffbd),url("${page.background}")`, backgroundSize: "cover" }
-            : undefined
+          backgroundUrl ? { backgroundImage: `linear-gradient(#ffffffbd,#ffffffbd),url("${backgroundUrl}")`, backgroundSize: "cover" } : undefined
         }
       >
+        {!readOnly && page.blocks.some((b) => b.id === selected && b.kind === "image") && (
+          // The 12-column grid images snap to: shown only while an image is selected.
+          <div className="vn-grid-overlay" aria-hidden="true">
+            {Array.from({ length: 12 }, (_, i) => (
+              <i key={i} />
+            ))}
+          </div>
+        )}
         {page.blocks
           .filter((b) => !b.hidden)
           .map((b) => (
@@ -261,7 +304,7 @@ function PageCanvas({
             >
               {b.kind === "image" ? (
                 <figure>
-                  <img src={b.src} alt={b.text || "Изображение"} draggable={false} />
+                  <NoteImage src={b.src} alt={b.text || "Изображение"} />
                   {b.text && <figcaption>{b.text}</figcaption>}
                 </figure>
               ) : (
@@ -296,19 +339,48 @@ function PageCanvas({
     </div>
   );
 }
+/** VOIDEX: what the window around Notes can ask (closing with unsaved changes). */
+export interface NotesController {
+  /** There are changes that are not saved on the server yet. */
+  isDirty(): boolean;
+  /** Saves now; true when everything is saved. */
+  flush(): Promise<boolean>;
+}
 export default function NotesApp({
   adapter = httpAdapter,
   logoUrl = "/notes-logo.jpeg",
   embedded = false,
+  share,
+  shareLink,
+  remoteRevision,
+  controllerRef,
+  headerEnd,
 }: {
   adapter?: NotesAdapter;
   logoUrl?: string;
   embedded?: boolean;
+  /** VOIDEX: a share token to open read-only (default: `?share=` of the page address). */
+  share?: string | null;
+  /** VOIDEX: the address of a share (default: this page with `?share=`). */
+  shareLink?: (token: string) => string;
+  /** VOIDEX: the newest revision saved on another device (live sync). */
+  remoteRevision?: number;
+  controllerRef?: React.MutableRefObject<NotesController | null>;
+  /** VOIDEX: controls at the end of the header (the window menu). */
+  headerEnd?: React.ReactNode;
 }) {
+  const mediaReader = useMemo(() => adapter.media?.bind(adapter), [adapter]);
+  const readMedia = (src: string) => (mediaReader ? mediaReader(src) : fetch(src).then((r) => r.blob()));
+  const linkOf = (token: string) => (shareLink ? shareLink(token) : location.origin + location.pathname + "?share=" + token);
   const [data, setData] = useState<Workspace>({ version: 1, projects: [] });
   const current = useRef(data);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  /** Another device saved in between: ask which version to keep (never overwrite silently). */
+  const [conflict, setConflict] = useState(false);
+  const conflictRef = useRef(false);
+  conflictRef.current = conflict;
   const revision = useRef(0);
   const [status, setStatus] = useState("Сохранено");
   const dirty = useRef(false);
@@ -321,6 +393,8 @@ export default function NotesApp({
   const [spaceId, setSpaceId] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
   const [selected, setSelected] = useState("");
+  const selectedRef = useRef("");
+  selectedRef.current = selected;
   const [query, setQuery] = useState("");
   const [listView, setListView] = useState(false);
   const [orientation, setOrientation] = useState<"landscape" | "portrait">("landscape");
@@ -356,7 +430,7 @@ export default function NotesApp({
   >([]);
   const [readOnly, setReadOnly] = useState(false);
   const [direction, setDirection] = useState(1);
-  const touch = useRef(0);
+  const touch = useRef({ x: 0, y: 0 });
   const [uploading, setUploading] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
@@ -380,13 +454,85 @@ export default function NotesApp({
         setStatus("Есть изменения");
       }
     } catch (e) {
+      if (e instanceof NotesConflictError) {
+        setStatus("Конфликт версий");
+        setConflict(true);
+        saving.current = false;
+        return;
+      }
       setStatus("Не сохранено");
       toast.error((e as Error).message);
     } finally {
       saving.current = false;
-      if (dirty.current && snapshot !== current.current) timer.current = setTimeout(() => void flush(), 700);
+      if (dirty.current && snapshot !== current.current && !conflictRef.current) timer.current = setTimeout(() => void flush(), 700);
     }
   }, [adapter]);
+  /** Replaces what is shown with the server's version (after a conflict, or a save from another device). */
+  const reload = useCallback(async () => {
+    const result = await adapter.load();
+    if (timer.current) clearTimeout(timer.current);
+    current.current = result.data;
+    revision.current = result.revision;
+    history.current = [];
+    future.current = [];
+    dirty.current = false;
+    setData(result.data);
+    setStatus("Сохранено");
+    return result;
+  }, [adapter]);
+  const resolveConflict = async (keep: "theirs" | "mine" | "both") => {
+    try {
+      const mine = current.current;
+      const latest = await adapter.load();
+      if (keep === "theirs") {
+        await reload();
+      } else {
+        // "mine": my version replaces theirs; "both": theirs plus a copy of each of my projects.
+        const next: Workspace =
+          keep === "mine"
+            ? mine
+            : {
+                ...latest.data,
+                projects: [
+                  ...latest.data.projects,
+                  ...mine.projects.map((p) => ({
+                    ...structuredClone(p),
+                    id: uid(),
+                    name: p.name + " (копия с этого устройства)",
+                    spaces: p.spaces.map((sp) => ({ ...structuredClone(sp), id: uid() })),
+                  })),
+                ],
+              };
+        revision.current = latest.revision;
+        current.current = next;
+        setData(next);
+        dirty.current = true;
+        conflictRef.current = false;
+        setConflict(false);
+        await flush();
+        return;
+      }
+      setConflict(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+  if (controllerRef)
+    controllerRef.current = {
+      isDirty: () => dirty.current || saving.current,
+      flush: async () => {
+        if (timer.current) clearTimeout(timer.current);
+        for (let i = 0; i < 50 && saving.current; i++) await new Promise((r) => setTimeout(r, 100));
+        await flush();
+        return !dirty.current;
+      },
+    };
+  // Saved on another device: show it when nothing here is unsaved (otherwise the next save asks).
+  useEffect(() => {
+    if (!loaded || readOnly || remoteRevision === undefined || remoteRevision <= revision.current) return;
+    if (dirty.current || saving.current) return;
+    void reload().catch(() => {});
+  }, [remoteRevision, loaded, readOnly, reload]);
   const change = useCallback(
     (next: Workspace, group = false) => {
       if (readOnly) return;
@@ -406,7 +552,7 @@ export default function NotesApp({
   );
   useEffect(() => {
     let cancelled = false;
-    const token = new URLSearchParams(location.search).get("share");
+    const token = share !== undefined ? share : new URLSearchParams(location.search).get("share");
     (async () => {
       try {
         if (token) {
@@ -419,7 +565,7 @@ export default function NotesApp({
           setData(w);
           setProjectId(p.id);
           if (p.spaces.length === 1) {
-            setSpaceId(p.spaces[0].id);
+            setSpaceId(p.spaces[0]!.id);
             setPlaying(true);
           }
           setReadOnly(true);
@@ -429,6 +575,13 @@ export default function NotesApp({
           current.current = result.data;
           setData(result.data);
           revision.current = result.revision;
+          // Back from a shared snapshot to my own notes.
+          setReadOnly(false);
+          setPlaying(false);
+          setProjectId("");
+          setSpaceId("");
+          history.current = [];
+          future.current = [];
         }
         setLoaded(true);
       } catch (e) {
@@ -438,7 +591,7 @@ export default function NotesApp({
     return () => {
       cancelled = true;
     };
-  }, [adapter]);
+  }, [adapter, share, loadAttempt]);
   useEffect(() => {
     const f = (e: BeforeUnloadEvent) => {
       if (dirty.current) {
@@ -450,7 +603,8 @@ export default function NotesApp({
     return () => window.removeEventListener("beforeunload", f);
   }, []);
   useEffect(() => {
-    if (doc) setSideOpen(doc.mode === "presentation");
+    // VOIDEX: on a wide window notes keep the pages list open too (sidebar + sheet + tools).
+    if (doc) setSideOpen(doc.mode === "presentation" || (document.querySelector(".vn-app")?.clientWidth || 0) >= 1100);
   }, [doc?.id, doc?.mode]);
   useEffect(() => {
     if (doc?.format !== "both" && doc) setOrientation(doc.format);
@@ -524,12 +678,82 @@ export default function NotesApp({
     setPageIndex(pageIndex + 1);
     setSelected("");
   };
-  const reorderBlock = (id: string, d: number) =>
+  const reorderBlock = (id: string, d: number) => {
+    // VOIDEX: in notes a block moves on to the neighbouring page at the edge of its page.
+    if (doc && page && doc.mode === "notes") {
+      const i = doc.slides.findIndex((p) => p.id === page.id);
+      const from = page.blocks.findIndex((b) => b.id === id);
+      const to = from + d;
+      if (from >= 0 && (to < 0 || to >= page.blocks.length)) {
+        const j = i + (to < 0 ? -1 : 1);
+        if (j < 0 || j >= doc.slides.length) return;
+        const moved = page.blocks[from]!;
+        updateDoc((s) => ({
+          ...s,
+          slides: s.slides.map((p, k) =>
+            k === i
+              ? { ...p, blocks: p.blocks.filter((b) => b.id !== id) }
+              : k === j
+                ? { ...p, blocks: to < 0 ? [...p.blocks, moved] : [moved, ...p.blocks] }
+                : p,
+          ),
+        }));
+        setPageIndex(j);
+        return;
+      }
+    }
+    reorderInPage(id, d);
+  };
+  /**
+   * VOIDEX page breaks (notes): the boundary between two pages. In the
+   * continuous sheet it can be inserted after a block, moved up or down by one
+   * block, or removed (the pages join). Paged view shows the same boundaries
+   * as separate pages. Nothing is ever dropped.
+   */
+  const insertBreak = (blockId: string) => {
+    if (!doc || !page) return;
+    const i = doc.slides.findIndex((p) => p.id === page.id);
+    const at = page.blocks.findIndex((b) => b.id === blockId);
+    if (i < 0 || at < 0) return;
+    const tail = page.blocks.slice(at + 1);
+    const next: Slide = { ...slide(), background: page.background, transition: page.transition, blocks: tail.length ? tail : [block("text", "")] };
+    updateDoc((s) => ({
+      ...s,
+      slides: [...s.slides.slice(0, i), { ...page, blocks: page.blocks.slice(0, at + 1) }, next, ...s.slides.slice(i + 1)],
+    }));
+    setPageIndex(i + 1);
+    setSelected("");
+  };
+  const removeBreak = (i: number) => {
+    updateDoc((s) => {
+      const a = s.slides[i];
+      const b = s.slides[i + 1];
+      if (!a || !b) return s;
+      const joined: Slide = { ...a, blocks: [...a.blocks, ...b.blocks], speaker: [a.speaker, b.speaker].filter(Boolean).join("\n\n") };
+      return { ...s, slides: [...s.slides.slice(0, i), joined, ...s.slides.slice(i + 2)] };
+    });
+    setPageIndex(i);
+  };
+  const moveBreak = (i: number, d: -1 | 1) =>
+    updateDoc((s) => {
+      const a = s.slides[i];
+      const b = s.slides[i + 1];
+      if (!a || !b) return s;
+      if (d < 0) {
+        if (a.blocks.length < 2) return s;
+        const moved = a.blocks[a.blocks.length - 1]!;
+        return { ...s, slides: s.slides.map((p, k) => (k === i ? { ...a, blocks: a.blocks.slice(0, -1) } : k === i + 1 ? { ...b, blocks: [moved, ...b.blocks] } : p)) };
+      }
+      if (b.blocks.length < 2) return s;
+      const moved = b.blocks[0]!;
+      return { ...s, slides: s.slides.map((p, k) => (k === i ? { ...a, blocks: [...a.blocks, moved] } : k === i + 1 ? { ...b, blocks: b.blocks.slice(1) } : p)) };
+    });
+  const reorderInPage = (id: string, d: number) =>
     updatePage((p) => {
       const bs = [...p.blocks];
       const from = bs.findIndex((b) => b.id === id);
       const to = Math.max(0, Math.min(bs.length - 1, from + d));
-      bs.splice(to, 0, bs.splice(from, 1)[0]);
+      bs.splice(to, 0, bs.splice(from, 1)[0]!);
       return { ...p, blocks: bs };
     });
   const undo = (redo = false) => {
@@ -633,15 +857,22 @@ export default function NotesApp({
       if (asCover) setCover(src);
       else {
         const b = { ...block("image"), src, size: 6, text: "" };
-        updatePage((p) => ({ ...p, blocks: [...p.blocks, b] }));
+        // After the selected block, or at the end of the page.
+        updatePage((p) => {
+          const at = p.blocks.findIndex((x) => x.id === selectedRef.current);
+          return { ...p, blocks: at < 0 ? [...p.blocks, b] : [...p.blocks.slice(0, at + 1), b, ...p.blocks.slice(at + 1)] };
+        });
         setSelected(b.id);
-        setPanel("image");
+        selectedRef.current = b.id;
       }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setUploading(false);
     }
+  }
+  async function uploadImages(files: File[]) {
+    for (const f of files) await uploadImage(f);
   }
   function createItem() {
     if (!name.trim()) return;
@@ -674,7 +905,7 @@ export default function NotesApp({
     const target = doc || project;
     if (!target) return;
     try {
-      await exportHTML(target);
+      await exportHTML(target, readMedia);
       toast.success("Файл HTML готов");
     } catch (e) {
       toast.error((e as Error).message);
@@ -748,7 +979,7 @@ export default function NotesApp({
               onClick={() =>
                 updateDoc((s) => {
                   const a = [...s.slides];
-                  [a[i - 1], a[i]] = [a[i], a[i - 1]];
+                  [a[i - 1], a[i]] = [a[i]!, a[i - 1]!];
                   setPageIndex(i - 1);
                   return { ...s, slides: a };
                 })
@@ -886,7 +1117,7 @@ export default function NotesApp({
         />
       </label>
       <label className="vn-switch-row">
-        Разделять заметку на страницы
+        Разбить на страницы
         <Switch checked={doc?.paged || false} onCheckedChange={(v) => updateDoc((s) => ({ ...s, paged: v }))} />
       </label>
       <label>
@@ -921,13 +1152,13 @@ export default function NotesApp({
         <label>
           Размер по сетке · {orientation === "portrait" ? "телефон" : "компьютер"}
           <div className="vn-size-options">
-            {[4, 6, 12].map((n) => (
+            {IMAGE_SIZES.map(([n, , l]) => (
               <button
                 key={n}
                 className={(orientation === "portrait" ? selectedBlock.portraitSize || 12 : selectedBlock.size) === n ? "active" : ""}
                 onClick={() => updateBlock(selected, { [orientation === "portrait" ? "portraitSize" : "size"]: n })}
               >
-                {n === 4 ? "⅓" : n === 6 ? "½" : "Вся ширина"}
+                {l}
               </button>
             ))}
           </div>
@@ -939,9 +1170,9 @@ export default function NotesApp({
             value={selectedBlock.align}
             onChange={(v) => updateBlock(selected, { align: v as Block["align"] })}
             options={[
-              ["left", "Слева от текста"],
-              ["right", "Справа от текста"],
-              ["center", "Отдельным блоком"],
+              ["left", "Слева, текст обтекает"],
+              ["right", "Справа, текст обтекает"],
+              ["center", "По центру, отдельным блоком"],
             ]}
           />
         </label>
@@ -973,18 +1204,25 @@ export default function NotesApp({
     );
   if (!loaded)
     return (
-      <div className="vn-app vn-loading">
+      <div className={"vn-app vn-loading" + (embedded ? " is-embedded" : "")}>
         <img src={logoUrl} alt="Заметки Voidex" />
         <h1>{loadError ? "Не удалось открыть заметки" : "Открываем ваше пространство"}</h1>
         <p>{loadError || "Загружаем проекты…"}</p>
         {loadError && (
-          <button className="vn-primary" onClick={() => location.reload()}>
+          <button
+            className="vn-primary"
+            onClick={() => {
+              setLoadError("");
+              setLoadAttempt((n) => n + 1);
+            }}
+          >
             Повторить
           </button>
         )}
       </div>
     );
   return (
+    <MediaContext.Provider value={mediaReader}>
     <div className={"vn-app " + (doc ? "is-editor" : "") + (playing ? " is-playing" : "") + (embedded ? " is-embedded" : "")}>
       <Toaster position="bottom-center" />
       <input
@@ -1135,7 +1373,7 @@ export default function NotesApp({
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => void exportCurrent()}>Скачать HTML для просмотра</DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => void exportProject(project ? [project] : data.projects).catch((e) => toast.error(e.message))}
+                      onClick={() => void exportProject(project ? [project] : data.projects, readMedia).catch((e) => toast.error(e.message))}
                     >
                       Экспорт исходного проекта
                     </DropdownMenuItem>
@@ -1188,6 +1426,7 @@ export default function NotesApp({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+            {headerEnd && <span className="vn-header-end">{headerEnd}</span>}
           </div>
         </header>
       )}
@@ -1296,7 +1535,7 @@ export default function NotesApp({
                   onClick={() => {
                     const p = demoProject();
                     change({ ...data, projects: [...data.projects, p] });
-                    openSpace(p.id, p.spaces[0].id);
+                    openSpace(p.id, p.spaces[0]!.id);
                   }}
                 >
                   Открыть пример
@@ -1359,11 +1598,31 @@ export default function NotesApp({
                   <ImagePlus size={18} />
                   <span>Фото</span>
                 </button>
-                <button className="vn-tool" onClick={addPage}>
-                  <Plus size={18} />
-                  <span>Страница</span>
-                </button>
+                {doc.mode === "notes" && !doc.paged ? (
+                  <button className="vn-tool" onClick={() => (selected ? insertBreak(selected) : addPage())} data-testid="notes-insert-break">
+                    <SeparatorHorizontal size={18} />
+                    <span>Разрыв</span>
+                  </button>
+                ) : (
+                  <button className="vn-tool" onClick={addPage}>
+                    <Plus size={18} />
+                    <span>Страница</span>
+                  </button>
+                )}
               </div>
+              {doc.mode === "notes" && (
+                <div className="vn-tool-group">
+                  <button
+                    className={"vn-tool " + (doc.paged ? "active" : "")}
+                    aria-pressed={doc.paged}
+                    onClick={() => updateDoc((s) => ({ ...s, paged: !s.paged }))}
+                    data-testid="notes-paged-toggle"
+                  >
+                    {doc.paged ? <Files size={18} /> : <ScrollText size={18} />}
+                    <span>Разбить на страницы</span>
+                  </button>
+                </div>
+              )}
               <div className="vn-tool-group">
                 <button className="vn-tool" onClick={() => setPanel("background")}>
                   <Palette size={18} />
@@ -1404,11 +1663,25 @@ export default function NotesApp({
             <div
               className={"vn-stage " + (playing ? "viewer" : "") + (doc.mode === "notes" && !doc.paged ? " continuous" : "")}
               onTouchStart={(e) => {
-                touch.current = e.touches[0].clientX;
+                const t = e.touches[0]!;
+                touch.current = { x: t.clientX, y: t.clientY };
               }}
               onTouchEnd={(e) => {
-                if ((playing || doc.flow === "horizontal") && Math.abs(e.changedTouches[0].clientX - touch.current) > 65)
-                  movePage(e.changedTouches[0].clientX < touch.current ? 1 : -1);
+                const t = e.changedTouches[0]!;
+                const dx = t.clientX - touch.current.x;
+                const dy = t.clientY - touch.current.y;
+                // Horizontal swipes turn pages (show, sideways flow, or paged notes); vertical ones scroll.
+                if ((playing || doc.flow === "horizontal" || doc.paged) && Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.5)
+                  movePage(dx < 0 ? 1 : -1);
+              }}
+              onPasteCapture={(e) => {
+                // VOIDEX: pasting a picture puts it into the note.
+                if (readOnly || playing) return;
+                const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+                if (!files.length) return;
+                e.preventDefault();
+                e.stopPropagation();
+                void uploadImages(files);
               }}
               onDragOver={(e) => {
                 if (e.dataTransfer.types.includes("Files")) e.preventDefault();
@@ -1416,7 +1689,7 @@ export default function NotesApp({
               onDrop={(e) => {
                 if (!readOnly && e.dataTransfer.files.length) {
                   e.preventDefault();
-                  void uploadImage(e.dataTransfer.files[0]);
+                  void uploadImages([...e.dataTransfer.files].filter((f) => f.type.startsWith("image/")));
                 }
               }}
             >
@@ -1471,6 +1744,28 @@ export default function NotesApp({
                         {i + 1} / {doc.slides.length}
                       </span>
                     )}
+                    {!doc.paged && !readOnly && i < doc.slides.length - 1 && (
+                      <div className="vn-page-break" role="separator" aria-label={"Разрыв страницы " + (i + 1)} data-testid="notes-page-break">
+                        <span className="vn-page-break-label">
+                          <SeparatorHorizontal size={14} /> Разрыв страницы
+                        </span>
+                        <span className="vn-page-break-actions">
+                          <IconButton label="Поднять разрыв" disabled={p.blocks.length < 2} onClick={() => moveBreak(i, -1)}>
+                            <ChevronUp size={15} />
+                          </IconButton>
+                          <IconButton
+                            label="Опустить разрыв"
+                            disabled={(doc.slides[i + 1]?.blocks.length ?? 0) < 2}
+                            onClick={() => moveBreak(i, 1)}
+                          >
+                            <ChevronDown size={15} />
+                          </IconButton>
+                          <IconButton label="Убрать разрыв" onClick={() => removeBreak(i)}>
+                            <X size={15} />
+                          </IconButton>
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
@@ -1517,9 +1812,44 @@ export default function NotesApp({
                     </>
                   )}
                   {selectedBlock.kind === "image" && (
-                    <button className="vn-tool" onClick={() => setPanel("image")}>
-                      Размер и обтекание
-                    </button>
+                    <>
+                      <div className="vn-size-quick" role="group" aria-label="Размер изображения">
+                        {IMAGE_SIZES.map(([n, short, l]) => {
+                          const key = orientation === "portrait" ? "portraitSize" : "size";
+                          const value = orientation === "portrait" ? selectedBlock.portraitSize || 12 : selectedBlock.size;
+                          return (
+                            <button
+                              key={n}
+                              className={value === n ? "active" : ""}
+                              aria-label={l}
+                              aria-pressed={value === n}
+                              title={l}
+                              data-testid={`notes-image-size-${n}`}
+                              onClick={() => updateBlock(selected, { [key]: n })}
+                            >
+                              {n === 12 ? "100%" : short}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <IconButton label="Слева, текст обтекает" active={selectedBlock.align === "left"} onClick={() => updateBlock(selected, { align: "left" })}>
+                        <AlignLeft size={16} />
+                      </IconButton>
+                      <IconButton label="По центру" active={selectedBlock.align === "center"} onClick={() => updateBlock(selected, { align: "center" })}>
+                        <AlignCenter size={16} />
+                      </IconButton>
+                      <IconButton label="Справа, текст обтекает" active={selectedBlock.align === "right"} onClick={() => updateBlock(selected, { align: "right" })}>
+                        <AlignRight size={16} />
+                      </IconButton>
+                      <button className="vn-tool" onClick={() => setPanel("image")}>
+                        Ещё
+                      </button>
+                    </>
+                  )}
+                  {doc.mode === "notes" && (
+                    <IconButton label="Разрыв страницы после блока" onClick={() => insertBreak(selected)}>
+                      <SeparatorHorizontal size={16} />
+                    </IconButton>
                   )}
                   <IconButton label="Выше" onClick={() => reorderBlock(selected, -1)}>
                     <ArrowUp size={16} />
@@ -1617,7 +1947,7 @@ export default function NotesApp({
               <Upload size={18} />
             </button>
           </div>
-          {cover.startsWith("/api/") && <img className="vn-cover-upload" src={cover} alt="Обложка" />}
+          {cover.startsWith("/api/") && <NoteImage className="vn-cover-upload" src={cover} alt="Обложка" />}
           {create === "space" && (
             <>
               <label>
@@ -1690,6 +2020,25 @@ export default function NotesApp({
           {sideContent}
         </SheetContent>
       </Sheet>
+      <AlertDialog open={conflict}>
+        <AlertDialogContent data-testid="notes-conflict">
+          <AlertDialogTitle>Заметки изменены на другом устройстве</AlertDialogTitle>
+          <AlertDialogDescription>
+            Пока вы редактировали, на другом устройстве сохранили другую версию. Ничего не перезаписано — выберите, что оставить.
+          </AlertDialogDescription>
+          <div className="vn-conflict-actions">
+            <button className="vn-primary" onClick={() => void resolveConflict("both")} data-testid="notes-conflict-both">
+              Сохранить обе версии
+            </button>
+            <button className="vn-secondary" onClick={() => void resolveConflict("mine")} data-testid="notes-conflict-mine">
+              Оставить версию с этого устройства
+            </button>
+            <button className="vn-secondary" onClick={() => void resolveConflict("theirs")} data-testid="notes-conflict-theirs">
+              Открыть версию с другого устройства
+            </button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={!!remove} onOpenChange={(v) => !v && setRemove(null)}>
         <AlertDialogContent>
           <AlertDialogTitle>{remove?.label}</AlertDialogTitle>
@@ -1738,16 +2087,16 @@ export default function NotesApp({
             {shareBusy ? "Создаём…" : "Создать ссылку для просмотра"}
           </button>
           <p className="vn-help">
-            Ссылка работает для людей с доступом к этому приложению. Доступ по аккаунтам Voidex подключается при интеграции.
+            Ссылку откроют только те, кто вошёл в VOIDEX. Заметки докладчика не публикуются; ссылку можно отозвать.
           </p>
           {shareToken && (
             <>
-              <input aria-label="Ссылка для просмотра" readOnly value={location.origin + location.pathname + "?share=" + shareToken} />
+              <input aria-label="Ссылка для просмотра" readOnly value={linkOf(shareToken)} />
               <button
                 className="vn-secondary"
                 onClick={async () => {
                   try {
-                    await navigator.clipboard.writeText(location.origin + location.pathname + "?share=" + shareToken);
+                    await navigator.clipboard.writeText(linkOf(shareToken));
                     toast.success("Ссылка скопирована");
                   } catch {
                     toast.error("Выделите и скопируйте ссылку вручную");
@@ -1787,7 +2136,7 @@ export default function NotesApp({
                       label="Скопировать ссылку"
                       onClick={() => {
                         void navigator.clipboard
-                          .writeText(location.origin + location.pathname + "?share=" + l.token)
+                          .writeText(linkOf(l.token))
                           .then(() => toast.success("Ссылка скопирована"))
                           .catch(() => toast.error("Не удалось скопировать"));
                       }}
@@ -1844,7 +2193,7 @@ export default function NotesApp({
           <footer>
             <label>
               Скорость {speed}
-              <Slider aria-label="Скорость промтера" min={10} max={100} step={5} value={[speed]} onValueChange={(v) => setSpeed(v[0])} />
+              <Slider aria-label="Скорость промтера" min={10} max={100} step={5} value={[speed]} onValueChange={(v) => setSpeed(v[0] ?? speed)} />
             </label>
             <label>
               Размер текста {fontSize}
@@ -1854,7 +2203,7 @@ export default function NotesApp({
                 max={64}
                 step={2}
                 value={[fontSize]}
-                onValueChange={(v) => setFontSize(v[0])}
+                onValueChange={(v) => setFontSize(v[0] ?? fontSize)}
               />
             </label>
             <button
@@ -1870,5 +2219,6 @@ export default function NotesApp({
         </div>
       )}
     </div>
+    </MediaContext.Provider>
   );
 }

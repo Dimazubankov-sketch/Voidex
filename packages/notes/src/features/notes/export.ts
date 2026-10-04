@@ -1,4 +1,11 @@
-import { Space, Project } from "./model";
+import type { Space, Project } from "./model";
+/** Reads an image path; VOIDEX passes the adapter's authenticated reader. */
+export type MediaReader = (src: string) => Promise<Blob>;
+const plainFetch: MediaReader = async (src) => {
+  const r = await fetch(src);
+  if (!r.ok) throw new Error("Не удалось загрузить изображение");
+  return r.blob();
+};
 export function download(name: string, data: string, type = "application/json") {
   const u = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement("a");
@@ -8,29 +15,28 @@ export function download(name: string, data: string, type = "application/json") 
   setTimeout(() => URL.revokeObjectURL(u), 1000);
 }
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-export async function exportHTML(data: Space | Project) {
+export async function exportHTML(data: Space | Project, read: MediaReader = plainFetch) {
   const spaces = "spaces" in data ? data.spaces : [data];
   const cloned = structuredClone(spaces);
   for (const s of cloned)
     for (const p of s.slides) {
       for (const b of p.blocks) {
         if (b.src) {
-          const r = await fetch(b.src);
-          if (!r.ok) throw new Error("Не удалось включить изображение в экспорт");
+          const blob = await read(b.src).catch(() => {
+            throw new Error("Не удалось включить изображение в экспорт");
+          });
           b.src = await new Promise<string>((resolve, reject) => {
             const fr = new FileReader();
             fr.onload = () => resolve(fr.result as string);
             fr.onerror = reject;
-            r.blob()
-              .then((blob) => fr.readAsDataURL(blob))
-              .catch(reject);
+            fr.readAsDataURL(blob);
           });
         }
       }
-      if (p.background.startsWith("/api/media")) {
-        const r = await fetch(p.background);
-        if (!r.ok) throw new Error("Не удалось загрузить фон");
-        const blob = await r.blob();
+      if (p.background.startsWith("/api/")) {
+        const blob = await read(p.background).catch(() => {
+          throw new Error("Не удалось загрузить фон");
+        });
         p.background = await new Promise<string>((resolve, reject) => {
           const fr = new FileReader();
           fr.onload = () => resolve(fr.result as string);
@@ -73,7 +79,7 @@ export async function exportHTML(data: Space | Project) {
     )}</main><script>let i=0;const pages=[...document.querySelectorAll('section')];function show(d){i=Math.max(0,Math.min(pages.length-1,i+d));pages.forEach((p,n)=>p.classList.toggle('active',n===i));document.getElementById('count').textContent=(i+1)+' / '+pages.length}show(0);onkeydown=e=>{if(e.key==='ArrowRight')show(1);if(e.key==='ArrowLeft')show(-1)};</script></html>`;
   download(data.name + ".html", html, "text/html");
 }
-export async function exportProject(projects: Project[]) {
+export async function exportProject(projects: Project[], read: MediaReader = plainFetch) {
   const assets: Record<string, string> = {};
   const urls = new Set<string>();
   for (const p of projects) {
@@ -87,9 +93,9 @@ export async function exportProject(projects: Project[]) {
     }
   }
   for (const url of urls) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error("Не удалось включить фото в проект");
-    const blob = await r.blob();
+    const blob = await read(url).catch(() => {
+      throw new Error("Не удалось включить фото в проект");
+    });
     assets[url] = await new Promise<string>((resolve, reject) => {
       const f = new FileReader();
       f.onload = () => resolve(String(f.result));

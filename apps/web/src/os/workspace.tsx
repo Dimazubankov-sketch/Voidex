@@ -6,6 +6,7 @@ import { useT } from "@/lib/i18n";
 import { takeReopenApp } from "@/lib/known-accounts";
 import { useSession } from "@/lib/session";
 import { ApprovalPrompt } from "./approval-prompt";
+import { CloseGuard } from "./close-guard";
 import { useConnection, useServerEvents } from "./events";
 import { AppSwitcher } from "./app-switcher";
 import { DesktopDock, dockZone } from "./home/dock";
@@ -87,6 +88,20 @@ export function Workspace() {
     return () => window.removeEventListener("hashchange", follow);
   }, [hydrated]);
 
+  // Step 2.5: shared Notes links (#notes/share/<token>) open read-only in Notes.
+  useEffect(() => {
+    if (!hydrated) return;
+    const follow = () => {
+      const m = /^#notes\/share\/([A-Za-z0-9_-]{16,64})$/.exec(window.location.hash);
+      if (!m) return;
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      useWM.getState().open("notes", { params: { share: m[1] } });
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [hydrated]);
+
   // PC: only the current virtual desktop's windows count as open.
   const fg = ff === "desktop" ? foregroundId(wm, wm.space) : foregroundId(wm);
   const anyVisible = !!fg;
@@ -107,6 +122,7 @@ export function Workspace() {
       <NotificationCenter />
       <OfflineBanner />
       <ApprovalPrompt />
+      <CloseGuard />
     </div>
   );
 }

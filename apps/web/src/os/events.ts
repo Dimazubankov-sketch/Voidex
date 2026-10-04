@@ -8,6 +8,7 @@ import { qk, queryClient } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { toast } from "@/ui/overlays";
 import { visibleChats } from "@/apps/vibex/store";
+import { useNotesSync } from "@/apps/notes/sync";
 import { layoutEpoch, mergeServerUser } from "./home/layout";
 import { notificationsChanged, receiveNotification } from "./notifications/store";
 import { useWM } from "./window-manager";
@@ -90,6 +91,9 @@ function handle(event: ServerEvent) {
       if (prefs?.sound) playChime();
       break;
     }
+    case "notes.changed":
+      useNotesSync.setState({ revision: event.revision });
+      break;
     case "vibex.feed":
       // Someone posted, edited, liked or commented: feeds and that post refresh.
       void queryClient.invalidateQueries({ queryKey: ["vibex", "feed"] });

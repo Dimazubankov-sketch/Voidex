@@ -5,7 +5,7 @@ import { RiCloseLine } from "@remixicon/react";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
 import { AppTile } from "@/brand/brand";
-import { useWM } from "../window-manager";
+import { requestClose, useWM } from "../window-manager";
 import { appLabel } from "./actions";
 import { spaceLabel } from "./context-menu";
 import { AppGlyph } from "./icons";
@@ -101,7 +101,7 @@ export function WindowOverview() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            useWM.getState().close(w.id);
+                            void requestClose(w.id);
                           }}
                           aria-label={t("os.close")}
                           className="absolute right-2.5 top-2.5 grid size-7 place-items-center rounded-full bg-black/[0.06] text-text-secondary opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"

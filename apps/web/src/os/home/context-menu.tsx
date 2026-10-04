@@ -42,7 +42,7 @@ import {
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
-import { useWM } from "../window-manager";
+import { requestClose, useWM } from "../window-manager";
 import { currentView, setView } from "./brush-menu";
 import { CATEGORY_LABEL, addToDesktop, addToFolder, appCategory, createFolderWith, openApp, removeFromDesktop, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
@@ -208,7 +208,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           // An open app that isn't pinned sits in the dock only while it runs: pin keeps it there.
           dockEntry(id),
           ...(windows.length
-            ? [{ id: "close-app", label: t("os.close"), icon: <RiCloseLine />, danger: true, onSelect: () => windows.forEach((w) => useWM.getState().close(w.id)) }]
+            ? [{ id: "close-app", label: t("os.close"), icon: <RiCloseLine />, danger: true, onSelect: () => windows.forEach((w) => void requestClose(w.id)) }]
             : []),
         ];
       }

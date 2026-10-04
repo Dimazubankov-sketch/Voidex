@@ -1744,3 +1744,153 @@
   font-size: 11px;
   color: #a095ac;
 }
+
+/* ===========================================================================
+   VOIDEX integration (Step 2.5)
+   =========================================================================== */
+/* Page breaks in the continuous sheet: a dashed line on the paper with its own controls. */
+.vn-page-break {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 12px;
+  background: #fff;
+}
+.vn-page-break::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 50%;
+  border-top: 1.5px dashed #cdbff0;
+}
+.vn-page-break-label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 28px;
+  padding: 0 8px;
+  background: #fff;
+  color: #8f7fbf;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+.vn-page-break-actions {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: 16px;
+  padding: 0 4px;
+  background: #fff;
+}
+.vn-page-break-actions .vn-icon {
+  min-width: 32px;
+  height: 32px;
+}
+/* The 12-column grid, only while an image is selected. */
+.vn-grid-overlay {
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  pointer-events: none;
+  z-index: 0;
+}
+.vn-grid-overlay i {
+  border-left: 1px dashed #6c5cff1f;
+  background: #6c5cff08;
+}
+.vn-grid-overlay i:last-child {
+  border-right: 1px dashed #6c5cff1f;
+}
+.vn-image-loading {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4/3;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f1eef7 25%, #f8f6fb 37%, #f1eef7 63%);
+  background-size: 400% 100%;
+  animation: vn-shimmer 1.4s ease infinite;
+}
+@keyframes vn-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+/* Quick image size: S / M / L / 100%. */
+.vn-size-quick {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 11px;
+  background: #f1eef7;
+}
+.vn-size-quick button {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #6a6675;
+  font-size: 12px;
+  font-weight: 600;
+}
+.vn-size-quick button.active {
+  background: #fff;
+  color: #6552e7;
+  box-shadow: 0 1px 4px #33295314;
+}
+.vn-tool.active {
+  background: #efedff;
+  color: #6552e7;
+}
+.vn-conflict-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Phones and tablets: big enough to tap. */
+@media (pointer: coarse) {
+  .vn-selection-tools .vn-icon,
+  .vn-page-break-actions .vn-icon {
+    min-width: 40px;
+    height: 40px;
+  }
+  .vn-size-quick button {
+    min-width: 40px;
+    height: 38px;
+  }
+}
+/* No zoom on focus (iOS zooms into fields under 16px). */
+.vn-app input,
+.vn-app textarea,
+.vn-dialog input,
+.vn-sheet input,
+.vn-sheet textarea {
+  font-size: max(16px, 1em);
+}
+@media (pointer: coarse) {
+  .vn-app .vn-editable {
+    font-size: max(16px, 1em);
+  }
+}
+@container (max-width: 560px) {
+  .vn-page-break-label {
+    margin-left: 4px;
+  }
+  .vn-page-break-actions {
+    margin-right: 0;
+  }
+  .vn-page-break::before {
+    left: 12px;
+    right: 12px;
+  }
+  .vn-selection-tools {
+    max-width: calc(100% - 8px);
+  }
+}

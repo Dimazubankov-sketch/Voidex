@@ -118,7 +118,8 @@ export function demoProject(): Project {
   return { id: uid(), name: "Мой первый проект", cover: "lavender", spaces: [s], updated: Date.now() };
 }
 export const plainText = (s: Space) => s.slides.flatMap((p) => p.blocks.map((b) => b.text)).join(" ");
-const mediaPath = (s: unknown) => typeof s === "string" && /^\/api\/media\?id=[a-f0-9-]{36}$/.test(s);
+// VOIDEX: images are served by the Notes API (/api/notes/media), see @voidex/shared notes.ts.
+const mediaPath = (s: unknown) => typeof s === "string" && /^\/api\/notes\/media\?id=[a-f0-9-]{36}$/.test(s);
 const coverOK = (s: unknown) => typeof s === "string" && (backgrounds.some(([v]) => v === s) || mediaPath(s));
 export function validWorkspace(x: unknown): x is Workspace {
   try {

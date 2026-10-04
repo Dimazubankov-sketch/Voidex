@@ -839,4 +839,12 @@ export const ko: Record<MessageKey, string> = {
   "overview.minimized": "최소화됨",
   "overview.maximized": "최대화됨",
   "overview.open": "열림",
+  "closeGuard.title": "저장되지 않은 변경 사항",
+  "closeGuard.body": "{app}에 아직 저장되지 않은 변경 사항이 있습니다. 닫기 전에 저장할까요?",
+  "closeGuard.save": "저장 후 닫기",
+  "closeGuard.discard": "저장하지 않고 닫기",
+  "closeGuard.saveFailed": "저장하지 못했습니다. 창이 열린 상태로 유지됩니다.",
+  "notes.name": "노트",
+  "notes.sharedView": "공유된 노트 — 보기 전용",
+  "notes.backToMine": "내 노트",
 };

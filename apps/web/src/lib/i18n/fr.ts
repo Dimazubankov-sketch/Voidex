@@ -839,4 +839,12 @@ export const fr: Record<MessageKey, string> = {
   "overview.minimized": "Réduite",
   "overview.maximized": "Agrandie",
   "overview.open": "Ouverte",
+  "closeGuard.title": "Modifications non enregistrées",
+  "closeGuard.body": "{app} contient des modifications non enregistrées. Les enregistrer avant de fermer ?",
+  "closeGuard.save": "Enregistrer et fermer",
+  "closeGuard.discard": "Fermer sans enregistrer",
+  "closeGuard.saveFailed": "Échec de l'enregistrement. La fenêtre reste ouverte.",
+  "notes.name": "Notes",
+  "notes.sharedView": "Note partagée — lecture seule",
+  "notes.backToMine": "Mes notes",
 };

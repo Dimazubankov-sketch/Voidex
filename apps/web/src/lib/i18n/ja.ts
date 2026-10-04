@@ -839,4 +839,12 @@ export const ja: Record<MessageKey, string> = {
   "overview.minimized": "最小化",
   "overview.maximized": "最大化",
   "overview.open": "表示中",
+  "closeGuard.title": "保存されていない変更",
+  "closeGuard.body": "{app} に保存されていない変更があります。閉じる前に保存しますか？",
+  "closeGuard.save": "保存して閉じる",
+  "closeGuard.discard": "保存せずに閉じる",
+  "closeGuard.saveFailed": "保存できませんでした。ウィンドウは開いたままです。",
+  "notes.name": "メモ",
+  "notes.sharedView": "共有されたメモ — 閲覧のみ",
+  "notes.backToMine": "自分のメモ",
 };

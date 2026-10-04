@@ -72,6 +72,25 @@ interface WMState {
   hydrate: (userId: string) => void;
 }
 
+/**
+ * Step 2.5: an app can ask before its window closes (e.g. Notes with unsaved
+ * changes). The hook resolves true to let the window close.
+ */
+type BeforeClose = () => boolean | Promise<boolean>;
+const beforeClose = new Map<string, BeforeClose>();
+export function setBeforeClose(windowId: string, fn: BeforeClose | null) {
+  if (fn) beforeClose.set(windowId, fn);
+  else beforeClose.delete(windowId);
+}
+/** Closes a window from the UI, letting its app object first. Resolves true when it closed. */
+export async function requestClose(windowId: string): Promise<boolean> {
+  const ask = beforeClose.get(windowId);
+  if (ask && !(await ask())) return false;
+  beforeClose.delete(windowId);
+  useWM.getState().close(windowId);
+  return true;
+}
+
 const STORAGE = (userId: string) => `vx.wm.${userId}`;
 export const DEFAULT_SPACE = "d_1";
 let persistKey: string | null = null;

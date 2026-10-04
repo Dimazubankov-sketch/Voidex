@@ -839,4 +839,12 @@ export const de: Record<MessageKey, string> = {
   "overview.minimized": "Minimiert",
   "overview.maximized": "Maximiert",
   "overview.open": "Offen",
+  "closeGuard.title": "Ungespeicherte Änderungen",
+  "closeGuard.body": "{app} hat noch nicht gespeicherte Änderungen. Vor dem Schließen speichern?",
+  "closeGuard.save": "Speichern und schließen",
+  "closeGuard.discard": "Ohne Speichern schließen",
+  "closeGuard.saveFailed": "Speichern fehlgeschlagen. Das Fenster bleibt offen.",
+  "notes.name": "Notizen",
+  "notes.sharedView": "Geteilte Notiz – nur ansehen",
+  "notes.backToMine": "Meine Notizen",
 };

@@ -839,4 +839,12 @@ export const tr: Record<MessageKey, string> = {
   "overview.minimized": "Simge durumunda",
   "overview.maximized": "Tam ekran",
   "overview.open": "Açık",
+  "closeGuard.title": "Kaydedilmemiş değişiklikler",
+  "closeGuard.body": "{app} uygulamasında kaydedilmemiş değişiklikler var. Kapatmadan önce kaydedilsin mi?",
+  "closeGuard.save": "Kaydet ve kapat",
+  "closeGuard.discard": "Kaydetmeden kapat",
+  "closeGuard.saveFailed": "Kaydedilemedi. Pencere açık kalıyor.",
+  "notes.name": "Notlar",
+  "notes.sharedView": "Paylaşılan not — yalnızca görüntüleme",
+  "notes.backToMine": "Notlarım",
 };

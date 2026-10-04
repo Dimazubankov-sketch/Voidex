@@ -108,6 +108,11 @@ export function CalculatorGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-calculator.png" className={className} />;
 }
 
+/** Notes: the user's Voidex Notes logo (Step 2.5), cut out of the delivered artwork without redrawing. */
+export function NotesGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-notes.png" className={className} />;
+}
+
 /** Share of the tile the logo's content box fills — the same for every app. */
 export const GLYPH_BOX = "52%";
 

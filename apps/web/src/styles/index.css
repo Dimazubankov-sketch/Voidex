@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Step 2.5: the Voidex Notes package uses Tailwind utilities in its UI kit. */
+@source "../../../../packages/notes/src";
 
 /* ===========================================================================
    VOIDEX design tokens
@@ -108,6 +110,29 @@
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+
+  /* Voidex Notes UI kit (packages/notes, shadcn-style names) on VOIDEX tokens. */
+  --color-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-secondary);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-secondary);
+  --color-muted-foreground: var(--text-secondary);
+  --color-accent: var(--primary-soft);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+  --color-sidebar: var(--surface-secondary);
+  --color-sidebar-foreground: var(--text);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-accent: var(--primary-soft);
+  --color-sidebar-accent-foreground: var(--text);
+  --color-sidebar-ring: var(--primary);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: #ffffff;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI",
     Roboto, "Helvetica Neue", Arial, sans-serif;

@@ -2,7 +2,7 @@ import { RiCheckboxBlankLine, RiCloseLine, RiSubtractLine, RiStackLine, RiCheckb
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { MenuList, type MenuItem } from "@/ui/overlays";
-import { useWM } from "./window-manager";
+import { requestClose, useWM } from "./window-manager";
 
 /**
  * The [...] window menu. Desktop gets real window management
@@ -28,13 +28,13 @@ export function WindowMenu({ windowId, onDone }: { windowId: string; onDone: () 
             icon: win.state === "maximized" ? <RiCheckboxMultipleBlankLine className="size-[18px]" /> : <RiCheckboxBlankLine className="size-[18px]" />,
             onSelect: () => wm.toggleMaximize(windowId),
           },
-          { id: "close", label: t("os.close"), icon: <RiCloseLine className="size-5" />, onSelect: () => wm.close(windowId), danger: true },
+          { id: "close", label: t("os.close"), icon: <RiCloseLine className="size-5" />, onSelect: () => void requestClose(windowId), danger: true },
         ]
       : [
           // "Minimize": the same action and icon as on PC — back to the home screen.
           { id: "minimize", label: t("os.minimize"), icon: <RiSubtractLine className="size-5" />, onSelect: () => wm.minimize(windowId) },
           { id: "switcher", label: t("os.switcher"), icon: <RiStackLine className="size-5" />, onSelect: () => wm.setSwitcher(true) },
-          { id: "close", label: t("os.close"), icon: <RiCloseLine className="size-5" />, onSelect: () => wm.close(windowId), danger: true },
+          { id: "close", label: t("os.close"), icon: <RiCloseLine className="size-5" />, onSelect: () => void requestClose(windowId), danger: true },
         ];
   return <MenuList items={items} onDone={onDone} />;
 }

@@ -839,4 +839,12 @@ export const pt: Record<MessageKey, string> = {
   "overview.minimized": "Minimizado",
   "overview.maximized": "Maximizado",
   "overview.open": "Aberto",
+  "closeGuard.title": "Alterações não salvas",
+  "closeGuard.body": "{app} tem alterações ainda não salvas. Salvar antes de fechar?",
+  "closeGuard.save": "Salvar e fechar",
+  "closeGuard.discard": "Fechar sem salvar",
+  "closeGuard.saveFailed": "Não foi possível salvar. A janela continua aberta.",
+  "notes.name": "Notas",
+  "notes.sharedView": "Nota compartilhada — somente leitura",
+  "notes.backToMine": "Minhas notas",
 };
