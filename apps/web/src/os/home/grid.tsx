@@ -1,5 +1,4 @@
 import { useMemo, type ReactNode } from "react";
-import { motion } from "motion/react";
 import { WIDGET_CELLS, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type PlacedCell, type WidgetType, type WorkspaceLayout } from "@voidex/shared";
 import type { IconMetrics, LabelStyle } from "./icons";
 import { useHomeUi } from "./ui-store";
@@ -98,18 +97,11 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
       data-row-h={rowH}
       data-gap-x={m.gapX}
       data-gap-y={m.gapY}
+      // Step 2.3.1: the cell under a dragged icon is not drawn (no grid outline while moving icons);
+      // the icon still snaps to it on drop. Kept as data for tests.
+      data-drop-cell={target ? `${target.c},${target.r}` : undefined}
       data-testid={testId}
     >
-      {target && (
-        <motion.div
-          className="pointer-events-none rounded-[22px] border-2 border-dashed border-primary/45 bg-primary/[0.06]"
-          style={{ gridColumn: `${target.c + 1} / span 1`, gridRow: `${target.r + 1} / span 1`, margin: 4 }}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.12 }}
-          data-testid="home-drop-cell"
-        />
-      )}
       {widgets.map((w) => {
         const p = placed.get(widgetKey(w.id));
         if (!p) return null;
