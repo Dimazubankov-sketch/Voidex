@@ -4,6 +4,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query";
 import { App } from "./app";
 import "./styles/index.css";
+import { applyStoredTheme } from "@/lib/theme";
+
+applyStoredTheme();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

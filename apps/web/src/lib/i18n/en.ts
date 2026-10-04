@@ -73,7 +73,7 @@ export const en = {
   "signup.otp.changeNumber": "Change number",
   "signup.otp.verified": "Number confirmed",
   "signup.otp.devNotice": "Development mode — no SMS was sent. Your code is {code}.",
-  "signup.mail.title": "Create your VOIDEX Mail",
+  "signup.mail.title": "Create your VoidOps Mail",
   "signup.mail.subtitle": "Your address inside VOIDEX. For now, mail is delivered between VOIDEX users only.",
   "signup.mail.username": "Username",
   "signup.mail.checking": "Checking…",
@@ -111,7 +111,7 @@ export const en = {
 
   // sign-in
   "login.title": "Sign in to VOIDEX",
-  "login.subtitle": "Use your VOIDEX Mail address or phone number.",
+  "login.subtitle": "Use your VoidOps Mail address or phone number.",
   "login.identifier": "Email or phone",
   "login.password": "Password",
   "login.submit": "Sign in",
@@ -136,7 +136,7 @@ export const en = {
 
   // recovery
   "recovery.title": "Recover access",
-  "recovery.subtitle": "Enter your VOIDEX Mail address or phone number.",
+  "recovery.subtitle": "Enter your VoidOps Mail address or phone number.",
   "recovery.newTitle": "Set a new password",
   "recovery.newSubtitle": "For your security, you'll be signed out on all other devices.",
   "recovery.submit": "Update password",
@@ -270,7 +270,7 @@ export const en = {
   "settings.security": "Security",
   "settings.password": "Password",
   "settings.phone": "Phone",
-  "settings.email": "VOIDEX Mail",
+  "settings.email": "VoidOps Mail",
   "settings.devices": "Devices & sessions",
   "settings.privacy": "Privacy",
   "settings.language": "Language",
@@ -306,7 +306,7 @@ export const en = {
   "settings.phone.usage": "Used for sign-in confirmation and account recovery.",
   "settings.email.address": "Address",
   "settings.email.type": "Type",
-  "settings.email.internal": "Internal VOIDEX Mail",
+  "settings.email.internal": "Internal VoidOps Mail",
   "settings.email.note": "Delivers to other VOIDEX users. Your address can't be changed.",
   "settings.security.recovery": "Recovery methods",
   "settings.security.recoverySms": "SMS code to {phone}",
@@ -344,7 +344,7 @@ export const en = {
   "settings.about.tagline": "Your unified digital space.",
 
   // mail
-  "mail.title": "Mail",
+  "mail.title": "VoidOps Mail",
   "mail.inbox": "Inbox",
   "mail.sent": "Sent",
   "mail.drafts": "Drafts",
@@ -479,7 +479,7 @@ export const en = {
   "vibex.chat.sent": "Sent",
   "vibex.chat.unavailable": "Chat unavailable",
   "vibex.people.title": "Find people on VOIDEX",
-  "vibex.people.hint": "Search by name or VOIDEX Mail address.",
+  "vibex.people.hint": "Search by name or VoidOps Mail address.",
   "vibex.people.search": "Name or address",
   "vibex.people.recent": "From your chats",
   "vibex.people.empty": "Nobody found",
@@ -533,7 +533,7 @@ export const en = {
   "error.no_trusted_device": "You're not signed in on any other device.",
   "error.account_not_found": "We couldn't find a VOIDEX account with this email or phone.",
   "error.recipient_not_found": "No VOIDEX user with this address.",
-  "error.recipient_external": "VOIDEX Mail can only deliver to VOIDEX addresses for now.",
+  "error.recipient_external": "VoidOps Mail can only deliver to VOIDEX addresses for now.",
   "error.no_recipients": "Add at least one recipient.",
   "error.draft_already_sent": "This message has already been sent.",
   "error.not_found": "Not found.",
@@ -893,6 +893,8 @@ export const en = {
   "vibex.voice.position": "Playback position",
   "vibex.voice.unplayed": "Not listened to yet",
   "vibex.post.views": "Views",
+  "lock.keyboardHint": "Type the code · Enter confirms",
+  "lock.useFaceLink": "Use Face ID / Windows Hello",
 } as const;
 
 export type MessageKey = keyof typeof en;

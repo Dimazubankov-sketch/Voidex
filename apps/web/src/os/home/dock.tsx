@@ -7,7 +7,8 @@ import { AppTile } from "@/brand/brand";
 import { useWM } from "../window-manager";
 import { appLabel, openApp } from "./actions";
 import { DesktopSearchBar } from "./search";
-import { AppGlyph, ghost } from "./icons";
+import { AppGlyph, UnreadBadge, ghost } from "./icons";
+import { useAppBadge } from "@/lib/app-badges";
 import { updateLayout, useWorkspaceLayout } from "./layout";
 import { DesktopsGlyph, SpacesList } from "./spaces";
 import { useHomeUi } from "./ui-store";
@@ -68,7 +69,9 @@ export function DesktopDock() {
   const desktops = layout.desktop.dockDesktops;
   // A desktop icon dragged over the dock opens a gap where it would land.
   const gapAt = drag && !drag.fromDock && drag.overDock !== undefined ? drag.overDock : null;
-  const glass = apps.length > 0 || running.length > 0 || desktops;
+  // The dock as a shelf (search beside the icons) whenever it shows something; its glass can be off (Step 2.5).
+  const shelf = apps.length > 0 || running.length > 0 || desktops;
+  const glass = shelf && layout.appearance.dock !== "off";
 
   return (
     <div className="pointer-events-none absolute inset-x-0 z-[30] flex justify-center px-6" style={{ bottom: BOTTOM }} data-testid="bottom-bar">
@@ -77,14 +80,15 @@ export function DesktopDock() {
         data-dock
         data-system-ui
         className={cx("pointer-events-auto flex max-w-full items-center rounded-[26px]", glass && "vx-glass")}
-        style={{ height: dockShellHeight(scale), padding: glass ? `0 ${PAD + 2}px` : 0, gap: 8 }}
+        style={{ height: dockShellHeight(scale), padding: shelf ? `0 ${PAD + 2}px` : 0, gap: 8 }}
         onMouseMove={(e) => mouseX.set(e.clientX)}
         onMouseLeave={() => mouseX.set(Infinity)}
         data-testid="dock"
         data-glass-shell={glass || undefined}
+        data-shelf={shelf || undefined}
       >
-        <DesktopSearchBar apps={installed} layout={layout} inDock={glass} height={glass ? Math.max(36, tile - 6) : 44} />
-        {glass && <span className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden />}
+        <DesktopSearchBar apps={installed} layout={layout} inDock={shelf} height={shelf ? Math.max(36, tile - 6) : 44} />
+        {shelf && <span className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden />}
         {apps.map((id, i) => (
           <DockSlot key={id} gap={gapAt === i} tile={tile}>
             <DockApp id={id} layout={layout} mouseX={mouseX} tile={tile} />
@@ -200,6 +204,7 @@ function DockApp({ id, layout, mouseX, tile, pinned = true }: { id: AppId; layou
   const ref = useRef<HTMLButtonElement>(null);
   const scale = useMagnify(mouseX, ref, tile);
   const running = useWM((s) => Object.values(s.windows).some((w) => w.appId === id));
+  const badge = useAppBadge(id);
   const dragging = useHomeUi((s) => s.drag?.fromDock && s.drag.item.kind === "app" && s.drag.item.id === id);
   const [hover, setHover] = useState(false);
   const moved = useRef(false);
@@ -294,6 +299,7 @@ function DockApp({ id, layout, mouseX, tile, pinned = true }: { id: AppId; layou
         <AppTile size={tile} className="!shadow-[0_2px_8px_rgba(20,20,40,0.12)]">
           <AppGlyph id={id} />
         </AppTile>
+        <UnreadBadge n={badge} id={`dock-${id}`} small />
       </motion.span>
       <span className={cx("absolute -bottom-[7px] size-1 rounded-full", running ? "bg-primary" : "bg-transparent")} />
     </button>

@@ -260,6 +260,7 @@ export function LockScreen() {
                     error={blockedFor > 0 ? t("lock.tryIn", { time: mmss(blockedFor) }) : error}
                     disabled={blockedFor > 0}
                     onSubmit={submitCode}
+                    extraLabel={t("lock.useFaceLink")}
                     extraKey={
                       faceOffered ? (
                         <button type="button" onClick={() => setMode("face")} className="rounded-[18px] p-2 text-primary hover:bg-white/50" aria-label={t("lock.useFace")} data-testid="lock-use-face">

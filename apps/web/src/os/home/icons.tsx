@@ -1,3 +1,4 @@
+import { badgeText, useAppBadge } from "@/lib/app-badges";
 import { memo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { motion, motionValue } from "motion/react";
@@ -8,7 +9,6 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { useMailSummary } from "@/lib/mail-summary";
 import { AppTile, GLYPH_BOX } from "@/brand/brand";
 import { CLIENT_APPS } from "../app-registry";
-import { useWM } from "../window-manager";
 import { appLabel, itemKey, ungroupFolder } from "./actions";
 import type { LabelTone } from "./appearance";
 import { updateLayout } from "./layout";
@@ -45,10 +45,19 @@ function captionClass(tone: LabelTone) {
   return tone === "light" ? "text-white/80 [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]" : "text-text-tertiary";
 }
 
-function UnreadBadge({ n }: { n: number }) {
+/** Top-right unread count (1–99+) — shown only when there is something unread. */
+export function UnreadBadge({ n, id, small }: { n: number; id: string; small?: boolean }) {
+  if (n <= 0) return null;
   return (
-    <span className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white shadow-glow animate-pop">
-      {n > 99 ? "99+" : n}
+    <span
+      className={cx(
+        "absolute flex items-center justify-center rounded-full bg-primary font-semibold tabular-nums text-white shadow-glow ring-2 ring-surface animate-pop",
+        small ? "-right-1 -top-1 h-[18px] min-w-[18px] px-1 text-[10.5px]" : "-right-1.5 -top-1.5 h-6 min-w-6 px-1.5 text-[12px]",
+      )}
+      aria-label={String(n)}
+      data-testid={`app-badge-${id}`}
+    >
+      {badgeText(n)}
     </span>
   );
 }
@@ -139,8 +148,7 @@ interface ItemProps {
 /** One icon on the desktop — an app or a folder. Gestures are handled by the surface. */
 export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, index, editing, placeholder, mergeTarget, inFolder, onOpen }: ItemProps) {
   const t = useT();
-  const running = useWM((s) => item.kind === "app" && Object.values(s.windows).some((w) => w.appId === item.id));
-  const unread = useMailSummary(item.kind === "app" && item.id === "mail").data?.unread.inbox ?? 0;
+  const unread = useAppBadge(item.kind === "app" ? item.id : "settings", item.kind === "app");
   const folder = item.kind === "folder" ? layout.folders.find((f) => f.id === item.id) : undefined;
   if (item.kind === "folder" && !folder) return null;
   const name = item.kind === "app" ? appLabel(layout, item.id) : folder!.name || t("home.folder");
@@ -189,7 +197,7 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
           ) : (
             <FolderTile folder={folder!} size={metrics.tile} highlight={mergeTarget} />
           )}
-          {item.kind === "app" && item.id === "mail" && unread > 0 && !editing && <UnreadBadge n={unread} />}
+          {item.kind === "app" && !editing && <UnreadBadge n={unread} id={item.id} />}
           {editing && (
             <RemoveBadge
               label={inFolder ? t("home.removeFromFolder") : item.kind === "app" ? t("home.removeFromDesktop") : t("home.dissolveFolder")}
@@ -215,7 +223,6 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
             <AppCaption id={item.id} />
           </span>
         )}
-        <span className={cx("-mt-0.5 size-1.5 rounded-full transition-opacity", running ? "bg-primary opacity-100" : "opacity-0")} />
       </button>
     </motion.div>
   );

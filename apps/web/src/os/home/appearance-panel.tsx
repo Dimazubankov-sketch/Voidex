@@ -72,6 +72,19 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
                 />
               </Field>
             )}
+            {pc && (
+              <Field label={t("appearance.dock")}>
+                <Segmented
+                  value={a.dock}
+                  options={[
+                    ["glass", "appearance.systemBarGlass"],
+                    ["off", "appearance.systemBarOff"],
+                  ]}
+                  onChange={(dock) => setAppearance({ dock })}
+                  testId="dock-style"
+                />
+              </Field>
+            )}
           </Block>
         </>
       )}

@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { RiDeleteBack2Line } from "@remixicon/react";
 import { PASSCODE_LENGTH } from "@voidex/shared";
 import { cx } from "@/lib/cx";
+import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -20,6 +21,7 @@ export function PasscodePad({
   extraKey,
   testId = "passcode-pad",
   autoFocusKeyboard = true,
+  extraLabel,
 }: {
   title: ReactNode;
   hint?: ReactNode;
@@ -30,8 +32,13 @@ export function PasscodePad({
   extraKey?: ReactNode;
   testId?: string;
   autoFocusKeyboard?: boolean;
+  /** PC: the text of the link made of `extraKey` (e.g. "Use Face ID / Windows Hello"). */
+  extraLabel?: string;
 }) {
   const t = useT();
+  // Step 2.5: PC gets a keyboard-first field; phones keep the keypad.
+  const keyboardFirst = useFormFactor() === "desktop";
+  const input = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
@@ -55,6 +62,8 @@ export function PasscodePad({
           setBusy(false);
           codeRef.current = "";
           setCode("");
+          // A wrong code: the field is cleared and keeps the keyboard.
+          if (keyboardFirst) window.setTimeout(() => input.current?.focus(), 0);
         });
     }
   };
@@ -86,8 +95,94 @@ export function PasscodePad({
     return () => window.removeEventListener("keydown", h);
   });
 
+  // PC: focus the field when it appears and again once a block is over.
+  useEffect(() => {
+    if (!keyboardFirst || disabled) return;
+    const id = window.setTimeout(() => input.current?.focus(), 60);
+    return () => window.clearTimeout(id);
+  }, [keyboardFirst, disabled]);
+
+  if (keyboardFirst) {
+    return (
+      <div ref={root} className="flex w-full flex-col items-center" data-testid={testId} data-passcode-pad data-variant="keyboard" onPointerDown={() => window.setTimeout(() => input.current?.focus(), 0)}>
+        <div className="text-center text-[17px] font-semibold tracking-tight text-text">{title}</div>
+        {hint && <div className="mt-1 max-w-[300px] text-center text-[13px] text-text-secondary">{hint}</div>}
+        <motion.label
+          key={shake}
+          className={cx("relative mt-5 flex cursor-text gap-2", disabled && "opacity-50")}
+          animate={shake ? { x: [0, -10, 10, -7, 7, 0] } : { x: 0 }}
+          transition={{ duration: 0.4 }}
+          data-testid="passcode-dots"
+          data-filled={code.length}
+        >
+          <input
+            ref={input}
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            enterKeyHint="done"
+            maxLength={PASSCODE_LENGTH}
+            value={code}
+            disabled={disabled || busy}
+            aria-label={typeof title === "string" ? title : t("lock.enterCode")}
+            aria-invalid={!!error || undefined}
+            className="absolute inset-0 z-10 size-full cursor-text opacity-0"
+            data-testid="passcode-input"
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "").slice(0, PASSCODE_LENGTH);
+              if (digits.length < codeRef.current.length) {
+                codeRef.current = digits;
+                setCode(digits);
+                return;
+              }
+              for (const d of digits.slice(codeRef.current.length)) press(d);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                // Enter confirms a complete code (it is also sent by itself on the sixth digit).
+                if (codeRef.current.length === PASSCODE_LENGTH && !busy) {
+                  const full = codeRef.current;
+                  codeRef.current = full.slice(0, -1);
+                  press(full.slice(-1));
+                }
+              }
+            }}
+          />
+          {Array.from({ length: PASSCODE_LENGTH }, (_, i) => (
+            <span
+              key={i}
+              aria-hidden
+              className={cx(
+                "grid h-[52px] w-11 place-items-center rounded-[14px] border bg-surface/70 transition-colors",
+                i === code.length && !disabled ? "border-primary ring-2 ring-primary/25" : "border-border-strong",
+                shake > 0 && code.length === 0 && error && "border-danger/60",
+              )}
+            >
+              {i < code.length && <span className="size-2.5 rounded-full bg-text" />}
+            </span>
+          ))}
+        </motion.label>
+        <div className="mt-2 min-h-[20px] text-center text-[13px] font-medium text-danger" role="alert" data-testid="passcode-error">
+          {error}
+        </div>
+        <div className="text-[12px] text-text-tertiary">{t("lock.keyboardHint")}</div>
+        {extraKey && (
+          <div className="mt-4 flex items-center gap-1 text-[13.5px] font-medium text-primary" data-testid="passcode-extra">
+            {extraKey}
+            {extraLabel && (
+              <span aria-hidden className="cursor-pointer hover:underline" onClick={(e) => e.currentTarget.parentElement?.querySelector("button")?.click()}>
+                {extraLabel}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div ref={root} className="flex w-full flex-col items-center" data-testid={testId} data-passcode-pad>
+    <div ref={root} className="flex w-full flex-col items-center" data-testid={testId} data-passcode-pad data-variant="keypad">
       <div className="text-center text-[17px] font-semibold tracking-tight text-text">{title}</div>
       {hint && <div className="mt-1 max-w-[280px] text-center text-[13px] text-text-secondary">{hint}</div>}
       <motion.div

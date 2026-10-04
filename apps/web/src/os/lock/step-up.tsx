@@ -123,6 +123,7 @@ export function StepUpSheet() {
           disabled={blockedFor > 0}
           onSubmit={submit}
           testId="step-up-pad"
+          extraLabel={t("lock.useFaceLink")}
           extraKey={
             faceOffered ? (
               <button type="button" onClick={() => setMode("face")} className="rounded-[18px] p-2 hover:bg-surface-hover" aria-label={t("lock.useFace")}>

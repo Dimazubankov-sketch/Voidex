@@ -1,3 +1,4 @@
+import { useTheme } from "@/lib/theme";
 import { RemoveAppsConfirm, RemoveSelectionBar } from "./remove-apps";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
@@ -111,6 +112,8 @@ export function HomeScreen({
   useEffect(() => {
     document.documentElement.dataset.glass = layout.appearance.glass;
   }, [layout.appearance.glass]);
+  // Step 2.5: light / dark / system theme of the account.
+  useTheme(layout.appearance.theme);
 
   // Leaving the home screen (an app comes to the front) ends edit mode.
   useEffect(() => {

@@ -89,6 +89,60 @@
   --glass-scrim-blur: 0px;
 }
 
+/* Step 2.5 — dark theme: the same tokens, night values. Set on <html data-theme="dark">
+   (Settings → Personalization: light / dark / system). The wallpaper keeps its own
+   colours; only the material on top of it darkens. */
+:root[data-theme="dark"] {
+  --background: #121218;
+  --background-deep: #0c0c11;
+  --surface: #1c1c25;
+  --surface-secondary: #252530;
+  --surface-hover: #2d2d3a;
+  --primary: #7f72ff;
+  --primary-hover: #9387ff;
+  --primary-soft: rgba(127, 114, 255, 0.18);
+  --primary-strong: #b9b1ff;
+  --text: #ededf3;
+  --text-secondary: #a9a9b8;
+  --text-tertiary: #7c7c8f;
+  --border: #2f2f3c;
+  --border-strong: #41414f;
+  --danger: #ff6b70;
+  --danger-soft: rgba(255, 107, 112, 0.16);
+  --success: #3fd093;
+  --success-soft: rgba(63, 208, 147, 0.15);
+  --warning: #f2ad3a;
+  --warning-soft: rgba(242, 173, 58, 0.15);
+
+  --shadow-tile: 0 1px 1px rgba(0, 0, 0, 0.25), 0 6px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-window: 0 2px 6px rgba(0, 0, 0, 0.35), 0 24px 64px rgba(0, 0, 0, 0.55);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  /* Dark glass: smoky, still translucent — the wallpaper shows through, not blacked out. */
+  --glass-bg: linear-gradient(160deg, rgba(40, 40, 54, 0.52) 0%, rgba(26, 26, 36, 0.4) 100%);
+  --glass-bg-strong: linear-gradient(160deg, rgba(36, 36, 48, 0.78) 0%, rgba(24, 24, 34, 0.7) 100%);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-edge: rgba(0, 0, 0, 0.35);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --glass-tile: linear-gradient(145deg, rgba(64, 60, 96, 0.62) 0%, rgba(44, 44, 64, 0.5) 100%);
+  --glass-scrim: rgba(0, 0, 0, 0.3);
+  color-scheme: dark;
+}
+:root[data-theme="dark"][data-glass="medium"] {
+  --glass-bg: linear-gradient(160deg, rgba(34, 34, 46, 0.78) 0%, rgba(26, 26, 36, 0.7) 100%);
+  --glass-bg-strong: linear-gradient(160deg, rgba(30, 30, 40, 0.9) 0%, rgba(24, 24, 34, 0.86) 100%);
+  --glass-tile: linear-gradient(145deg, rgba(54, 52, 80, 0.9) 0%, rgba(40, 40, 58, 0.86) 100%);
+}
+:root[data-theme="dark"][data-glass="off"] {
+  --glass-bg: var(--surface);
+  --glass-bg-strong: var(--surface);
+  --glass-border: var(--border);
+  --glass-tile: #2a2a3a;
+  --glass-scrim: rgba(0, 0, 0, 0.45);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-background-deep: var(--background-deep);
@@ -367,4 +421,53 @@ img[data-system-asset] { pointer-events: none; }
   background: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.8);
   box-shadow: 0 8px 24px -16px rgba(60, 50, 140, 0.25);
+}
+
+/* Dark theme: the few light surfaces written as white keep reading as surfaces. */
+:root[data-theme="dark"] .bg-white { background-color: var(--surface); }
+:root[data-theme="dark"] .bg-white\/90,
+:root[data-theme="dark"] .bg-white\/85,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/75 { background-color: rgb(28 28 37 / 0.85); }
+:root[data-theme="dark"] .bg-white\/70,
+:root[data-theme="dark"] .bg-white\/60,
+:root[data-theme="dark"] .bg-white\/55,
+:root[data-theme="dark"] .bg-white\/50 { background-color: rgb(40 40 52 / 0.6); }
+:root[data-theme="dark"] .border-white,
+:root[data-theme="dark"] .border-white\/80,
+:root[data-theme="dark"] .border-white\/70,
+:root[data-theme="dark"] .border-white\/60,
+:root[data-theme="dark"] .border-white\/50 { border-color: rgb(255 255 255 / 0.1); }
+:root[data-theme="dark"] .vx-dock-field { background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root[data-theme="dark"] .vx-glass { background: rgba(28, 28, 37, 0.9); }
+  :root[data-theme="dark"] .vx-glass-strong { background: rgba(28, 28, 37, 0.95); }
+}
+:root[data-theme="dark"] .vx-lock-card {
+  background: rgba(28, 26, 40, 0.62);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 24px 60px -24px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme="dark"] .vx-remove-card {
+  background:
+    radial-gradient(120% 70% at 85% 0%, rgba(127, 114, 255, 0.3), transparent 60%),
+    linear-gradient(180deg, rgba(32, 30, 44, 0.92) 0%, rgba(24, 24, 34, 0.95) 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="dark"] .vx-remove-icon { background: linear-gradient(145deg, rgba(60, 56, 90, 0.9), rgba(40, 38, 60, 0.8)); border-color: rgba(255, 255, 255, 0.12); }
+:root[data-theme="dark"] .vx-remove-apps { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.08); }
+
+/*
+ * Step 2.5 — no zoom on focus on phones and tablets. iOS zooms into a field
+ * whose text is under 16px; every field is at least 16px on touch screens.
+ * (No user-scalable=no / maximum-scale: pinch zoom stays available.)
+ */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable="true"],
+  [contenteditable=""] {
+    font-size: max(16px, 1em) !important;
+  }
 }
