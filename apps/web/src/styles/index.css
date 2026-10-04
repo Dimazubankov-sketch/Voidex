@@ -471,3 +471,10 @@ img[data-system-asset] { pointer-events: none; }
     font-size: max(16px, 1em) !important;
   }
 }
+
+/* Settings backgrounds (Step 2.5: light and dark). */
+.vx-settings-bg { background: linear-gradient(180deg, #f6f4fd 0%, #f9f9fb 220px); }
+.vx-settings-nav { background: linear-gradient(180deg, #f7f5fe 0%, #fbfbfd 40%); }
+:root[data-theme="dark"] .vx-settings-bg { background: linear-gradient(180deg, #1d1b2a 0%, var(--background) 220px); }
+:root[data-theme="dark"] .vx-settings-nav { background: linear-gradient(180deg, #1d1b2a 0%, var(--background) 40%); }
+.vx-profile-card { background: radial-gradient(80% 120% at 100% 0%, rgba(150, 128, 255, 0.2), rgba(150, 128, 255, 0) 60%), var(--surface); }

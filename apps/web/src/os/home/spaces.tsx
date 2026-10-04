@@ -1,3 +1,4 @@
+import { useWallpapers } from "./wallpapers";
 import { RiAddLine, RiCheckLine } from "@remixicon/react";
 import { DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
@@ -72,8 +73,9 @@ function useEntries(layout: WorkspaceLayout): { entries: Entry[]; canAdd: boolea
 export function SpacesList({ layout, onPicked, compact, testPrefix = "dock-space" }: { layout: WorkspaceLayout; onPicked?: () => void; compact?: boolean; testPrefix?: string }) {
   const t = useT();
   const { entries, canAdd, add } = useEntries(layout);
-  const image = useWallpaperImage(layout.appearance.wallpaper);
-  const wp = layout.appearance.wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(layout.appearance.wallpaper, image.data).style;
+  const { wallpaper } = useWallpapers();
+  const image = useWallpaperImage(wallpaper);
+  const wp = wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data).style;
   const w = compact ? 72 : 100;
   const h = compact ? 46 : 62;
 

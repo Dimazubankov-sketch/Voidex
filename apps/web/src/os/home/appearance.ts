@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Wallpaper, WallpaperPreset } from "@voidex/shared";
 import { api } from "@/lib/api";
+import { useSession } from "@/lib/session";
 
 /**
  * Desktop wallpapers. The default stays the white VOIDEX surface; everything
@@ -91,10 +92,20 @@ export type WallpaperSlot = "desktop" | "lock";
 /** The user's own wallpaper image (only the owner can fetch it); the lock screen has its own slot. */
 export function useWallpaperImage(w: Wallpaper | null, slot: WallpaperSlot = "desktop") {
   const version = w?.kind === "image" ? w.version : null;
+  const userId = useSession((s) => s.user?.id ?? "");
   return useQuery({
-    queryKey: ["wallpaper", slot, version],
+    queryKey: ["wallpaper", slot, version, userId],
     enabled: !!version,
-    queryFn: async () => URL.createObjectURL(await api.get<Blob>(`/api/account/wallpaper${slot === "lock" ? "?slot=lock" : ""}`)),
+    queryFn: async () => {
+      // Step 2.5: a picture kept on this device (wallpaper sync off).
+      if (version!.startsWith("local:")) {
+        const { readLocalImage } = await import("./wallpapers");
+        const blob = await readLocalImage(userId, slot);
+        if (!blob) throw new Error("missing local wallpaper");
+        return URL.createObjectURL(blob);
+      }
+      return URL.createObjectURL(await api.get<Blob>(`/api/account/wallpaper${slot === "lock" ? "?slot=lock" : ""}`));
+    },
     staleTime: Infinity,
     gcTime: Infinity,
   });

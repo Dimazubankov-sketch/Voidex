@@ -1,3 +1,4 @@
+import { useWallpapers } from "./wallpapers";
 import { useTheme } from "@/lib/theme";
 import { RemoveAppsConfirm, RemoveSelectionBar } from "./remove-apps";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
@@ -67,9 +68,10 @@ export function HomeScreen({
   const { layout, apps, ready } = useWorkspaceLayout();
   const editing = useHomeUi((s) => s.editing);
   const drag = useHomeUi((s) => s.drag);
-  const image = useWallpaperImage(layout.appearance.wallpaper);
-  const wp = wallpaperStyle(layout.appearance.wallpaper, image.data);
-  const plain = layout.appearance.wallpaper.kind === "default";
+  const { wallpaper } = useWallpapers();
+  const image = useWallpaperImage(wallpaper);
+  const wp = wallpaperStyle(wallpaper, image.data);
+  const plain = wallpaper.kind === "default";
   const tone = labelTone(wp.dark);
   const scale = SCALE[layout.desktop.density];
   const cols4 = layout.mobile.columns === 4;

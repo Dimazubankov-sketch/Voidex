@@ -12,7 +12,7 @@ import { Button, Spinner, Switch } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
 import { WallpaperPicker, Segmented, Block } from "@/os/home/appearance-panel";
 import { useWallpaperImage, wallpaperStyle } from "@/os/home/appearance";
-import { useWorkspaceLayout, updateLayout } from "@/os/home/layout";
+import { useWallpapers } from "@/os/home/wallpapers";
 import { lockNow } from "@/os/lock/auto-lock";
 import { FaceGlyph } from "@/os/lock/face-glyph";
 import { PasscodePad } from "@/os/lock/passcode-pad";
@@ -26,8 +26,7 @@ import { Badge, Group, Row, SectionTitle } from "../kit";
  */
 export function LockSection() {
   const t = useT();
-  const { layout } = useWorkspaceLayout();
-  const a = layout.appearance;
+  const wp = useWallpapers();
   const status = useSecurityStatus().data;
   const support = useQuery({ queryKey: ["face-id-support"], queryFn: faceIdSupport, staleTime: Infinity }).data;
   const [codeSheet, setCodeSheet] = useState<null | "create" | "change">(null);
@@ -54,22 +53,22 @@ export function LockSection() {
       <SectionTitle subtitle={t("lockSettings.subtitle")}>{t("settings.lock")}</SectionTitle>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <Preview kind="lock" wallpaper={a.lockWallpaper ?? a.wallpaper} slot={a.lockWallpaper ? "lock" : "desktop"} />
-        <Preview kind="desktop" wallpaper={a.wallpaper} slot="desktop" />
+        <Preview kind="lock" wallpaper={wp.lockWallpaper ?? wp.wallpaper} slot={wp.lockWallpaper ? "lock" : "desktop"} />
+        <Preview kind="desktop" wallpaper={wp.wallpaper} slot="desktop" />
       </div>
 
       <div className="space-y-6">
         <WallpaperPicker
           slot="lock"
           title={t("lockSettings.lockWallpaper")}
-          current={a.lockWallpaper ?? null}
-          desktop={a.wallpaper}
-          onPick={(lockWallpaper) => updateLayout((l) => ({ ...l, appearance: { ...l.appearance, lockWallpaper } }))}
+          current={wp.lockWallpaper}
+          desktop={wp.wallpaper}
+          onPick={(w) => wp.setLockWallpaper(w)}
         />
         <WallpaperPicker
           title={t("lockSettings.desktopWallpaper")}
-          current={a.wallpaper}
-          onPick={(wallpaper) => wallpaper && updateLayout((l) => ({ ...l, appearance: { ...l.appearance, wallpaper } }))}
+          current={wp.wallpaper}
+          onPick={(w) => w && wp.setWallpaper(w)}
         />
       </div>
 

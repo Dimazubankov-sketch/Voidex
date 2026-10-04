@@ -14,6 +14,7 @@ import { useSession } from "@/lib/session";
 import { VoidexMark } from "@/brand/brand";
 import { ConfirmDialog, toast } from "@/ui/overlays";
 import { wallpaperStyle } from "../home/appearance";
+import { localWallpapersFor, readLocalImage } from "../home/wallpapers";
 import { FaceGlyph, FaceLens, type FaceState } from "./face-glyph";
 import { PasscodePad } from "./passcode-pad";
 
@@ -174,14 +175,25 @@ export function LockScreen() {
     }
   };
 
-  const wp = wallpaperStyle(state?.wallpaper ?? { kind: "preset", id: "wave-milk-violet" }, null);
+  // Step 2.5: with wallpaper sync off this device shows its own lock-screen wallpaper.
+  const local = state && !state.syncWallpapers ? localWallpapersFor(state.userId) : null;
+  const shown = local ? (local.lockWallpaper ?? local.wallpaper) : (state?.wallpaper ?? null);
+  const shownSlot = local ? (local.lockWallpaper ? "lock" : "desktop") : state?.wallpaperSlot;
+  const wp = wallpaperStyle(shown ?? { kind: "preset", id: "wave-milk-violet" }, null);
   const imageQ = useQuery({
-    queryKey: ["lock-wallpaper", state?.wallpaperSlot, state?.wallpaper?.kind === "image" ? state.wallpaper.version : null],
-    enabled: state?.wallpaper?.kind === "image",
-    queryFn: async () => URL.createObjectURL(await rawGetBlob(`/api/auth/lock/wallpaper?slot=${state!.wallpaperSlot}`)),
+    queryKey: ["lock-wallpaper", shownSlot, shown?.kind === "image" ? shown.version : null, !!local],
+    enabled: shown?.kind === "image",
+    queryFn: async () => {
+      if (local) {
+        const blob = await readLocalImage(state!.userId, shownSlot as "lock" | "desktop");
+        if (!blob) throw new Error("missing");
+        return URL.createObjectURL(blob);
+      }
+      return URL.createObjectURL(await rawGetBlob(`/api/auth/lock/wallpaper?slot=${state!.wallpaperSlot}`));
+    },
     staleTime: Infinity,
   });
-  const bg = state?.wallpaper?.kind === "image" ? wallpaperStyle(state.wallpaper, imageQ.data ?? null) : wp;
+  const bg = shown?.kind === "image" ? wallpaperStyle(shown, imageQ.data ?? null) : wp;
   const dark = bg.dark;
 
   const statusText = opening

@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api";
 import { errorMessage, fieldMessage } from "@/lib/errors";
 import { countryName, flagEmoji, formatDate, useLanguage, useT } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
+import { useFormFactor } from "@/lib/form-factor";
 import { Avatar } from "@/brand/brand";
 import { Button, Notice, TextField } from "@/ui/controls";
 import { BirthDateFields, CountryList, LanguageList, datePartsToIso, isoToDateParts } from "@/ui/pickers";
@@ -27,10 +28,42 @@ export function AccountSection({ navigate }: SectionProps) {
   const [confirmAll, setConfirmAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const name = `${me.firstName} ${me.lastName}`;
+  const pc = useFormFactor() === "desktop";
   return (
     <div>
+      {pc ? (
+        // Step 2.5 (PC): a large profile card — picture, name, address, phone, country — with its actions.
+        <div className="vx-profile-card relative mb-6 flex items-center gap-5 overflow-hidden rounded-[28px] border border-border/70 p-6 shadow-tile" data-testid="account-card">
+          <span className="rounded-full p-1 shadow-[0_10px_30px_-12px_rgba(106,77,245,0.55)] ring-4 ring-surface">
+            <Avatar name={name} userId={me.id} version={me.avatarVersion} size={96} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-[26px] font-bold tracking-tight" data-testid="account-name">
+              {name}
+            </h2>
+            <div className="truncate text-[14.5px] text-text-secondary" data-selectable>
+              {me.mailAddress}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5 text-[12.5px]">
+              <span className="rounded-full bg-primary/10 px-2.5 py-1 font-medium text-primary-strong">{formatPhone(me.phone)}</span>
+              <span className="rounded-full bg-surface-secondary px-2.5 py-1 text-text-secondary">
+                {flagEmoji(me.country)} {countryName(me.country, lang)}
+              </span>
+              <span className="rounded-full bg-surface-secondary px-2.5 py-1 text-text-tertiary">{t("settings.memberSince", { date: formatDate(me.createdAt, lang) })}</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-2">
+            <Button size="sm" onClick={() => navigate("personal")} data-testid="account-edit">
+              {t("settings.editProfile")}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate("security")}>
+              {t("settings.security")}
+            </Button>
+          </div>
+        </div>
+      ) : (
       <div className="relative mb-6 flex flex-col items-center overflow-hidden rounded-[26px] bg-[radial-gradient(90%_70%_at_50%_0%,rgba(150,128,255,0.18),rgba(150,128,255,0)_70%)] pb-2 pt-5 text-center">
-        <span className="rounded-full p-1 shadow-[0_10px_30px_-12px_rgba(106,77,245,0.55)] ring-4 ring-white">
+        <span className="rounded-full p-1 shadow-[0_10px_30px_-12px_rgba(106,77,245,0.55)] ring-4 ring-surface">
           <Avatar name={name} userId={me.id} version={me.avatarVersion} size={92} />
         </span>
         <h2 className="mt-3 text-[24px] font-bold tracking-tight" data-testid="account-name">
@@ -41,6 +74,7 @@ export function AccountSection({ navigate }: SectionProps) {
         </div>
         <div className="mt-1 text-[12.5px] text-text-tertiary">{t("settings.memberSince", { date: formatDate(me.createdAt, lang) })}</div>
       </div>
+      )}
       <Group>
         <Row icon={<RiUserLine className="size-[18px]" />} label={t("settings.personal")} hint={t("settings.hint.personal")} chevron onClick={() => navigate("personal")} testId="row-personal" />
         <Row icon={<RiMailLine className="size-[18px]" />} label={t("settings.email")} hint={me.mailAddress} chevron onClick={() => navigate("email")} testId="row-email" />

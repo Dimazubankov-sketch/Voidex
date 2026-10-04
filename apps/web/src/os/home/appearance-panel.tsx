@@ -15,8 +15,9 @@ import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { Button, Spinner, Switch } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
-import { DEFAULT_SWATCH, prepareWallpaper, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "./appearance";
+import { DEFAULT_SWATCH, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "./appearance";
 import { useWorkspaceLayout, updateLayout } from "./layout";
+import { useWallpapers } from "./wallpapers";
 import { useHomeUi } from "./ui-store";
 
 /** Parts of the panel: the brush shows one at a time, Settings → Desktop all of them. */
@@ -38,6 +39,7 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
   const setAppearance = (patch: Partial<WorkspaceLayout["appearance"]>) => updateLayout((l) => ({ ...l, appearance: { ...l.appearance, ...patch } }));
   const setDesktop = (patch: Partial<WorkspaceLayout["desktop"]>) => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, ...patch } }));
   const [confirmReset, setConfirmReset] = useState(false);
+  const wallpapers = useWallpapers();
   const pc = ff === "desktop";
 
   return (
@@ -45,7 +47,7 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
       <p className="text-[13px] text-text-secondary">{t("appearance.synced")}</p>
       {parts.includes("wallpaper") && (
         <>
-          <WallpaperPicker current={a.wallpaper} onPick={(wallpaper) => wallpaper && setAppearance({ wallpaper })} />
+          <WallpaperPicker current={wallpapers.wallpaper} onPick={(wallpaper) => wallpaper && wallpapers.setWallpaper(wallpaper)} />
           <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
             <Field label={t("appearance.glass")}>
               <Segmented
@@ -264,7 +266,7 @@ export function Segmented<V extends string>({
   );
 }
 
-const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
+export const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
   white: "wallpaper.white",
   aura: "wallpaper.aura",
   mist: "wallpaper.mist",
@@ -353,6 +355,7 @@ export function WallpaperPicker({
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const wallpapers = useWallpapers();
   const hasImage = current?.kind === "image";
   const lock = slot === "lock";
   const q = lock ? "?slot=lock" : "";
@@ -361,9 +364,8 @@ export function WallpaperPicker({
   const upload = async (file: File) => {
     setBusy(true);
     try {
-      const blob = await prepareWallpaper(file);
-      const r = await api.put<{ version: string }>(`/api/account/wallpaper${q}`, blob, { headers: { "Content-Type": "application/octet-stream" } });
-      onPick({ kind: "image", version: r.version });
+      // To the account, or kept on this device when wallpaper sync is off (Step 2.5).
+      onPick(await wallpapers.upload(file, slot));
     } catch {
       toast({ title: t("appearance.imageFailed"), tone: "danger" });
     } finally {
@@ -373,6 +375,7 @@ export function WallpaperPicker({
 
   const removeImage = async () => {
     onPick(lock ? null : { kind: "default" });
+    if (!wallpapers.sync) return;
     try {
       await api.delete(`/api/account/wallpaper${q}`);
     } catch {

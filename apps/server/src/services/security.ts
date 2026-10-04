@@ -206,6 +206,9 @@ export class SecurityService {
       firstName: row.firstName,
       wallpaper: appearance ? (appearance.lockWallpaper ?? appearance.wallpaper) : null,
       wallpaperSlot: appearance?.lockWallpaper ? "lock" : "desktop",
+      // Step 2.5: with sync off each device shows its own wallpapers (kept on the device).
+      userId: row.userId,
+      syncWallpapers: appearance?.syncWallpapers ?? true,
     };
   }
 

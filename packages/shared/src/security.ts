@@ -52,6 +52,9 @@ export interface LockStateDto {
   wallpaper: Wallpaper | null;
   /** Where an image wallpaper comes from (GET /api/auth/lock/wallpaper?slot=…). */
   wallpaperSlot: "lock" | "desktop";
+  /** Step 2.5: whose lock screen this is, and whether wallpapers follow the account (else: this device's own). */
+  userId: string;
+  syncWallpapers: boolean;
 }
 
 export const SetPasscodeSchema = z.object({ passcode: PasscodeSchema });
