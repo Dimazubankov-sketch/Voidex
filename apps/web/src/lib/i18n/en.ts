@@ -878,6 +878,13 @@ export const en = {
   "notes.name": "Notes",
   "notes.sharedView": "A shared note — view only",
   "notes.backToMine": "My notes",
+  "home.delete": "Delete",
+  "home.removeSelected": "Selected: {n}",
+  "home.removeConfirmTitle": "Delete the selected apps?",
+  "home.removeConfirmText": "The selected apps will be removed from the VOIDEX desktop. Your data won't be affected.",
+  "home.removeConfirmTitle2": "Really delete the selected apps?",
+  "home.removeConfirmText2": "This removes the selected apps from the VOIDEX desktop. The apps' data won't be deleted.",
+  "home.removedManyFromDesktop": "{n} apps removed from the desktop. They're still in the app menu.",
 } as const;
 
 export type MessageKey = keyof typeof en;

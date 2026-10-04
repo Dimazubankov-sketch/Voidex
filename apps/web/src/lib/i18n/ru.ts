@@ -862,4 +862,11 @@ export const ru: Record<MessageKey, string> = {
   "notes.name": "Заметки",
   "notes.sharedView": "Общая заметка — только просмотр",
   "notes.backToMine": "Мои заметки",
+  "home.delete": "Удалить",
+  "home.removeSelected": "Выбрано: {n}",
+  "home.removeConfirmTitle": "Удалить выбранные приложения?",
+  "home.removeConfirmText": "Выбранные приложения будут удалены с рабочего стола VOIDEX. Это не затронет ваши данные.",
+  "home.removeConfirmTitle2": "Точно удалить выбранные приложения?",
+  "home.removeConfirmText2": "Это действие удалит выбранные приложения с рабочего стола VOIDEX. Данные приложений не будут удалены.",
+  "home.removedManyFromDesktop": "Приложения убраны с рабочего стола: {n}. Они остались в меню приложений.",
 };

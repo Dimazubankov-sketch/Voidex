@@ -847,4 +847,11 @@ export const de: Record<MessageKey, string> = {
   "notes.name": "Notizen",
   "notes.sharedView": "Geteilte Notiz – nur ansehen",
   "notes.backToMine": "Meine Notizen",
+  "home.delete": "Löschen",
+  "home.removeSelected": "Ausgewählt: {n}",
+  "home.removeConfirmTitle": "Ausgewählte Apps löschen?",
+  "home.removeConfirmText": "Die ausgewählten Apps werden vom VOIDEX-Schreibtisch entfernt. Deine Daten bleiben erhalten.",
+  "home.removeConfirmTitle2": "Ausgewählte Apps wirklich löschen?",
+  "home.removeConfirmText2": "Damit werden die ausgewählten Apps vom VOIDEX-Schreibtisch entfernt. Die Daten der Apps werden nicht gelöscht.",
+  "home.removedManyFromDesktop": "{n} Apps vom Schreibtisch entfernt. Sie bleiben im App-Menü.",
 };

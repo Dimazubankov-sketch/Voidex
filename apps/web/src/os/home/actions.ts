@@ -78,6 +78,26 @@ export function removeFromDesktop(id: AppId) {
   });
 }
 
+/**
+ * Step 2.5: removes several icons from the desktop after the two-step
+ * confirmation. Only the icons go: the apps stay installed (app menu, search)
+ * and their data is untouched. One "Undo" puts them all back.
+ */
+export function removeAppsFromDesktop(ids: AppId[]) {
+  if (!ids.length) return;
+  const before = currentLayout();
+  updateLayout((l) => ids.reduce((acc, id) => hideApp(acc, id), l));
+  toast({
+    title: ids.length === 1 ? t("home.removedFromDesktop", { app: appLabel(before, ids[0]!) }) : t("home.removedManyFromDesktop", { n: ids.length }),
+    action: {
+      label: t("home.undo"),
+      onClick: () =>
+        updateLayout((l) => ({ ...l, hidden: l.hidden.filter((a) => !ids.includes(a)), mobile: before.mobile, desktop: { ...l.desktop, spaces: before.desktop.spaces } })),
+    },
+    duration: 5000,
+  });
+}
+
 export function addToDesktop(id: AppId) {
   updateLayout((l) => showApp(l, id, currentPlace()));
 }

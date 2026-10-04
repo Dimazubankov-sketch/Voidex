@@ -1,3 +1,4 @@
+import { RemoveAppsConfirm, RemoveSelectionBar } from "./remove-apps";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
 import { RiBrushLine, RiCheckLine } from "@remixicon/react";
@@ -239,6 +240,8 @@ export function HomeScreen({
       <RenameSheet layout={layout} />
       {ff === "mobile" && <MobileSearch apps={apps} layout={layout} />}
       <DragGhost layout={layout} />
+      <RemoveSelectionBar />
+      <RemoveAppsConfirm />
     </motion.main>
   );
 }

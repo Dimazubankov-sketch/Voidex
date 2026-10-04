@@ -44,6 +44,15 @@ class Finger {
   }
 }
 
+/** Step 2.5: "Удалить" on the selection, then both confirmations. */
+async function confirmRemoval(page: Page) {
+  await page.getByTestId("remove-selection-delete").click();
+  await page.getByTestId("remove-confirm-ok").click();
+  await expect(page.getByTestId("remove-confirm")).toHaveAttribute("data-step", "2");
+  await page.getByTestId("remove-confirm-ok").click();
+  await expect(page.getByTestId("remove-confirm")).toHaveCount(0);
+}
+
 /** Centre of an element once it has stopped moving (layout animations). */
 async function resting(page: Page, l: Locator) {
   let p = { x: 0, y: 0 };
@@ -88,8 +97,10 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await expect(page.getByTestId("home-appearance")).toBeVisible();
   await expect(page.getByTestId("home-done")).toBeVisible();
 
-  // "−" removes the icon from the desktop only; the app stays in the app menu.
+  // "−" marks the icon; after two confirmations it leaves the desktop only (the app stays in the app menu).
   await page.getByTestId("app-settings").getByTestId("home-remove-badge").click({ force: true });
+  await expect(page.getByTestId("app-settings")).toBeVisible();
+  await confirmRemoval(page);
   await expect(page.getByTestId("app-settings")).toHaveCount(0);
   await page.getByTestId("home-done").click();
   await expect(home).not.toHaveAttribute("data-editing", "true");
@@ -376,6 +387,7 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await page.waitForTimeout(500);
   const app = page.locator('[data-home-container="mobile:0"] [data-testid^="app-"]').first();
   await finger.tap(await center(app.getByTestId("home-remove-badge")));
+  await confirmRemoval(page);
   await expect(top).toHaveCount(3);
 });
 

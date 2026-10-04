@@ -847,4 +847,11 @@ export const tr: Record<MessageKey, string> = {
   "notes.name": "Notlar",
   "notes.sharedView": "Paylaşılan not — yalnızca görüntüleme",
   "notes.backToMine": "Notlarım",
+  "home.delete": "Sil",
+  "home.removeSelected": "Seçili: {n}",
+  "home.removeConfirmTitle": "Seçili uygulamalar silinsin mi?",
+  "home.removeConfirmText": "Seçili uygulamalar VOIDEX masaüstünden kaldırılacak. Verileriniz etkilenmez.",
+  "home.removeConfirmTitle2": "Seçili uygulamalar gerçekten silinsin mi?",
+  "home.removeConfirmText2": "Bu işlem seçili uygulamaları VOIDEX masaüstünden kaldırır. Uygulama verileri silinmez.",
+  "home.removedManyFromDesktop": "{n} uygulama masaüstünden kaldırıldı. Uygulama menüsünde duruyorlar.",
 };

@@ -44,7 +44,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { requestClose, useWM } from "../window-manager";
 import { currentView, setView } from "./brush-menu";
-import { CATEGORY_LABEL, addToDesktop, addToFolder, appCategory, createFolderWith, openApp, removeFromDesktop, ungroupFolder } from "./actions";
+import { CATEGORY_LABEL, addToDesktop, addToFolder, appCategory, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
@@ -154,12 +154,12 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           return [
             ...(mobile ? [] : [{ id: "open", label: t("home.open"), icon: <RiShareBoxLine />, onSelect: () => openApp(id) }]),
             { id: "take-out", label: t("home.removeFromFolder"), icon: <RiFolderReduceLine />, onSelect: () => updateLayout((l) => removeFromFolder(l, id)) },
-            { id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => removeFromDesktop(id), danger: true },
+            { id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => useHomeUi.getState().setRemoveConfirm([id]), danger: true },
           ];
         }
         const list: Entry[] = [];
         if (!mobile) list.push({ id: "open", label: t("home.open"), icon: <RiShareBoxLine />, onSelect: () => openApp(id) });
-        list.push({ id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => removeFromDesktop(id), danger: true });
+        list.push({ id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => useHomeUi.getState().setRemoveConfirm([id]), danger: true });
         list.push({ id: "create-folder", label: t("home.createFolder"), icon: <RiFolderAddLine />, onSelect: () => createFolderWith(id) });
         list.push({ id: "add-to-folder", label: t("home.addToFolder"), icon: <RiFolderTransferLine />, sub: "folders" });
         if (!mobile) {
@@ -196,7 +196,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           ...(mobile ? [] : [dockEntry(id)]),
           hidden
             ? { id: "add-to-desktop", label: t("home.addToDesktop"), icon: <RiAddLine />, onSelect: () => addToDesktop(id) }
-            : { id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => removeFromDesktop(id), danger: true },
+            : { id: "remove", label: t("home.removeFromDesktop"), icon: <RiDeleteBinLine />, onSelect: () => useHomeUi.getState().setRemoveConfirm([id]), danger: true },
         ];
       }
       case "dock-app": {

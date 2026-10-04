@@ -847,4 +847,11 @@ export const zh: Record<MessageKey, string> = {
   "notes.name": "笔记",
   "notes.sharedView": "共享笔记 — 仅查看",
   "notes.backToMine": "我的笔记",
+  "home.delete": "删除",
+  "home.removeSelected": "已选择：{n}",
+  "home.removeConfirmTitle": "删除所选应用？",
+  "home.removeConfirmText": "所选应用将从 VOIDEX 桌面移除。不会影响你的数据。",
+  "home.removeConfirmTitle2": "确定删除所选应用？",
+  "home.removeConfirmText2": "此操作会将所选应用从 VOIDEX 桌面移除。应用数据不会被删除。",
+  "home.removedManyFromDesktop": "已从桌面移除 {n} 个应用。它们仍在应用菜单中。",
 };

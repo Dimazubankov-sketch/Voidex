@@ -847,4 +847,11 @@ export const ko: Record<MessageKey, string> = {
   "notes.name": "노트",
   "notes.sharedView": "공유된 노트 — 보기 전용",
   "notes.backToMine": "내 노트",
+  "home.delete": "삭제",
+  "home.removeSelected": "선택됨: {n}",
+  "home.removeConfirmTitle": "선택한 앱을 삭제할까요?",
+  "home.removeConfirmText": "선택한 앱이 VOIDEX 바탕화면에서 삭제됩니다. 데이터에는 영향이 없습니다.",
+  "home.removeConfirmTitle2": "선택한 앱을 정말 삭제할까요?",
+  "home.removeConfirmText2": "이 작업은 선택한 앱을 VOIDEX 바탕화면에서 삭제합니다. 앱 데이터는 삭제되지 않습니다.",
+  "home.removedManyFromDesktop": "바탕화면에서 앱 {n}개를 삭제했습니다. 앱 메뉴에는 남아 있습니다.",
 };

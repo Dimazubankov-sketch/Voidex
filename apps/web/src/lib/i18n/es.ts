@@ -847,4 +847,11 @@ export const es: Record<MessageKey, string> = {
   "notes.name": "Notas",
   "notes.sharedView": "Nota compartida: solo lectura",
   "notes.backToMine": "Mis notas",
+  "home.delete": "Eliminar",
+  "home.removeSelected": "Seleccionadas: {n}",
+  "home.removeConfirmTitle": "¿Eliminar las apps seleccionadas?",
+  "home.removeConfirmText": "Las apps seleccionadas se quitarán del escritorio de VOIDEX. Tus datos no se verán afectados.",
+  "home.removeConfirmTitle2": "¿Seguro que quieres eliminar las apps seleccionadas?",
+  "home.removeConfirmText2": "Esta acción quitará las apps seleccionadas del escritorio de VOIDEX. Los datos de las apps no se eliminarán.",
+  "home.removedManyFromDesktop": "{n} apps quitadas del escritorio. Siguen en el menú de apps.",
 };

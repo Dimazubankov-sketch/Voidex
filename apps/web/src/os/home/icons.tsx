@@ -1,7 +1,7 @@
 import { memo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { motion, motionValue } from "motion/react";
-import { RiSubtractLine } from "@remixicon/react";
+import { RiCheckLine, RiSubtractLine } from "@remixicon/react";
 import { APP_REGISTRY, removeFromFolder, type AppId, type Folder, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useLanguage, useT } from "@/lib/i18n";
@@ -9,7 +9,7 @@ import { useMailSummary } from "@/lib/mail-summary";
 import { AppTile, GLYPH_BOX } from "@/brand/brand";
 import { CLIENT_APPS } from "../app-registry";
 import { useWM } from "../window-manager";
-import { appLabel, itemKey, removeFromDesktop, ungroupFolder } from "./actions";
+import { appLabel, itemKey, ungroupFolder } from "./actions";
 import type { LabelTone } from "./appearance";
 import { updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
@@ -53,7 +53,7 @@ function UnreadBadge({ n }: { n: number }) {
   );
 }
 
-function RemoveBadge({ label, onRemove }: { label: string; onRemove: () => void }) {
+function RemoveBadge({ label, onRemove, selected }: { label: string; onRemove: () => void; selected?: boolean }) {
   // A span, not a <button>: it sits inside the icon's button.
   return (
     <span
@@ -62,8 +62,13 @@ function RemoveBadge({ label, onRemove }: { label: string; onRemove: () => void 
       aria-label={label}
       title={label}
       data-home-control
+      aria-pressed={selected}
       data-testid="home-remove-badge"
-      className="absolute -left-2 -top-2 z-10 flex size-[22px] items-center justify-center rounded-full border border-white/70 bg-[rgba(60,60,72,0.72)] text-white shadow-md backdrop-blur-md animate-pop"
+      data-selected={selected || undefined}
+      className={cx(
+        "absolute -left-2 -top-2 z-10 flex size-[22px] items-center justify-center rounded-full border border-white/70 text-white shadow-md backdrop-blur-md animate-pop",
+        selected ? "bg-primary" : "bg-[rgba(60,60,72,0.72)]",
+      )}
       onClick={(e) => {
         e.stopPropagation();
         onRemove();
@@ -75,7 +80,7 @@ function RemoveBadge({ label, onRemove }: { label: string; onRemove: () => void 
         onRemove();
       }}
     >
-      <RiSubtractLine className="size-4" />
+      {selected ? <RiCheckLine className="size-4" /> : <RiSubtractLine className="size-4" />}
     </span>
   );
 }
@@ -139,6 +144,7 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
   const folder = item.kind === "folder" ? layout.folders.find((f) => f.id === item.id) : undefined;
   if (item.kind === "folder" && !folder) return null;
   const name = item.kind === "app" ? appLabel(layout, item.id) : folder!.name || t("home.folder");
+  const removeSel = useHomeUi((s) => s.removeSel);
   const wiggle: CSSProperties | undefined = editing ? { animationDelay: `${-((index * 137) % 300)}ms` } : undefined;
 
   return (
@@ -187,8 +193,14 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
           {editing && (
             <RemoveBadge
               label={inFolder ? t("home.removeFromFolder") : item.kind === "app" ? t("home.removeFromDesktop") : t("home.dissolveFolder")}
+              selected={item.kind === "app" && !inFolder && removeSel.includes(item.id)}
               onRemove={() =>
-                item.kind === "folder" ? ungroupFolder(item.id) : inFolder ? updateLayout((l) => removeFromFolder(l, item.id)) : removeFromDesktop(item.id)
+                item.kind === "folder"
+                  ? ungroupFolder(item.id)
+                  : inFolder
+                    ? updateLayout((l) => removeFromFolder(l, item.id))
+                    : // Step 2.5: "−" only marks the app; "Удалить" then asks twice.
+                      useHomeUi.getState().toggleRemoveSel(item.id)
               }
             />
           )}

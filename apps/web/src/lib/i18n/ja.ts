@@ -847,4 +847,11 @@ export const ja: Record<MessageKey, string> = {
   "notes.name": "メモ",
   "notes.sharedView": "共有されたメモ — 閲覧のみ",
   "notes.backToMine": "自分のメモ",
+  "home.delete": "削除",
+  "home.removeSelected": "選択中: {n}",
+  "home.removeConfirmTitle": "選択したアプリを削除しますか？",
+  "home.removeConfirmText": "選択したアプリは VOIDEX のデスクトップから削除されます。データには影響しません。",
+  "home.removeConfirmTitle2": "本当に選択したアプリを削除しますか？",
+  "home.removeConfirmText2": "この操作で選択したアプリが VOIDEX のデスクトップから削除されます。アプリのデータは削除されません。",
+  "home.removedManyFromDesktop": "{n} 個のアプリをデスクトップから削除しました。アプリメニューには残っています。",
 };

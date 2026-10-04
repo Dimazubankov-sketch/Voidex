@@ -63,6 +63,12 @@ interface HomeUi {
   widgetsOpen: boolean;
   launcherOpen: boolean;
   drag: DragState | null;
+  /** Step 2.5: apps marked with "−" in edit mode, waiting for "Удалить". */
+  removeSel: AppId[];
+  /** Step 2.5: the apps in the two-step delete confirmation (null: closed). */
+  removeConfirm: AppId[] | null;
+  toggleRemoveSel: (id: AppId) => void;
+  setRemoveConfirm: (ids: AppId[] | null) => void;
   setEditing: (v: boolean) => void;
   setMobilePage: (p: number) => void;
   setOpenFolder: (f: HomeUi["openFolder"]) => void;
@@ -92,7 +98,12 @@ export const useHomeUi = create<HomeUi>((set) => ({
   widgetsOpen: false,
   launcherOpen: false,
   drag: null,
-  setEditing: (editing) => set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null, brushOpen: false }),
+  removeSel: [],
+  removeConfirm: null,
+  toggleRemoveSel: (id) => set((st) => ({ removeSel: st.removeSel.includes(id) ? st.removeSel.filter((a) => a !== id) : [...st.removeSel, id] })),
+  setRemoveConfirm: (removeConfirm) => set({ removeConfirm, menu: null }),
+  setEditing: (editing) =>
+    set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null, brushOpen: false, removeSel: [] }),
   setMobilePage: (mobilePage) => set({ mobilePage }),
   setOpenFolder: (openFolder) => set(openFolder ? { openFolder, menu: null } : { openFolder, menu: null, renamingFolder: null }),
   setRenamingFolder: (renamingFolder) => set({ renamingFolder }),
