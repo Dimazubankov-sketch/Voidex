@@ -40,6 +40,8 @@ export function WallpapersSection() {
   const input = useRef<HTMLInputElement>(null);
   const strip = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
+  /** While a tapped card scrolls into the middle, the passing cards don't become current. */
+  const target = useRef<number | null>(null);
   const slot: WallpaperSlot = tab === "lock" ? "lock" : "desktop";
   const applied = tab === "lock" ? wp.lockWallpaper : wp.wallpaper;
 
@@ -75,9 +77,15 @@ export function WallpapersSection() {
         best = i;
       }
     });
+    if (target.current !== null) {
+      if (best === target.current) target.current = null;
+      return;
+    }
     setIndex(best);
   };
   const goTo = (i: number) => {
+    target.current = i;
+    window.setTimeout(() => (target.current = null), 800);
     setIndex(i);
     (strip.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
   };

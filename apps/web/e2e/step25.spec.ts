@@ -182,11 +182,14 @@ test("Notes: closing with unsaved changes asks; a save from another device shows
 
   // Unsaved text + close: the shell asks; Cancel keeps the window, "Save and close" saves.
   await app.locator(".vn-heading .vn-editable").first().click();
+  await page.keyboard.press("End");
   await page.keyboard.type("!");
   await closeWindow(page, "notes");
   await expect(page.getByTestId("close-guard")).toBeVisible();
   await page.getByTestId("close-guard-cancel").click();
   await expect(page.locator('[data-testid="window-notes"][data-state="open"]')).toBeVisible();
+  await app.locator(".vn-heading .vn-editable").first().click();
+  await page.keyboard.press("End");
   await page.keyboard.type("?");
   await closeWindow(page, "notes");
   await page.getByTestId("close-guard-save").click();
@@ -230,6 +233,7 @@ test("Vibex: delete my message (others can't), placeholder for both; action row 
   expect((await api(page, "POST", `/api/vibex/chats/${chat.id}/messages`, { text: "Секретное сообщение" })).status).toBe(201);
   expect((await api(other, "POST", `/api/vibex/chats/${chat.id}/messages`, { text: "Ответ Бори" })).status).toBe(201);
   await openApp(page, "vibex");
+  await page.getByTestId(isMobile(page) ? "vibex-tab-chats" : "vibex-nav-chats").click();
   await page.getByTestId("chat-row").first().click();
   const mine = page.getByTestId("message").filter({ hasText: "Секретное сообщение" });
   await expect(mine).toBeVisible();
@@ -254,16 +258,19 @@ test("Vibex: delete my message (others can't), placeholder for both; action row 
   expect(list.find((m: { deleted?: boolean }) => m.deleted)).toBeTruthy();
 
   // Posts: icon + number buttons (0 shown), views apart.
-  expect((await api(other, "POST", "/api/vibex/posts", { text: "Пост Бори" })).status).toBe(201);
-  if (isMobile(page)) await page.getByTestId("vibex-tab-feed").click().catch(() => undefined);
-  else await page.getByTestId("vibex-nav-feed").click().catch(() => undefined);
-  const card = page.getByTestId("post-card").filter({ hasText: "Пост Бори" });
+  const postText = `Пост Бори ${Date.now().toString(36)}`;
+  expect((await api(other, "POST", "/api/vibex/posts", { text: postText })).status).toBe(201);
+  if (isMobile(page)) {
+    await page.getByTestId("chat-back").click();
+    await page.getByTestId("vibex-tab-feed").click();
+  } else await page.getByTestId("vibex-nav-feed").click();
+  const card = page.getByTestId("post-card").filter({ hasText: postText });
   await expect(card).toBeVisible({ timeout: 15_000 });
   for (const id of ["post-like", "post-comment", "post-share"]) await expect(card.getByTestId(`${id}-count`)).toHaveText("0");
   await expect(card.getByTestId("post-share")).toHaveAttribute("aria-label", /Поделиться/);
   await expect(card.getByTestId("share-glyph")).toBeVisible();
   // A real view: counted once on the server (the author doesn't count).
-  await expect.poll(async () => (await api(other, "GET", "/api/vibex/feed")).body.items.find((p: { text: string }) => p.text === "Пост Бори")?.views, { timeout: 15_000 }).toBe(1);
+  await expect.poll(async () => (await api(other, "GET", "/api/vibex/feed")).body.items.find((p: { text: string }) => p.text === postText)?.views, { timeout: 15_000 }).toBe(1);
   void a;
 });
 
@@ -346,12 +353,15 @@ test("phone Notification Center: handle down = full screen, up = back; swipe a c
   await expect(nc).toBeVisible();
   await expect(page.getByTestId("notification")).toHaveCount(2);
   const handle = page.getByTestId("notification-handle");
+  await page.waitForTimeout(700); // the sheet finishes sliding in
   let h = (await handle.boundingBox())!;
   await drag({ x: h.x + h.width / 2, y: h.y + h.height / 2 }, 0, 200);
   await expect(nc).toHaveAttribute("data-full", "true");
+  await page.waitForTimeout(500);
   h = (await handle.boundingBox())!;
   await drag({ x: h.x + h.width / 2, y: h.y + h.height / 2 }, 0, -200);
   await expect(nc).not.toHaveAttribute("data-full", "true");
+  await page.waitForTimeout(500);
   // Swipe the first card sideways: deleted on the server.
   const card = (await page.getByTestId("notification").first().boundingBox())!;
   await drag({ x: card.x + 40, y: card.y + card.height / 2 }, 240, 0);
