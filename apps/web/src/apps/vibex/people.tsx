@@ -32,7 +32,7 @@ export function PeopleSection() {
   const query = q.trim();
   const people = usePeople(query);
   const chats = useChats();
-  const recent = (chats.data ?? []).map((c) => c.peer);
+  const recent = (chats.data ?? []).flatMap((c) => (c.peer ? [c.peer] : []));
   return (
     <div className="flex flex-col gap-3">
       <label className="flex h-12 items-center gap-2 rounded-2xl border border-border bg-surface px-4 shadow-tile">

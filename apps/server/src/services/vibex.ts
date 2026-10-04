@@ -974,7 +974,7 @@ export class VibexService {
         app: "vibex",
         type: "vibex.group",
         title: input.title.trim(),
-        body: `${creator.name} added you to the group`,
+        body: creator.name,
         actorId: creatorId,
         target: { chatId: id },
         collapseOn: "chatId",

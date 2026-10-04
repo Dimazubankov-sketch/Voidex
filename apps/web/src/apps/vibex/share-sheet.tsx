@@ -50,7 +50,7 @@ function ShareBody({ wrapper }: { wrapper: VibexPostDto }) {
   const contacts = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const fromChats = (chats.data ?? [])
-      .map((c) => c.peer)
+      .flatMap((c) => (c.peer ? [c.peer] : []))
       .filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.handle.includes(needle) || p.address.includes(needle));
     const seen = new Set(fromChats.map((p) => p.id));
     const others = (people.data ?? []).filter((p) => !seen.has(p.id));

@@ -35,6 +35,7 @@ const ACTION: Record<string, MessageKey> = {
   "vibex.reply": "notifications.vibex.reply",
   "vibex.like": "notifications.vibex.like",
   "vibex.follow": "notifications.vibex.follow",
+  "vibex.group": "notifications.vibex.group",
   "system.update": "notifications.system.update",
 };
 

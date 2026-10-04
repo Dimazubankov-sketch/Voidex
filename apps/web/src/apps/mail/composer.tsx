@@ -291,7 +291,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
               <Notice tone="danger">{error}</Notice>
             </div>
           )}
-          <div className="flex shrink-0 items-center gap-2 border-t px-4 py-3 pb-[max(var(--safe-bottom),12px)]">
+          <div className="flex shrink-0 items-center gap-2 border-t px-4 py-3">
             {!mobile && (
               <Button onClick={send} loading={sending} disabled={!hasRecipients || uploading} icon={<RiSendPlane2Fill className="size-4" />} data-testid="composer-send">
                 {sending ? t("mail.sending") : t("mail.send")}

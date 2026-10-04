@@ -39,6 +39,7 @@ import { CallSheet, type CallKind } from "./calls";
 import { useSession } from "@/lib/session";
 import { NestedPost, UnavailablePost } from "./posts";
 import { markVisible, useVibex } from "./store";
+import { ChatAvatar, GroupAvatar, GroupInfoSheet, chatTitle } from "./groups";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 /** Press-and-hold before a pinned chat lifts (touch and mouse alike). */
@@ -50,7 +51,9 @@ const MOVE_TOLERANCE = 8;
 function Preview({ chat }: { chat: VibexChatDto }) {
   const t = useT();
   const m = chat.lastMessage;
-  if (!m) return <span className="text-text-tertiary">{t("vibex.chat.empty", { name: chat.peer.firstName })}</span>;
+  if (!m) return <span className="text-text-tertiary">{chat.group ? t("vibex.group.created") : t("vibex.chat.empty", { name: chat.peer?.firstName ?? "" })}</span>;
+  // Groups: who wrote it.
+  const author = chat.group && !m.mine ? chat.group.members.find((x) => x.id === m.senderId)?.firstName : null;
   const what = m.kind === "voice"
     ? t("vibex.voice.message")
     : m.kind === "circle"
@@ -65,6 +68,7 @@ function Preview({ chat }: { chat: VibexChatDto }) {
   return (
     <>
       {m.mine && <span className="text-text-secondary">{t("vibex.chats.you")} </span>}
+      {author && <span className="text-text-secondary">{author}: </span>}
       {m.kind === "text" && !m.text && m.files.length > 0 &&
         (m.files.some((f) => f.kind === "image") ? (
           <RiImageLine className="-mt-0.5 mr-1 inline size-3.5 text-text-tertiary" />
@@ -81,10 +85,10 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
   const read = chat.lastMessage?.mine && chat.peerReadAt && chat.peerReadAt >= chat.lastMessage.createdAt;
   return (
     <>
-      <Avatar name={chat.peer.name} userId={chat.peer.id} version={chat.peer.avatarVersion} size={50} />
+      <ChatAvatar chat={chat} size={50} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className={cx("min-w-0 flex-1 truncate text-[15px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chat.peer.name}</span>
+          <span className={cx("min-w-0 flex-1 truncate text-[15px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
           {chat.lastMessage?.mine &&
             (read ? <RiCheckDoubleLine className="size-4 shrink-0 text-primary" /> : <RiCheckLine className="size-4 shrink-0 text-text-tertiary" />)}
           <span className={cx("shrink-0 text-[12px] tabular-nums text-text-tertiary", HOVER_HIDE)}>{chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}</span>
@@ -126,7 +130,7 @@ function useChatMenu(chat: VibexChatDto, pinnedIds: string[]) {
     pinned
       ? { id: "unpin", label: t("vibex.chats.unpin"), icon: <RiUnpinLine className="size-5" />, onSelect: () => setPins.mutate(pinnedIds.filter((id) => id !== chat.id)) }
       : { id: "pin", label: t("vibex.chats.pin"), icon: <RiPushpinLine className="size-5" />, onSelect: () => setPins.mutate([chat.id, ...pinnedIds]) },
-    { id: "profile", label: t("vibex.chats.profile"), icon: <RiUserLine className="size-5" />, onSelect: () => push({ kind: "person", id: chat.peer.id }) },
+    ...(chat.peer ? [{ id: "profile", label: t("vibex.chats.profile"), icon: <RiUserLine className="size-5" />, onSelect: () => push({ kind: "person", id: chat.peer!.id }) }] : []),
   ];
   return items;
 }
@@ -136,7 +140,7 @@ function RowMenu({ chat, pinnedIds, open, onClose, anchor }: { chat: VibexChatDt
   const items = useChatMenu(chat, pinnedIds);
   if (ff === "mobile") {
     return (
-      <Sheet open={open} onClose={onClose} title={chat.peer.name} testId="chat-menu">
+      <Sheet open={open} onClose={onClose} title={chatTitle(chat)} testId="chat-menu">
         <MenuList items={items} onDone={onClose} />
       </Sheet>
     );
@@ -443,10 +447,10 @@ function Ticks({ msg, peerReadAt }: { msg: VibexMessageDto; peerReadAt: string |
 }
 
 /** Quote of the message a reply answers. */
-function ReplyQuote({ reply, mine, peerName }: { reply: NonNullable<VibexMessageDto["replyTo"]>; mine: boolean; peerName: string }) {
+function ReplyQuote({ reply, mine, nameOf }: { reply: NonNullable<VibexMessageDto["replyTo"]>; mine: boolean; nameOf: NameOf }) {
   const t = useT();
   const me = useSession((s) => s.user)!;
-  const who = reply.senderId === me.id ? t("vibex.chats.you") : peerName;
+  const who = reply.senderId === me.id ? t("vibex.chats.you") : nameOf(reply.senderId);
   const what = reply.kind === "voice" ? t("vibex.voice.message") : reply.kind === "circle" ? t("vibex.circle.message") : reply.text || t("vibex.chats.file");
   return (
     <div className={cx("mx-1.5 mt-1 rounded-[14px] border-l-[3px] px-2.5 py-1 text-[12.5px]", mine ? "border-white/70 bg-white/15" : "border-primary bg-primary/[0.07]")} data-testid="message-reply-quote">
@@ -456,7 +460,33 @@ function ReplyQuote({ reply, mine, peerName }: { reply: NonNullable<VibexMessage
   );
 }
 
-function Bubble({ msg, peerReadAt, tail, peerName, onReply }: { msg: VibexMessageDto; peerReadAt: string | null; tail: boolean; peerName: string; onReply: (m: VibexMessageDto) => void }) {
+/** Name of a chat participant by id (groups: whoever wrote; direct: the other person). */
+type NameOf = (userId: string) => string;
+
+function useNameOf(chat: VibexChatDto): NameOf {
+  const t = useT();
+  return useCallback(
+    (id: string) => chat.peer?.name ?? chat.group?.members.find((m) => m.id === id)?.name ?? t("vibex.group.formerMember"),
+    [chat, t],
+  );
+}
+
+function Bubble({
+  msg,
+  peerReadAt,
+  tail,
+  nameOf,
+  author,
+  onReply,
+}: {
+  msg: VibexMessageDto;
+  peerReadAt: string | null;
+  tail: boolean;
+  nameOf: NameOf;
+  /** Groups: the sender's name above the first message of a run. */
+  author?: string | null;
+  onReply: (m: VibexMessageDto) => void;
+}) {
   const t = useT();
   const lang = useLanguage();
   const [viewer, setViewer] = useState<number | null>(null);
@@ -490,7 +520,7 @@ function Bubble({ msg, peerReadAt, tail, peerName, onReply }: { msg: VibexMessag
       <div className={cx("group flex w-full items-end gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind="circle" {...hold}>
         {mine && replyButton}
         <div className="flex flex-col items-end gap-1">
-          {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} peerName={peerName} />}
+          {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} nameOf={nameOf} />}
           <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} />
           <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
         </div>
@@ -510,7 +540,12 @@ function Bubble({ msg, peerReadAt, tail, peerName, onReply }: { msg: VibexMessag
           tail && (mine ? "rounded-br-[8px]" : "rounded-bl-[8px]"),
         )}
       >
-        {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} peerName={peerName} />}
+        {author && (
+          <span className="px-2.5 pt-1 text-[12.5px] font-semibold text-primary" data-testid="message-author">
+            {author}
+          </span>
+        )}
+        {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
         {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
         {images.length > 0 && (
           <div className={cx("grid gap-1 overflow-hidden rounded-[18px]", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
@@ -555,6 +590,7 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
   const q = useMessages(chat.id);
   const items = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
   const top = useRef<HTMLDivElement>(null);
+  const nameOf = useNameOf(chat);
 
   // Load older messages when the top comes into view.
   useEffect(() => {
@@ -581,8 +617,8 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
   if (!items.length) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center text-text-tertiary">
-        <Avatar name={chat.peer.name} userId={chat.peer.id} version={chat.peer.avatarVersion} size={72} />
-        <span className="text-[15px]">{t("vibex.chat.empty", { name: chat.peer.firstName })}</span>
+        <ChatAvatar chat={chat} size={72} />
+        <span className="text-[15px]">{chat.group ? t("vibex.group.emptyHint") : t("vibex.chat.empty", { name: chat.peer?.firstName ?? "" })}</span>
       </div>
     );
   }
@@ -601,7 +637,14 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
                 <span className="vx-glass rounded-full px-3 py-1 text-[12px] font-medium text-text-secondary">{formatDate(m.createdAt, lang, { day: "numeric", month: "long" })}</span>
               </div>
             )}
-            <Bubble msg={m} peerReadAt={chat.peerReadAt} tail={tail} peerName={chat.peer.name} onReply={onReply} />
+            <Bubble
+              msg={m}
+              peerReadAt={chat.peerReadAt}
+              tail={tail}
+              nameOf={nameOf}
+              author={chat.group && !m.mine && (!older || older.senderId !== m.senderId || dayBreak) ? nameOf(m.senderId) : null}
+              onReply={onReply}
+            />
           </div>
         );
       })}
@@ -614,7 +657,7 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
 
 type Pending = { key: string; name: string };
 
-function MessageComposer({ chatId, replyTo, onClearReply, peerName }: { chatId: string; replyTo: VibexMessageDto | null; onClearReply: () => void; peerName: string }) {
+function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: string; replyTo: VibexMessageDto | null; onClearReply: () => void; nameOf: NameOf }) {
   const t = useT();
   const ff = useFormFactor();
   const me = useSession((s) => s.user)!;
@@ -701,7 +744,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, peerName }: { chatId: 
   const empty = !text.trim() && !files.length && !pending.length;
 
   return (
-    <div className="shrink-0 px-3 pb-[max(var(--safe-bottom),10px)] pt-2 sm:px-4">
+    <div className="shrink-0 px-3 pb-2.5 pt-2 sm:px-4">
       <AnimatePresence initial={false}>
         {(files.length > 0 || pending.length > 0) && (
           <motion.div className="mb-2 flex flex-wrap gap-2" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} data-testid="composer-files">
@@ -740,7 +783,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, peerName }: { chatId: 
         <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface px-3 py-1.5 shadow-tile" data-testid="composer-reply">
           <RiReplyLine className="size-4 shrink-0 text-primary" />
           <span className="min-w-0 flex-1 text-[13px]">
-            <span className="block font-semibold text-primary">{replyTo.senderId === me.id ? t("vibex.chats.you") : peerName}</span>
+            <span className="block font-semibold text-primary">{replyTo.senderId === me.id ? t("vibex.chats.you") : nameOf(replyTo.senderId)}</span>
             <span className="line-clamp-1 text-text-secondary">
               {replyTo.kind === "voice" ? t("vibex.voice.message") : replyTo.kind === "circle" ? t("vibex.circle.message") : replyTo.text || t("vibex.chats.file")}
             </span>
@@ -830,6 +873,7 @@ export function Conversation({ chatId, onBack }: { chatId: string; onBack?: () =
   const push = useVibex((s) => s.push);
   const [replyTo, setReplyTo] = useState<VibexMessageDto | null>(null);
   const [call, setCall] = useState<CallKind | null>(null);
+  const [info, setInfo] = useState(false);
   useEffect(() => markVisible(chatId), [chatId]);
   if (!chat.data) {
     return (
@@ -839,6 +883,34 @@ export function Conversation({ chatId, onBack }: { chatId: string; onBack?: () =
     );
   }
   const c = chat.data;
+  return <ConversationView c={c} chatId={chatId} onBack={onBack} replyTo={replyTo} setReplyTo={setReplyTo} call={call} setCall={setCall} info={info} setInfo={setInfo} push={push} />;
+}
+
+function ConversationView({
+  c,
+  chatId,
+  onBack,
+  replyTo,
+  setReplyTo,
+  call,
+  setCall,
+  info,
+  setInfo,
+  push,
+}: {
+  c: VibexChatDto;
+  chatId: string;
+  onBack?: () => void;
+  replyTo: VibexMessageDto | null;
+  setReplyTo: (m: VibexMessageDto | null) => void;
+  call: CallKind | null;
+  setCall: (k: CallKind | null) => void;
+  info: boolean;
+  setInfo: (v: boolean) => void;
+  push: (p: { kind: "person"; id: string }) => void;
+}) {
+  const t = useT();
+  const nameOf = useNameOf(c);
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="conversation" data-chat-id={chatId}>
       <WindowHeader className="border-b px-2 sm:px-3">
@@ -847,25 +919,38 @@ export function Conversation({ chatId, onBack }: { chatId: string; onBack?: () =
             <RiArrowLeftSLine className="size-7" />
           </IconButton>
         )}
-        <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => push({ kind: "person", id: c.peer.id })}>
-          <Avatar name={c.peer.name} userId={c.peer.id} version={c.peer.avatarVersion} size={38} />
-          <span className="min-w-0">
-            <span className="block truncate text-[15px] font-semibold">{c.peer.name}</span>
-            <span className="block truncate text-[12px] text-text-tertiary">{c.peer.address}</span>
-          </span>
-        </button>
-        <IconButton label={t("vibex.call.audio")} onClick={() => setCall("audio")} data-testid="chat-call-audio">
-          <RiPhoneLine className="size-5" />
-        </IconButton>
-        <IconButton label={t("vibex.call.video")} onClick={() => setCall("video")} data-testid="chat-call-video">
-          <RiVidiconLine className="size-5" />
-        </IconButton>
+        {c.group ? (
+          <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setInfo(true)} data-testid="group-header">
+            <GroupAvatar title={c.group.title} fileId={c.group.avatarFileId} size={38} />
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-semibold">{c.group.title}</span>
+              <span className="block truncate text-[12px] text-text-tertiary">{t("vibex.group.members", { n: c.group.members.length })}</span>
+            </span>
+          </button>
+        ) : (
+          <>
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => push({ kind: "person", id: c.peer!.id })}>
+              <Avatar name={c.peer!.name} userId={c.peer!.id} version={c.peer!.avatarVersion} size={38} />
+              <span className="min-w-0">
+                <span className="block truncate text-[15px] font-semibold">{c.peer!.name}</span>
+                <span className="block truncate text-[12px] text-text-tertiary">{c.peer!.address}</span>
+              </span>
+            </button>
+            <IconButton label={t("vibex.call.audio")} onClick={() => setCall("audio")} data-testid="chat-call-audio">
+              <RiPhoneLine className="size-5" />
+            </IconButton>
+            <IconButton label={t("vibex.call.video")} onClick={() => setCall("video")} data-testid="chat-call-video">
+              <RiVidiconLine className="size-5" />
+            </IconButton>
+          </>
+        )}
       </WindowHeader>
       <div className="flex min-h-0 flex-1 flex-col bg-surface-secondary/50">
         <Messages chat={c} onReply={setReplyTo} />
-        <MessageComposer chatId={chatId} key={chatId} replyTo={replyTo} onClearReply={() => setReplyTo(null)} peerName={c.peer.name} />
+        <MessageComposer chatId={chatId} key={chatId} replyTo={replyTo} onClearReply={() => setReplyTo(null)} nameOf={nameOf} />
       </div>
-      <CallSheet kind={call} peer={c.peer} onClose={() => setCall(null)} />
+      {c.peer && <CallSheet kind={call} peer={c.peer} onClose={() => setCall(null)} />}
+      {c.group && <GroupInfoSheet key={c.group.title + c.group.avatarFileId} chat={c} open={info} onClose={() => setInfo(false)} />}
     </div>
   );
 }

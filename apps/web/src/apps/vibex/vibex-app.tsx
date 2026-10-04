@@ -19,6 +19,7 @@ import { useSession } from "@/lib/session";
 import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { ChatList, Conversation } from "./chats";
+import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
 import { HistorySection, PeopleSection, PostPage } from "./people";
@@ -145,7 +146,6 @@ function NewPostFab({ className }: { className?: string }) {
 function DesktopVibex() {
   const t = useT();
   const section = useVibex((s) => s.section);
-  const go = useVibex((s) => s.go);
   const stack = useVibex((s) => s.stack);
   const back = useVibex((s) => s.back);
   const chatId = useVibex((s) => s.chatId);
@@ -158,16 +158,15 @@ function DesktopVibex() {
 
       {section === "chats" && !page ? (
         <div className="flex min-w-0 flex-1">
-          <section className="flex w-[330px] shrink-0 flex-col border-r bg-surface">
+          <section className="relative flex w-[330px] shrink-0 flex-col border-r bg-surface">
             <WindowHeader menu={false}>
               <span className="flex-1 pl-1.5 text-[17px] font-bold">{t("vibex.nav.messages")}</span>
-              <IconButton label={t("vibex.chats.new")} onClick={() => go("people")} data-testid="vibex-new-chat">
-                <RiAddLine className="size-5" />
-              </IconButton>
             </WindowHeader>
-            <div className="scroll-area flex-1">
+            <div className="scroll-area flex-1 pb-20">
               <ChatList />
             </div>
+            {/* The pencil: a new conversation (a person or a group), like the feed's "+" */}
+            <NewChatFab className="bottom-5 right-5" />
           </section>
           <section className="relative flex min-w-0 flex-1 flex-col bg-surface">
             {chatId ? (
@@ -238,9 +237,12 @@ function MobileVibex() {
         </IconButton>
       </WindowHeader>
 
-      <div className="scroll-area flex-1">{section === "chats" ? <ChatList /> : <Column><SectionBody section={section} /></Column>}</div>
+      <div className="scroll-area flex-1">{section === "chats" ? <div className="pb-20"><ChatList /></div> : <Column><SectionBody section={section} /></Column>}</div>
+      {section === "chats" && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
 
-      <nav className="flex h-16 shrink-0 items-center justify-around border-t bg-surface px-2 pb-[var(--safe-bottom)]" data-testid="vibex-tabbar">
+      {/* No safe-area padding here: the window frame already keeps the home-indicator area below the app.
+          (Adding it again squeezed this 64px bar on iPhone and pushed the icons across the divider.) */}
+      <nav className="flex h-16 shrink-0 items-center justify-around border-t bg-surface px-2" data-testid="vibex-tabbar">
         {tabs.map((item) => {
           const active = item.key !== "compose" && section === item.key;
           const Icon = active ? item.fill : item.line;
