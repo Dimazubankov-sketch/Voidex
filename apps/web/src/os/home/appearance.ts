@@ -86,13 +86,15 @@ export function wallpaperStyle(w: Wallpaper, imageUrl: string | null | undefined
   }
 }
 
-/** The user's own wallpaper image (only the owner can fetch it). */
-export function useWallpaperImage(w: Wallpaper) {
-  const version = w.kind === "image" ? w.version : null;
+export type WallpaperSlot = "desktop" | "lock";
+
+/** The user's own wallpaper image (only the owner can fetch it); the lock screen has its own slot. */
+export function useWallpaperImage(w: Wallpaper | null, slot: WallpaperSlot = "desktop") {
+  const version = w?.kind === "image" ? w.version : null;
   return useQuery({
-    queryKey: ["wallpaper", version],
+    queryKey: ["wallpaper", slot, version],
     enabled: !!version,
-    queryFn: async () => URL.createObjectURL(await api.get<Blob>("/api/account/wallpaper")),
+    queryFn: async () => URL.createObjectURL(await api.get<Blob>(`/api/account/wallpaper${slot === "lock" ? "?slot=lock" : ""}`)),
     staleTime: Infinity,
     gcTime: Infinity,
   });

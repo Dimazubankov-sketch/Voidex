@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { RiCameraLine, RiDeleteBinLine, RiKeyLine, RiLogoutBoxRLine, RiMailLine, RiPhoneLine, RiShieldCheckLine, RiDeviceLine } from "@remixicon/react";
+import { RiCameraLine, RiDeleteBinLine, RiKeyLine, RiLock2Line, RiLogoutBoxRLine, RiMailLine, RiPhoneLine, RiShieldCheckLine, RiDeviceLine, RiUserLine } from "@remixicon/react";
 import { validateBirthDate, validateName, type MeDto } from "@voidex/shared";
 import { formatPhone, type CountryCode } from "@voidex/shared/phone";
 import { api } from "@/lib/api";
@@ -13,7 +13,7 @@ import { Avatar } from "@/brand/brand";
 import { Button, Notice, TextField } from "@/ui/controls";
 import { BirthDateFields, CountryList, LanguageList, datePartsToIso, isoToDateParts } from "@/ui/pickers";
 import { ConfirmDialog, toast } from "@/ui/overlays";
-import { Badge, Group, Row, SectionTitle } from "../kit";
+import { Badge, BrandFooter, Group, Row, SectionTitle } from "../kit";
 import type { SectionProps } from "../settings-app";
 
 function useMe(): MeDto {
@@ -29,38 +29,35 @@ export function AccountSection({ navigate }: SectionProps) {
   const name = `${me.firstName} ${me.lastName}`;
   return (
     <div>
-      <div className="mb-7 flex flex-col items-center pt-4 text-center">
-        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={96} />
-        <h2 className="mt-4 text-[24px] font-bold tracking-tight" data-testid="account-name">
+      <div className="relative mb-6 flex flex-col items-center overflow-hidden rounded-[26px] bg-[radial-gradient(90%_70%_at_50%_0%,rgba(150,128,255,0.18),rgba(150,128,255,0)_70%)] pb-2 pt-5 text-center">
+        <span className="rounded-full p-1 shadow-[0_10px_30px_-12px_rgba(106,77,245,0.55)] ring-4 ring-white">
+          <Avatar name={name} userId={me.id} version={me.avatarVersion} size={92} />
+        </span>
+        <h2 className="mt-3 text-[24px] font-bold tracking-tight" data-testid="account-name">
           {name}
         </h2>
-        <div className="text-[15px] text-text-secondary" data-selectable>
+        <div className="text-[14px] text-text-secondary" data-selectable>
           {me.mailAddress}
         </div>
-        <div className="mt-1 text-[13px] text-text-tertiary">{t("settings.memberSince", { date: formatDate(me.createdAt, lang) })}</div>
+        <div className="mt-1 text-[12.5px] text-text-tertiary">{t("settings.memberSince", { date: formatDate(me.createdAt, lang) })}</div>
       </div>
       <Group>
-        <Row icon={<RiShieldCheckLine className="size-[18px]" />} label={t("settings.personal")} chevron onClick={() => navigate("personal")} testId="row-personal" />
-        <Row icon={<RiMailLine className="size-[18px]" />} label={t("settings.email")} value={me.mailAddress} chevron onClick={() => navigate("email")} testId="row-email" />
-        <Row
-          icon={<RiPhoneLine className="size-[18px]" />}
-          label={t("settings.phone")}
-          value={formatPhone(me.phone)}
-          chevron
-          onClick={() => navigate("phone")}
-          testId="row-phone"
-        />
+        <Row icon={<RiUserLine className="size-[18px]" />} label={t("settings.personal")} hint={t("settings.hint.personal")} chevron onClick={() => navigate("personal")} testId="row-personal" />
+        <Row icon={<RiMailLine className="size-[18px]" />} label={t("settings.email")} hint={me.mailAddress} chevron onClick={() => navigate("email")} testId="row-email" />
+        <Row icon={<RiPhoneLine className="size-[18px]" />} label={t("settings.phone")} hint={formatPhone(me.phone)} chevron onClick={() => navigate("phone")} testId="row-phone" />
       </Group>
       <Group>
-        <Row icon={<RiShieldCheckLine className="size-[18px]" />} label={t("settings.security")} chevron onClick={() => navigate("security")} testId="row-security" />
-        <Row icon={<RiKeyLine className="size-[18px]" />} label={t("settings.password")} chevron onClick={() => navigate("password")} testId="row-password" />
-        <Row icon={<RiDeviceLine className="size-[18px]" />} label={t("settings.devices")} chevron onClick={() => navigate("devices")} testId="row-devices" />
+        <Row icon={<RiShieldCheckLine className="size-[18px]" />} label={t("settings.security")} hint={t("settings.hint.security")} chevron onClick={() => navigate("security")} testId="row-security" />
+        <Row icon={<RiKeyLine className="size-[18px]" />} label={t("settings.password")} hint={t("settings.hint.password")} chevron onClick={() => navigate("password")} testId="row-password" />
+        <Row icon={<RiDeviceLine className="size-[18px]" />} label={t("settings.devices")} hint={t("settings.hint.devices")} chevron onClick={() => navigate("devices")} testId="row-devices" />
+        <Row icon={<RiLock2Line className="size-[18px]" />} label={t("settings.faceIdPasscode")} hint={t("settings.hint.lock")} chevron onClick={() => navigate("lock")} testId="row-lock" />
       </Group>
       <Group>
         <Row
           icon={<RiLogoutBoxRLine className="size-[18px]" />}
           label={t("settings.signOut")}
           danger
+          chevron
           testId="sign-out"
           onClick={async () => {
             setBusy(true);
@@ -68,7 +65,7 @@ export function AccountSection({ navigate }: SectionProps) {
           }}
           right={busy ? <span className="text-[13px] text-text-tertiary">…</span> : undefined}
         />
-        <Row icon={<RiLogoutBoxRLine className="size-[18px]" />} label={t("settings.signOutAll")} danger onClick={() => setConfirmAll(true)} testId="sign-out-all" />
+        <Row icon={<RiLogoutBoxRLine className="size-[18px]" />} label={t("settings.signOutAll")} danger chevron onClick={() => setConfirmAll(true)} testId="sign-out-all" />
       </Group>
       <ConfirmDialog
         open={confirmAll}
@@ -79,6 +76,7 @@ export function AccountSection({ navigate }: SectionProps) {
         confirmLabel={t("settings.signOut")}
         danger
       />
+      <BrandFooter />
     </div>
   );
 }

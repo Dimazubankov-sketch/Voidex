@@ -36,6 +36,7 @@ export function PasscodePad({
   const [busy, setBusy] = useState(false);
   const [shake, setShake] = useState(0);
   const codeRef = useRef(code);
+  const root = useRef<HTMLDivElement>(null);
   codeRef.current = code;
 
   const press = (d: string) => {
@@ -68,6 +69,9 @@ export function PasscodePad({
     if (!autoFocusKeyboard) return;
     const h = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Two pads on screen (a confirmation over a sheet): only the newest one types.
+      const pads = document.querySelectorAll("[data-passcode-pad]");
+      if (pads.length > 1 && pads[pads.length - 1] !== root.current) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (/^\d$/.test(e.key)) {
@@ -83,7 +87,7 @@ export function PasscodePad({
   });
 
   return (
-    <div className="flex w-full flex-col items-center" data-testid={testId}>
+    <div ref={root} className="flex w-full flex-col items-center" data-testid={testId} data-passcode-pad>
       <div className="text-center text-[17px] font-semibold tracking-tight text-text">{title}</div>
       {hint && <div className="mt-1 max-w-[280px] text-center text-[13px] text-text-secondary">{hint}</div>}
       <motion.div

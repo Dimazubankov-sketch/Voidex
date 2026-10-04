@@ -9,8 +9,7 @@ import {
   RiMessage2Line,
   RiPhoneLine,
   RiSmartphoneLine,
-  RiTabletLine,
-} from "@remixicon/react";
+  RiTabletLine, RiLock2Line } from "@remixicon/react";
 import { isPasswordAcceptable, type MeDto, type SessionDto, type VerificationStartedDto } from "@voidex/shared";
 import { formatPhone, parsePhone, type CountryCode } from "@voidex/shared/phone";
 import { ApiError, api } from "@/lib/api";
@@ -55,6 +54,14 @@ export function SecuritySection({ navigate }: SectionProps) {
           right={<Badge tone={me.phoneVerifiedAt ? "success" : "warning"}>{me.phoneVerifiedAt ? t("common.verified") : t("common.notVerified")}</Badge>}
           chevron
           onClick={() => navigate("phone")}
+        />
+        <Row
+          icon={<RiLock2Line className="size-[18px]" />}
+          label={t("settings.faceIdPasscode")}
+          hint={t("settings.hint.lock")}
+          chevron
+          onClick={() => navigate("lock")}
+          testId="security-lock"
         />
       </Group>
       <Group title={t("settings.security.recovery")}>

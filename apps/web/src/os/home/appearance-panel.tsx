@@ -15,7 +15,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { Button, Spinner, Switch } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
-import { DEFAULT_SWATCH, prepareWallpaper, useWallpaperImage, wallpaperStyle } from "./appearance";
+import { DEFAULT_SWATCH, prepareWallpaper, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "./appearance";
 import { useWorkspaceLayout, updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 
@@ -45,7 +45,7 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
       <p className="text-[13px] text-text-secondary">{t("appearance.synced")}</p>
       {parts.includes("wallpaper") && (
         <>
-          <WallpaperPicker current={a.wallpaper} onPick={(wallpaper) => setAppearance({ wallpaper })} />
+          <WallpaperPicker current={a.wallpaper} onPick={(wallpaper) => wallpaper && setAppearance({ wallpaper })} />
           <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
             <Field label={t("appearance.glass")}>
               <Segmented
@@ -198,7 +198,7 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
   );
 }
 
-function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+export function Block({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
     <section>
       <h3 className="mb-1 text-[13px] font-medium uppercase tracking-wide text-text-tertiary">{title}</h3>
@@ -217,7 +217,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function Segmented<V extends string>({
+export function Segmented<V extends string>({
   value,
   options,
   onChange,
@@ -263,13 +263,34 @@ const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
   "wave-milk-gray-purple": "wallpaper.waveMilkGrayPurple",
 };
 
-function sameWallpaper(a: Wallpaper, b: Wallpaper) {
+function sameWallpaper(a: Wallpaper | null, b: Wallpaper | null) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function Swatch({ wallpaper, current, onPick, label, testId, children }: { wallpaper: Wallpaper; current: Wallpaper; onPick: (w: Wallpaper) => void; label: string; testId: string; children?: ReactNode }) {
-  const image = useWallpaperImage(wallpaper);
-  const style = wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data).style;
+function Swatch({
+  wallpaper,
+  current,
+  onPick,
+  label,
+  testId,
+  children,
+  slot = "desktop",
+  shows,
+}: {
+  /** What picking it stores (null: the lock screen follows the desktop). */
+  wallpaper: Wallpaper | null;
+  current: Wallpaper | null;
+  onPick: (w: Wallpaper | null) => void;
+  label: string;
+  testId: string;
+  children?: ReactNode;
+  slot?: WallpaperSlot;
+  /** What it looks like, when that differs from what it stores ("as on the desktop"). */
+  shows?: { wallpaper: Wallpaper; slot: WallpaperSlot };
+}) {
+  const look = shows?.wallpaper ?? wallpaper ?? ({ kind: "default" } as Wallpaper);
+  const image = useWallpaperImage(look, shows?.slot ?? slot);
+  const style = look.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(look, image.data).style;
   const active = sameWallpaper(wallpaper, current);
   return (
     <button
@@ -297,17 +318,38 @@ function Swatch({ wallpaper, current, onPick, label, testId, children }: { wallp
   );
 }
 
-function WallpaperPicker({ current, onPick }: { current: Wallpaper; onPick: (w: Wallpaper) => void }) {
+/**
+ * Wallpapers for the desktop or (Step 2.4) the lock screen: the same presets
+ * and an own image, each slot with its own image file. The lock screen can
+ * also simply follow the desktop.
+ */
+export function WallpaperPicker({
+  current,
+  onPick,
+  slot = "desktop",
+  title,
+  desktop,
+}: {
+  current: Wallpaper | null;
+  onPick: (w: Wallpaper | null) => void;
+  slot?: WallpaperSlot;
+  title?: string;
+  /** Lock slot: the desktop wallpaper (for the "as on the desktop" choice). */
+  desktop?: Wallpaper;
+}) {
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const hasImage = current.kind === "image";
+  const hasImage = current?.kind === "image";
+  const lock = slot === "lock";
+  const q = lock ? "?slot=lock" : "";
+  const tid = (id: string) => (lock ? `lock-${id}` : id);
 
   const upload = async (file: File) => {
     setBusy(true);
     try {
       const blob = await prepareWallpaper(file);
-      const r = await api.put<{ version: string }>("/api/account/wallpaper", blob, { headers: { "Content-Type": "application/octet-stream" } });
+      const r = await api.put<{ version: string }>(`/api/account/wallpaper${q}`, blob, { headers: { "Content-Type": "application/octet-stream" } });
       onPick({ kind: "image", version: r.version });
     } catch {
       toast({ title: t("appearance.imageFailed"), tone: "danger" });
@@ -317,32 +359,33 @@ function WallpaperPicker({ current, onPick }: { current: Wallpaper; onPick: (w: 
   };
 
   const removeImage = async () => {
-    onPick({ kind: "default" });
+    onPick(lock ? null : { kind: "default" });
     try {
-      await api.delete("/api/account/wallpaper");
+      await api.delete(`/api/account/wallpaper${q}`);
     } catch {
       /* the layout no longer points at it; a later upload replaces it anyway */
     }
   };
 
   return (
-    <Block title={t("appearance.wallpaper")}>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] justify-items-center gap-x-2 gap-y-3 pt-1" data-testid="wallpaper-presets">
-        <Swatch wallpaper={{ kind: "default" }} current={current} onPick={onPick} label={t("wallpaper.default")} testId="wallpaper-default" />
+    <Block title={title ?? t("appearance.wallpaper")}>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] justify-items-center gap-x-2 gap-y-3 pt-1" data-testid={tid("wallpaper-presets")}>
+        {lock && desktop && <Swatch wallpaper={null} current={current} onPick={onPick} label={t("lockSettings.asDesktop")} testId="lock-wallpaper-same" shows={{ wallpaper: desktop, slot: "desktop" }} />}
+        <Swatch wallpaper={{ kind: "default" }} current={current} onPick={onPick} label={t("wallpaper.default")} testId={tid("wallpaper-default")} />
         {WALLPAPER_PRESETS.map((id) => (
-          <Swatch key={id} wallpaper={{ kind: "preset", id }} current={current} onPick={onPick} label={t(WALLPAPER_LABEL[id])} testId={`wallpaper-preset-${id}`} />
+          <Swatch key={id} wallpaper={{ kind: "preset", id }} current={current} onPick={onPick} label={t(WALLPAPER_LABEL[id])} testId={tid(`wallpaper-preset-${id}`)} />
         ))}
       </div>
       <div>
         <div className="mb-2 text-[13px] text-text-secondary">{t("appearance.image")}</div>
         <div className="flex flex-wrap items-center gap-3">
-          {hasImage && <Swatch wallpaper={current} current={current} onPick={onPick} label={t("appearance.image")} testId="wallpaper-image" />}
-          <Button variant="secondary" size="sm" onClick={() => input.current?.click()} disabled={busy} data-testid="wallpaper-upload">
+          {hasImage && <Swatch wallpaper={current} current={current} onPick={onPick} label={t("appearance.image")} testId={tid("wallpaper-image")} slot={slot} />}
+          <Button variant="secondary" size="sm" onClick={() => input.current?.click()} disabled={busy} data-testid={tid("wallpaper-upload")}>
             {busy ? <Spinner size={16} /> : <RiImageAddLine className="size-4" />}
             {busy ? t("appearance.uploading") : t("appearance.upload")}
           </Button>
           {hasImage && (
-            <Button variant="ghost" size="sm" onClick={removeImage} data-testid="wallpaper-remove">
+            <Button variant="ghost" size="sm" onClick={removeImage} data-testid={tid("wallpaper-remove")}>
               <RiDeleteBinLine className="size-4" />
               {t("appearance.removeImage")}
             </Button>
@@ -354,7 +397,7 @@ function WallpaperPicker({ current, onPick }: { current: Wallpaper; onPick: (w: 
           type="file"
           accept="image/jpeg,image/png,image/webp"
           className="hidden"
-          data-testid="wallpaper-file"
+          data-testid={tid("wallpaper-file")}
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = "";
