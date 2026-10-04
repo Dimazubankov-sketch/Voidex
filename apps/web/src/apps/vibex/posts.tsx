@@ -115,6 +115,7 @@ function ActionButton({
   activeClass = "text-primary",
   testId,
   pressed,
+  wide,
 }: {
   icon: ReactNode;
   label: string;
@@ -125,6 +126,8 @@ function ActionButton({
   activeClass?: string;
   testId: string;
   pressed?: boolean;
+  /** The text button ("Share"): a bit more room than the icon + counter ones. */
+  wide?: boolean;
 }) {
   return (
     <button
@@ -133,12 +136,17 @@ function ActionButton({
       aria-pressed={pressed}
       aria-label={aria}
       title={aria}
-      className={cx("flex items-center justify-center gap-2 py-3 text-[14px] font-medium transition-colors hover:bg-surface-secondary active:bg-surface-hover", active ? activeClass : "text-text-secondary")}
+      className={cx(
+        "flex h-10 min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-xl px-1.5 text-[14px] font-medium leading-none transition-colors hover:bg-surface-secondary active:bg-surface-hover",
+        wide && "flex-[1.6]",
+        active ? activeClass : "text-text-secondary",
+      )}
       data-testid={testId}
     >
-      {icon}
-      {label && <span className="truncate">{label}</span>}
-      {!!count && <span className="text-[13px] tabular-nums text-text-tertiary">{count}</span>}
+      <span className="flex shrink-0">{icon}</span>
+      {/* Very narrow cards keep the icon only (the button keeps its accessible name). */}
+      {label && <span className={cx("min-w-0 truncate", wide && "@max-[260px]:hidden")}>{label}</span>}
+      {!!count && <span className="shrink-0 text-[13px] tabular-nums text-text-tertiary">{count}</span>}
     </button>
   );
 }
@@ -150,7 +158,9 @@ function PostActions({ post }: { post: VibexPostDto }) {
   const share = useVibex((s) => s.share);
   const comment = useVibex((s) => s.openComments);
   return (
-    <div className="grid grid-cols-3 border-t">
+    // Inside the card, under the divider: a padded row of fixed height, so the buttons (and
+    // their hover background) never leave the card, whatever the width or the label length.
+    <div className="@container flex h-[52px] items-center gap-1 border-t px-2" data-testid="post-actions">
       <ActionButton
         icon={
           <motion.span key={String(post.liked)} initial={post.liked ? { scale: 0.6 } : false} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 520, damping: 16 }} className="flex">
@@ -175,6 +185,8 @@ function PostActions({ post }: { post: VibexPostDto }) {
       <ActionButton
         icon={<RiShareForwardLine className="size-5" />}
         label={t("vibex.post.share")}
+        aria={t("vibex.post.share")}
+        wide
         count={post.reposts}
         active={post.reposted}
         onClick={() => share(post)}
