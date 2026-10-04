@@ -15,6 +15,7 @@
     "test:e2e": "pnpm --filter @voidex/web test:e2e",
     "db:migrate": "pnpm --filter @voidex/server db:migrate",
     "db:generate": "pnpm --filter @voidex/server db:generate",
+    "seed:vibex-demo": "pnpm --filter @voidex/server db:seed:dev",
     "start": "pnpm --filter @voidex/server start"
   },
   "pnpm": {
