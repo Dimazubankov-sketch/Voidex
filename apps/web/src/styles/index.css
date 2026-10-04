@@ -310,3 +310,15 @@ img[data-system-asset] { pointer-events: none; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Step 2.4 — lock screen, Face ID setup, confirmation: milky violet glass. */
+.vx-lock-card {
+  background: rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: blur(26px) saturate(1.35);
+  backdrop-filter: blur(26px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 24px 60px -24px rgba(86, 64, 196, 0.38);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .vx-lock-card { background: rgba(255, 255, 255, 0.92); }
+}

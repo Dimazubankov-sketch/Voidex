@@ -54,10 +54,11 @@ async function toError(res: Response): Promise<ApiError> {
 
 let inflight: Promise<SessionResponse> | null = null;
 
-async function doRefresh(): Promise<SessionResponse> {
+async function doRefresh(lock: boolean): Promise<SessionResponse> {
   const run = async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
-      const res = await rawRequest("POST", "/api/auth/refresh", {});
+      // { lock: true } on app start: with a passcode set, a new start opens on the lock screen.
+      const res = await rawRequest("POST", "/api/auth/refresh", lock ? { lock: true } : {});
       if (res.ok) return (await res.json()) as SessionResponse;
       const err = await toError(res);
       if (err.code === ErrorCode.RefreshRace) {
@@ -74,15 +75,19 @@ async function doRefresh(): Promise<SessionResponse> {
   return run();
 }
 
-/** Renews the session using the refresh cookie. Used on boot and on expiry. */
-export function refreshSession(): Promise<SessionResponse> {
-  inflight ??= doRefresh()
+/**
+ * Renews the session using the refresh cookie. Used on boot (`lock`: the app
+ * starts locked when a passcode is set) and on expiry.
+ */
+export function refreshSession(opts: { lock?: boolean } = {}): Promise<SessionResponse> {
+  inflight ??= doRefresh(!!opts.lock)
     .then((s) => {
       useSession.getState().setSession(s);
       return s;
     })
     .catch((err: ApiError) => {
-      if (err.code === ErrorCode.SessionExpired || err.code === ErrorCode.SessionRevoked || err.code === ErrorCode.Unauthenticated) {
+      if (err.code === ErrorCode.SessionLocked) useSession.getState().lockLocal();
+      else if (err.code === ErrorCode.SessionExpired || err.code === ErrorCode.SessionRevoked || err.code === ErrorCode.Unauthenticated) {
         const had = useSession.getState().status === "signedIn";
         useSession.getState().signOutLocal(err.code === ErrorCode.SessionRevoked ? "revoked" : had ? "expired" : null);
       }
@@ -112,10 +117,42 @@ export interface RequestOptions {
   /** Skip auth header (public endpoints). */
   anonymous?: boolean;
   headers?: Record<string, string>;
+  /** Don't ask for a code-password confirmation on `step_up_required` (the caller handles it). */
+  noStepUp?: boolean;
 }
 
+/**
+ * Asks the person to confirm with the code-password or Face ID (the step-up
+ * sheet registers itself here). Resolves true once confirmed, false if dismissed.
+ */
+let stepUpHandler: (() => Promise<boolean>) | null = null;
+export function setStepUpHandler(h: (() => Promise<boolean>) | null) {
+  stepUpHandler = h;
+}
+
+const lockedError = () => new ApiError(423, ErrorCode.SessionLocked, "Locked");
+
 export async function request<T>(method: string, path: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
+  // A locked session gets nothing from the server: don't even try (the lock screen is up).
+  if (!opts.anonymous && useSession.getState().locked) throw lockedError();
+  const res = await send(method, path, body, opts);
+  if (!res.ok) {
+    const err = await toError(res);
+    if (err.code === ErrorCode.SessionLocked) useSession.getState().lockLocal();
+    // Sensitive change: confirm (code-password / Face ID) and repeat once.
+    if (err.code === ErrorCode.StepUpRequired && !opts.noStepUp && stepUpHandler && (await stepUpHandler())) {
+      return request<T>(method, path, body, { ...opts, noStepUp: true });
+    }
+    throw err;
+  }
+  if (res.status === 204) return undefined as T;
+  const type = res.headers.get("content-type") ?? "";
+  return (type.includes("application/json") ? await res.json() : await res.blob()) as T;
+}
+
+async function send(method: string, path: string, body: unknown, opts: RequestOptions): Promise<Response> {
   const token = opts.anonymous ? null : await accessToken();
+  if (!opts.anonymous && !token && useSession.getState().locked) throw lockedError();
   let res = await rawRequest(method, path, body, token, opts.headers);
   if (res.status === 401 && token) {
     const err = await toError(res);
@@ -127,10 +164,7 @@ export async function request<T>(method: string, path: string, body?: unknown, o
     const fresh = await refreshSession();
     res = await rawRequest(method, path, body, fresh.accessToken, opts.headers);
   }
-  if (!res.ok) throw await toError(res);
-  if (res.status === 204) return undefined as T;
-  const type = res.headers.get("content-type") ?? "";
-  return (type.includes("application/json") ? await res.json() : await res.blob()) as T;
+  return res;
 }
 
 export const api = {
@@ -140,6 +174,24 @@ export const api = {
   patch: <T>(path: string, body: unknown = {}, opts?: RequestOptions) => request<T>("PATCH", path, body, opts),
   delete: <T>(path: string, opts?: RequestOptions) => request<T>("DELETE", path, undefined, opts),
 };
+
+/**
+ * POST without an access token: the lock-screen routes (/api/auth/lock/*)
+ * identify the session by its refresh cookie, because a locked session has no
+ * access token.
+ */
+export async function rawPost<T>(path: string, body: unknown = {}): Promise<T> {
+  const res = await rawRequest("POST", path, body);
+  if (!res.ok) throw await toError(res);
+  return (await res.json()) as T;
+}
+
+/** GET a file without an access token (the lock-screen wallpaper). */
+export async function rawGetBlob(path: string): Promise<Blob> {
+  const res = await rawRequest("GET", path);
+  if (!res.ok) throw await toError(res);
+  return res.blob();
+}
 
 export function qs(params: Record<string, string | number | undefined | null>) {
   const s = new URLSearchParams();

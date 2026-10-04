@@ -1,8 +1,10 @@
 import type { RefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { RiNotification3Line } from "@remixicon/react";
+import { RiLock2Line, RiNotification3Line } from "@remixicon/react";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
+import { useSecurityStatus } from "@/lib/security";
+import { lockNow } from "./lock/auto-lock";
 import { BrushButton, Clock, DoneButton, NineDots } from "./home/home-screen";
 import { useWorkspaceLayout } from "./home/layout";
 import { useHomeUi } from "./home/ui-store";
@@ -12,8 +14,8 @@ export { SYSTEM_BAR_H };
 
 /**
  * The PC System Bar (Step 2.3): time and date on the left, small utility
- * controls on the right — Notification Center (bell) and the app menu (nine
- * dots). In edit mode the brush and "Done" take their places. Background:
+ * controls on the right — Notification Center (bell), lock (with a
+ * code-password, Step 2.4) and the app menu (nine dots). In edit mode the brush and "Done" take their places. Background:
  * real glass or none (Settings → Desktop → "System bar background"). It sits
  * above every window; app windows never cover it.
  */
@@ -25,6 +27,7 @@ export function SystemBar({ launcherBtn, brushBtn }: { launcherBtn: RefObject<HT
   const unread = useUnreadNotifications();
   const ncOpen = useNotificationCenter((s) => s.open);
   const glass = layout.appearance.systemBar !== "off";
+  const canLock = !!useSecurityStatus().data?.passcodeEnabled;
 
   return (
     <header
@@ -60,6 +63,11 @@ export function SystemBar({ launcherBtn, brushBtn }: { launcherBtn: RefObject<HT
           </span>
         )}
       </BarButton>
+      {canLock && (
+        <BarButton label={t("lock.lockNow")} onClick={() => void lockNow()} testId="lock-now">
+          <RiLock2Line className="size-[16px]" />
+        </BarButton>
+      )}
       <BarButton
         ref={launcherBtn}
         label={t("os.launcher")}

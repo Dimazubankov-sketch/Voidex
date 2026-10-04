@@ -17,6 +17,7 @@ export const qk = {
   apps: ["apps"] as const,
   sessions: ["sessions"] as const,
   approvals: ["approvals"] as const,
+  security: ["security"] as const,
   consents: ["consents"] as const,
   systemInfo: ["system-info"] as const,
   legal: (key: string, lang: string) => ["legal", key, lang] as const,

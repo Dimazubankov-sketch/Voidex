@@ -126,6 +126,13 @@ function handle(event: ServerEvent) {
     case "approval.resolved":
       void queryClient.invalidateQueries({ queryKey: qk.approvals });
       break;
+    case "session.locked":
+      // This device was locked (another tab, inactivity, the server): the lock screen takes over.
+      if (event.sessionId === session.sessionId) session.lockLocal();
+      break;
+    case "security.updated":
+      void queryClient.invalidateQueries({ queryKey: qk.security });
+      break;
     case "session.revoked":
       if (event.sessionId === session.sessionId && !isSigningOut()) session.signOutLocal("revoked");
       break;
@@ -141,7 +148,10 @@ function handle(event: ServerEvent) {
  * refetches everything so nothing missed while offline stays stale.
  */
 export function useServerEvents() {
+  // Locked: no stream (the server refuses it); it reconnects right after unlocking.
+  const locked = useSession((s) => s.locked);
   useEffect(() => {
+    if (locked) return;
     let stopped = false;
     let controller: AbortController | null = null;
     let backoff = 1000;
@@ -153,7 +163,7 @@ export function useServerEvents() {
 
     (async () => {
       let first = true;
-      while (!stopped && useSession.getState().status === "signedIn") {
+      while (!stopped && useSession.getState().status === "signedIn" && !useSession.getState().locked) {
         const token = await accessToken();
         if (!token || stopped) break;
         controller = new AbortController();
@@ -165,6 +175,10 @@ export function useServerEvents() {
           if (res.status === 401) {
             await refreshSession().catch(() => undefined);
             continue;
+          }
+          if (res.status === 423) {
+            useSession.getState().lockLocal();
+            break;
           }
           if (!res.ok || !res.body) throw new Error(`events ${res.status}`);
           useConnection.setState({ connected: true });
@@ -211,5 +225,5 @@ export function useServerEvents() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, []);
+  }, [locked]);
 }

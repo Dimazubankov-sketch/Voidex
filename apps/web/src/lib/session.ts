@@ -6,7 +6,14 @@ import { rememberAccount } from "./known-accounts";
 export type SignedOutReason = "expired" | "revoked" | "signed_out" | null;
 
 interface SessionState {
-  status: "booting" | "signedOut" | "signedIn";
+  /** "locked": the app started on a locked session (no user loaded yet). */
+  status: "booting" | "signedOut" | "signedIn" | "locked";
+  /**
+   * The session is locked on the server (start with a passcode, inactivity,
+   * manual lock, another tab). The lock screen covers everything; no API
+   * works until it is unlocked.
+   */
+  locked: boolean;
   accessToken: string | null;
   accessTokenExpiresAt: number;
   sessionId: string | null;
@@ -15,6 +22,7 @@ interface SessionState {
   setSession: (s: SessionResponse) => void;
   setUser: (user: MeDto) => void;
   signOutLocal: (reason: SignedOutReason) => void;
+  lockLocal: () => void;
 }
 
 const HAD_SESSION = "vx.hadSession";
@@ -26,6 +34,7 @@ const HAD_SESSION = "vx.hadSession";
  */
 export const useSession = create<SessionState>((set) => ({
   status: "booting",
+  locked: false,
   accessToken: null,
   accessTokenExpiresAt: 0,
   sessionId: null,
@@ -41,6 +50,7 @@ export const useSession = create<SessionState>((set) => ({
     rememberAccount(s.user);
     set({
       status: "signedIn",
+      locked: false,
       accessToken: s.accessToken,
       accessTokenExpiresAt: new Date(s.accessTokenExpiresAt).getTime(),
       sessionId: s.sessionId,
@@ -58,8 +68,10 @@ export const useSession = create<SessionState>((set) => ({
     } catch {
       /* ignore */
     }
-    set({ status: "signedOut", accessToken: null, accessTokenExpiresAt: 0, sessionId: null, user: null, signedOutReason: reason });
+    set({ status: "signedOut", locked: false, accessToken: null, accessTokenExpiresAt: 0, sessionId: null, user: null, signedOutReason: reason });
   },
+  lockLocal: () =>
+    set((s) => (s.status === "signedOut" ? s : { locked: true, status: s.status === "signedIn" ? "signedIn" : "locked", accessToken: null, accessTokenExpiresAt: 0 })),
 }));
 
 export function deviceHadSession() {

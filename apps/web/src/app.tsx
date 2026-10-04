@@ -10,18 +10,22 @@ import { ToastViewport } from "@/ui/overlays";
 
 const AuthRoot = lazy(() => import("@/auth/auth-root").then((m) => ({ default: m.AuthRoot })));
 const Workspace = lazy(() => import("@/os/workspace").then((m) => ({ default: m.Workspace })));
+const LockScreen = lazy(() => import("@/os/lock/lock-screen").then((m) => ({ default: m.LockScreen })));
+const SecurityLayer = lazy(() => import("@/os/lock/security-layer").then((m) => ({ default: m.SecurityLayer })));
 
 /**
  * Boot: "VOIDEX doesn't forget me". If this device holds a valid refresh
- * cookie, the session is restored straight into the workspace; otherwise the
- * sign-in / create-account screens appear.
+ * cookie, the session is restored; with a code-password it opens on the lock
+ * screen first (Step 2.4). Otherwise the sign-in / create-account screens
+ * appear.
  */
 export function App() {
   const status = useSession((s) => s.status);
+  const locked = useSession((s) => s.locked);
   const userId = useSession((s) => s.user?.id);
 
   useEffect(() => {
-    refreshSession().catch(() => {
+    refreshSession({ lock: true }).catch(() => {
       if (useSession.getState().status === "booting") useSession.getState().signOutLocal(null);
     });
   }, []);
@@ -44,13 +48,24 @@ export function App() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
         >
-          <Suspense fallback={<BootScreen />}>
-            <Workspace />
+          {/* Locked: the workspace stays (open windows and drafts survive) but is hidden and inert under the lock screen. */}
+          <div className="h-dvh" style={locked ? { visibility: "hidden" } : undefined} inert={locked} aria-hidden={locked || undefined}>
+            <Suspense fallback={<BootScreen />}>
+              <Workspace />
+            </Suspense>
+          </div>
+          <Suspense fallback={null}>
+            <SecurityLayer />
           </Suspense>
         </motion.div>
       ) : (
         <AnimatePresence mode="wait">
           {status === "booting" && <BootScreen key="boot" />}
+          {status === "locked" && (
+            <Suspense key="locked" fallback={<BootScreen />}>
+              <LockScreen />
+            </Suspense>
+          )}
           {status === "signedOut" && (
             <motion.div key="auth" className="h-dvh" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25 }}>
               <Suspense fallback={<BootScreen />}>

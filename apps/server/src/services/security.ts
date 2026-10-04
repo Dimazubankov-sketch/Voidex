@@ -205,6 +205,7 @@ export class SecurityService {
       passcodeLockedUntil: row.passcodeLockedUntil && row.passcodeLockedUntil.getTime() > now ? row.passcodeLockedUntil.toISOString() : null,
       firstName: row.firstName,
       wallpaper: appearance ? (appearance.lockWallpaper ?? appearance.wallpaper) : null,
+      wallpaperSlot: appearance?.lockWallpaper ? "lock" : "desktop",
     };
   }
 

@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import type { MeDto, Preferences } from "@voidex/shared";
-import { api } from "./api";
+import { api, rawPost } from "./api";
 import { qk, queryClient } from "./query";
 import { useSession } from "./session";
 import { mergeServerUser } from "@/os/home/layout";
@@ -13,7 +13,9 @@ export const isSigningOut = () => signingOut;
 export async function signOut() {
   signingOut = true;
   try {
-    await api.post("/api/auth/logout");
+    // Locked: no access token — the refresh cookie identifies the session.
+    if (useSession.getState().locked || useSession.getState().status === "locked") await rawPost("/api/auth/logout").catch(() => undefined);
+    else await api.post("/api/auth/logout");
   } finally {
     useSession.getState().signOutLocal("signed_out");
     signingOut = false;

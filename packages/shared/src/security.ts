@@ -50,6 +50,8 @@ export interface LockStateDto {
   firstName: string;
   /** The lock-screen wallpaper (null: the same as the desktop's). */
   wallpaper: Wallpaper | null;
+  /** Where an image wallpaper comes from (GET /api/auth/lock/wallpaper?slot=…). */
+  wallpaperSlot: "lock" | "desktop";
 }
 
 export const SetPasscodeSchema = z.object({ passcode: PasscodeSchema });
