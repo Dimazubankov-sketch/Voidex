@@ -56,18 +56,22 @@ interface GridProps {
   renderItem: (item: LayoutItem, index: number) => ReactNode;
   renderWidget: (id: string, size: { w: number; h: number }) => ReactNode;
   testId?: string;
+  /** Step 2.5 (PC): columns that fit the free width; the grid never gets wider than its area. */
+  maxCols?: number;
 }
 
-export function HomeGrid({ layout, place, items, metrics: m, label, editing, sorted, minRows = 0, renderItem, renderWidget, testId }: GridProps) {
+export function HomeGrid({ layout, place, items, metrics: m, label, editing, sorted, minRows = 0, renderItem, renderWidget, testId, maxCols }: GridProps) {
   const id = gridId(place);
-  const cols = place.surface === "mobile" ? layout.mobile.columns : layout.desktop.columns;
+  const wanted = place.surface === "mobile" ? layout.mobile.columns : layout.desktop.columns;
+  const cols = Math.max(1, maxCols ? Math.min(wanted, maxCols) : wanted);
   const rowH = rowHeight(m, label);
   const target = useHomeUi((s) => (s.drag?.cell?.grid === id ? s.drag.cell : null));
   const container = place.surface === "mobile" ? String(place.page) : place.space;
   const widgets = layout.widgets.filter((w) => w.surface === place.surface && w.container === container && (WIDGET_TYPES as readonly string[]).includes(w.type));
 
   const placed: Map<string, PlacedCell> = useMemo(() => {
-    if (!sorted) return placementOf(layout, place);
+    // Fewer columns fit than chosen: items further right flow into the free cells (stored cells are kept).
+    if (!sorted) return placementOf(cols === wanted || place.surface === "mobile" ? layout : { ...layout, desktop: { ...layout.desktop, columns: cols } }, place);
     const blocks = widgets.map((w) => ({ key: widgetKey(w.id), ...WIDGET_CELLS[w.type as WidgetType] }));
     const cells = Object.fromEntries(widgets.flatMap((w) => {
       const all = place.surface === "mobile" ? layout.mobile.cells : layout.desktop.cells;

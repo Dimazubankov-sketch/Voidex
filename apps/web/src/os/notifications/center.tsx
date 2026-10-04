@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { RiCheckDoubleLine, RiCloseLine, RiDeleteBin6Line, RiNotification3Line } from "@remixicon/react";
 import { APP_REGISTRY, type NotificationDto } from "@voidex/shared";
@@ -292,19 +292,33 @@ function MobileCenter() {
   // 0 = hidden above the screen, 1 = fully open; the top-edge gesture drives it while pulling.
   const y = useTransform(ncPull, (p) => `${(p - 1) * 100}%`);
   const scrim = useTransform(ncPull, [0, 1], [0, 1]);
+  // Step 2.5: partial sheet or the whole screen. Down on the handle expands, up collapses (then closes).
+  const [full, setFull] = useState(false);
+  const stretch = useMotionValue(0);
+  // While the handle is pulled down the sheet grows with the finger.
+  const stretchHeight = useTransform(stretch, (v) => (v > 0 ? `calc(50dvh + ${v}px)` : ""));
 
   useEffect(() => {
     void animate(ncPull, open ? 1 : 0, { type: "spring", stiffness: 380, damping: 38 });
+    if (!open) setFull(false);
   }, [open]);
 
   const onPan = (_: unknown, info: PanInfo) => {
-    if (info.offset.y < 0) ncPull.set(Math.max(0, 1 + info.offset.y / (window.innerHeight * 0.8)));
+    if (info.offset.y < 0 && !full) ncPull.set(Math.max(0, 1 + info.offset.y / (window.innerHeight * 0.8)));
+    else if (info.offset.y > 0 && !full) stretch.set(Math.min(info.offset.y, window.innerHeight));
   };
   const onPanEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.y < -90 || info.velocity.y < -600) {
+    stretch.set(0);
+    const down = info.offset.y > 60 || info.velocity.y > 600;
+    const up = info.offset.y < -90 || info.velocity.y < -600;
+    if (down && !full) setFull(true);
+    else if (up && full) setFull(false);
+    else if (up) {
       setOpen(false);
       void animate(ncPull, 0, { type: "spring", stiffness: 380, damping: 38 });
-    } else void animate(ncPull, 1, { type: "spring", stiffness: 380, damping: 38 });
+      return;
+    }
+    void animate(ncPull, 1, { type: "spring", stiffness: 380, damping: 38 });
   };
 
   return (
@@ -316,9 +330,14 @@ function MobileCenter() {
         aria-modal="true"
         aria-labelledby="nc-title-m"
         tabIndex={-1}
-        className={cx("vx-glass absolute outline-none inset-x-0 top-0 flex max-h-[86dvh] min-h-[50dvh] flex-col rounded-b-[30px] border-t-0 pt-[var(--safe-top)]", open && "pointer-events-auto")}
-        style={{ y, visibility: undefined }}
+        className={cx(
+          "vx-glass absolute outline-none inset-x-0 top-0 flex flex-col border-t-0 pt-[var(--safe-top)] transition-[max-height,min-height,border-radius] duration-300 ease-out",
+          full ? "max-h-[100dvh] min-h-[100dvh] rounded-none pb-[var(--safe-bottom)]" : "max-h-[86dvh] min-h-[50dvh] rounded-b-[30px]",
+          open && "pointer-events-auto",
+        )}
+        style={{ y, minHeight: stretchHeight }}
         data-system-ui
+        data-full={full || undefined}
         data-testid={open ? "notification-center" : undefined}
       >
         <Body onClose={close} titleId="nc-title-m" />

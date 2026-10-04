@@ -483,6 +483,22 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
   const current = layout.desktop.spaces.find((s) => s.id === space) ?? layout.desktop.spaces[0]!;
   const cols = layout.desktop.columns;
   const manual = layout.desktop.sort === "manual";
+  // Step 2.5: the free area is the desktop minus the system bar, the dock zone and the margins;
+  // the grid uses at most the columns that fit it, re-measured on resize and dock size changes.
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const [fitCols, setFitCols] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!host) return;
+    const measure = () => {
+      const cs = getComputedStyle(host);
+      const w = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      setFitCols(Math.max(1, Math.floor((w + m.gapX) / (m.cell + m.gapX))));
+    };
+    const ro = new ResizeObserver(measure);
+    ro.observe(host);
+    measure();
+    return () => ro.disconnect();
+  }, [host, m.cell, m.gapX]);
 
   // The desktop this device was on was removed elsewhere: fall back to the first.
   useEffect(() => {
@@ -527,7 +543,7 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
           data-testid="desktop-space"
           data-space={layout.desktop.spaces.findIndex((s) => s.id === current.id) + 1}
         >
-          <div className="scroll-area absolute inset-0 px-8 pb-6 pt-[3vh]" data-home-free data-grid-host>
+          <div ref={setHost} className="scroll-area absolute inset-0 px-8 pb-6 pt-[3vh]" data-home-free data-grid-host data-fit-cols={fitCols}>
             {layout.desktop.view === "categories" ? (
               <>
                 <WidgetStrip layout={layout} surface="desktop" container={current.id} editing={editing} />
@@ -545,6 +561,7 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
                   sorted={!manual}
                   minRows={editing ? 4 : 0}
                   testId="desktop-grid"
+                  maxCols={fitCols}
                   renderItem={item}
                   renderWidget={(id, sz) => {
                     const w = layout.widgets.find((x) => x.id === id)!;

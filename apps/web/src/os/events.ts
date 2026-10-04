@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { toast } from "@/ui/overlays";
+import { playNotificationSound } from "@/lib/sound";
 import { visibleChats } from "@/apps/vibex/store";
 import { useNotesSync } from "@/apps/notes/sync";
 import { layoutEpoch, mergeServerUser } from "./home/layout";
@@ -18,26 +19,6 @@ export const useConnection = create<{ connected: boolean; online: boolean }>(() 
   connected: false,
   online: typeof navigator === "undefined" ? true : navigator.onLine,
 }));
-
-let chime: AudioContext | null = null;
-function playChime() {
-  try {
-    chime ??= new AudioContext();
-    const o = chime.createOscillator();
-    const g = chime.createGain();
-    o.type = "sine";
-    o.frequency.setValueAtTime(880, chime.currentTime);
-    o.frequency.exponentialRampToValueAtTime(1320, chime.currentTime + 0.12);
-    g.gain.setValueAtTime(0.0001, chime.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.12, chime.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, chime.currentTime + 0.35);
-    o.connect(g).connect(chime.destination);
-    o.start();
-    o.stop(chime.currentTime + 0.4);
-  } catch {
-    /* audio unavailable */
-  }
-}
 
 async function refreshMe() {
   const epoch = layoutEpoch();
@@ -68,7 +49,7 @@ function handle(event: ServerEvent) {
           duration: 6000,
         });
       }
-      if (prefs?.sound) playChime();
+      if (prefs?.sound) playNotificationSound();
       break;
     }
     case "vibex.message": {
@@ -88,7 +69,7 @@ function handle(event: ServerEvent) {
           duration: 6000,
         });
       }
-      if (prefs?.sound) playChime();
+      if (prefs?.sound) playNotificationSound();
       break;
     }
     case "vibex.message.deleted":
