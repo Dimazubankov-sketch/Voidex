@@ -213,7 +213,8 @@ test("calculator OCR: gallery photo → crop → local recognition → editable 
   test.setTimeout(180_000);
   const uploads: string[] = [];
   page.on("request", (r) => {
-    if (r.method() !== "GET" && !r.url().includes("/api/auth/")) uploads.push(r.url());
+    // Sign-up and its code-password setup aren't uploads; activity heartbeats carry no data.
+    if (r.method() !== "GET" && !/\/api\/(auth|security)\//.test(r.url())) uploads.push(r.url());
   });
   await signUpViaApi(page);
   await openApp(page, "calculator");
