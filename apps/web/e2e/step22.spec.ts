@@ -116,20 +116,19 @@ test("view: Grid ↔ Categories switched many times stays on the last choice (no
   test.skip(isMobile(page), "PC right-click");
   await signUpViaApi(page, "Вика", "Вид");
   await desktopMenu(page);
-  await page.getByTestId("menu-view").click();
-  const grid = page.getByTestId("menu-view-grid");
-  const cats = page.getByTestId("menu-view-categories");
+  // One tap toggles Grid ⇄ Categories (Step 2.4: no submenu).
+  const toggle = page.getByTestId("menu-view");
   // Quick back-and-forth: each click lands while the previous save / its echo is in flight.
   for (let i = 0; i < 4; i++) {
-    await cats.click();
+    await toggle.click();
     await expect(page.getByTestId("desktop-categories")).toBeVisible();
     await page.waitForTimeout(150 + i * 120);
-    await grid.click();
+    await toggle.click();
     await expect(page.getByTestId("desktop-grid")).toBeVisible();
     await page.waitForTimeout(150 + i * 120);
   }
-  await cats.click();
-  await expect(cats).toHaveAttribute("aria-checked", "true");
+  await toggle.click();
+  await expect(page.getByTestId("desktop-categories")).toBeVisible();
   // Let every save and every server echo arrive: the view must not move on its own.
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(250);
@@ -139,8 +138,8 @@ test("view: Grid ↔ Categories switched many times stays on the last choice (no
   await page.reload();
   await expect(page.getByTestId("desktop-categories")).toBeVisible();
   await desktopMenu(page);
-  await page.getByTestId("menu-view").click();
-  await page.getByTestId("menu-view-grid").click();
+  await page.getByTestId("menu-view").click(); // categories → grid
+  await expect(page.getByTestId("desktop-grid")).toBeVisible();
   await page.waitForTimeout(1200);
   await page.reload();
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
@@ -157,10 +156,9 @@ test("view race (slow network): our own save's echo arriving late never flips th
     await route.fulfill({ response: res });
   });
   await desktopMenu(page);
-  await page.getByTestId("menu-view").click();
-  await page.getByTestId("menu-view-categories").click(); // saved ~350 ms later → echo → slow refetch (categories)
+  await page.getByTestId("menu-view").click(); // → categories; saved ~350 ms later → echo → slow refetch (categories)
   await page.waitForTimeout(600);
-  await page.getByTestId("menu-view-grid").click(); // the user changed their mind before the echo arrived
+  await page.getByTestId("menu-view").click(); // → grid: the user changed their mind before the echo arrived
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
   // The late "categories" copy lands during this window: the view must stay a grid.
   // (instant checks, not auto-retrying ones: a short flip must fail the test)

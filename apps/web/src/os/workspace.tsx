@@ -11,6 +11,7 @@ import { AppSwitcher } from "./app-switcher";
 import { DesktopDock, dockZone } from "./home/dock";
 import { useWorkspaceLayout } from "./home/layout";
 import { HomeScreen } from "./home/home-screen";
+import { WindowOverview } from "./home/window-overview";
 import { WindowFrame } from "./window-frame";
 import { SYSTEM_BAR_H } from "./metrics";
 import { NotificationCenter } from "./notifications/center";
@@ -101,6 +102,7 @@ export function Workspace() {
         {hydrated && wm.order.map((id) => wm.windows[id] && <WindowFrame key={id} win={wm.windows[id]!} launcherRect={() => rectOf(launcherBtn.current)} />)}
       </div>
       {ff === "desktop" && <DesktopDock />}
+      {ff === "desktop" && <WindowOverview />}
       {ff === "mobile" && <AppSwitcher />}
       <NotificationCenter />
       <OfflineBanner />

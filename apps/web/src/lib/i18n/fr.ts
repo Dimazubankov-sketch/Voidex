@@ -834,4 +834,9 @@ export const fr: Record<MessageKey, string> = {
   "lockSettings.autoNever": "Seulement au démarrage",
   "lockSettings.minutes": "{n} min",
   "lockSettings.lockNow": "Verrouiller maintenant",
+  "overview.title": "Apps ouvertes",
+  "overview.empty": "Aucune app ouverte",
+  "overview.minimized": "Réduite",
+  "overview.maximized": "Agrandie",
+  "overview.open": "Ouverte",
 };

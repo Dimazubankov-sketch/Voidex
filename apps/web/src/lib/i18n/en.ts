@@ -865,6 +865,11 @@ export const en = {
   "lockSettings.autoNever": "Only at start",
   "lockSettings.minutes": "{n} min",
   "lockSettings.lockNow": "Lock now",
+  "overview.title": "Open apps",
+  "overview.empty": "No open apps",
+  "overview.minimized": "Minimized",
+  "overview.maximized": "Full screen",
+  "overview.open": "Open",
 } as const;
 
 export type MessageKey = keyof typeof en;

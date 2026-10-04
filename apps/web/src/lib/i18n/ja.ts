@@ -834,4 +834,9 @@ export const ja: Record<MessageKey, string> = {
   "lockSettings.autoNever": "起動時のみ",
   "lockSettings.minutes": "{n} 分",
   "lockSettings.lockNow": "今すぐロック",
+  "overview.title": "開いているアプリ",
+  "overview.empty": "開いているアプリはありません",
+  "overview.minimized": "最小化",
+  "overview.maximized": "最大化",
+  "overview.open": "表示中",
 };

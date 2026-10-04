@@ -834,4 +834,9 @@ export const tr: Record<MessageKey, string> = {
   "lockSettings.autoNever": "Yalnızca açılışta",
   "lockSettings.minutes": "{n} dk",
   "lockSettings.lockNow": "Şimdi kilitle",
+  "overview.title": "Açık uygulamalar",
+  "overview.empty": "Açık uygulama yok",
+  "overview.minimized": "Simge durumunda",
+  "overview.maximized": "Tam ekran",
+  "overview.open": "Açık",
 };

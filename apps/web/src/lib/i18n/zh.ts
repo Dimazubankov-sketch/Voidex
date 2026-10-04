@@ -834,4 +834,9 @@ export const zh: Record<MessageKey, string> = {
   "lockSettings.autoNever": "仅启动时",
   "lockSettings.minutes": "{n} 分钟",
   "lockSettings.lockNow": "立即锁定",
+  "overview.title": "已打开的应用",
+  "overview.empty": "没有已打开的应用",
+  "overview.minimized": "已最小化",
+  "overview.maximized": "已最大化",
+  "overview.open": "已打开",
 };

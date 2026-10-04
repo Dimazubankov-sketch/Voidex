@@ -849,4 +849,9 @@ export const ru: Record<MessageKey, string> = {
   "lockSettings.autoNever": "Только при запуске",
   "lockSettings.minutes": "{n} мин",
   "lockSettings.lockNow": "Заблокировать сейчас",
+  "overview.title": "Открытые приложения",
+  "overview.empty": "Нет открытых приложений",
+  "overview.minimized": "Свёрнуто",
+  "overview.maximized": "Развёрнуто",
+  "overview.open": "Открыто",
 };

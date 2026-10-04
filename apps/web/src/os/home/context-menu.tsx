@@ -227,10 +227,12 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         const list: Entry[] = [
           { id: "appearance", label: t("home.wallpaper"), icon: <RiImageLine />, onSelect: () => ui().setAppearanceOpen(true) },
           {
+            // One tap toggles Grid ⇄ Categories (no submenu), like the phone's brush row; the menu stays open.
             id: "view",
-            label: t("home.view"),
+            label: `${t("home.view")}: ${currentView(layout, ff) === "grid" ? t("home.viewGrid") : t("home.viewCategories")}`,
             icon: currentView(layout, ff) === "grid" ? <RiLayoutGridLine /> : <RiListUnordered />,
-            sub: "view",
+            keepOpen: true,
+            onSelect: () => setView(ff, currentView(layout, ff) === "grid" ? "categories" : "grid"),
           },
           { id: "widgets", label: t("widgets.title"), icon: <RiApps2Fill />, onSelect: () => ui().setWidgetsOpen(true) },
           { id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) },

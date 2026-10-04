@@ -259,16 +259,16 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await page.getByTestId("menu-minimize").click();
   await goSpace(1);
 
-  // Right click on free space → View → Categories: applied at once, the menu stays.
+  // Right click on free space → View: one tap toggles Grid ⇄ Categories (no submenu), the menu stays.
   const grid = (await page.getByTestId("desktop-grid").boundingBox())!;
   await page.mouse.click(grid.x + 20, grid.y + grid.height + 120, { button: "right" });
   for (const id of ["appearance", "view", "widgets", "edit"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
   await page.getByTestId("menu-view").click();
-  await page.getByTestId("menu-view-categories").click();
   await expect(page.getByTestId("desktop-categories")).toBeVisible();
   await expect(page.getByTestId("category-folders")).toBeVisible();
-  await expect(page.getByTestId("menu-view-categories")).toHaveAttribute("aria-checked", "true");
-  await page.getByTestId("menu-view-grid").click();
+  await expect(page.getByTestId("menu-view-grid")).toHaveCount(0);
+  await expect(page.getByTestId("menu-view")).toContainText("По категориям");
+  await page.getByTestId("menu-view").click();
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.mouse.click(5, 5);

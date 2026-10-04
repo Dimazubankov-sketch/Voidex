@@ -834,4 +834,9 @@ export const ko: Record<MessageKey, string> = {
   "lockSettings.autoNever": "시작할 때만",
   "lockSettings.minutes": "{n}분",
   "lockSettings.lockNow": "지금 잠금",
+  "overview.title": "열린 앱",
+  "overview.empty": "열린 앱 없음",
+  "overview.minimized": "최소화됨",
+  "overview.maximized": "최대화됨",
+  "overview.open": "열림",
 };

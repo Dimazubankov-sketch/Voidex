@@ -1,6 +1,7 @@
 import { RiAddLine, RiCheckLine } from "@remixicon/react";
 import { DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
+import { TrimmedLogo } from "@/brand/brand";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { useWM } from "../window-manager";
@@ -14,21 +15,13 @@ import { useHomeUi } from "./ui-store";
  * (switch, add). Phone: the home-screen pages.
  */
 
-/** Glyph of the Desktops system app: two layered screens. */
+/**
+ * Glyph of the Desktops system app (Step 2.4): the two glass cards from the
+ * delivered artwork, cut out without redrawing — shown through TrimmedLogo
+ * like every other system icon, so it fills the same box (52% of the tile).
+ */
 export function DesktopsGlyph({ className = "size-[62%]" }: { className?: string }) {
-  return (
-    <svg viewBox="5 6 38 38" className={className} aria-hidden data-system-ui>
-      <defs>
-        <linearGradient id="vx-desk-a" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#9a8cff" />
-          <stop offset="1" stopColor="#6c5cff" />
-        </linearGradient>
-      </defs>
-      <rect x="13" y="7" width="29" height="22" rx="6" fill="#c9c2ff" />
-      <rect x="6" y="15" width="29" height="22" rx="6" fill="url(#vx-desk-a)" />
-      <rect x="12" y="40" width="17" height="3" rx="1.5" fill="#b9b0ff" />
-    </svg>
-  );
+  return <TrimmedLogo src="/brand/app-desktops.png" className={className} />;
 }
 
 interface Entry {

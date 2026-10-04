@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useMotionValue, useSpring, useTransform, type 
 import { pinToDock, unpinFromDock, type AppId, type DockScale, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
-import { AppTile, GLYPH_BOX } from "@/brand/brand";
+import { AppTile } from "@/brand/brand";
 import { useWM } from "../window-manager";
 import { appLabel, openApp } from "./actions";
 import { DesktopSearchBar } from "./search";
@@ -253,7 +253,7 @@ function DockApp({ id, layout, mouseX, tile }: { id: AppId; layout: WorkspaceLay
   );
 }
 
-/** The "Desktops" system item: hover (or click) for the desktops. */
+/** The "Desktops" system item: hover (or click) for the desktops; double click for the overview of open apps. */
 function DesktopsItem({ layout, mouseX, tile }: { layout: WorkspaceLayout; mouseX: MotionValue<number>; tile: number }) {
   const t = useT();
   const ref = useRef<HTMLButtonElement>(null);
@@ -279,6 +279,12 @@ function DesktopsItem({ layout, mouseX, tile }: { layout: WorkspaceLayout; mouse
         className="relative flex flex-col items-center outline-none"
         style={{ width: tile }}
         onClick={() => setOpen((o) => !o)}
+        // Double click: the overview of every open app on every desktop (single click / hover unchanged).
+        onDoubleClick={() => {
+          window.clearTimeout(openTimer.current);
+          setOpen(false);
+          useWM.getState().setSwitcher(true);
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -291,7 +297,8 @@ function DesktopsItem({ layout, mouseX, tile }: { layout: WorkspaceLayout; mouse
       >
         <motion.span className="block" style={{ width: tile, height: tile, scale, originY: 1 }}>
           <AppTile size={tile} className="!shadow-[0_2px_8px_rgba(20,20,40,0.12)]">
-            <span className="flex items-center justify-center" style={{ width: GLYPH_BOX, height: GLYPH_BOX }}>
+            {/* A wide mark: a slightly larger box gives it the same optical weight as the square app logos. */}
+            <span className="flex items-center justify-center" style={{ width: "62%", height: "62%" }}>
               <DesktopsGlyph className="size-full" />
             </span>
           </AppTile>

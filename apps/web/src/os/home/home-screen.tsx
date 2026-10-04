@@ -21,6 +21,7 @@ import { Launcher } from "./launcher";
 import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
+import { DesktopsGlyph } from "./spaces";
 import { useHomeUi } from "./ui-store";
 import { GridWidget, WidgetStrip, WidgetsPanel } from "./widgets";
 import { SYSTEM_BAR_H } from "../metrics";
@@ -260,7 +261,9 @@ function MobileSwitcherButton() {
       className="vx-glass pressable absolute bottom-3 left-1/2 z-10 flex size-[54px] -translate-x-1/2 items-center justify-center rounded-full"
       data-testid="mobile-switcher"
     >
-      <SwitcherGlyph />
+      <span className="block size-[30px]">
+        <DesktopsGlyph className="size-full" />
+      </span>
       {count > 0 && (
         <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white" data-testid="mobile-switcher-count">
           {count}
@@ -270,15 +273,6 @@ function MobileSwitcherButton() {
   );
 }
 
-/** Two stacked cards — "open apps". */
-function SwitcherGlyph() {
-  return (
-    <svg viewBox="0 0 28 28" className="size-7" aria-hidden data-system-ui>
-      <rect x="9" y="4" width="14" height="17" rx="4" fill="#c9c2ff" />
-      <rect x="5" y="8" width="14" height="17" rx="4" fill="#7a6bff" />
-    </svg>
-  );
-}
 
 /** The brush (edit mode): opens Wallpaper · View · Widgets. */
 export const BrushButton = ({ ref }: { ref: RefObject<HTMLButtonElement | null> }) => {
