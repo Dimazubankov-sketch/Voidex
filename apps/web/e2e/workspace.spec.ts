@@ -1,5 +1,5 @@
 import { expect, test, type CDPSession, type Locator, type Page } from "@playwright/test";
-import { signUpViaApi } from "./helpers";
+import { signUpViaApi, reloadUnlocked } from "./helpers";
 
 const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) < 900;
 
@@ -175,7 +175,7 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
 
   // Everything comes back from the server after a reload.
   await page.waitForTimeout(600); // debounced save
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("workspace")).toBeVisible();
   await expect(folder).toHaveCount(1);
   await expect(folder).toHaveAccessibleName("Работа");
@@ -284,7 +284,7 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
 
   // Saved on the server: reload keeps folder, name and the second desktop.
   await page.waitForTimeout(600);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(folder).toHaveAccessibleName("Главное");
   await page.getByTestId("dock-desktops").click();
   await expect(page.getByTestId("dock-space-2")).toBeVisible();
@@ -439,7 +439,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.getByTestId("menu-pin").click();
   await expect(page.getByTestId("dock-app-settings")).toBeVisible();
   await page.waitForTimeout(600);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("dock-app-settings")).toBeVisible();
   expect(await dockOrder()).toEqual(["settings"]);
 });
@@ -468,6 +468,6 @@ test("phone: long press → brush → View toggles Grid / Categories in one tap,
   await page.getByTestId("app-mail").click(); // apps still open from the categories view
   await expect(page.locator('[data-testid="window-mail"][data-state="open"]')).toBeVisible();
   await page.waitForTimeout(600);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("home-categories")).toBeVisible();
 });

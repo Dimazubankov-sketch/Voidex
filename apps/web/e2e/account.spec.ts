@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { PASSWORD, devCode, newPage, next, openApp, signUpViaApi, signUpViaUi } from "./helpers";
+import { PASSWORD, devCode, newPage, next, openApp, signUpViaApi, signUpViaUi, reloadUnlocked } from "./helpers";
 
 test("new user: sign up, see data in Settings, edit, sign out, sign back in, session restores", async ({ page }) => {
   const { address } = await signUpViaUi(page);
 
   // "VOIDEX doesn't forget me": reload restores the session straight into the workspace.
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("workspace")).toBeVisible();
 
   await openApp(page, "settings");

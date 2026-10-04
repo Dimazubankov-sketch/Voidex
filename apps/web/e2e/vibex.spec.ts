@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { PASSWORD, newPage, openApp, signUpViaApi, uniq, uniquePhoneDigits } from "./helpers";
+import { PASSWORD, newPage, openApp, signUpViaApi, uniq, uniquePhoneDigits, reloadUnlocked } from "./helpers";
 
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf00000301010036a2c3a90000000049454e44ae426082", "hex");
 
@@ -113,7 +113,7 @@ test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a ch
   await expect(bPage.getByTestId("share-sheet")).toHaveCount(0);
 
   // A sees B's repost in the feed with the original inside.
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("workspace")).toBeVisible();
   await openVibex(page);
   const repost = page.locator("[data-testid=post-card][data-kind=repost]").filter({ hasText: b.address });
@@ -215,7 +215,7 @@ test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regu
   await expect
     .poll(async () => (await call(request, a.token, "GET", "/api/vibex/chats")).filter((c: { pinnedPosition: number | null }) => c.pinnedPosition !== null).map((c: { id: string }) => c.id))
     .toEqual([chats[2], chats[0], chats[1]]);
-  await page.reload();
+  await reloadUnlocked(page);
   await openVibex(page);
   await nav(page, "chats");
   expect(await order()).toEqual([chats[2], chats[0], chats[1]]);

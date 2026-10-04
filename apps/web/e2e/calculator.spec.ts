@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { addWidget, normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
 import { fileURLToPath } from "node:url";
-import { openApp, signUpViaApi } from "./helpers";
+import { openApp, signUpViaApi, reloadUnlocked } from "./helpers";
 
 /**
  * Step 2.3: the Calculator (packages/calculator) as a VOIDEX system app —
@@ -170,7 +170,7 @@ test("calculator widget: a tap on its title opens the full Calculator app", asyn
   let l = normalizeLayout(me.body.preferences.workspace.layout ?? null, ["settings", "mail", "vibex", "calculator"]);
   l = addWidget(l, "calculator", isMobile(page) ? { surface: "mobile", page: 0 } : { surface: "desktop", space: l.desktop.spaces[0]!.id }, "w_calcopen1");
   expect((await api(page, "PATCH", "/api/preferences", { workspace: { layout: l } })).status).toBe(200);
-  await page.reload();
+  await reloadUnlocked(page);
   const w = page.getByTestId("widget-calculator");
   await expect(w).toBeVisible();
   await w.getByTestId("calc-widget-open").click();

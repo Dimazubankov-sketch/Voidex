@@ -1,6 +1,35 @@
 import { expect, type Browser, type Page } from "@playwright/test";
 
 export const PASSWORD = "Violet-Orbit-42";
+/** The code-password every e2e account creates (Step 2.4: required for new accounts). */
+export const PASSCODE = "135790";
+
+/** The lock screen is up (app start with a code-password, manual lock): unlock it with the code-password. */
+export async function unlock(page: Page, code = PASSCODE) {
+  await expect(page.getByTestId("lock-screen")).toBeVisible();
+  await expect(page.getByTestId("passcode-pad")).toBeVisible();
+  await page.keyboard.type(code);
+  await expect(page.getByTestId("lock-screen")).toHaveCount(0);
+}
+
+/** Reload = a new app start: with a code-password VOIDEX opens on the lock screen first. */
+export async function reloadUnlocked(page: Page) {
+  await page.reload();
+  await expect(page.getByTestId("lock-screen").or(page.getByTestId("workspace")).first()).toBeVisible();
+  if (await page.getByTestId("lock-screen").count()) await unlock(page);
+  await expect(page.getByTestId("workspace")).toBeVisible();
+}
+
+/** First setup after registration: create the code-password (twice), skip Face ID. */
+export async function completeSecuritySetup(page: Page, code = PASSCODE) {
+  await expect(page.getByTestId("security-setup")).toBeVisible();
+  await expect(page.getByTestId("setup-pad-create")).toBeVisible();
+  await page.keyboard.type(code);
+  await expect(page.getByTestId("setup-pad-confirm")).toBeVisible();
+  await page.keyboard.type(code);
+  await page.getByTestId("face-setup-later").click();
+  await expect(page.getByTestId("security-setup")).toHaveCount(0);
+}
 let seq = 0;
 export function uniq(prefix = "e") {
   seq += 1;
@@ -63,11 +92,13 @@ export async function signUpViaUi(page: Page, opts: { first?: string; last?: str
   await next(page);
   await page.getByTestId("enter-workspace").click();
   await expect(page.getByTestId("workspace")).toBeVisible();
+  // Step 2.4: the code-password is created before the desktop is usable.
+  await completeSecuritySetup(page);
   return { username, address: `${username}@voidops.ru` };
 }
 
 /** Fast sign-up through the API (still real SMS verification via the dev provider). */
-export async function signUpViaApi(page: Page, first = "Борис", last = "Орлов") {
+export async function signUpViaApi(page: Page, first = "Борис", last = "Орлов", opts: { passcode?: boolean } = {}) {
   const username = uniq("a");
   const phone = "+7" + uniquePhoneDigits();
   await page.goto("/");
@@ -83,8 +114,19 @@ export async function signUpViaApi(page: Page, first = "Борис", last = "О�
     { first, last, username, phone },
   );
   expect(res.user).toBeTruthy();
-  await page.reload();
-  await expect(page.getByTestId("workspace")).toBeVisible();
+  if (opts.passcode === false) {
+    // Leave the first-setup screen to the test.
+    await page.reload();
+    return { username, address: `${username}@voidops.ru`, id: res.user.id as string, token: res.accessToken as string };
+  }
+  // The required code-password, set through the API like the setup screen does.
+  const set = await page.evaluate(
+    async ({ token, passcode }) =>
+      (await fetch("/api/security/passcode", { method: "POST", headers: { "Content-Type": "application/json", "X-Voidex-Client": "web", Authorization: `Bearer ${token}` }, body: JSON.stringify({ passcode }) })).status,
+    { token: res.accessToken as string, passcode: PASSCODE },
+  );
+  expect(set).toBe(200);
+  await reloadUnlocked(page);
   return { username, address: `${username}@voidops.ru`, id: res.user.id as string, token: res.accessToken as string };
 }
 

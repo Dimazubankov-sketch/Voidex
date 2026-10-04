@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { newPage, openApp, signUpViaApi } from "./helpers";
+import { newPage, openApp, signUpViaApi, reloadUnlocked } from "./helpers";
 
 /**
  * Step 2.3: one VOIDEX identity for every app, the Notification Center (phone
@@ -83,7 +83,7 @@ test("phone: a pull from the top edge opens the Notification Center (home and in
   test.skip(!isMobile(page), "phone gesture");
   await signUpViaApi(page);
   await api(page, "POST", "/api/notifications/dev/system-update", { title: "VOIDEX 2.3", body: "Что нового", version: "2.3" });
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("app-mail")).toBeVisible();
 
   // Normal pull-down on the icons → search (not notifications).
@@ -181,7 +181,7 @@ test("PC grid: drop on an empty cell takes it, on an occupied one swaps; positio
   // Saved to the account (not only on screen).
   await expect.poll(async () => JSON.stringify((await layoutOf(page)).desktop.cells["app:mail"])).toBe(JSON.stringify({ c: 1, r: 0 }));
 
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("app-mail")).toBeVisible();
   expect(await cellOf(page, "vibex")).toBe("4,1");
   expect(await cellOf(page, "mail")).toBe("1,0");
@@ -199,7 +199,7 @@ test("phone: brush → View toggles in one tap; the Calculator widget works; the
   // A stored Step 2.2 "Workspaces" widget is dropped, no broken placeholder.
   const l0 = await layoutOf(page);
   await api(page, "PATCH", "/api/preferences", { workspace: { layout: { ...l0, widgets: [{ id: "w_legacy01", type: "desktops", surface: "mobile", container: "0", x: 0, y: 0 }] } } });
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("app-mail")).toBeVisible();
   await expect(page.locator("[data-widget]")).toHaveCount(0);
   expect((await layoutOf(page)).widgets).toEqual([]);
@@ -249,7 +249,7 @@ test("phone: brush → View toggles in one tap; the Calculator widget works; the
   // The layout is saved to the account shortly after the drop: reload only once the server has it.
   const [c, r] = kept!.split(",").map(Number);
   await expect.poll(async () => (await layoutOf(page)).mobile.cells["app:vibex"] ?? null).toEqual({ c, r });
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("app-vibex")).toBeVisible();
   expect(await cellOf(page, "vibex")).toBe(kept);
 });
@@ -261,7 +261,7 @@ test("app names on / off from Settings → Desktop (icons only), synced to the a
   await page.getByTestId("settings-nav-desktop").click();
   await page.getByTestId("show-labels").getByRole("switch").click();
   await expect.poll(async () => (await layoutOf(page)).appearance.showLabels).toBe(false);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("app-mail")).toBeVisible();
   await expect(page.getByTestId("home-label")).toHaveCount(0);
   // The icon keeps its accessible name; search still shows names.

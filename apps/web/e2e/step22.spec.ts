@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { signUpViaApi } from "./helpers";
+import { signUpViaApi, reloadUnlocked } from "./helpers";
 
 /** Step 2.2 regressions: dock, view switching, window geometry, dock vs windows, phone brush / widgets. */
 
@@ -108,7 +108,7 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await expect(page.getByTestId("app-vibex")).toBeVisible();
 
   await page.waitForTimeout(600);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator"]);
 });
 
@@ -135,13 +135,13 @@ test("view: Grid ↔ Categories switched many times stays on the last choice (no
     expect(await page.getByTestId("desktop-grid").count()).toBe(0);
   }
   await page.keyboard.press("Escape");
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("desktop-categories")).toBeVisible();
   await desktopMenu(page);
   await page.getByTestId("menu-view").click(); // categories → grid
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
   await page.waitForTimeout(1200);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
 });
 
@@ -167,7 +167,7 @@ test("view race (slow network): our own save's echo arriving late never flips th
     expect(await page.getByTestId("desktop-categories").count()).toBe(0);
   }
   await page.unroute("**/api/me");
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("desktop-grid")).toBeVisible();
 });
 
@@ -257,7 +257,7 @@ test("phone: long press → brush → Widgets: add the Calculator widget; round 
 
   // Saved with the account.
   await page.waitForTimeout(600);
-  await page.reload();
+  await reloadUnlocked(page);
   await expect(page.getByTestId("home-page-0").getByTestId("widget-calculator")).toBeVisible();
 
   // Inside an app the [...] menu offers "Minimize" (not "Workspace"); the round button is not there.

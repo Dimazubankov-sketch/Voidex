@@ -195,3 +195,26 @@ Migration `0005_vibex_social.sql` (additive): `vibex_profiles`, `vibex_comments`
   - Idempotent: each block runs once (new accounts, a marker post / message);
     re-running adds nothing. An unknown address is reported, not created.
     Video posts are not seeded (no sample video is generated).
+
+## Step 2.4 — group chats
+
+- **Pencil button** on the chat list (a round button, like the feed's "+"):
+  "New chat". Pick one person → a direct chat, the same as before. Pick
+  several (up to 49) → name the group (required, ≤ 64 characters), add an
+  optional picture (JPEG / PNG / WebP, a Vibex file of purpose `group`,
+  readable by members only), then "Начать чат".
+- Server: conversation kind `group` with `title`, `avatar_file_id`,
+  `created_by`; member `role` owner / member. `POST /api/vibex/groups`,
+  `PATCH /api/vibex/groups/:id` (creator only: name, picture),
+  `POST /api/vibex/groups/:id/leave` (the creator's role passes on; the last
+  one out removes the group). Adding someone respects their "who can message
+  me" setting (403 with the person's id). `VibexChatDto.peer` is `null` for
+  groups; `group` carries title, picture, members and my role.
+- In the chat: the group's picture or initials, "Участники: N", the sender's
+  name above the first bubble of a run, and a group sheet (members, rename and
+  picture for the creator, leave). No calls in groups.
+- Notifications: `vibex.group` ("Добавил(а) вас в группу") when added; group
+  messages show the group name and "Sender: text".
+- Fix: the phone tab bar (and the chat / mail composers) added the iPhone
+  safe area a second time inside a window that already keeps it below the
+  app. The tab bar was squeezed, and its icons crossed the divider.

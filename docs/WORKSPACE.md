@@ -198,3 +198,24 @@ purpose with its own quota).
   calculator (`shared/mini-calc.ts`, + − × ÷ with precedence, %, ±, ⌫,
   division by zero → "Error"); its title opens the Calculator app (docs/CALCULATOR.md).
   The widget itself loads nothing heavy (no KaTeX, mathjs or OCR).
+
+## Step 2.4
+
+- **PC right-click → View** toggles Grid ⇄ Categories in one tap (no
+  submenu), like the phone's brush row; the menu stays open.
+- **Double click on the dock's Desktops item** opens the overview of every
+  open app on every desktop, grouped by desktop. A card brings the window
+  forward on its desktop; × closes the app; Esc or a click outside closes the
+  overview. A single click or hover still shows the desktops. The cards show
+  the app, not a live picture of the window.
+- **New Desktops icon**: the two glass cards from the delivered artwork, cut
+  out without redrawing (`public/brand/app-desktops.png`). It is used on the
+  PC dock (in a slightly larger box so the wide mark weighs the same as the
+  square logos) and on the phone's round button.
+- **Lock screen wallpaper** (`appearance.lockWallpaper`, null = as on the
+  desktop) with its own image slot (`PUT /api/account/wallpaper?slot=lock`).
+  Set in Settings → "Экран блокировки и обои". See docs/LOCK_AND_FACE_ID.md.
+- **Settings** redesign: brand line, large title, the profile card, and
+  section cards with a line of description ("Приложение", "Безопасность и
+  конфиденциальность"). The profile page has personal and account sections
+  plus sign-out.

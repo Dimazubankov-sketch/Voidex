@@ -56,6 +56,7 @@ All are read in `apps/server/src/config.ts`. Production values live in `/opt/voi
 | `AUTH_TOKEN_PEPPER` | random hex (96) | HMAC for one-time codes, challenge & recovery secrets |
 | `MAIL_DOMAIN` | `voidops.ru` | addresses `name@voidops.ru` |
 | `SMS_PROVIDER` | `otpcom` | chosen per release by the deploy script, see "SMS" below |
+| `WEBAUTHN_RP_ID` | unset (default `voidex.su`) | Face ID (WebAuthn) relying party; origin `https://<rp id>`. No change needed for voidex.su (Step 2.4, docs/LOCK_AND_FACE_ID.md) |
 | `OTP_API_KEY` | `otp_live_…` | from GitHub Secret `OTP_API_KEY` → `state/secrets.env` |
 | `SMS_AERO_API_KEY` | SMS Aero API key | from GitHub Secret `SMS_AERO_API_KEY` → `state/secrets.env` |
 | `SMS_AERO_EMAIL` | SMS Aero account email | from GitHub Secret `SMS_AERO_EMAIL` (Basic-auth login) |
