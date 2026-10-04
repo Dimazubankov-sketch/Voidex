@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail" | "vibex" | "calculator";
+export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -80,8 +80,20 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
   },
   mail: {
     id: "mail",
-    name: { en: "Mail", ru: "Почта", es: "Correo", de: "Mail", fr: "Courrier", pt: "E-mail", zh: "邮件", ja: "メール", ko: "메일", tr: "Posta" },
-    caption: { en: "VOIDEX Mail", ru: "VOIDEX Mail", es: "VOIDEX Mail", de: "VOIDEX Mail", fr: "VOIDEX Mail", pt: "VOIDEX Mail", zh: "VOIDEX Mail", ja: "VOIDEX Mail", ko: "VOIDEX Mail", tr: "VOIDEX Mail" },
+    // Step 2.5: the mail service is VoidOps (addresses stay @voidops.ru).
+    name: {
+      en: "VoidOps Mail",
+      ru: "Почта VoidOps",
+      es: "Correo VoidOps",
+      de: "VoidOps Mail",
+      fr: "Courrier VoidOps",
+      pt: "E-mail VoidOps",
+      zh: "VoidOps 邮件",
+      ja: "VoidOps メール",
+      ko: "VoidOps 메일",
+      tr: "VoidOps Posta",
+    },
+    caption: { en: "@voidops.ru", ru: "@voidops.ru", es: "@voidops.ru", de: "@voidops.ru", fr: "@voidops.ru", pt: "@voidops.ru", zh: "@voidops.ru", ja: "@voidops.ru", ko: "@voidops.ru", tr: "@voidops.ru" },
     version: "1.0.0",
     kind: "system",
     removable: false,
@@ -90,8 +102,8 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
     status: "available",
     category: "communication",
     keywords: {
-      en: ["email", "inbox", "messages", "letters", "voidops"],
-      ru: ["почта", "письма", "входящие", "email", "voidops"],
+      en: ["email", "inbox", "messages", "letters", "voidops", "mail"],
+      ru: ["почта", "письма", "входящие", "email", "voidops", "mail"],
       es: ["correo", "email", "bandeja", "mensajes", "voidops"],
       de: ["E-Mail", "Posteingang", "Nachrichten", "Briefe", "voidops"],
       fr: ["e-mail", "courriel", "boîte de réception", "messages", "voidops"],
@@ -153,6 +165,43 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
       tr: ["hesap", "matematik", "denklem", "kesirler", "bilimsel", "çözüm"],
     },
     window: { defaultWidth: 900, defaultHeight: 740, minWidth: 360, minHeight: 560, singleton: true },
+  },
+  notes: {
+    id: "notes",
+    name: { en: "Notes", ru: "Заметки", es: "Notas", de: "Notizen", fr: "Notes", pt: "Notas", zh: "笔记", ja: "メモ", ko: "노트", tr: "Notlar" },
+    caption: {
+      en: "Docs & slides",
+      ru: "Документы и слайды",
+      es: "Documentos y diapositivas",
+      de: "Dokumente & Folien",
+      fr: "Documents et diapos",
+      pt: "Documentos e slides",
+      zh: "文档与幻灯片",
+      ja: "ドキュメントとスライド",
+      ko: "문서 및 슬라이드",
+      tr: "Belgeler ve slaytlar",
+    },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    // Notes live in the account (one document, synced with revisions).
+    permissions: ["account.read"],
+    status: "available",
+    category: "work",
+    keywords: {
+      en: ["notes", "documents", "text", "editor", "presentation", "slides", "pages", "write"],
+      ru: ["заметки", "документы", "текст", "редактор", "презентация", "слайды", "страницы", "записи"],
+      es: ["notas", "documentos", "texto", "editor", "presentación", "diapositivas", "páginas"],
+      de: ["Notizen", "Dokumente", "Text", "Editor", "Präsentation", "Folien", "Seiten"],
+      fr: ["notes", "documents", "texte", "éditeur", "présentation", "diapositives", "pages"],
+      pt: ["notas", "documentos", "texto", "editor", "apresentação", "slides", "páginas"],
+      zh: ["笔记", "文档", "文本", "编辑器", "演示", "幻灯片", "页面"],
+      ja: ["メモ", "ノート", "ドキュメント", "テキスト", "エディタ", "プレゼンテーション", "スライド"],
+      ko: ["노트", "메모", "문서", "텍스트", "편집기", "프레젠테이션", "슬라이드"],
+      tr: ["notlar", "belgeler", "metin", "düzenleyici", "sunum", "slaytlar", "sayfalar"],
+    },
+    window: { defaultWidth: 1180, defaultHeight: 780, minWidth: 380, minHeight: 500, singleton: true },
   },
 };
 

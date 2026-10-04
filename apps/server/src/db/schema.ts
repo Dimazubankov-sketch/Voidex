@@ -412,7 +412,7 @@ export const blobs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     /** What the blob is for: "mail" attachment content or the "wallpaper". */
-    purpose: text("purpose", { enum: ["mail", "wallpaper", "lock-wallpaper", "vibex"] }).notNull(),
+    purpose: text("purpose", { enum: ["mail", "wallpaper", "lock-wallpaper", "vibex", "notes"] }).notNull(),
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     data: bytea("data").notNull(),
@@ -536,6 +536,8 @@ export const vibexMessages = pgTable(
     durationMs: integer("duration_ms"),
     replyToId: uuid("reply_to_id").references((): AnyPgColumn => vibexMessages.id, { onDelete: "set null" }),
     createdAt: createdAt(),
+    /** Step 2.5: the sender deleted it; text and files are gone, a placeholder stays (replies keep their target). */
+    deletedAt: ts("deleted_at"),
   },
   (t) => [index("vibex_messages_conversation_idx").on(t.conversationId, t.createdAt)],
 );
@@ -683,6 +685,75 @@ export const vibexReports = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("vibex_reports_once_uq").on(t.reporterId, t.postId)],
+);
+
+/** Step 2.5: one person viewed a post (unique per person; the author is not counted). */
+export const vibexPostViews = pgTable(
+  "vibex_post_views",
+  {
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => vibexPosts.id, { onDelete: "cascade" }),
+    viewerId: uuid("viewer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ name: "vibex_post_views_pk", columns: [t.postId, t.viewerId] })],
+);
+
+/* ==========================================================================
+   Voidex Notes (Step 2.5)
+   ========================================================================== */
+
+/**
+ * The whole Notes workspace of an account (projects → spaces → pages) as one
+ * JSON document. `revision` grows with every save; a save names the revision
+ * it was based on, so two devices never silently overwrite each other.
+ */
+export const notesWorkspaces = pgTable("notes_workspaces", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+  revision: integer("revision").notNull().default(0),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
+
+/** Images in notes; the bytes live in `blobs` (purpose "notes"). */
+export const notesMedia = pgTable(
+  "notes_media",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notes_media_owner_idx").on(t.ownerId, t.createdAt)],
+);
+
+/**
+ * A read-only snapshot of a space or a project, opened with its token by
+ * signed-in VOIDEX users. Speaker notes are removed before it is stored;
+ * `mediaIds` are the owner's images the snapshot may show.
+ */
+export const notesShares = pgTable(
+  "notes_shares",
+  {
+    token: text("token").primaryKey(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+    mediaIds: uuid("media_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notes_shares_owner_idx").on(t.ownerId, t.createdAt)],
 );
 
 /* ==========================================================================

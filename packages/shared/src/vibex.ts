@@ -66,6 +66,10 @@ export interface VibexPostDto {
   /** Step 2.2: comment count, last edit time. */
   comments: number;
   editedAt: string | null;
+  /** Step 2.5: unique signed-in people who saw it (the author is not counted). */
+  views: number;
+  /** Step 2.5: shares — reposts plus sends into chats. */
+  shares: number;
   /** Reposts: the original post, or null when it is no longer available. */
   repostOf?: VibexPostDto | null;
 }
@@ -80,12 +84,14 @@ export interface VibexMessageDto {
   /** Voice / circle length. */
   durationMs: number | null;
   /** The message this one answers (a short preview). */
-  replyTo: { id: string; senderId: string; text: string; kind: VibexMessageKind } | null;
+  replyTo: { id: string; senderId: string; text: string; kind: VibexMessageKind; deleted?: boolean } | null;
   text: string;
   files: VibexFileDto[];
   /** A post shared into the chat (null: shared, but no longer available). */
   sharedPost?: VibexPostDto | null;
   createdAt: string;
+  /** Step 2.5: deleted by its sender — show "Сообщение удалено" (text and files are gone). */
+  deleted?: boolean;
 }
 
 /** Step 2.4: a group chat (several people, a name, an optional picture). */
@@ -282,6 +288,9 @@ export const VibexSendMessageSchema = z
   .refine((m) => m.text.trim().length > 0 || m.fileIds.length > 0, { message: "Empty message", path: ["text"] })
   .refine((m) => m.kind === "text" || (m.fileIds.length === 1 && !m.text.trim()), { message: "A recording is one file", path: ["fileIds"] })
   .refine((m) => m.kind !== "circle" || (m.durationMs ?? 0) <= VIBEX_CIRCLE_MAX_MS, { message: "Too long", path: ["durationMs"] });
+
+/** Step 2.5: posts the viewer saw (counted once per person). */
+export const VibexViewsSchema = z.object({ postIds: z.array(z.string().uuid()).min(1).max(50) });
 
 export const VibexPinsSchema = z.object({ conversationIds: z.array(z.string().uuid()).max(50) });
 

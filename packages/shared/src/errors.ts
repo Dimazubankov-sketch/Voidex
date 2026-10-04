@@ -79,6 +79,11 @@ export const ErrorCode = {
   VibexNotActivated: "vibex_not_activated",
   VibexOtherAccount: "vibex_other_account",
 
+  // notes (Step 2.5)
+  /** The document changed on another device since this one loaded it. */
+  NotesConflict: "notes_conflict",
+  NotesTooLarge: "notes_too_large",
+
   // apps
   AppNotInRegistry: "app_not_in_registry",
   AppNotRemovable: "app_not_removable",

@@ -241,6 +241,10 @@ export type ServerEvent =
   | { type: "vibex.chats"; conversationId?: string }
   /** Vibex: a post was created / edited / liked / commented / removed — refresh feeds. */
   | { type: "vibex.feed"; postId?: string }
+  /** Step 2.5 Vibex: a chat message was deleted by its sender (the chat shows a placeholder). */
+  | { type: "vibex.message.deleted"; conversationId: string; messageId: string }
+  /** Step 2.5 Notes: the workspace was saved on another device (this revision). */
+  | { type: "notes.changed"; revision: number }
   | {
       type: "mail.received";
       threadId: string;

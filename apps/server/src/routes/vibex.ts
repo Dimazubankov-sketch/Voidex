@@ -20,6 +20,7 @@ import {
   VibexProfileUpdateSchema,
   VibexSettingsUpdateSchema,
   VibexUploadPurposeSchema,
+  VibexViewsSchema,
 } from "@voidex/shared";
 import { z } from "zod";
 import { parse } from "../http.js";
@@ -128,6 +129,9 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
     return vibex.send(req.auth!.userId, id, parse(VibexSendMessageSchema, req.body));
   });
 
+  /** Step 2.5: the sender deletes their message for everyone. */
+  app.delete("/messages/:id", limit(120), async (req) => vibex.deleteMessage(req.auth!.userId, parse(idParam, req.params).id));
+
   app.post("/chats/:id/read", async (req) => vibex.read(req.auth!.userId, parse(idParam, req.params).id));
 
   // ----------------------------------------------------------------- files
@@ -168,6 +172,9 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
     reply.status(201);
     return vibex.createPost(req.auth!.userId, parse(VibexCreatePostSchema, req.body));
   });
+
+  /** Step 2.5: posts that were on screen (unique views). */
+  app.post("/views", limit(240), async (req) => vibex.view(req.auth!.userId, parse(VibexViewsSchema, req.body).postIds));
 
   app.get("/posts/:id", async (req) => vibex.post(req.auth!.userId, parse(idParam, req.params).id));
 

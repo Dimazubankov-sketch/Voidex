@@ -188,6 +188,15 @@ export class NotificationService {
     return { ok: true };
   }
 
+  /** Removes everyone's notifications about one subject (e.g. a chat message its sender deleted). */
+  async removeTarget(key: string, value: string) {
+    const rows = await this.ctx.db
+      .delete(notifications)
+      .where(sql`${notifications.target} ->> ${key} = ${value}`)
+      .returning({ userId: notifications.userId });
+    for (const u of new Set(rows.map((r) => r.userId))) this.changed(u);
+  }
+
   async clear(userId: string) {
     await this.ctx.db.delete(notifications).where(eq(notifications.userId, userId));
     this.changed(userId);

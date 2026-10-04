@@ -42,6 +42,8 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
   [ErrorCode.AttachmentTooLarge]: 413,
   [ErrorCode.AttachmentTypeNotAllowed]: 415,
   [ErrorCode.AttachmentLimit]: 422,
+  [ErrorCode.NotesConflict]: 409,
+  [ErrorCode.NotesTooLarge]: 413,
   [ErrorCode.AppNotInRegistry]: 404,
   [ErrorCode.AppNotRemovable]: 403,
 };

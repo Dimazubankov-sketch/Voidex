@@ -90,6 +90,12 @@ export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calc
 /** Background of the PC system bar (top): real glass, or none. */
 export const SYSTEM_BAR_STYLES = ["glass", "off"] as const;
 export type SystemBarStyle = (typeof SYSTEM_BAR_STYLES)[number];
+/** Step 2.5: background of the PC dock, set apart from the system bar's. */
+export const DOCK_STYLES = ["glass", "off"] as const;
+export type DockStyle = (typeof DOCK_STYLES)[number];
+/** Step 2.5: colour theme. Accounts from before Step 2.5 stay light. */
+export const THEMES = ["light", "dark", "system"] as const;
+export type Theme = (typeof THEMES)[number];
 export const DOCK_SCALES = ["s", "m", "l"] as const;
 export type DockScale = (typeof DOCK_SCALES)[number];
 
@@ -150,6 +156,15 @@ export const AppearanceSchema = z.object({
   systemBar: z.enum(SYSTEM_BAR_STYLES).default("glass"),
   /** Step 2.4: the lock screen's own wallpaper; null / absent = the same as the desktop. */
   lockWallpaper: WallpaperSchema.nullable().optional(),
+  /** Step 2.5: PC dock background (separate from the system bar). */
+  dock: z.enum(DOCK_STYLES).default("glass"),
+  /** Step 2.5: light / dark / follow the device. */
+  theme: z.enum(THEMES).default("light"),
+  /**
+   * Step 2.5: wallpapers follow the account on every device (true), or each
+   * device keeps its own (false: stored on the device, the account's stay).
+   */
+  syncWallpapers: z.boolean().default(true),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -217,7 +232,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", theme: "light", syncWallpapers: true };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -242,6 +257,9 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     showLabels: base.showLabels !== false,
     systemBar: base.systemBar === "off" ? "off" : "glass",
     lockWallpaper: base.lockWallpaper ? normalizeWallpaper(base.lockWallpaper) : null,
+    dock: base.dock === "off" ? "off" : "glass",
+    theme: (THEMES as readonly string[]).includes(base.theme) ? base.theme : "light",
+    syncWallpapers: base.syncWallpapers !== false,
   };
 }
 

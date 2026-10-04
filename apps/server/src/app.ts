@@ -25,12 +25,14 @@ import { VibexService } from "./services/vibex.js";
 import { SecurityService } from "./services/security.js";
 import { lockRoutes, securityRoutes } from "./routes/security.js";
 import { NotificationService } from "./services/notifications.js";
+import { NotesService } from "./services/notes.js";
 import { createTranslator, type Translator } from "./services/translate.js";
 import { accountRoutes } from "./routes/account.js";
 import { authRoutes } from "./routes/auth.js";
 import { mailRoutes } from "./routes/mail.js";
 import { systemRoutes } from "./routes/system.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { notesRoutes } from "./routes/notes.js";
 import { vibexRoutes } from "./routes/vibex.js";
 
 declare module "fastify" {
@@ -56,6 +58,7 @@ export interface Services {
   vibex: VibexService;
   notifications: NotificationService;
   security: SecurityService;
+  notes: NotesService;
 }
 
 export interface BuildOptions {
@@ -108,6 +111,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
     vibex: new VibexService(ctx, notifications),
     notifications,
     security: new SecurityService(ctx, sessions),
+    notes: new NotesService(ctx),
   };
   app.decorate("services", services);
   app.decorate("ctx", ctx);
@@ -228,6 +232,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
       await api.register(mailRoutes, { prefix: "/mail" });
       await api.register(vibexRoutes, { prefix: "/vibex" });
       await api.register(notificationRoutes, { prefix: "/notifications" });
+      await api.register(notesRoutes, { prefix: "/notes" });
     },
     { prefix: "/api" },
   );

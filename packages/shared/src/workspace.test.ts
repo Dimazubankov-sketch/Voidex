@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_APPEARANCE,
   DESKTOP_SPACES_MAX,
   MOBILE_PAGES_MAX,
   WorkspaceLayoutSchema,
@@ -334,5 +335,19 @@ describe("step 2.3: grid cells, labels, system bar", () => {
   it("labels and system bar settings are kept", () => {
     const l = n3({ ...defaultLayout(MANY), appearance: { ...defaultLayout(MANY).appearance, showLabels: false, systemBar: "off" } });
     expect(l.appearance).toMatchObject({ showLabels: false, systemBar: "off" });
+  });
+});
+
+describe("Step 2.5 appearance: dock glass, theme, wallpaper sync", () => {
+  const MANY: AppId[] = ["mail", "settings", "vibex", "notes"];
+  it("older layouts get light theme, glass dock and synced wallpapers", () => {
+    const old = { ...defaultLayout(MANY), appearance: { wallpaper: { kind: "default" }, captions: true } } as unknown as WorkspaceLayout;
+    expect(normalizeLayout(old, MANY).appearance).toMatchObject({ dock: "glass", theme: "light", syncWallpapers: true, systemBar: "glass" });
+  });
+  it("keeps the dock and the system bar apart; unknown values fall back", () => {
+    const l = normalizeLayout({ ...defaultLayout(MANY), appearance: { ...DEFAULT_APPEARANCE, dock: "off", systemBar: "glass", theme: "dark", syncWallpapers: false } }, MANY);
+    expect(l.appearance).toMatchObject({ dock: "off", systemBar: "glass", theme: "dark", syncWallpapers: false });
+    const bad = normalizeLayout({ ...defaultLayout(MANY), appearance: { ...DEFAULT_APPEARANCE, theme: "neon" as "dark" } }, MANY);
+    expect(bad.appearance.theme).toBe("light");
   });
 });

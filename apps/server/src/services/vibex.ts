@@ -44,6 +44,7 @@ import {
   vibexLikes,
   vibexMembers,
   vibexMessages,
+  vibexPostViews,
   vibexPosts,
   vibexProfiles,
   vibexReports,
@@ -558,7 +559,7 @@ export class VibexService {
     const originals = originalIds.length ? await this.ctx.db.select().from(vibexPosts).where(inArray(vibexPosts.id, originalIds)) : [];
     const all = [...rows, ...originals];
     const ids = all.map((r) => r.id);
-    const [people, media, likeCounts, repostCounts, myLikes, myMarks, myReposts, commentCounts] = await Promise.all([
+    const [people, media, likeCounts, repostCounts, myLikes, myMarks, myReposts, commentCounts, viewCounts, sendCounts] = await Promise.all([
       this.persons(all.map((r) => r.authorId)),
       this.filesOf("postId", ids),
       this.ctx.db
@@ -582,7 +583,21 @@ export class VibexService {
         .from(vibexComments)
         .where(and(inArray(vibexComments.postId, ids), isNull(vibexComments.deletedAt)))
         .groupBy(vibexComments.postId),
+      // Step 2.5: unique signed-in viewers (never the author) …
+      this.ctx.db
+        .select({ id: vibexPostViews.postId, n: sql<number>`count(*)::int` })
+        .from(vibexPostViews)
+        .where(inArray(vibexPostViews.postId, ids))
+        .groupBy(vibexPostViews.postId),
+      // … and how often it was sent into chats ("Share → send in a message").
+      this.ctx.db
+        .select({ id: vibexMessages.sharedPostId, n: sql<number>`count(*)::int` })
+        .from(vibexMessages)
+        .where(and(inArray(vibexMessages.sharedPostId, ids), isNull(vibexMessages.deletedAt)))
+        .groupBy(vibexMessages.sharedPostId),
     ]);
+    const views = new Map(viewCounts.map((r) => [r.id, r.n]));
+    const sends = new Map(sendCounts.map((r) => [r.id!, r.n]));
     const comments = new Map(commentCounts.map((r) => [r.id, r.n]));
     const likes = new Map(likeCounts.map((r) => [r.id, r.n]));
     const reposts = new Map(repostCounts.map((r) => [r.id!, r.n]));
@@ -604,6 +619,8 @@ export class VibexService {
       mine: r.authorId === viewerId,
       comments: comments.get(r.id) ?? 0,
       editedAt: r.editedAt?.toISOString() ?? null,
+      views: views.get(r.id) ?? 0,
+      shares: (reposts.get(r.id) ?? 0) + (sends.get(r.id) ?? 0),
     });
     const byId = new Map(all.map((r) => [r.id, r]));
     for (const r of rows) {
@@ -1078,6 +1095,7 @@ export class VibexService {
         and(
           inArray(vibexMessages.conversationId, ids),
           ne(vibexMessages.senderId, userId),
+          isNull(vibexMessages.deletedAt),
           or(isNull(vibexMembers.lastReadAt), gt(vibexMessages.createdAt, vibexMembers.lastReadAt)),
         ),
       )
@@ -1141,6 +1159,23 @@ export class VibexService {
     const repliedBy = new Map(replied.map((m) => [m.id, m]));
     for (const r of rows) {
       const to = r.replyToId ? repliedBy.get(r.replyToId) : undefined;
+      if (r.deletedAt) {
+        // Step 2.5: deleted by its sender — only a placeholder is left.
+        out.set(r.id, {
+          id: r.id,
+          conversationId: r.conversationId,
+          senderId: r.senderId,
+          mine: r.senderId === viewerId,
+          kind: r.kind,
+          durationMs: null,
+          replyTo: null,
+          text: "",
+          files: [],
+          createdAt: r.createdAt.toISOString(),
+          deleted: true,
+        });
+        continue;
+      }
       out.set(r.id, {
         id: r.id,
         conversationId: r.conversationId,
@@ -1148,7 +1183,10 @@ export class VibexService {
         mine: r.senderId === viewerId,
         kind: r.kind,
         durationMs: r.durationMs,
-        replyTo: to && to.conversationId === r.conversationId ? { id: to.id, senderId: to.senderId, text: to.text.slice(0, 160), kind: to.kind } : null,
+        replyTo:
+          to && to.conversationId === r.conversationId
+            ? { id: to.id, senderId: to.senderId, text: to.deletedAt ? "" : to.text.slice(0, 160), kind: to.kind, ...(to.deletedAt ? { deleted: true } : {}) }
+            : null,
         text: r.text,
         files: files.get(r.id) ?? [],
         ...(r.sharedPost ? { sharedPost: (r.sharedPostId && posts.get(r.sharedPostId)) || null } : {}),
@@ -1199,7 +1237,7 @@ export class VibexService {
         const [to] = await tx
           .select({ id: vibexMessages.id })
           .from(vibexMessages)
-          .where(and(eq(vibexMessages.id, input.replyToId), eq(vibexMessages.conversationId, conversationId)));
+          .where(and(eq(vibexMessages.id, input.replyToId), eq(vibexMessages.conversationId, conversationId), isNull(vibexMessages.deletedAt)));
         if (!to) throw notFound("Message");
         replyToId = to.id;
       }
@@ -1246,6 +1284,57 @@ export class VibexService {
       });
     }
     return dto;
+  }
+
+  /**
+   * Step 2.5: the sender deletes their own message (text, files, voice, circle)
+   * for everyone. Its text and files are removed for good; a placeholder
+   * stays so the chat and replies to it keep their place. Only the sender can
+   * do this — anyone else gets 403.
+   */
+  async deleteMessage(userId: string, messageId: string) {
+    const [m] = await this.ctx.db.select().from(vibexMessages).where(eq(vibexMessages.id, messageId));
+    if (!m) throw notFound("Message");
+    await this.membership(userId, m.conversationId);
+    if (m.senderId !== userId) throw fail(ErrorCode.Forbidden, "Only the sender can delete a message.", { status: 403 });
+    if (m.deletedAt) return { ok: true };
+    await this.ctx.db.transaction(async (tx) => {
+      await tx
+        .update(vibexMessages)
+        .set({ deletedAt: this.ctx.now(), text: "", sharedPostId: null, sharedPost: false, durationMs: null })
+        .where(eq(vibexMessages.id, m.id));
+      const files = await tx.delete(vibexFiles).where(eq(vibexFiles.messageId, m.id)).returning({ key: vibexFiles.storageKey });
+      await this.ctx.blobs.delete(files.map((f) => f.key), tx);
+    });
+    const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, m.conversationId));
+    for (const u of members) {
+      this.ctx.events.toUser(u.userId, { type: "vibex.message.deleted", conversationId: m.conversationId, messageId: m.id });
+      this.ctx.events.toUser(u.userId, { type: "vibex.chats", conversationId: m.conversationId });
+    }
+    await this.notifications?.removeTarget("messageId", m.id);
+    return { ok: true };
+  }
+
+  /**
+   * Step 2.5: the viewer saw these posts. Counted once per person and post;
+   * the author's own views and posts the viewer can't see are ignored.
+   */
+  async view(viewerId: string, postIds: string[]) {
+    const ids = [...new Set(postIds)];
+    if (!ids.length) return { ok: true };
+    const rows = await this.ctx.db
+      .select({ id: vibexPosts.id, authorId: vibexPosts.authorId })
+      .from(vibexPosts)
+      .where(and(inArray(vibexPosts.id, ids), isNull(vibexPosts.deletedAt), ne(vibexPosts.authorId, viewerId)));
+    const allowed: string[] = [];
+    for (const r of rows) if (await this.canSee(viewerId, r.authorId, "posts")) allowed.push(r.id);
+    if (allowed.length) {
+      await this.ctx.db
+        .insert(vibexPostViews)
+        .values(allowed.map((postId) => ({ postId, viewerId })))
+        .onConflictDoNothing();
+    }
+    return { ok: true };
   }
 
   /** Marks the chat read up to now; the other person gets read receipts. */
