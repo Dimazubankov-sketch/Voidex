@@ -77,11 +77,13 @@ test("dock: dragging inside the dock never hides the app's desktop icon; Esc can
   await expect.poll(() => dockOrder(page)).toEqual(["mail", "settings", "vibex", "calculator"]);
   await expect(desktopMail).toBeVisible();
 
-  // A real drop reorders (and is saved).
+  // A real drop reorders (and is saved). Let the preview settle before letting go, like a hand does.
   await page.mouse.move(a.x, a.y);
   await page.mouse.down();
   await page.mouse.move(a.x + 10, a.y, { steps: 2 });
   await page.mouse.move(b.x + 30, b.y, { steps: 8 });
+  await page.waitForTimeout(250);
+  await page.mouse.move(b.x + 31, b.y);
   await page.mouse.up();
   await expect.poll(() => dockOrder(page)).toEqual(["settings", "mail", "vibex", "calculator"]);
   await expect(desktopMail).toBeVisible();

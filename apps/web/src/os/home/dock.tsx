@@ -243,7 +243,15 @@ function DockApp({ id, layout, mouseX, tile, pinned = true }: { id: AppId; layou
       }
       if (moved.current) ui().setDrag(null);
     };
-    const up = () => finish(true);
+    // The slot is where the pointer is released (not only where it last moved).
+    const up = (ev: PointerEvent) => {
+      const d = ui().drag;
+      if (moved.current && d && !d.unpin) {
+        const index = dockIndexAt(ev.clientX, id);
+        if (index !== d.dockIndex) ui().patchDrag({ dockIndex: index });
+      }
+      finish(true);
+    };
     const cancel = () => finish(false);
     const key = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape" || !moved.current) return;
