@@ -15,6 +15,7 @@
     "@simplewebauthn/browser": "^13",
     "@tanstack/react-query": "^5.104.0",
     "@voidex/calculator": "workspace:*",
+    "@voidex/notes": "workspace:*",
     "@voidex/shared": "workspace:*",
     "clsx": "^2.1.1",
     "motion": "^13.4.4",
