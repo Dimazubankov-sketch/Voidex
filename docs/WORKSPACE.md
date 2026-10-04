@@ -181,12 +181,18 @@ purpose with its own quota).
   that had a cell first — nothing is lost. Categories view arranges itself
   (no manual placement). The Step 2.2 free pixel placement is retired
   (`arrange` is always `grid`; stored `positions` are ignored).
+  Step 2.3.1: while an icon is dragged no grid or drop-cell outline is drawn;
+  the icon still snaps to the cell under the pointer (`data-drop-cell` on the
+  grid, for tests).
 - **Brush → View** is a one-tap toggle (Grid ⇄ Categories), no second panel.
 - **Dock click**: closed → open, in the background → focus, focused →
   minimize (next click restores). The search field has the dock's hover lift.
 - **Phone**: the round button at the bottom of the home screen opens the app
-  switcher (open apps as cards, swipe up to close, tap to open; empty state and
-  "Pages" from there). It exists only on the home screen.
+  switcher (open apps as cards, swipe up to close, tap to open; an empty
+  state). It exists only on the home screen. Step 2.3.1: the switcher shows
+  only the cards — the "Desktops / Pages" button and the phone pages sheet are
+  gone; phone pages are reached by swiping the home screen (and created by
+  dragging an icon to the page edge).
 - **Widgets**: the Workspaces widget is removed (stored ones are dropped by
   `normalizeLayout`); new **Calculator** widget, 2 × 2 cells, a working mini
   calculator (`shared/mini-calc.ts`, + − × ÷ with precedence, %, ±, ⌫,

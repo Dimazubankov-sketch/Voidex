@@ -251,10 +251,11 @@ test("phone: long press → brush → Widgets: add the Calculator widget; round 
   await btn.click();
   await expect(page.getByTestId("app-switcher")).toBeVisible();
   await expect(page.getByTestId("switcher-empty")).toBeVisible();
-  // The pages are reachable from there.
-  await page.getByTestId("switcher-pages").click();
-  await expect(page.getByTestId("mobile-spaces-sheet")).toBeVisible();
-  await page.keyboard.press("Escape");
+  // Step 2.3.1: only the cards — no "Desktops" button, no pages menu from here.
+  await expect(page.getByTestId("switcher-pages")).toHaveCount(0);
+  await expect(page.getByTestId("app-switcher").getByRole("button")).toHaveCount(0);
+  await page.getByTestId("app-switcher").click();
+  await expect(page.getByTestId("app-switcher")).toHaveCount(0);
 
   // Saved with the account.
   await page.waitForTimeout(600);

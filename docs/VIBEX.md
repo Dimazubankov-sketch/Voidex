@@ -177,7 +177,21 @@ Migration `0005_vibex_social.sql` (additive): `vibex_profiles`, `vibex_comments`
   with its comments or the profile.
 - **Side menu**: Home, My page, Messages, Search, Bookmarks, History | Settings;
   left-edge swipe opens it on phones.
-- **Demo data** (`pnpm --filter @voidex/server db:seed:dev [address]`, refuses
-  production): Demo Anna / Alex / Mia with avatars, covers, details, photo posts,
-  a comment thread, follows, chats (pinned, reply, file, voice). Video posts are
-  not seeded (no sample video is generated).
+- **Demo data** — development / test only: `pnpm seed:vibex-demo [address]`
+  (same as `pnpm --filter @voidex/server db:seed:dev [address]`). Code:
+  `apps/server/src/db/demo-seed.ts` (`seedVibexDemo()`, covered by
+  `test/demo-seed.test.ts`), CLI `seed-dev.ts`. It refuses to run in
+  production twice over: the CLI exits on `NODE_ENV=production`, and the
+  function throws on a production config. Nothing in the deploy pipeline runs it.
+  - Demo people: Алина, Марк, Sofia, Тимур (Step 2.2), Demo Anna / Alex / Mia
+    (avatars, covers, details); password `Demo-Vibex-2026`.
+  - Feed: short and long posts, posts with one and several pictures, a repost,
+    a post with many comments and reply threads, likes, follows.
+  - Chats: read and unread (several messages), pinned, a reply, a picture, a
+    file, a voice message.
+  - With `address`: that account gets its own set — a pinned chat with a reply
+    thread, a read chat, unread chats (one with a picture and a file), follows
+    and a comment of its own with an answer.
+  - Idempotent: each block runs once (new accounts, a marker post / message);
+    re-running adds nothing. An unknown address is reported, not created.
+    Video posts are not seeded (no sample video is generated).
