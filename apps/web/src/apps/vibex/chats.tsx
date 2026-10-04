@@ -173,7 +173,8 @@ function ChatRow({ chat, pinnedIds }: { chat: VibexChatDto; pinnedIds: string[] 
         ref={pop.anchor}
         label={t("vibex.post.more")}
         size="sm"
-        className="absolute right-3 top-1/2 hidden -translate-y-1/2 bg-surface shadow-tile [@media(hover:hover)]:group-hover:inline-flex"
+        // "!": IconButton is inline-flex itself; without it the button covered the time and unread badge on every row.
+        className="absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile [@media(hover:hover)]:group-hover:!inline-flex"
         onClick={pop.toggle}
         data-testid="chat-row-menu"
       >
@@ -332,7 +333,7 @@ function PinnedRow({
           ref={pop.anchor}
           label={t("vibex.post.more")}
           size="sm"
-          className={cx("absolute right-3 top-1/2 hidden -translate-y-1/2 bg-surface shadow-tile", !dragging && "[@media(hover:hover)]:group-hover:inline-flex")}
+          className={cx("absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile", !dragging && "[@media(hover:hover)]:group-hover:!inline-flex")}
           onClick={pop.toggle}
           data-testid="chat-row-menu"
         >
