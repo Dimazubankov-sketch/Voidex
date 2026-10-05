@@ -165,16 +165,21 @@ export function Popover({
   width?: number;
   testId?: string;
 }) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
   useEscape(open, onClose);
   useLayoutEffect(() => {
     if (!open || !anchor.current) return;
     const place = () => {
       const r = anchor.current!.getBoundingClientRect();
       const vw = window.innerWidth;
+      const vh = window.innerHeight;
       let left = align === "end" ? r.right - width : r.left;
       left = Math.max(8, Math.min(left, vw - width - 8));
-      setPos({ top: r.bottom + 8, left });
+      // Anchors in the lower part of the screen (bottom bars) open the menu upwards.
+      const below = vh - r.bottom - 16;
+      const above = r.top - 16;
+      if (below < 260 && above > below) setPos({ bottom: vh - r.top + 8, left, maxHeight: above });
+      else setPos({ top: r.bottom + 8, left, maxHeight: below });
     };
     place();
     window.addEventListener("resize", place);
@@ -189,8 +194,15 @@ export function Popover({
           <motion.div
             role="menu"
             data-testid={testId}
-            className="fixed z-[190] overflow-hidden rounded-2xl border border-border/70 bg-surface/95 p-1.5 shadow-float backdrop-blur-xl"
-            style={{ top: pos.top, left: pos.left, width, transformOrigin: align === "end" ? "top right" : "top left" }}
+            className="scroll-area fixed z-[190] overflow-y-auto overflow-x-hidden rounded-2xl border border-border/70 bg-surface/95 p-1.5 shadow-float backdrop-blur-xl"
+            style={{
+              top: pos.top,
+              bottom: pos.bottom,
+              left: pos.left,
+              width,
+              maxHeight: pos.maxHeight,
+              transformOrigin: `${pos.bottom !== undefined ? "bottom" : "top"} ${align === "end" ? "right" : "left"}`,
+            }}
             initial={{ opacity: 0, scale: 0.92, y: -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -2 }}
