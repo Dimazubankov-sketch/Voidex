@@ -149,16 +149,27 @@ function DesktopVibex() {
   const stack = useVibex((s) => s.stack);
   const back = useVibex((s) => s.back);
   const chatId = useVibex((s) => s.chatId);
-  const [collapsed, setCollapsed] = useState(false);
+  // Step 2.5.1: a narrow window collapses the rail to icons by itself; the toggle still wins.
+  const [manual, setManual] = useState<boolean | null>(null);
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    if (!host) return;
+    const ro = new ResizeObserver(() => setNarrow(host.clientWidth < 860));
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [host]);
+  const collapsed = manual ?? narrow;
   const page = stack.at(-1);
 
   return (
     <>
-      <SidebarPanel variant="rail" collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
+      <span ref={(el) => setHost(el?.parentElement ?? null)} className="hidden" aria-hidden />
+      <SidebarPanel variant="rail" collapsed={collapsed} onToggle={() => setManual(!collapsed)} />
 
       {section === "chats" && !page ? (
         <div className="flex min-w-0 flex-1">
-          <section className="relative flex w-[330px] shrink-0 flex-col border-r bg-surface">
+          <section className="relative flex w-[300px] shrink-0 flex-col border-r bg-surface">
             <WindowHeader menu={false}>
               <span className="flex-1 pl-1.5 text-[17px] font-bold">{t("vibex.nav.messages")}</span>
             </WindowHeader>

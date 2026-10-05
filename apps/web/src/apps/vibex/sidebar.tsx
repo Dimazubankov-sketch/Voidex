@@ -21,8 +21,11 @@ import { useWindow } from "@/os/window-context";
 import { useChats } from "./data";
 import { useVibex, type VibexSection } from "./store";
 
-/** Width of the expanded rail / drawer (px). */
+/** Width of the phone drawer (px). */
 export const DRAWER_WIDTH = 272;
+/** Step 2.5.1: the PC rail is compact — narrower, denser rows (the phone drawer keeps its touch sizes). */
+export const RAIL_WIDTH = 232;
+export const RAIL_COLLAPSED = 60;
 
 interface Row {
   key: VibexSection;
@@ -53,6 +56,7 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
   const go = useVibex((s) => s.go);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
   const name = `${me.firstName} ${me.lastName}`;
+  const rail = variant === "rail";
   const pick = (key: VibexSection) => {
     go(key);
     onClose?.();
@@ -70,13 +74,14 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         aria-current={selected ? "page" : undefined}
         title={collapsed ? t(row.label) : undefined}
         className={cx(
-          "relative flex h-10 items-center rounded-xl text-left text-[14px] font-medium transition",
-          collapsed ? "justify-center" : "gap-3 px-3",
+          "relative flex items-center text-left font-medium transition",
+          rail ? "h-9 rounded-[10px] text-[13px]" : "h-10 rounded-xl text-[14px]",
+          collapsed ? "justify-center" : rail ? "gap-2.5 px-2.5" : "gap-3 px-3",
           selected ? "bg-primary/10 text-primary" : "text-text hover:bg-surface-hover",
         )}
         data-testid={`vibex-nav-${row.key}`}
       >
-        <Icon className={cx("size-[19px] shrink-0", selected ? "text-primary" : "text-text-secondary")} />
+        <Icon className={cx(rail ? "size-[17px]" : "size-[19px]", "shrink-0", selected ? "text-primary" : "text-text-secondary")} />
         {!collapsed && <span className="flex-1 truncate">{t(row.label)}</span>}
         {badge > 0 && (
           <span
@@ -95,16 +100,16 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
       className={cx(
         "flex h-full flex-col bg-surface transition-[width] duration-300 ease-out",
         variant === "rail" && "shrink-0 border-r",
-        collapsed ? "w-[68px] px-2.5 py-3" : "px-3 py-3",
+        collapsed ? "px-2 py-3" : rail ? "px-2.5 py-2.5" : "px-3 py-3",
         variant === "drawer" && "w-full shadow-float",
       )}
-      style={variant === "rail" && !collapsed ? { width: DRAWER_WIDTH } : undefined}
+      style={rail ? { width: collapsed ? RAIL_COLLAPSED : RAIL_WIDTH } : undefined}
       data-testid="vibex-sidebar"
     >
       <BrandRow drag={variant === "rail"} className={cx("flex items-center pb-2", collapsed ? "flex-col gap-2 pt-1" : "justify-between pl-1.5")}>
         <div className="flex items-center gap-2" data-system-ui>
-          <VibexGlyph className="size-7" />
-          {!collapsed && <span className="text-[18px] font-bold tracking-tight text-text">{t("vibex.title")}</span>}
+          <VibexGlyph className={rail ? "size-6" : "size-7"} />
+          {!collapsed && <span className={cx("font-bold tracking-tight text-text", rail ? "text-[16px]" : "text-[18px]")}>{t("vibex.title")}</span>}
         </div>
         {variant === "drawer" ? (
           <button type="button" onClick={onClose} aria-label={t("common.close")} className="flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover">
@@ -129,14 +134,14 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         type="button"
         onClick={() => pick("me")}
         title={collapsed ? name : undefined}
-        className={cx("mb-2 flex items-center rounded-2xl transition hover:bg-surface-hover", collapsed ? "justify-center p-1" : "gap-2.5 bg-surface-secondary/70 p-2")}
+        className={cx("mb-2 flex items-center transition hover:bg-surface-hover", rail ? "rounded-xl" : "rounded-2xl", collapsed ? "justify-center p-1" : rail ? "gap-2 bg-surface-secondary/70 p-1.5" : "gap-2.5 bg-surface-secondary/70 p-2")}
         data-testid="vibex-me"
       >
-        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={collapsed ? 38 : 36} />
+        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={collapsed ? 34 : rail ? 30 : 36} />
         {!collapsed && (
           <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-[13.5px] font-semibold text-text">{name}</span>
-            <span className="block truncate text-[11.5px] text-text-tertiary">{me.mailAddress}</span>
+            <span className={cx("block truncate font-semibold text-text", rail ? "text-[12.5px]" : "text-[13.5px]")}>{name}</span>
+            <span className={cx("block truncate text-text-tertiary", rail ? "text-[11px]" : "text-[11.5px]")}>{me.mailAddress}</span>
           </span>
         )}
       </button>

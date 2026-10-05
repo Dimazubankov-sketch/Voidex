@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RiPauseFill, RiPlayFill } from "@remixicon/react";
+import { RiPauseFill, RiPlayFill, RiRestartLine } from "@remixicon/react";
 import type { VibexFileDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
@@ -14,6 +14,24 @@ let playingNow: HTMLMediaElement | null = null;
 function takeOver(el: HTMLMediaElement) {
   if (playingNow && playingNow !== el && !playingNow.paused) playingNow.pause();
   playingNow = el;
+}
+
+/**
+ * Step 2.5.1: recordings made by MediaRecorder (WebM) carry no duration in
+ * their header — the browser reports Infinity until it has read the whole
+ * file, so seeking and the progress bar can't work. Asking for a far-away
+ * position makes it scan to the end; then it knows the real length and we go
+ * back to the start.
+ */
+function probeDuration(el: HTMLMediaElement) {
+  if (Number.isFinite(el.duration) && el.duration > 0) return;
+  const done = () => {
+    if (!Number.isFinite(el.duration)) return;
+    el.removeEventListener("durationchange", done);
+    el.currentTime = 0;
+  };
+  el.addEventListener("durationchange", done);
+  el.currentTime = 1e101;
 }
 
 /** Step 2.5: voice messages I have listened to (this device), for the "unplayed" dot. */
@@ -89,7 +107,8 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
   const [played, setPlayed] = useState(() => mine || playedSet().has(file.id));
-  const total = durationMs ?? 0;
+  const [real, setReal] = useState(0);
+  const total = durationMs ?? real;
 
   const toggle = () => {
     const a = audio.current;
@@ -169,6 +188,11 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
           ref={audio}
           src={src}
           preload="metadata"
+          onLoadedMetadata={(e) => probeDuration(e.currentTarget)}
+          onDurationChange={(e) => {
+            const d = e.currentTarget.duration;
+            if (Number.isFinite(d) && d > 0) setReal(Math.round(d * 1000));
+          }}
           onPlay={(e) => {
             takeOver(e.currentTarget);
             setPlaying(true);
@@ -193,16 +217,22 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
   );
 }
 
-/** Video circle: round video; tap plays / pauses with sound; a ring shows progress. */
+/**
+ * Video circle: round video; tap plays / pauses with sound, a ring shows the
+ * progress; after the end a tap replays it from the start. `playsInline`
+ * keeps it in the bubble on iPhone (never the system fullscreen player).
+ */
 export function CircleBubble({ file, durationMs }: { file: VibexFileDto; durationMs: number | null }) {
   const t = useT();
   const { data: src } = useFileUrl(file.id);
   const video = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
+  const [ended, setEnded] = useState(false);
   const [pos, setPos] = useState(0);
   const size = 208;
   const r = size / 2 - 3;
   const c = 2 * Math.PI * r;
+  const length = (v: HTMLVideoElement) => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : (durationMs ?? 0) / 1000);
   return (
     <button
       type="button"
@@ -210,14 +240,17 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
         const v = video.current;
         if (!v) return;
         if (v.paused) {
+          if (ended || v.ended) v.currentTime = 0;
           v.muted = false;
           void v.play();
         } else v.pause();
       }}
       aria-label={playing ? t("vibex.voice.pause") : t("vibex.circle.play")}
-      className="relative block shrink-0 rounded-full"
+      className="relative block shrink-0 overflow-hidden rounded-full"
       style={{ width: size, height: size }}
       data-testid="circle-message"
+      data-playing={playing || undefined}
+      data-ended={ended || undefined}
     >
       {src ? (
         <video
@@ -226,19 +259,22 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
           playsInline
           preload="metadata"
           className="size-full rounded-full bg-black object-cover"
+          onLoadedMetadata={(e) => probeDuration(e.currentTarget)}
           onPlay={(e) => {
             takeOver(e.currentTarget);
             setPlaying(true);
+            setEnded(false);
           }}
           onPause={() => setPlaying(false)}
           onEnded={() => {
             setPlaying(false);
-            setPos(0);
+            setEnded(true);
+            setPos(1);
           }}
           onTimeUpdate={(e) => {
             const v = e.currentTarget;
-            const d = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : (durationMs ?? 0) / 1000;
-            if (d) setPos(Math.min(1, v.currentTime / d));
+            const d = length(v);
+            if (d && !v.seeking) setPos(Math.min(1, v.currentTime / d));
           }}
         />
       ) : (
@@ -251,13 +287,15 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
       </svg>
       {!playing && (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur">
-            <RiPlayFill className="size-7" />
+          <span className="flex size-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" data-testid={ended ? "circle-replay" : "circle-play"}>
+            {ended ? <RiRestartLine className="size-6" /> : <RiPlayFill className="size-7" />}
           </span>
         </span>
       )}
       {durationMs !== null && (
-        <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] tabular-nums text-white">{formatDuration(durationMs)}</span>
+        <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] tabular-nums text-white">
+          {formatDuration(playing || (pos > 0 && !ended) ? pos * durationMs : durationMs)}
+        </span>
       )}
     </button>
   );
