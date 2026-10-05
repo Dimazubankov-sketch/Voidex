@@ -12,7 +12,7 @@ import { APP_CATEGORIES, APP_IDS, type AppCategory, type AppId } from "./apps.js
  *    ├── desktop      virtual desktops, each with its own icons; grid density,
  *    │                columns, grid / by-category view, manual / by-name order;
  *    │                dock: apps pinned to the PC dock, in order
- *    ├── categories   the user's own category for an app (overrides the manifest)
+ *    ├── categories   (unused since Step 2.5.1: an app's category comes from its manifest)
  *    ├── names        the user's own label for an app icon (the app keeps its name)
  *    └── appearance   wallpaper and icon label style
  *
@@ -361,8 +361,8 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
   const spaces: DesktopSpace[] = spacesIn.map((s, i) => ({ id: s.id, name: s.name.slice(0, SPACE_NAME_MAX), items: desktop.out[i]! }));
   spaces[0]!.items.push(...topLevel.filter((i) => !desktop.seen.has(itemKey(i))));
 
+  // Step 2.5.1: categories are not reassigned by hand any more — old overrides are dropped.
   const categories: Partial<Record<AppId, AppCategory>> = {};
-  for (const [id, c] of Object.entries(base.categories ?? {})) if (installedSet.has(id as AppId)) categories[id as AppId] = c;
 
   const names: Partial<Record<AppId, string>> = {};
   for (const [id, name] of Object.entries(base.names ?? {})) {
@@ -614,13 +614,6 @@ export function unpinFromDock(l: WorkspaceLayout, app: AppId): WorkspaceLayout {
   return n;
 }
 
-export function setCategory(l: WorkspaceLayout, app: AppId, category: AppCategory | null): WorkspaceLayout {
-  const n = clone(l);
-  if (category) n.categories[app] = category;
-  else delete n.categories[app];
-  return n;
-}
-
 export function addSpace(l: WorkspaceLayout, random: () => number = Math.random): { layout: WorkspaceLayout; id: string } | null {
   if (l.desktop.spaces.length >= DESKTOP_SPACES_MAX) return null;
   const n = clone(l);
@@ -650,9 +643,9 @@ export function renameSpace(l: WorkspaceLayout, space: string, name: string): Wo
   return n;
 }
 
-/** Category of an app for this user: their own choice, else the manifest default. */
-export function categoryOf(l: Pick<WorkspaceLayout, "categories">, app: AppId, fallback: AppCategory): AppCategory {
-  return l.categories[app] ?? fallback;
+/** Category of an app: always the one from its manifest (Step 2.5.1: no manual reassignment). */
+export function categoryOf(_l: Pick<WorkspaceLayout, "categories">, _app: AppId, fallback: AppCategory): AppCategory {
+  return fallback;
 }
 
 
@@ -734,22 +727,66 @@ export interface PlacedCell extends Cell {
 
 export const widgetKey = (id: string) => `widget:${id}`;
 
-/** Places blocks (widgets) and 1×1 items on a grid of `columns`. Pure. */
-export function gridPlacement(columns: number, items: string[], cells: Record<string, Cell>, blocks: GridBlock[] = []): Map<string, PlacedCell> {
+/**
+ * Places blocks (widgets) and 1×1 items on a grid of `columns`. Pure.
+ *
+ * Step 2.5.1: with `rows` the grid is bounded (a PC desktop is exactly as big
+ * as the screen area): a stored cell outside it is moved to the nearest free
+ * cell inside, and only when the area is full does anything go past the last
+ * row. Without `rows` (phone pages) the grid grows downwards as before.
+ */
+export function gridPlacement(columns: number, items: string[], cells: Record<string, Cell>, blocks: GridBlock[] = [], rows?: number): Map<string, PlacedCell> {
   const cols = Math.max(1, Math.floor(columns));
+  const maxRows = rows === undefined ? Infinity : Math.max(1, Math.floor(rows));
   const taken = new Set<string>();
   const out = new Map<string, PlacedCell>();
-  const fits = (c: number, r: number, w: number, h: number) => {
+  const free = (c: number, r: number, w: number, h: number) => {
     if (c < 0 || r < 0 || c + w > cols) return false;
     for (let y = r; y < r + h; y++) for (let x = c; x < c + w; x++) if (taken.has(`${x},${y}`)) return false;
     return true;
   };
+  const fits = (c: number, r: number, w: number, h: number) => r + h <= maxRows && free(c, r, w, h);
   const take = (key: string, c: number, r: number, w: number, h: number) => {
     for (let y = r; y < r + h; y++) for (let x = c; x < c + w; x++) taken.add(`${x},${y}`);
     out.set(key, { c, r, w, h });
   };
   const firstFree = (w: number, h: number) => {
-    for (let r = 0; ; r++) for (let c = 0; c + w <= cols; c++) if (fits(c, r, w, h)) return { c, r };
+    for (let r = 0; r + h <= maxRows; r++) for (let c = 0; c + w <= cols; c++) if (free(c, r, w, h)) return { c, r };
+    // Bounded and full: past the last row (never lost, the next free cell after it).
+    for (let r = Number.isFinite(maxRows) ? maxRows : 0; ; r++) for (let c = 0; c + w <= cols; c++) if (free(c, r, w, h)) return { c, r };
+  };
+  /** The free cell inside the bounds nearest to (c0, r0); reading order breaks ties. */
+  const nearest = (c0: number, r0: number, w: number, h: number) => {
+    let best: { c: number; r: number } | null = null;
+    let dist = Infinity;
+    for (let r = 0; r + h <= maxRows; r++)
+      for (let c = 0; c + w <= cols; c++) {
+        const d = (c - c0) ** 2 + (r - r0) ** 2;
+        if (d < dist && free(c, r, w, h)) {
+          dist = d;
+          best = { c, r };
+        }
+      }
+    return best;
+  };
+  const bounded = Number.isFinite(maxRows);
+  /** Stored cells that fit go first; out-of-bounds ones then move to the nearest free cell. */
+  const settle = (key: string, w: number, h: number, queue: { key: string; w: number; h: number }[], late: { key: string; w: number; h: number; c: Cell }[]) => {
+    const c = cells[key];
+    if (c && fits(c.c, c.r, w, h)) take(key, c.c, c.r, w, h);
+    else if (c && bounded) late.push({ key, w, h, c });
+    else queue.push({ key, w, h });
+  };
+  const place = (late: { key: string; w: number; h: number; c: Cell }[], queue: { key: string; w: number; h: number }[]) => {
+    for (const x of late) {
+      const at = nearest(Math.min(Math.max(0, x.c.c), cols - x.w), Math.min(Math.max(0, x.c.r), maxRows - x.h), x.w, x.h);
+      if (at) take(x.key, at.c, at.r, x.w, x.h);
+      else queue.push(x);
+    }
+    for (const x of queue) {
+      const at = firstFree(x.w, x.h)!;
+      take(x.key, at.c, at.r, x.w, x.h);
+    }
   };
   const order = (keys: string[]) => {
     const placed = keys.filter((k) => cells[k]).sort((a, b) => cells[a]!.r - cells[b]!.r || cells[a]!.c - cells[b]!.c);
@@ -757,27 +794,14 @@ export function gridPlacement(columns: number, items: string[], cells: Record<st
   };
 
   // Blocks first (widgets are bigger and need room), then items.
-  const blockQueue: GridBlock[] = [];
-  for (const b of [...blocks].sort((x, y) => (cells[x.key] ? 0 : 1) - (cells[y.key] ? 0 : 1))) {
-    const w = Math.min(b.w, cols);
-    const c = cells[b.key];
-    if (c && fits(c.c, c.r, w, b.h)) take(b.key, c.c, c.r, w, b.h);
-    else blockQueue.push({ ...b, w });
-  }
-  for (const b of blockQueue) {
-    const at = firstFree(b.w, b.h)!;
-    take(b.key, at.c, at.r, b.w, b.h);
-  }
-  const queue: string[] = [];
-  for (const k of order(items)) {
-    const c = cells[k];
-    if (c && fits(c.c, c.r, 1, 1)) take(k, c.c, c.r, 1, 1);
-    else queue.push(k);
-  }
-  for (const k of queue) {
-    const at = firstFree(1, 1)!;
-    take(k, at.c, at.r, 1, 1);
-  }
+  const blockQueue: { key: string; w: number; h: number }[] = [];
+  const blockLate: { key: string; w: number; h: number; c: Cell }[] = [];
+  for (const b of [...blocks].sort((x, y) => (cells[x.key] ? 0 : 1) - (cells[y.key] ? 0 : 1))) settle(b.key, Math.min(b.w, cols), Math.min(b.h, bounded ? maxRows : b.h), blockQueue, blockLate);
+  place(blockLate, blockQueue);
+  const queue: { key: string; w: number; h: number }[] = [];
+  const late: { key: string; w: number; h: number; c: Cell }[] = [];
+  for (const k of order(items)) settle(k, 1, 1, queue, late);
+  place(late, queue);
   return out;
 }
 
@@ -794,16 +818,27 @@ export function surfaceKeys(l: WorkspaceLayout, place: Place): { items: string[]
 const columnsOf = (l: WorkspaceLayout, surface: Place["surface"]) => (surface === "mobile" ? l.mobile.columns : l.desktop.columns);
 const cellsOf = (l: WorkspaceLayout, surface: Place["surface"]) => (surface === "mobile" ? l.mobile.cells : l.desktop.cells);
 
+/**
+ * Step 2.5.1: the size of a PC desktop grid as this screen shows it — columns
+ * and rows that fit the free area (the stored column count is only a
+ * fallback). Phone pages ignore it.
+ */
+export interface GridGeometry {
+  cols: number;
+  rows: number;
+}
+
 /** Where everything on one page / desktop is right now. */
-export function placementOf(l: WorkspaceLayout, place: Place): Map<string, PlacedCell> {
+export function placementOf(l: WorkspaceLayout, place: Place, geometry?: GridGeometry): Map<string, PlacedCell> {
   const { items, blocks } = surfaceKeys(l, place);
-  return gridPlacement(columnsOf(l, place.surface), items, cellsOf(l, place.surface), blocks);
+  const g = place.surface === "desktop" ? geometry : undefined;
+  return gridPlacement(g ? g.cols : columnsOf(l, place.surface), items, cellsOf(l, place.surface), blocks, g?.rows);
 }
 
 /** Freezes the current placement of a page / desktop into stored cells (so one move changes only what moves). */
-function pin(n: WorkspaceLayout, place: Place) {
+function pin(n: WorkspaceLayout, place: Place, geometry?: GridGeometry) {
   const cells = cellsOf(n, place.surface);
-  for (const [k, p] of placementOf(n, place)) cells[k] = { c: p.c, r: p.r };
+  for (const [k, p] of placementOf(n, place, geometry)) cells[k] = { c: p.c, r: p.r };
 }
 
 function containerKeyOf(l: WorkspaceLayout, surface: Place["surface"], key: string): Place | null {
@@ -826,23 +861,24 @@ function containerKeyOf(l: WorkspaceLayout, surface: Place["surface"], key: stri
  * item goes where the dragged one was). Moving to another page / desktop
  * carries the item there. Nothing else moves.
  */
-export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Cell): WorkspaceLayout {
+export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Cell, geometry?: GridGeometry): WorkspaceLayout {
   const from = containerKeyOf(l, to.surface, key);
   if (!from) return l;
   const n = clone(l);
   const same = JSON.stringify(from) === JSON.stringify(to);
-  pin(n, from);
-  if (!same) pin(n, to);
+  const g = to.surface === "desktop" ? geometry : undefined;
+  pin(n, from, g);
+  if (!same) pin(n, to, g);
   const cells = cellsOf(n, to.surface);
   const old = cells[key];
   const isWidget = key.startsWith("widget:");
   const size = isWidget ? WIDGET_CELLS[(n.widgets.find((w) => widgetKey(w.id) === key)?.type ?? "calculator") as WidgetType] : { w: 1, h: 1 };
-  const cols = columnsOf(n, to.surface);
+  const cols = g ? g.cols : columnsOf(n, to.surface);
   const c = Math.max(0, Math.min(cols - size.w, cell.c));
-  const r = Math.max(0, cell.r);
+  const r = Math.max(0, g ? Math.min(g.rows - size.h, cell.r) : cell.r);
 
   // Who is in the target area?
-  const placed = placementOf(n, to);
+  const placed = placementOf(n, to, g);
   const occupants = [...placed.entries()].filter(([k, p]) => k !== key && p.c < c + size.w && p.c + p.w > c && p.r < r + size.h && p.r + p.h > r).map(([k]) => k);
   // An icon never pushes a widget away.
   if (!isWidget && occupants.some((k) => k.startsWith("widget:"))) return l;

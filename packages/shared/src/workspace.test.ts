@@ -26,6 +26,8 @@ import {
   removeWidget,
   placeInCell,
   placementOf,
+  gridPlacement,
+  categoryOf,
   type LayoutItem,
   type WorkspaceLayout,
 } from "./workspace.js";
@@ -349,5 +351,57 @@ describe("Step 2.5 appearance: dock glass, theme, wallpaper sync", () => {
     expect(l.appearance).toMatchObject({ dock: "off", systemBar: "glass", theme: "dark", syncWallpapers: false });
     const bad = normalizeLayout({ ...defaultLayout(MANY), appearance: { ...DEFAULT_APPEARANCE, theme: "neon" as "dark" } }, MANY);
     expect(bad.appearance.theme).toBe("light");
+  });
+});
+
+describe("Step 2.5.1: bounded PC desktop grid", () => {
+  it("keeps valid stored cells and moves out-of-bounds ones to the nearest free cell", () => {
+    const p = gridPlacement(6, ["a", "b", "c", "d"], { a: { c: 0, r: 0 }, b: { c: 12, r: 1 }, c: { c: 3, r: 20 }, d: { c: 5, r: 3 } }, [], 4);
+    expect(p.get("a")).toMatchObject({ c: 0, r: 0 });
+    expect(p.get("d")).toMatchObject({ c: 5, r: 3 });
+    // b: column 12 does not exist → the last column of its row.
+    expect(p.get("b")).toMatchObject({ c: 5, r: 1 });
+    // c: row 20 does not exist → the last row, same column.
+    expect(p.get("c")).toMatchObject({ c: 3, r: 3 });
+    for (const cell of p.values()) {
+      expect(cell.c + cell.w).toBeLessThanOrEqual(6);
+      expect(cell.r + cell.h).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it("a clamped cell that is taken goes to the nearest free one; a valid stored cell keeps priority", () => {
+    const p = gridPlacement(3, ["x", "y"], { x: { c: 9, r: 9 }, y: { c: 2, r: 1 } }, [], 2);
+    expect(p.get("y")).toMatchObject({ c: 2, r: 1 });
+    // x wanted the bottom-right corner (taken by y): the nearest free cell.
+    const x = p.get("x")!;
+    expect(Math.abs(x.c - 2) + Math.abs(x.r - 1)).toBe(1);
+  });
+
+  it("new items fill the area in reading order and only spill past the last row when it is full", () => {
+    const keys = Array.from({ length: 7 }, (_, i) => `k${i}`);
+    const p = gridPlacement(3, keys, {}, [], 2);
+    expect([...p.values()].filter((c) => c.r < 2)).toHaveLength(6);
+    expect(p.get("k6")).toMatchObject({ c: 0, r: 2 });
+  });
+
+  it("widgets are clamped too (a 2×2 block never hangs outside)", () => {
+    const p = gridPlacement(4, ["a"], { "widget:w": { c: 3, r: 5 } }, [{ key: "widget:w", w: 2, h: 2 }], 3);
+    expect(p.get("widget:w")).toMatchObject({ c: 2, r: 1, w: 2, h: 2 });
+  });
+
+  it("placeInCell uses the screen geometry for PC desktops (drop in the far corner stays inside)", () => {
+    const l = norm(defaultLayout(APPS));
+    const space = l.desktop.spaces[0]!.id;
+    const g = { cols: 10, rows: 5 };
+    const n = placeInCell(l, "app:mail", { surface: "desktop", space }, { c: 40, r: 40 }, g);
+    expect(placementOf(n, { surface: "desktop", space }, g).get("app:mail")).toMatchObject({ c: 9, r: 4 });
+    // The phone layout is never bounded by it.
+    expect(placementOf(n, { surface: "mobile", page: 0 }, g).size).toBe(placementOf(n, { surface: "mobile", page: 0 }).size);
+  });
+
+  it("an app's category is always its manifest category (old manual overrides are dropped)", () => {
+    const l = norm({ ...defaultLayout(APPS), categories: { mail: "tools" } } as WorkspaceLayout);
+    expect(l.categories).toEqual({});
+    expect(categoryOf({ categories: { mail: "tools" } } as WorkspaceLayout, "mail", "communication")).toBe("communication");
   });
 });

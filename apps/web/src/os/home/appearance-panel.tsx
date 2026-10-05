@@ -1,7 +1,5 @@
 import { useState, type ReactNode } from "react";
 import {
-  DESKTOP_COLUMNS_MAX,
-  DESKTOP_COLUMNS_MIN,
   defaultLayout,
   type WallpaperPreset,
   type WorkspaceLayout,
@@ -70,17 +68,6 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
                   ]}
                   onChange={(density) => setDesktop({ density })}
                   testId="scale"
-                />
-              </Field>
-              <Field label={t("appearance.pcColumns")}>
-                <Segmented
-                  value={String(layout.desktop.columns)}
-                  options={Array.from({ length: DESKTOP_COLUMNS_MAX - DESKTOP_COLUMNS_MIN + 1 }, (_, i) => {
-                    const v = String(i + DESKTOP_COLUMNS_MIN);
-                    return [v, v] as [string, string];
-                  })}
-                  onChange={(v) => setDesktop({ columns: Number(v) })}
-                  testId="pc-columns"
                 />
               </Field>
               <Field label={t("appearance.sort")}>

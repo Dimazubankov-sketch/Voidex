@@ -15,7 +15,6 @@ import {
   RiFolderTransferLine,
   RiLayoutGridLine,
   RiMacbookLine,
-  RiPriceTag3Line,
   RiApps2Line,
   RiListUnordered,
   RiShareBoxLine,
@@ -25,7 +24,6 @@ import {
   RiApps2Fill,
 } from "@remixicon/react";
 import {
-  APP_CATEGORIES,
   addSpace,
   moveItem,
   pinToDock,
@@ -33,7 +31,6 @@ import {
   removeSpace,
   removeWidget,
   sameItem,
-  setCategory,
   unpinFromDock,
   type AppId,
   type LayoutItem,
@@ -44,7 +41,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { requestClose, useWM } from "../window-manager";
 import { currentView, setView } from "./brush-menu";
-import { CATEGORY_LABEL, addToDesktop, openWallpapers, addToFolder, appCategory, createFolderWith, openApp, ungroupFolder } from "./actions";
+import { addToDesktop, openWallpapers, addToFolder, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
@@ -57,7 +54,7 @@ interface Entry {
   icon?: ReactNode;
   onSelect?: () => void;
   /** Opens a second level instead of acting. */
-  sub?: "folders" | "category" | "spaces" | "view";
+  sub?: "folders" | "spaces" | "view";
   danger?: boolean;
   checked?: boolean;
   /** Applies in place and leaves the menu open (view switches). */
@@ -165,7 +162,6 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         if (!mobile) {
           list.push(dockEntry(id));
           list.push({ id: "rename", label: t("home.rename"), icon: <RiEditLine />, onSelect: () => ui().setRenaming({ kind: "app", id }) });
-          list.push({ id: "category", label: t("home.category"), icon: <RiPriceTag3Line />, sub: "category" });
           if (layout.desktop.spaces.length > 1) list.push({ id: "move-space", label: t("home.moveToSpace"), icon: <RiMacbookLine />, sub: "spaces" });
         }
         return list;
@@ -284,11 +280,6 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         { id: "new-folder", label: t("home.newFolder"), icon: <RiFolderAddLine />, onSelect: () => createFolderWith(id) },
       ];
     }
-    if (sub === "category" && target.kind === "app") {
-      const id = target.id;
-      const current = appCategory(layout, id);
-      return APP_CATEGORIES.map((c) => ({ id: `cat-${c}`, label: t(CATEGORY_LABEL[c]), checked: c === current, onSelect: () => updateLayout((l) => setCategory(l, id, c)) }));
-    }
     if (sub === "spaces") {
       return layout.desktop.spaces
         .filter((s) => !s.items.some((i) => sameItem(i, item)))
@@ -304,7 +295,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
 
   const shown = sub ? subEntries() : entries;
   const subTitle =
-    sub === "folders" ? t("home.addToFolder") : sub === "category" ? t("home.category") : sub === "spaces" ? t("home.moveToSpace") : sub === "view" ? t("appearance.view") : "";
+    sub === "folders" ? t("home.addToFolder") : sub === "spaces" ? t("home.moveToSpace") : sub === "view" ? t("appearance.view") : "";
 
   return (
     <motion.div

@@ -2,6 +2,7 @@ import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEv
 import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeInCell, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
 import type { FormFactor } from "@/lib/form-factor";
 import { useWM } from "../window-manager";
+import { desktopGeometry } from "./desktop-geometry";
 import { itemKey, mergeInto, parseItem } from "./actions";
 import { dockIndexAt } from "./dock";
 import { cellAt, placeOfGrid } from "./grid";
@@ -302,7 +303,7 @@ export function useHomeGestures(opts: GestureOptions) {
         const place = placeOfGrid(d.cell.grid);
         const key = itemKey(d.item);
         const cell = { c: d.cell.c, r: d.cell.r };
-        if (place) updateLayout((l) => placeInCell(l, key, place, cell));
+        if (place) updateLayout((l) => placeInCell(l, key, place, cell, desktopGeometry()));
       }
       ui().setDrag(null);
     };

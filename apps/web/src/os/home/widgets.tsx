@@ -22,6 +22,7 @@ import { Button } from "@/ui/controls";
 import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { CalculatorGlyph } from "@/brand/brand";
+import { desktopGeometry } from "./desktop-geometry";
 import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
 import { updateLayout, useWorkspaceLayout } from "./layout";
@@ -158,7 +159,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const place = placeOfGrid(grid.dataset.homeGrid!);
       if (ev.type === "pointerup" && target && place) {
         const cell = target;
-        updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, cell));
+        updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, cell, desktopGeometry()));
       }
     };
     window.addEventListener("pointermove", move);

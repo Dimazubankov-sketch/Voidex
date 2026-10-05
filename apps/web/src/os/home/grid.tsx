@@ -1,5 +1,7 @@
 import { useMemo, type ReactNode } from "react";
+import { cx } from "@/lib/cx";
 import { WIDGET_CELLS, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type PlacedCell, type WidgetType, type WorkspaceLayout } from "@voidex/shared";
+import type { DesktopGrid } from "./desktop-geometry";
 import type { IconMetrics, LabelStyle } from "./icons";
 import { useHomeUi } from "./ui-store";
 
@@ -56,51 +58,60 @@ interface GridProps {
   renderItem: (item: LayoutItem, index: number) => ReactNode;
   renderWidget: (id: string, size: { w: number; h: number }) => ReactNode;
   testId?: string;
-  /** Step 2.5 (PC): columns that fit the free width; the grid never gets wider than its area. */
-  maxCols?: number;
+  /**
+   * Step 2.5.1 (PC): the desktop is exactly its screen area — columns × rows
+   * that fit it, spread over the full width and height. Nothing is placed
+   * outside it and the grid never grows (no scrolling desktop).
+   */
+  fixed?: DesktopGrid;
 }
 
-export function HomeGrid({ layout, place, items, metrics: m, label, editing, sorted, minRows = 0, renderItem, renderWidget, testId, maxCols }: GridProps) {
+export function HomeGrid({ layout, place, items, metrics: m, label, editing, sorted, minRows = 0, renderItem, renderWidget, testId, fixed }: GridProps) {
   const id = gridId(place);
-  const wanted = place.surface === "mobile" ? layout.mobile.columns : layout.desktop.columns;
-  const cols = Math.max(1, maxCols ? Math.min(wanted, maxCols) : wanted);
+  const cols = Math.max(1, fixed ? fixed.cols : place.surface === "mobile" ? layout.mobile.columns : layout.desktop.columns);
   const rowH = rowHeight(m, label);
   const target = useHomeUi((s) => (s.drag?.cell?.grid === id ? s.drag.cell : null));
   const container = place.surface === "mobile" ? String(place.page) : place.space;
   const widgets = layout.widgets.filter((w) => w.surface === place.surface && w.container === container && (WIDGET_TYPES as readonly string[]).includes(w.type));
 
+  const geometry = fixed ? { cols: fixed.cols, rows: fixed.rows } : undefined;
   const placed: Map<string, PlacedCell> = useMemo(() => {
-    // Fewer columns fit than chosen: items further right flow into the free cells (stored cells are kept).
-    if (!sorted) return placementOf(cols === wanted || place.surface === "mobile" ? layout : { ...layout, desktop: { ...layout.desktop, columns: cols } }, place);
+    // PC: stored cells outside the screen area move to the nearest free cell inside it.
+    if (!sorted) return placementOf(layout, place, geometry);
     const blocks = widgets.map((w) => ({ key: widgetKey(w.id), ...WIDGET_CELLS[w.type as WidgetType] }));
     const cells = Object.fromEntries(widgets.flatMap((w) => {
       const all = place.surface === "mobile" ? layout.mobile.cells : layout.desktop.cells;
       const c = all[widgetKey(w.id)];
       return c ? [[widgetKey(w.id), c]] : [];
     }));
-    return gridPlacement(cols, items.map(layoutItemKey), cells, blocks);
+    return gridPlacement(cols, items.map(layoutItemKey), cells, blocks, geometry?.rows);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, sorted, items, cols, JSON.stringify(place)]);
+  }, [layout, sorted, items, cols, geometry?.rows, JSON.stringify(place)]);
 
   let rows = 0;
   for (const p of placed.values()) rows = Math.max(rows, p.r + p.h);
   // While something is dragged here the grid grows to the row under the pointer (PC desktops grow downwards).
-  const shownRows = Math.max(minRows, rows + (editing ? 1 : 0), target ? target.r + 1 : 0, 1);
+  const shownRows = fixed ? Math.max(fixed.rows, rows) : Math.max(minRows, rows + (editing ? 1 : 0), target ? target.r + 1 : 0, 1);
   const area = (p: PlacedCell) => ({ gridColumn: `${p.c + 1} / span ${p.w}`, gridRow: `${p.r + 1} / span ${p.h}` });
 
   return (
     <div
-      className="relative mx-auto grid"
-      style={{ gridTemplateColumns: `repeat(${cols}, ${m.cell}px)`, gridTemplateRows: `repeat(${shownRows}, ${rowH}px)`, columnGap: m.gapX, rowGap: m.gapY, width: cols * m.cell + (cols - 1) * m.gapX }}
+      className={cx("relative grid", fixed ? "size-full" : "mx-auto")}
+      style={
+        fixed
+          ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${shownRows}, ${fixed.rowH}px)` }
+          : { gridTemplateColumns: `repeat(${cols}, ${m.cell}px)`, gridTemplateRows: `repeat(${shownRows}, ${rowH}px)`, columnGap: m.gapX, rowGap: m.gapY, width: cols * m.cell + (cols - 1) * m.gapX }
+      }
       data-home-grid={sorted ? undefined : id}
       data-home-container={sorted ? undefined : id}
       data-home-free
       data-cols={cols}
-      data-max-rows={place.surface === "mobile" ? shownRows : undefined}
-      data-cell-w={m.cell}
-      data-row-h={rowH}
-      data-gap-x={m.gapX}
-      data-gap-y={m.gapY}
+      data-rows={fixed ? fixed.rows : undefined}
+      data-max-rows={place.surface === "mobile" ? shownRows : fixed ? fixed.rows : undefined}
+      data-cell-w={fixed ? fixed.cellW : m.cell}
+      data-row-h={fixed ? fixed.rowH : rowH}
+      data-gap-x={fixed ? 0 : m.gapX}
+      data-gap-y={fixed ? 0 : m.gapY}
       // Step 2.3.1: the cell under a dragged icon is not drawn (no grid outline while moving icons);
       // the icon still snaps to it on drop. Kept as data for tests.
       data-drop-cell={target ? `${target.c},${target.r}` : undefined}
@@ -110,7 +121,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         const p = placed.get(widgetKey(w.id));
         if (!p) return null;
         return (
-          <div key={w.id} style={area(p)} className="relative min-h-0 min-w-0" data-widget-cell={w.id} data-cell={`${p.c},${p.r}`}>
+          <div key={w.id} style={area(p)} className={cx("relative min-h-0 min-w-0", fixed && "flex items-start justify-center")} data-widget-cell={w.id} data-cell={`${p.c},${p.r}`}>
             {renderWidget(w.id, { w: p.w * m.cell + (p.w - 1) * m.gapX, h: p.h * rowH + (p.h - 1) * m.gapY })}
           </div>
         );
@@ -119,7 +130,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         const p = placed.get(layoutItemKey(item));
         if (!p) return null;
         return (
-          <div key={layoutItemKey(item)} style={area(p)} className="flex justify-center" data-cell={`${p.c},${p.r}`}>
+          <div key={layoutItemKey(item)} style={area(p)} className={cx("flex min-h-0 min-w-0 justify-center", fixed && "items-start")} data-cell={`${p.c},${p.r}`}>
             {renderItem(item, j)}
           </div>
         );

@@ -17,6 +17,7 @@ import { ContextMenu } from "./context-menu";
 import { FolderOverlay } from "./folder-overlay";
 import { useHomeGestures } from "./gestures";
 import { dockZone } from "./dock";
+import { fitGrid, useDesktopGrid } from "./desktop-geometry";
 import { HomeGrid, rowHeight } from "./grid";
 import { DragGhost, HomeItem, type IconMetrics, type LabelStyle } from "./icons";
 import { Launcher } from "./launcher";
@@ -481,24 +482,26 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
   const lang = useLanguage();
   const space = useWM((s) => s.space);
   const current = layout.desktop.spaces.find((s) => s.id === space) ?? layout.desktop.spaces[0]!;
-  const cols = layout.desktop.columns;
   const manual = layout.desktop.sort === "manual";
-  // Step 2.5: the free area is the desktop minus the system bar, the dock zone and the margins;
-  // the grid uses at most the columns that fit it, re-measured on resize and dock size changes.
+  // Step 2.5.1: the desktop is exactly the free area — the screen minus the system bar, the dock zone
+  // and the margins (the surrounding layout reserves those). Columns × rows that fit it are measured
+  // on every resize (window, dock size, system bar); the grid spans all of it and never scrolls.
   const [host, setHost] = useState<HTMLDivElement | null>(null);
-  const [fitCols, setFitCols] = useState<number | undefined>(undefined);
-  useEffect(() => {
+  const grid = useDesktopGrid((s) => s.grid);
+  const rowH = rowHeight(m, label);
+  useLayoutEffect(() => {
     if (!host) return;
     const measure = () => {
       const cs = getComputedStyle(host);
       const w = host.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-      setFitCols(Math.max(1, Math.floor((w + m.gapX) / (m.cell + m.gapX))));
+      const h = host.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if (w > 0 && h > 0) useDesktopGrid.getState().set(fitGrid(w, h, m.cell, rowH, m.gapX, m.gapY));
     };
     const ro = new ResizeObserver(measure);
     ro.observe(host);
     measure();
     return () => ro.disconnect();
-  }, [host, m.cell, m.gapX]);
+  }, [host, m.cell, m.gapX, m.gapY, rowH]);
 
   // The desktop this device was on was removed elsewhere: fall back to the first.
   useEffect(() => {
@@ -543,14 +546,14 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
           data-testid="desktop-space"
           data-space={layout.desktop.spaces.findIndex((s) => s.id === current.id) + 1}
         >
-          <div ref={setHost} className="scroll-area absolute inset-0 px-8 pb-6 pt-[3vh]" data-home-free data-grid-host data-fit-cols={fitCols}>
+          <div ref={setHost} className="absolute inset-0 overflow-hidden px-6 pb-2 pt-4" data-home-free data-grid-host data-testid="desktop-area">
             {layout.desktop.view === "categories" ? (
               <>
                 <WidgetStrip layout={layout} surface="desktop" container={current.id} editing={editing} />
-                <CategoryView layout={layout} items={items} maxWidth={cols * m.cell + (cols - 1) * m.gapX} tone={label.tone} render={item} />
+                <CategoryView layout={layout} items={items} maxWidth={grid ? grid.cols * grid.cellW : 9999} tone={label.tone} render={item} />
               </>
             ) : (
-              <div className="pt-[2vh]" data-home-free>
+              grid && (
                 <HomeGrid
                   layout={layout}
                   place={{ surface: "desktop", space: current.id }}
@@ -559,16 +562,15 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
                   label={label}
                   editing={editing}
                   sorted={!manual}
-                  minRows={editing ? 4 : 0}
                   testId="desktop-grid"
-                  maxCols={fitCols}
+                  fixed={grid}
                   renderItem={item}
                   renderWidget={(id, sz) => {
                     const w = layout.widgets.find((x) => x.id === id)!;
                     return <GridWidget widget={w} size={sz} editing={editing} />;
                   }}
                 />
-              </div>
+              )
             )}
             {!items.length && !layout.widgets.some((w) => w.surface === "desktop" && w.container === current.id) && (
               <p className={cx("mx-auto mt-10 max-w-[360px] text-center text-[14px]", label.tone === "light" ? "text-white/85" : "text-text-secondary")}>{t("home.empty")}</p>

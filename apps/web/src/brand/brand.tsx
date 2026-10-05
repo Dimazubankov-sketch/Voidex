@@ -62,10 +62,16 @@ function useContentBox(src: string) {
 /**
  * A raster logo scaled to its content box: an SVG whose viewBox is the trimmed
  * box, so the visible mark fills the element (aspect kept, centred).
+ * `optical` (Step 2.5.1) shrinks a mark that is optically heavier than the
+ * others (a solid shape reads bigger than an open one at the same box) — the
+ * artwork itself is untouched.
  */
-export function TrimmedLogo({ src, className }: { src: string; className?: string }) {
+export function TrimmedLogo({ src, className, optical = 1 }: { src: string; className?: string; optical?: number }) {
   const box = useContentBox(src);
-  const vb = box ?? { x: 0, y: 0, w: 1, h: 1 };
+  const raw = box ?? { x: 0, y: 0, w: 1, h: 1 };
+  const padX = (raw.w * (1 / optical - 1)) / 2;
+  const padY = (raw.h * (1 / optical - 1)) / 2;
+  const vb = { x: raw.x - padX, y: raw.y - padY, w: raw.w + padX * 2, h: raw.h + padY * 2 };
   return (
     <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className={className} aria-hidden data-system-ui preserveAspectRatio="xMidYMid meet">
       {box && <image href={src} x={0} y={0} width={box.nw} height={box.nh} />}
@@ -108,9 +114,15 @@ export function CalculatorGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-calculator.png" className={className} />;
 }
 
-/** Notes: the user's Voidex Notes logo (Step 2.5), cut out of the delivered artwork without redrawing. */
+/**
+ * Notes: the user's Voidex Notes logo (Step 2.5), cut out of the delivered
+ * artwork without redrawing. It is a nearly solid sheet (≈89% of its box is
+ * ink, the other marks 40–69%), so it is drawn at an optical 0.84 to read the
+ * same size as the rest — in every tile, the dock, search and the launcher.
+ */
+export const NOTES_OPTICAL = 0.84;
 export function NotesGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-notes.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-notes.png" className={className} optical={NOTES_OPTICAL} />;
 }
 
 /** Share of the tile the logo's content box fills — the same for every app. */
