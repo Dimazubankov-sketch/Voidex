@@ -289,6 +289,10 @@ test("PC desktop: never scrolls, the grid fills the free area (more columns than
   await expect.poll(() => cellOf("calculator")).toBe(`${g.cols - 1},${g.rows - 1}`);
 
   const check = async () => {
+    // Settled layout (after a resize the grid is re-measured on the next frame).
+    await expect
+      .poll(() => page.getByTestId("desktop-area").evaluate((a) => a.scrollHeight <= a.clientHeight && a.scrollWidth <= a.clientWidth))
+      .toBe(true);
     const r = await page.evaluate(() => {
       const area = document.querySelector('[data-testid="desktop-area"]') as HTMLElement;
       const doc = document.scrollingElement!;

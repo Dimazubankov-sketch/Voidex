@@ -99,7 +99,8 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
       className={cx("relative grid", fixed ? "size-full" : "mx-auto")}
       style={
         fixed
-          ? { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${shownRows}, ${fixed.rowH}px)` }
+          ? // Rows share the area exactly (never taller than it, even for a frame while the window resizes).
+            { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: shownRows === fixed.rows ? `repeat(${shownRows}, minmax(0, 1fr))` : `repeat(${shownRows}, ${fixed.rowH}px)` }
           : { gridTemplateColumns: `repeat(${cols}, ${m.cell}px)`, gridTemplateRows: `repeat(${shownRows}, ${rowH}px)`, columnGap: m.gapX, rowGap: m.gapY, width: cols * m.cell + (cols - 1) * m.gapX }
       }
       data-home-grid={sorted ? undefined : id}
