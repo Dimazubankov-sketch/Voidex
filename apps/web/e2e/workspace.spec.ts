@@ -179,10 +179,14 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await finger.longPress(empty);
   await page.getByTestId("home-appearance").click();
   await expect(page.getByTestId("brush-menu")).toBeVisible();
+  // Step 2.5.1: Wallpaper opens the one Wallpapers screen in Settings (Home tab).
   await page.getByTestId("brush-wallpaper").click();
-  await page.getByTestId("wallpaper-preset-wave-light").click();
-  await page.keyboard.press("Escape");
-  await page.getByTestId("home-done").click();
+  await expect(page.getByTestId("settings-wallpapers").last()).toHaveAttribute("data-tab", "home");
+  await page.getByTestId("wallpapers-option-wave-light").click();
+  await page.getByTestId("wallpapers-apply").click();
+  await expect(page.getByTestId("wallpapers-apply")).toBeDisabled();
+  await page.getByTestId("window-settings").getByTestId("window-menu").first().click();
+  await page.getByTestId("menu-close").click();
 
   // Everything comes back from the server after a reload.
   await page.waitForTimeout(600); // debounced save
@@ -203,16 +207,13 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
 
   // Right click → Rename the icon (the app keeps its name elsewhere).
   await page.getByTestId("app-mail").click({ button: "right" });
-  for (const id of ["open", "remove", "create-folder", "add-to-folder", "rename", "category"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
+  for (const id of ["open", "remove", "create-folder", "add-to-folder", "rename"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
+  // Step 2.5.1: categories come from the app itself — no manual reassignment.
+  await expect(page.getByTestId("menu-category")).toHaveCount(0);
   await page.getByTestId("menu-rename").click();
   await page.getByTestId("rename-input").fill("Письма");
   await page.getByTestId("rename-save").click();
   await expect(page.getByTestId("app-mail")).toHaveAccessibleName("Письма");
-
-  // Category menu is data, not hard-wired: move Mail to "Работа".
-  await page.getByTestId("app-mail").click({ button: "right" });
-  await page.getByTestId("menu-category").click();
-  await page.getByTestId("menu-cat-work").click();
 
   // Drag Settings onto Mail and hold → a folder.
   const a = await center(page.getByTestId("app-settings").locator("[data-tile]"));
@@ -301,7 +302,7 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await expect(page.getByTestId("dock-space-2")).toBeVisible();
 });
 
-test("Settings → Desktop: scale (PC) / icons per row (phone), wallpaper, glass; no label colour / size", async ({ page }) => {
+test("Settings → Desktop: scale (PC) / icons per row (phone); wallpaper and glass live elsewhere; no label colour / size", async ({ page }) => {
   await signUpViaApi(page, "Ира", "Ву");
   await page.getByTestId("app-settings").click();
   await page.getByTestId("settings-nav-desktop").click();
@@ -322,13 +323,23 @@ test("Settings → Desktop: scale (PC) / icons per row (phone), wallpaper, glass
     await page.getByTestId("dock-scale-l").click();
     await expect(page.getByTestId("dock-scale-l")).toHaveAttribute("aria-checked", "true");
   }
-  await page.getByTestId("wallpaper-preset-mist").click();
+  // Step 2.5.1: no wallpaper picker or glass here — a link to Wallpapers (glass: Personalization).
+  await expect(page.getByTestId("wallpaper-presets")).toHaveCount(0);
+  await expect(page.getByTestId("glass")).toHaveCount(0);
+  await page.getByTestId("wallpaper-link-home").click();
+  await page.getByTestId("wallpapers-option-mist").click();
+  await page.getByTestId("wallpapers-apply").click();
   await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(240, 240, 243\)/);
-  // Glass effect: a real document-wide setting (default on).
+  // Glass effect: a real document-wide setting (default on), in Personalization.
   await expect(page.locator("html")).toHaveAttribute("data-glass", "on");
-  await page.getByTestId("glass-off").click();
+  if (isMobile(page)) {
+    await page.getByTestId("settings-back").last().click();
+    await page.getByTestId("settings-back").last().click();
+    await page.getByTestId("settings-nav-personalization").click();
+  } else await page.getByTestId("settings-nav-personalization").click();
+  await page.getByTestId("personal-glass-off").click();
   await expect(page.locator("html")).toHaveAttribute("data-glass", "off");
-  await page.getByTestId("glass-medium").click();
+  await page.getByTestId("personal-glass-medium").click();
   await expect(page.locator("html")).toHaveAttribute("data-glass", "medium");
 });
 

@@ -105,12 +105,22 @@ test("Settings: lock-screen wallpaper separate from the desktop; code-password c
   await openApp(page, "settings");
   await page.getByTestId("settings-nav-lock").click();
   await expect(page.getByTestId("settings-lock")).toBeVisible();
-  await expect(page.getByTestId("lock-wallpaper-same")).toHaveAttribute("aria-pressed", "true");
-  await page.getByTestId("lock-wallpaper-preset-wave-gray").click();
-  await expect(page.getByTestId("lock-wallpaper-preset-wave-gray")).toHaveAttribute("aria-pressed", "true");
+  // Step 2.5.1: the lock screen links to the one Wallpapers screen (Lock tab).
+  await page.getByTestId("wallpaper-link-lock").click();
+  const wallpapers = page.getByTestId("settings-wallpapers").last();
+  await expect(wallpapers).toHaveAttribute("data-tab", "lock");
+  await expect(page.getByTestId("wallpapers-option-same")).toHaveAttribute("aria-current", "true");
+  await page.getByTestId("wallpapers-option-wave-gray").click();
+  await page.getByTestId("wallpapers-apply").click();
+  await expect(page.getByTestId("wallpapers-apply")).toBeDisabled();
   // The desktop keeps its own wallpaper.
-  await expect(page.getByTestId("wallpaper-default")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("wallpapers-tab-home").click();
+  await expect(page.getByTestId("wallpapers-option-default")).toHaveAttribute("aria-current", "true");
+  await expect(page.getByTestId("wallpapers-apply")).toBeDisabled();
   await page.waitForTimeout(1500); // the layout is saved to the account
+  if (isMobile(page)) await page.getByTestId("settings-back").last().click();
+  else await page.getByTestId("settings-nav-lock").click();
+  await expect(page.getByTestId("settings-lock").last()).toBeVisible();
   // Change the code-password (confirmed: right after sign-up).
   await page.getByTestId("passcode-change").click();
   await expect(page.getByTestId("passcode-sheet")).toBeVisible();
