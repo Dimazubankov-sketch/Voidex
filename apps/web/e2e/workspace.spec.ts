@@ -275,7 +275,8 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
 
   // Right click on free space → View: one tap toggles Grid ⇄ Categories (no submenu), the menu stays.
   const grid = (await page.getByTestId("desktop-grid").boundingBox())!;
-  await page.mouse.click(grid.x + 20, grid.y + grid.height + 120, { button: "right" });
+  // Step 2.5.1: the grid fills the whole desktop — free space is an empty cell (bottom right).
+  await page.mouse.click(grid.x + grid.width - 30, grid.y + grid.height - 30, { button: "right" });
   for (const id of ["appearance", "view", "widgets", "edit"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
   await page.getByTestId("menu-view").click();
   await expect(page.getByTestId("desktop-categories")).toBeVisible();
