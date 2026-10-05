@@ -154,7 +154,12 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
         styleSrc: ["'self'", "'unsafe-inline'"],
         fontSrc: ["'self'", "data:"],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'"],
+        // Vibex voice messages and video circles play from local object URLs (the file is
+        // read with the session, then shown as blob:). Without media-src they fell back to
+        // default-src 'self' and the browser refused to play them (Step 2.6). The waveform
+        // reads the same blob, hence blob: in connect-src.
+        mediaSrc: ["'self'", "blob:"],
+        connectSrc: ["'self'", "blob:"],
         frameAncestors: ["'none'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],

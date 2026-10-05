@@ -1,3 +1,5 @@
+// First: strict-CSP validation mode before any schema is used.
+export * from "./csp.js";
 export * from "./errors.js";
 export * from "./regions.js";
 export * from "./legal.js";
