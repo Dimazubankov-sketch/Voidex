@@ -107,7 +107,7 @@ export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: 
       <motion.label
         className={cx(
           "flex items-center gap-2.5 rounded-full px-4 transition-shadow",
-          inDock ? "vx-dock-field hover:shadow-[inset_0_0_0_1px_rgba(20,20,40,0.08),0_4px_14px_rgba(20,20,40,0.08)]" : "vx-glass focus-within:shadow-float",
+          inDock ? "vx-dock-field" : "vx-glass focus-within:shadow-float",
         )}
         style={{ height, originY: 1 }}
         whileHover={inDock ? { scale: 1.035, y: -1 } : undefined}
@@ -115,8 +115,22 @@ export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: 
         data-testid={inDock ? "dock-search" : undefined}
       >
         <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
+        {/*
+          Step 2.5.1: a search box, not a login field — without a type / name the browser's
+          credential heuristics treated it as a username and drew the password-manager key on focus.
+        */}
         <input
           ref={input}
+          type="search"
+          name="voidex-app-search"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          enterKeyHint="search"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onFocus={() => setFocused(true)}
@@ -133,7 +147,7 @@ export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: 
           }}
           placeholder={t("home.search")}
           aria-label={t("home.search")}
-          className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
+          className="h-full min-w-0 flex-1 appearance-none bg-transparent text-[15px] outline-none placeholder:text-text-tertiary [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
           data-testid="home-search"
         />
       </motion.label>

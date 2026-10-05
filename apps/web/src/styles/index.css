@@ -285,11 +285,21 @@ button {
   .vx-glass-strong { background: rgba(255, 255, 255, 0.92); }
 }
 /* The search field inside the dock's glass: a quiet inset, not a second panel. */
+/*
+ * Step 2.5.1: the dock search is a plain input field — opaque, never glass,
+ * whatever the dock / glass settings: white with a hairline border and a
+ * soft shadow; in the dark theme the semantic dark field colour.
+ */
 .vx-dock-field {
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: inset 0 0 0 1px rgba(20, 20, 40, 0.06);
+  --field-bg: #ffffff;
+  --field-border: rgba(20, 20, 40, 0.1);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
+  box-shadow: 0 1px 2px rgba(20, 20, 40, 0.06), 0 2px 8px -4px rgba(20, 20, 40, 0.08);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
-:root[data-glass="off"] .vx-dock-field { background: var(--surface-secondary); }
+.vx-dock-field:focus-within { border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
 
 /*
  * System UI graphics (app icons, the dock, widgets, logos, decorative art) are
@@ -438,7 +448,7 @@ img[data-system-asset] { pointer-events: none; }
 :root[data-theme="dark"] .border-white\/70,
 :root[data-theme="dark"] .border-white\/60,
 :root[data-theme="dark"] .border-white\/50 { border-color: rgb(255 255 255 / 0.1); }
-:root[data-theme="dark"] .vx-dock-field { background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+:root[data-theme="dark"] .vx-dock-field { --field-bg: var(--surface-secondary); --field-border: var(--border-strong); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root[data-theme="dark"] .vx-glass { background: rgba(28, 28, 37, 0.9); }
   :root[data-theme="dark"] .vx-glass-strong { background: rgba(28, 28, 37, 0.95); }
