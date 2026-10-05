@@ -16,7 +16,8 @@ import { useHomeUi } from "./ui-store";
 
 /** Height of one row: tile + label lines (none when labels are off) + the running dot. */
 export function rowHeight(m: IconMetrics, label: LabelStyle): number {
-  const text = label.show === false ? 0 : Math.round(label.name * 1.3) + 6 + (label.captions ? Math.round(label.caption * 1.3) : 0);
+  const lines = label.twoLines ? 2 : 1;
+  const text = label.show === false ? 0 : Math.round(label.name * 1.3) * lines + 6 + (label.captions ? Math.round(label.caption * 1.3) : 0);
   return m.tile + 8 + text + 10;
 }
 

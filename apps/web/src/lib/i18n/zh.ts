@@ -217,7 +217,7 @@ export const zh: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG、PNG 或 WebP。图片会按屏幕缩放，仅你可见。",
   "appearance.imageFailed": "无法将此图片设为壁纸。",
   "appearance.removeImage": "移除图片",
-  "appearance.captions": "图标下方的第二行",
+  "appearance.captions": "名称下方的说明（“系统”、未读）",
   "appearance.arrangement": "应用排列",
   "appearance.phoneColumns": "手机每行图标数",
   "appearance.pcColumns": "电脑上的列数",
@@ -1059,4 +1059,7 @@ export const zh: Record<MessageKey, string> = {
   "notes.transition.applyAll": "应用到所有幻灯片",
   "notes.card.note": "笔记",
   "notes.card.project": "笔记项目",
+  "appearance.labelTwoLines": "图标下方第二行",
+  "appearance.labelTwoLinesHint": "长名称居中换成两行，而不是“…”。",
+  "appearance.dockSeparators": "程序坞中的分隔线",
 };

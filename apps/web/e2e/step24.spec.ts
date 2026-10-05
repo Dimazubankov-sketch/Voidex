@@ -271,7 +271,8 @@ test("PC dock: an open app that isn't pinned shows while it runs and leaves when
   // Open it from the desktop: it appears in the dock (after the pinned apps) while it runs.
   await openApp(page, "calculator");
   await expect(page.getByTestId("dock-running-calculator")).toBeVisible();
-  await expect(page.getByTestId("dock-running-separator")).toBeVisible();
+  // Step 2.6: the dock has no separators by default.
+  await expect(page.getByTestId("dock-running-separator")).toHaveCount(0);
   // Minimized it stays (still running); a click on it brings the window back.
   await page.getByTestId("window-menu").last().click();
   await page.getByTestId("menu-minimize").click();

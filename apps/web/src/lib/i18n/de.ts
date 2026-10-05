@@ -217,7 +217,7 @@ export const de: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG oder WebP. Es wird an Bildschirme angepasst und ist nur für dich sichtbar.",
   "appearance.imageFailed": "Dieses Bild konnte nicht als Hintergrund festgelegt werden.",
   "appearance.removeImage": "Bild entfernen",
-  "appearance.captions": "Zweite Zeile unter Symbolen",
+  "appearance.captions": "Untertitel unter Namen („System“, ungelesen)",
   "appearance.arrangement": "App-Anordnung",
   "appearance.phoneColumns": "Symbole pro Zeile auf dem Telefon",
   "appearance.pcColumns": "Spalten am Computer",
@@ -1059,4 +1059,7 @@ export const de: Record<MessageKey, string> = {
   "notes.transition.applyAll": "Auf alle Folien anwenden",
   "notes.card.note": "Notiz",
   "notes.card.project": "Notizprojekt",
+  "appearance.labelTwoLines": "Zweite Zeile unter Symbolen",
+  "appearance.labelTwoLinesHint": "Lange Namen umbrechen auf zwei zentrierte Zeilen statt „…“.",
+  "appearance.dockSeparators": "Trennlinien im Dock",
 };

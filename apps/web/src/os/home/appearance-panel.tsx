@@ -44,6 +44,14 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
             </span>
             <Switch checked={a.showLabels} onChange={(showLabels) => setAppearance({ showLabels })} label={t("appearance.showLabels")} />
           </div>
+          {/* Step 2.6: names may wrap to a second line (only meaningful while names are shown). */}
+          <div className={cx("flex items-center gap-3 pl-3", !a.showLabels && "opacity-50")} data-testid="label-two-lines" data-disabled={!a.showLabels || undefined}>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] text-text">{t("appearance.labelTwoLines")}</span>
+              <span className="block text-[12.5px] text-text-tertiary">{t("appearance.labelTwoLinesHint")}</span>
+            </span>
+            <Switch checked={a.showLabels && a.labelTwoLines} disabled={!a.showLabels} onChange={(labelTwoLines) => setAppearance({ labelTwoLines })} label={t("appearance.labelTwoLines")} />
+          </div>
           <Field label={t("appearance.view")}>
             <Segmented
               value={pc ? layout.desktop.view : layout.mobile.view}
@@ -119,6 +127,10 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
           <div className="flex items-center justify-between gap-3 py-1">
             <span className="text-[14px]">{t("appearance.dockDesktops")}</span>
             <Switch checked={layout.desktop.dockDesktops} onChange={(dockDesktops) => setDesktop({ dockDesktops })} label={t("appearance.dockDesktops")} />
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1" data-testid="dock-separators-setting">
+            <span className="text-[14px]">{t("appearance.dockSeparators")}</span>
+            <Switch checked={a.dockSeparators} onChange={(dockSeparators) => setAppearance({ dockSeparators })} label={t("appearance.dockSeparators")} />
           </div>
         </Block>
       )}

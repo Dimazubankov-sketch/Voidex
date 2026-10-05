@@ -217,7 +217,7 @@ export const es: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG o WebP. Se ajusta al tamaño de la pantalla y solo tú puedes verla.",
   "appearance.imageFailed": "No se pudo usar esta imagen como fondo.",
   "appearance.removeImage": "Quitar imagen",
-  "appearance.captions": "Segunda línea bajo los iconos",
+  "appearance.captions": "Subtítulos bajo los nombres («Sistema», no leídos)",
   "appearance.arrangement": "Disposición de las apps",
   "appearance.phoneColumns": "Iconos por fila en el teléfono",
   "appearance.pcColumns": "Columnas en el ordenador",
@@ -1059,4 +1059,7 @@ export const es: Record<MessageKey, string> = {
   "notes.transition.applyAll": "Aplicar a todas",
   "notes.card.note": "Nota",
   "notes.card.project": "Proyecto de notas",
+  "appearance.labelTwoLines": "Segunda línea bajo los iconos",
+  "appearance.labelTwoLinesHint": "Los nombres largos ocupan dos líneas centradas en lugar de «…».",
+  "appearance.dockSeparators": "Separadores en el Dock",
 };

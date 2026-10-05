@@ -217,7 +217,7 @@ export const ko: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG 또는 WebP. 화면에 맞게 조정되며 본인에게만 보입니다.",
   "appearance.imageFailed": "이 사진을 배경화면으로 설정할 수 없습니다.",
   "appearance.removeImage": "사진 제거",
-  "appearance.captions": "아이콘 아래 두 번째 줄",
+  "appearance.captions": "이름 아래 설명(“시스템”, 읽지 않음)",
   "appearance.arrangement": "앱 배치",
   "appearance.phoneColumns": "휴대폰 한 줄당 아이콘 수",
   "appearance.pcColumns": "컴퓨터 열 수",
@@ -1059,4 +1059,7 @@ export const ko: Record<MessageKey, string> = {
   "notes.transition.applyAll": "모든 슬라이드에 적용",
   "notes.card.note": "노트",
   "notes.card.project": "노트 프로젝트",
+  "appearance.labelTwoLines": "아이콘 아래 두 번째 줄",
+  "appearance.labelTwoLinesHint": "긴 이름을 “…” 대신 가운데 정렬된 두 줄로 표시합니다.",
+  "appearance.dockSeparators": "Dock 구분선",
 };

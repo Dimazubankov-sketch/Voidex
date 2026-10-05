@@ -217,7 +217,7 @@ export const ja: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG、PNG、WebP。画面に合わせて縮小され、あなただけに表示されます。",
   "appearance.imageFailed": "この画像を壁紙に設定できませんでした。",
   "appearance.removeImage": "画像を削除",
-  "appearance.captions": "アイコン下の 2 行目",
+  "appearance.captions": "名前の下の説明（「システム」、未読）",
   "appearance.arrangement": "アプリの配置",
   "appearance.phoneColumns": "スマートフォンの 1 行のアイコン数",
   "appearance.pcColumns": "パソコンの列数",
@@ -1059,4 +1059,7 @@ export const ja: Record<MessageKey, string> = {
   "notes.transition.applyAll": "すべてのスライドに適用",
   "notes.card.note": "メモ",
   "notes.card.project": "メモのプロジェクト",
+  "appearance.labelTwoLines": "アイコン下の2行目",
+  "appearance.labelTwoLinesHint": "長い名前を「…」ではなく中央揃えの2行で表示します。",
+  "appearance.dockSeparators": "Dockの区切り線",
 };

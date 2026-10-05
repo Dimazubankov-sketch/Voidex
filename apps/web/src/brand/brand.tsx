@@ -116,11 +116,13 @@ export function CalculatorGlyph({ className }: { className?: string }) {
 
 /**
  * Notes: the user's Voidex Notes logo (Step 2.5), cut out of the delivered
- * artwork without redrawing. It is a nearly solid sheet (≈89% of its box is
- * ink, the other marks 40–69%), so it is drawn at an optical 0.84 to read the
- * same size as the rest — in every tile, the dock, search and the launcher.
+ * artwork without redrawing. It is a nearly solid square sheet: fitted to the
+ * shared glyph box it covers ≈0.89 of it, against Mail 0.68, Vibex 0.61,
+ * Settings 0.52. Step 2.6: drawn at an optical 0.76 (≈0.51 of the box, with
+ * Settings and Vibex) — in every tile, the dock, search, the launcher, folder
+ * previews and the Notes header, all of which go through this one component.
  */
-export const NOTES_OPTICAL = 0.84;
+export const NOTES_OPTICAL = 0.76;
 export function NotesGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-notes.png" className={className} optical={NOTES_OPTICAL} />;
 }

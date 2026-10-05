@@ -77,12 +77,13 @@ export function HomeScreen({
   const cols4 = layout.mobile.columns === 4;
   // Label sizes follow the scale (PC) or the icons per row (phone) — no separate setting.
   const show = layout.appearance.showLabels;
+  const twoLines = show && layout.appearance.labelTwoLines;
   const label: LabelStyle = useMemo(
     () =>
       ff === "mobile"
-        ? { tone, name: cols4 ? 12 : 13, caption: cols4 ? 10.5 : 11, captions: layout.appearance.captions, show }
-        : { tone, name: scale.name, caption: scale.caption, captions: layout.appearance.captions, show },
-    [ff, tone, cols4, scale, layout.appearance.captions, show],
+        ? { tone, name: cols4 ? 12 : 13, caption: cols4 ? 10.5 : 11, captions: layout.appearance.captions, show, twoLines }
+        : { tone, name: scale.name, caption: scale.caption, captions: layout.appearance.captions, show, twoLines },
+    [ff, tone, cols4, scale, layout.appearance.captions, show, twoLines],
   );
   const pagerRef = useRef<Pager | null>(null);
   const mobileCategories = ff === "mobile" && layout.mobile.view === "categories";

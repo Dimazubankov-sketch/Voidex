@@ -217,7 +217,7 @@ export const tr: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG veya WebP. Ekrana göre boyutlandırılır ve yalnızca sen görürsün.",
   "appearance.imageFailed": "Bu resim duvar kâğıdı olarak ayarlanamadı.",
   "appearance.removeImage": "Resmi kaldır",
-  "appearance.captions": "Simgelerin altında ikinci satır",
+  "appearance.captions": "Adların altında açıklama (“Sistem”, okunmamış)",
   "appearance.arrangement": "Uygulama düzeni",
   "appearance.phoneColumns": "Telefonda satır başına simge",
   "appearance.pcColumns": "Bilgisayarda sütun",
@@ -1059,4 +1059,7 @@ export const tr: Record<MessageKey, string> = {
   "notes.transition.applyAll": "Tüm slaytlara uygula",
   "notes.card.note": "Not",
   "notes.card.project": "Not projesi",
+  "appearance.labelTwoLines": "Simgelerin altında ikinci satır",
+  "appearance.labelTwoLinesHint": "Uzun adlar “…” yerine ortalanmış iki satıra bölünür.",
+  "appearance.dockSeparators": "Dock’ta ayırıcılar",
 };

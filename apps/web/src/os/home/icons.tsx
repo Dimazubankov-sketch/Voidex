@@ -36,6 +36,8 @@ export interface LabelStyle {
   captions: boolean;
   /** Step 2.3: app names under desktop icons (off: icons only; the name stays the accessible label). */
   show?: boolean;
+  /** Step 2.6: names may take two centred lines (else one line with "…"). */
+  twoLines?: boolean;
 }
 
 function labelClass(tone: LabelTone) {
@@ -214,7 +216,16 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
           )}
         </span>
         {label.show !== false && (
-          <span className={cx("max-w-full truncate px-0.5 font-semibold leading-tight", labelClass(label.tone))} style={{ fontSize: label.name }} data-testid="home-label">
+          <span
+            className={cx(
+              "max-w-full px-0.5 font-semibold leading-tight",
+              label.twoLines ? "line-clamp-2 whitespace-normal break-words text-center [overflow-wrap:anywhere]" : "truncate",
+              labelClass(label.tone),
+            )}
+            style={{ fontSize: label.name }}
+            data-testid="home-label"
+            data-lines={label.twoLines ? 2 : 1}
+          >
             {name}
           </span>
         )}

@@ -72,6 +72,8 @@ export function DesktopDock() {
   // The dock as a shelf (search beside the icons) whenever it shows something; its glass can be off (Step 2.5).
   const shelf = apps.length > 0 || running.length > 0 || desktops;
   const glass = shelf && layout.appearance.dock !== "off";
+  // Step 2.6: no separators unless turned on in Settings → Desktop.
+  const separators = layout.appearance.dockSeparators;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 z-[30] flex justify-center px-6" style={{ bottom: BOTTOM }} data-testid="bottom-bar">
@@ -88,7 +90,7 @@ export function DesktopDock() {
         data-shelf={shelf || undefined}
       >
         <DesktopSearchBar apps={installed} layout={layout} inDock={shelf} height={shelf ? Math.max(36, tile - 6) : 44} />
-        {shelf && <span className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden />}
+        {shelf && separators && <span className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden data-testid="dock-separator" />}
         {apps.map((id, i) => (
           <DockSlot key={id} gap={gapAt === i} tile={tile}>
             <DockApp id={id} layout={layout} mouseX={mouseX} tile={tile} />
@@ -96,7 +98,7 @@ export function DesktopDock() {
         ))}
         {gapAt !== null && gapAt >= apps.length && <DockSlot gap tile={tile}>{null}</DockSlot>}
         <AnimatePresence initial={false}>
-          {running.length > 0 && (
+          {running.length > 0 && separators && (
             <motion.span key="running-sep" className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} data-testid="dock-running-separator" />
           )}
           {running.map((id) => (

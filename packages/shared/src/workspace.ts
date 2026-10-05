@@ -158,6 +158,10 @@ export const AppearanceSchema = z.object({
   lockWallpaper: WallpaperSchema.nullable().optional(),
   /** Step 2.5: PC dock background (separate from the system bar). */
   dock: z.enum(DOCK_STYLES).default("glass"),
+  /** Step 2.6: thin separators between the dock's groups (search | apps | running). Off by default. */
+  dockSeparators: z.boolean().default(false),
+  /** Step 2.6: app names under icons may take a second line (centred) instead of one line with "…". */
+  labelTwoLines: z.boolean().default(false),
   /** Step 2.5: light / dark / follow the device. */
   theme: z.enum(THEMES).default("light"),
   /**
@@ -232,7 +236,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", theme: "light", syncWallpapers: true };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -258,6 +262,8 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     systemBar: base.systemBar === "off" ? "off" : "glass",
     lockWallpaper: base.lockWallpaper ? normalizeWallpaper(base.lockWallpaper) : null,
     dock: base.dock === "off" ? "off" : "glass",
+    dockSeparators: base.dockSeparators === true,
+    labelTwoLines: base.labelTwoLines === true,
     theme: (THEMES as readonly string[]).includes(base.theme) ? base.theme : "light",
     syncWallpapers: base.syncWallpapers !== false,
   };

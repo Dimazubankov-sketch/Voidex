@@ -236,7 +236,7 @@ export const en = {
   "appearance.imageHint": "JPEG, PNG or WebP. It's resized to fit screens and visible only to you.",
   "appearance.imageFailed": "Couldn't set this picture as wallpaper.",
   "appearance.removeImage": "Remove picture",
-  "appearance.captions": "Second line under icons",
+  "appearance.captions": "Captions under names (“System”, unread)",
   "appearance.arrangement": "App arrangement",
   "appearance.phoneColumns": "Icons per row on phone",
   "appearance.pcColumns": "Columns on computer",
@@ -1090,6 +1090,9 @@ export const en = {
   "notes.transition.applyAll": "Apply to all slides",
   "notes.card.note": "Note",
   "notes.card.project": "Notes project",
+  "appearance.labelTwoLines": "Second line under icons",
+  "appearance.labelTwoLinesHint": "Long names wrap to two centred lines instead of “…”.",
+  "appearance.dockSeparators": "Separators in the Dock",
 } as const;
 
 export type MessageKey = keyof typeof en;

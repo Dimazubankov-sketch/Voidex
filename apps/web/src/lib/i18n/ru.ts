@@ -225,7 +225,7 @@ export const ru: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG или WebP. Изображение уменьшается под экран и видно только вам.",
   "appearance.imageFailed": "Не удалось установить изображение как обои.",
   "appearance.removeImage": "Удалить изображение",
-  "appearance.captions": "Вторая строка под значками",
+  "appearance.captions": "Подписи под названиями («Система», непрочитанные)",
   "appearance.arrangement": "Расположение приложений",
   "appearance.phoneColumns": "Значков в ряду на телефоне",
   "appearance.pcColumns": "Колонок на компьютере",
@@ -1074,4 +1074,7 @@ export const ru: Record<MessageKey, string> = {
   "notes.transition.applyAll": "Применить ко всем слайдам",
   "notes.card.note": "Заметка",
   "notes.card.project": "Проект заметок",
+  "appearance.labelTwoLines": "Вторая строка под значками",
+  "appearance.labelTwoLinesHint": "Длинные названия переносятся на две строки по центру вместо «…».",
+  "appearance.dockSeparators": "Разделители в Dock",
 };

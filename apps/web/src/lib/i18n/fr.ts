@@ -217,7 +217,7 @@ export const fr: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG ou WebP. L'image est adaptée aux écrans et visible par vous seul.",
   "appearance.imageFailed": "Impossible de définir cette image comme fond d'écran.",
   "appearance.removeImage": "Supprimer l'image",
-  "appearance.captions": "Deuxième ligne sous les icônes",
+  "appearance.captions": "Sous-titres sous les noms (« Système », non lus)",
   "appearance.arrangement": "Disposition des apps",
   "appearance.phoneColumns": "Icônes par ligne sur téléphone",
   "appearance.pcColumns": "Colonnes sur ordinateur",
@@ -1059,4 +1059,7 @@ export const fr: Record<MessageKey, string> = {
   "notes.transition.applyAll": "Appliquer à toutes les diapos",
   "notes.card.note": "Note",
   "notes.card.project": "Projet de notes",
+  "appearance.labelTwoLines": "Deuxième ligne sous les icônes",
+  "appearance.labelTwoLinesHint": "Les noms longs passent sur deux lignes centrées au lieu de « … ».",
+  "appearance.dockSeparators": "Séparateurs dans le Dock",
 };

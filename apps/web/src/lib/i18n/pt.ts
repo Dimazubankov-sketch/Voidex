@@ -217,7 +217,7 @@ export const pt: Record<MessageKey, string> = {
   "appearance.imageHint": "JPEG, PNG ou WebP. A imagem é ajustada à tela e só você a vê.",
   "appearance.imageFailed": "Não foi possível usar esta imagem como papel de parede.",
   "appearance.removeImage": "Remover imagem",
-  "appearance.captions": "Segunda linha sob os ícones",
+  "appearance.captions": "Legendas sob os nomes (“Sistema”, não lidas)",
   "appearance.arrangement": "Disposição dos apps",
   "appearance.phoneColumns": "Ícones por linha no celular",
   "appearance.pcColumns": "Colunas no computador",
@@ -1059,4 +1059,7 @@ export const pt: Record<MessageKey, string> = {
   "notes.transition.applyAll": "Aplicar a todos os slides",
   "notes.card.note": "Nota",
   "notes.card.project": "Projeto de notas",
+  "appearance.labelTwoLines": "Segunda linha sob os ícones",
+  "appearance.labelTwoLinesHint": "Nomes longos quebram em duas linhas centralizadas em vez de “…”.",
+  "appearance.dockSeparators": "Separadores no Dock",
 };
