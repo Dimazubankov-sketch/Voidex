@@ -1,66 +1,115 @@
-# Voidex Notes (Step 2.5)
+# Voidex Notes (Step 2.6)
 
-Voidex Notes is a system app (`notes`, category Work) built from the
-delivered package `packages/notes` (Voidex-Notes-Claude-Light). It runs
-natively in a VOIDEX window: no iframe, no second React root, its own lazy
-chunk (`apps/web/src/apps/notes/notes-app.tsx`), so the shell does not load it
-until Notes is opened.
+Notes is a system app (`notes`, category Work), written as VOIDEX screens in
+`apps/web/src/apps/notes` (its own lazy chunk; the editor is a second lazy
+chunk). `packages/notes` keeps only pure, tested document logic (pages,
+formats, Note → Presentation, slide reflow). Step 2.5's delivered UI with
+spaces, Prompter, note backgrounds and HTML export is gone.
 
-## What changed in the package
+## Model
 
-The editor was kept; changes are small and marked `VOIDEX` in the code:
+```
+Project (cover, name, owner, position)
+ └─ Document  kind = note | presentation  (name, cover, format, data, revision, position)
+```
 
-| Change | Why |
-|---|---|
-| Sources formatted with Prettier (commit "as delivered") | reviewable diffs |
-| `NotesAdapter.media(src)` and `MediaContext` | images are private; they are read with the session and shown from object URLs (also in HTML / JSON export) |
-| `NotesConflictError` + conflict dialog | a save refused with 409 offers: keep both / mine / theirs — never a silent overwrite |
-| `remoteRevision` | a save from another device is shown when nothing here is unsaved |
-| `controllerRef` (`isDirty`, `flush`) | the window asks before closing with unsaved changes |
-| `share`, `shareLink`, `headerEnd` props | deep link `#notes/share/<token>`, window menu in the header |
-| Page breaks (continuous sheet) | insert after a block, move up / down, remove (pages join) |
-| "Разбить на страницы" toolbar toggle | paged view of the same pages |
-| Image sizes S / M / L / full, align left / centre / right in the selection bar; paste / drop insert after the selected block; 12-column grid only while an image is selected | |
-| Media path `/api/notes/media?id=<uuid>` | the Notes API of VOIDEX |
-| UI kit: `z-[160]` portals, VOIDEX tokens, no `next-themes` | stays above windows, follows light / dark |
-| Strict-mode TypeScript fixes | the web app's compiler settings |
+Tables (migration `0009_notes_projects_sharing.sql`, additive):
+`notes_projects`, `notes_documents`, `notes_members`, `notes_prefs`; extended
+`notes_shares`; `notes_workspaces.migrated_at`; `vibex_messages.notes_card`,
+`mail_messages.notes_cards`.
 
-The model (projects → spaces → pages → blocks), presentations, formats,
-flows, transitions, presenter / teleprompter, speaker notes, undo / redo
-(40 steps), JSON import / export and HTML export are unchanged.
+- **Note body**: `{ kind: "note", format: "vertical" | "square", pages: [{ id, blocks }] }`.
+  Blocks: text, heading, subheading, quote, checklist, bullet, code, image
+  (`src`, `width` 10–100 %, `align`). One page = one continuous sheet of
+  unlimited length.
+- **Presentation body**: `{ kind: "presentation", format: "rect" | "square", slides: [{ id, transition, layers }] }`.
+  Layers (title / text / image) are placed in % of the slide, so they reflow
+  between 16:9 and 1:1.
 
-## Continuous and paged
+### Migration from Step 2.5
 
-A note is one continuous sheet by default (`paged: false`). Its pages are
-still stored as pages; in the sheet the boundary between two pages is a
-"page break" with three controls: move it up (the last block before it goes
-below), down (the first block after it goes above), remove (the two pages
-join; speaker notes are joined too). "Разрыв страницы после блока" splits
-the page after the selected block. Turning on "Разбить на страницы" shows the
-same boundaries as separate pages. Nothing is dropped in either direction.
+The old workspace JSON (projects → spaces) is converted lazily and once, the
+first time its owner opens Notes (`ensureMigrated`, guarded by
+`migrated_at`): every space becomes a document of its project, keeping
+order, content, images, revisions; name collisions become "Идеи (2)"; old
+share snapshots keep working. The old JSON stays untouched (no DROP).
 
-## Backend (`/api/notes`, signed-in only)
+## Screens
 
-| Route | |
-|---|---|
-| `GET /api/notes` | `{ data, revision }` of the signed-in account (empty workspace, revision 0 the first time) |
-| `PUT /api/notes` | `{ data, revision }` → `{ revision }`; 409 `notes_conflict` (details.revision) when another device saved first; 8 MB limit; the document is validated (`validNotesWorkspace`) |
-| `POST /api/notes/media` | image bytes → `{ url }`; JPEG / PNG / WebP / GIF by content, ≤ 12 MB, SVG refused |
-| `GET /api/notes/media?id=` | the owner, or any signed-in user when one of the owner's shares shows that image |
-| `POST /api/notes/shares` | a space or project → `{ token }` (24 random bytes, base64url); speaker notes removed on the server |
-| `GET /api/notes/shares` | my links `{ token, name, created }` |
-| `GET /api/notes/shares/:token` | the snapshot (any signed-in user with the link) |
-| `DELETE /api/notes/shares/:token` | owner only (404 for anyone else) |
+- **Projects** — grid or list (cover, name, file count, last change), sort:
+  custom (drag on PC, "Move up / down" on touch), modified, created, name —
+  remembered on the server (`notes_prefs`). "Доступно мне" lists documents
+  shared on their own.
+- **Project** — its notes (`.txt`) and presentations (`.prsn`).
+- **Bottom bar** — search (context: projects or documents) and the one "+"
+  (new project / new note or presentation). Phone safe-area aware.
+- The Notes logo has a fixed place in browser headers; Back has its own slot
+  and never moves it. Editors have no logo, only floating controls.
+- **Cover and name** sheet (like the Photos album sheet): JPEG / PNG / WebP,
+  downscaled before upload; without a picture a generated cover is shown.
 
-The user id always comes from the session. Tables (migration
-`0008_notes_vibex_views.sql`): `notes_workspaces`, `notes_media` (bytes in
-`blobs`, purpose `notes`), `notes_shares`. Tests: `apps/server/test/notes.test.ts`
-(isolation between accounts, CAS, image types, share snapshots, speaker notes,
-revoking).
+The route lives in its own store (`route.ts`). Step 2.5's "thrown back to
+Projects" came from `useT()` returning a new function every render: the
+adapter was rebuilt, the loading effect re-ran and reset the route. Nothing
+that loads data depends on render identity now; an e2e test guards it.
 
-## Limits
+## Editor
 
-- The editor's interface text is Russian (as delivered).
-- Images that are no longer referenced are not garbage-collected yet.
-- A shared link needs a VOIDEX sign-in (VOIDEX is closed); the downloaded HTML
-  file opens anywhere.
+Clean paper (no frames, grid or backgrounds), a minimal toolbar (style,
+list, checklist, picture, bold, italic) that rides above the phone keyboard.
+Markdown shortcuts: `# `, `## `, `- `, `[] `, `> `, ```` ``` ````.
+
+- **Vertical**: portrait sheets downwards. **Square**: square pages sideways,
+  text flows on to the next page by itself, the wheel scrolls sideways.
+  Switching keeps everything.
+- **Pages**: no page-break button. "+" → New page / Split here / Delete page
+  (its text moves to the previous page). ‹ 2 / 6 › navigation.
+- **Pictures**: upload, paste, drop; resize by the corner or 25/50/75/100 %;
+  align; move; remove. Shown from object URLs (images are private).
+- **Saving**: debounced, compare-and-swap on `revision`. A save that finds a
+  newer revision shows a banner (load theirs / keep mine) — never a silent
+  overwrite. Remote saves apply live while nothing is unsaved.
+- **Presentations**: sidebar Slides / Layers / Transitions; drag and resize
+  layers; transitions None / Fade / Slide / Scale with preview (reduced motion
+  respected); 16:9 ↔ 1:1 with an overflow warning; fullscreen show (arrows,
+  swipe, Esc). "Превратить в презентацию" makes a new `.prsn`, the note stays.
+
+## Sharing
+
+Only the owner shares. Roles: owner, editor, viewer.
+
+- **Copy** (default): a snapshot at share time; the recipient adds their own
+  independent copy ("Полученные").
+- **Разрешить редактирование**: access to the original as Editor; the owner
+  switches Viewer ↔ Editor or removes people in **Пользователи**.
+- Removing someone or deleting the original closes it on their devices at
+  once ("Доступ ограничен — Владелец больше не предоставляет вам доступ…");
+  the server refuses their reads and writes.
+- Share sheet: search, then **Vibex** or **Почта VoidOps**, then people; copy
+  link; Users. It arrives as a file card **Name.txt** (notes, projects) or
+  **Name.prsn** (presentations). Tapping a card opens Notes and resolves the
+  link. Cards are built as files (`NotesCardDto`) so download / cloud / Files
+  can be added later.
+- Tokens are random, unguessable, revocable (`notes_shares.revoked_at`).
+
+Deep links (sign-in and access still required): `#notes/project/<id>`,
+`#notes/doc/<id>`, `#notes/share/<token>`.
+
+## Events (no polling)
+
+`notes.document.updated`, `notes.access.revoked`, `notes.resource.deleted`,
+`notes.share.updated`, `notes.projects.changed`.
+
+## API
+
+`/api/notes/projects` (GET, POST), `/projects/:id` (GET, PATCH, DELETE),
+`/projects/:id/documents` (POST), `/documents/:id` (GET, PUT body+revision,
+PATCH name/cover/position, DELETE), `/access/:type/:id` (members),
+`/access/:type/:id/:userId` (PATCH role, DELETE), `/access/:type/:id/links`,
+`/shares` (POST), `/shares/:token` (GET, DELETE), `/shares/:token/accept`,
+`/prefs` (GET, PUT), `/media` (POST, GET `?id=`).
+
+## Tests
+
+`packages/notes/test`, `packages/shared/src/notes.test.ts`,
+`apps/server/test/notes.test.ts`, `apps/web/e2e/step26-notes.spec.ts`.

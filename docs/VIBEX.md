@@ -240,3 +240,14 @@ Migration `0005_vibex_social.sql` (additive): `vibex_profiles`, `vibex_comments`
 - **Action row**: like · comment · share as icon + number (0 shown), equal
   columns; views (eye) apart on the right. `shares` = reposts + sends into
   chats. The share button is an icon only ("Поделиться" for screen readers).
+
+## Voice and circle playback under the CSP (Step 2.6)
+
+Recordings are read with the session and played from `blob:` object URLs.
+The page's Content-Security-Policy (Helmet, served with `index.html`) must
+therefore allow `media-src 'self' blob:` and `connect-src 'self' blob:` (the
+waveform reads the same blob). Before Step 2.6 there was no `media-src`, so
+production fell back to `default-src 'self'` and refused to play; the dev
+server sends no CSP, which hid it. `apps/server/test/csp.test.ts` asserts the
+policy; `apps/web/e2e/step26-media.spec.ts` serves the app with the server's
+real policy and plays a real recording for sender and recipient.
