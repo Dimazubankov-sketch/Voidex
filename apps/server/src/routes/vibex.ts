@@ -126,7 +126,10 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
   app.post("/chats/:id/messages", limit(120), async (req, reply) => {
     const { id } = parse(idParam, req.params);
     reply.status(201);
-    return vibex.send(req.auth!.userId, id, parse(VibexSendMessageSchema, req.body));
+    const body = parse(VibexSendMessageSchema, req.body);
+    // Step 2.6: a Notes link becomes a file card (title and type only; opening it checks access in Notes).
+    const notesCard = body.notesToken ? await app.services.notes.card(body.notesToken) : undefined;
+    return vibex.send(req.auth!.userId, id, { ...body, notesCard });
   });
 
   /** Step 2.5: the sender deletes their message for everyone. */

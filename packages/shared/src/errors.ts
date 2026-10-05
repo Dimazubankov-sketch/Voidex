@@ -83,6 +83,8 @@ export const ErrorCode = {
   /** The document changed on another device since this one loaded it. */
   NotesConflict: "notes_conflict",
   NotesTooLarge: "notes_too_large",
+  NotesForbidden: "notes_forbidden",
+  NotesAccessRevoked: "notes_access_revoked",
 
   // apps
   AppNotInRegistry: "app_not_in_registry",

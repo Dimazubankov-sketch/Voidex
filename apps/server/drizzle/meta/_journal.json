@@ -64,6 +64,13 @@
       "when": 1791300000000,
       "tag": "0008_notes_vibex_views",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791400000000,
+      "tag": "0009_notes_projects_sharing",
+      "breakpoints": true
     }
   ]
 }

@@ -76,8 +76,14 @@ function handle(event: ServerEvent) {
       void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
       break;
-    case "notes.changed":
-      useNotesSync.setState({ revision: event.revision });
+    case "notes.document.updated":
+    case "notes.access.revoked":
+    case "notes.resource.deleted":
+    case "notes.share.updated":
+    case "notes.projects.changed":
+      // Step 2.6: Notes reacts in its own (lazy) chunk; lists refresh here too.
+      useNotesSync.getState().push(event);
+      void queryClient.invalidateQueries({ queryKey: ["notes"] });
       break;
     case "vibex.feed":
       // Someone posted, edited, liked or commented: feeds and that post refresh.

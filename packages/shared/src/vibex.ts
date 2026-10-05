@@ -1,3 +1,4 @@
+import type { NotesCardDto } from "./notes.js";
 import { z } from "zod";
 
 /**
@@ -92,6 +93,8 @@ export interface VibexMessageDto {
   createdAt: string;
   /** Step 2.5: deleted by its sender — show "Сообщение удалено" (text and files are gone). */
   deleted?: boolean;
+  /** Step 2.6: a Voidex Notes file card (opening it checks access in Notes). */
+  notesCard?: NotesCardDto | null;
 }
 
 /** Step 2.4: a group chat (several people, a name, an optional picture). */
@@ -284,8 +287,10 @@ export const VibexSendMessageSchema = z
     kind: z.enum(["text", "voice", "circle"]).default("text"),
     durationMs: z.number().int().min(0).max(VIBEX_VOICE_MAX_MS).optional(),
     replyToId: z.string().uuid().optional(),
+    /** Step 2.6: a Voidex Notes share link, shown as a .txt / .prsn file card. */
+    notesToken: z.string().regex(/^[A-Za-z0-9_-]{16,64}$/).optional(),
   })
-  .refine((m) => m.text.trim().length > 0 || m.fileIds.length > 0, { message: "Empty message", path: ["text"] })
+  .refine((m) => m.text.trim().length > 0 || m.fileIds.length > 0 || !!m.notesToken, { message: "Empty message", path: ["text"] })
   .refine((m) => m.kind === "text" || (m.fileIds.length === 1 && !m.text.trim()), { message: "A recording is one file", path: ["fileIds"] })
   .refine((m) => m.kind !== "circle" || (m.durationMs ?? 0) <= VIBEX_CIRCLE_MAX_MS, { message: "Too long", path: ["durationMs"] });
 

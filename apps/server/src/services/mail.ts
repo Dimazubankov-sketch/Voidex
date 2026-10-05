@@ -23,6 +23,7 @@ import {
   type RecipientKind,
   type ThreadDetailDto,
   type ThreadSummaryDto,
+  type NotesCardDto,
 } from "@voidex/shared";
 import type { Tx } from "../db/client.js";
 import { mailAccounts, mailAttachments, mailEntries, mailMessages, mailRecipients, mailThreads, users } from "../db/schema.js";
@@ -396,6 +397,7 @@ export class MailService {
       forwardOfId: m.forwardOfId,
       isOwn: own,
       attachments,
+      notesCards: m.notesCards ?? [],
     };
   }
 
@@ -538,6 +540,7 @@ export class MailService {
       forwardOfMessageId: m.forwardOfId,
       updatedAt: m.updatedAt.toISOString(),
       attachments: (await this.attachmentsOf([m.id], tx)).get(m.id) ?? [],
+      notesCards: m.notesCards ?? [],
     };
   }
 
@@ -552,19 +555,22 @@ export class MailService {
     return row.m;
   }
 
-  async createDraft(userId: string, input: DraftCreateInput): Promise<DraftDto> {
+  async createDraft(userId: string, input: DraftCreateInput, cards?: NotesCardDto[]): Promise<DraftDto> {
     const acc = await this.accountFor(userId);
     const now = this.ctx.now();
     return this.ctx.db.transaction(async (tx) => {
       let threadId: string | null = null;
       let inReplyToId: string | null = null;
       let forwardOfId: string | null = null;
+      let forwardCards: NotesCardDto[] = [];
       if (input.replyToMessageId) {
         const parent = await this.visibleMessage(tx, acc, input.replyToMessageId);
         threadId = parent.threadId;
         inReplyToId = parent.id;
       } else if (input.forwardOfMessageId) {
-        forwardOfId = (await this.visibleMessage(tx, acc, input.forwardOfMessageId)).id;
+        const original = await this.visibleMessage(tx, acc, input.forwardOfMessageId);
+        forwardOfId = original.id;
+        forwardCards = original.notesCards ?? [];
       }
       const [m] = await tx
         .insert(mailMessages)
@@ -579,6 +585,7 @@ export class MailService {
           status: "draft",
           inReplyToId,
           forwardOfId,
+          notesCards: cards ?? forwardCards,
           createdAt: now,
           updatedAt: now,
         })
@@ -605,14 +612,14 @@ export class MailService {
   }
 
   /** Autosave target: replaces the draft's content and recipients. */
-  async updateDraft(userId: string, draftId: string, input: DraftInput): Promise<DraftDto> {
+  async updateDraft(userId: string, draftId: string, input: DraftInput, cards?: NotesCardDto[]): Promise<DraftDto> {
     const acc = await this.accountFor(userId);
     const now = this.ctx.now();
     return this.ctx.db.transaction(async (tx) => {
       await this.ownDraft(tx, acc, draftId, true);
       const [m] = await tx
         .update(mailMessages)
-        .set({ subject: input.subject, body: input.body, snippet: makeSnippet(input.body), updatedAt: now })
+        .set({ subject: input.subject, body: input.body, snippet: makeSnippet(input.body), updatedAt: now, ...(cards ? { notesCards: cards } : {}) })
         .where(eq(mailMessages.id, draftId))
         .returning();
       await this.writeRecipients(tx, draftId, input);

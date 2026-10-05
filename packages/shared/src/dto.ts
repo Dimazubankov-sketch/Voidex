@@ -1,3 +1,4 @@
+import type { NotesCardDto } from "./notes.js";
 import type { NotificationDto } from "./notifications.js";
 import type { AppId, AppManifest } from "./apps.js";
 import type { Preferences } from "./api.js";
@@ -186,6 +187,8 @@ export interface MailMessageDto {
   forwardOfId: string | null;
   isOwn: boolean;
   attachments: MailAttachmentDto[];
+  /** Step 2.6: Voidex Notes cards (opening one checks access in Notes). */
+  notesCards: NotesCardDto[];
 }
 
 export interface ThreadDetailDto {
@@ -206,6 +209,7 @@ export interface DraftDto {
   forwardOfMessageId: string | null;
   updatedAt: string;
   attachments: MailAttachmentDto[];
+  notesCards: NotesCardDto[];
 }
 
 export interface Paginated<T> {
@@ -243,8 +247,16 @@ export type ServerEvent =
   | { type: "vibex.feed"; postId?: string }
   /** Step 2.5 Vibex: a chat message was deleted by its sender (the chat shows a placeholder). */
   | { type: "vibex.message.deleted"; conversationId: string; messageId: string }
-  /** Step 2.5 Notes: the workspace was saved on another device (this revision). */
-  | { type: "notes.changed"; revision: number }
+  /** Step 2.6 Notes: a document was saved (by me on another device, or by a co-editor). */
+  | { type: "notes.document.updated"; documentId: string; projectId: string; revision: number; byUserId: string; byName: string }
+  /** Step 2.6 Notes: the owner removed my access — close the document / project now. */
+  | { type: "notes.access.revoked"; resourceType: "project" | "document"; resourceId: string; name: string }
+  /** Step 2.6 Notes: a project / document I can see was deleted. */
+  | { type: "notes.resource.deleted"; resourceType: "project" | "document"; resourceId: string; name: string }
+  /** Step 2.6 Notes: who has access / my role changed. */
+  | { type: "notes.share.updated"; resourceType: "project" | "document"; resourceId: string }
+  /** Step 2.6 Notes: the list of projects / documents changed (created, renamed, moved, new access). */
+  | { type: "notes.projects.changed"; projectId?: string }
   | {
       type: "mail.received";
       threadId: string;

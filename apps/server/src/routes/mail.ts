@@ -56,9 +56,13 @@ export const mailRoutes: FastifyPluginAsync = async (app) => {
     return mail.composeDefaults(req.auth!.userId, id, q.mode, { lang: q.lang, tz: q.tz });
   });
 
+  /** Step 2.6: Notes links → file cards (title and type only; opening checks access in Notes). */
+  const notesCards = async (tokens?: string[]) => (tokens ? Promise.all([...new Set(tokens)].map((t) => app.services.notes.card(t))) : undefined);
+
   app.post("/drafts", { config: { rateLimit: { max: 60 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } }, async (req, reply) => {
     reply.status(201);
-    return mail.createDraft(req.auth!.userId, parse(DraftCreateSchema, req.body));
+    const body = parse(DraftCreateSchema, req.body);
+    return mail.createDraft(req.auth!.userId, body, await notesCards(body.notesTokens));
   });
 
   app.get("/drafts/:id", async (req) => {
@@ -68,7 +72,8 @@ export const mailRoutes: FastifyPluginAsync = async (app) => {
 
   app.put("/drafts/:id", async (req) => {
     const { id } = parse(idParam, req.params);
-    return mail.updateDraft(req.auth!.userId, id, parse(DraftInputSchema, req.body));
+    const body = parse(DraftInputSchema, req.body);
+    return mail.updateDraft(req.auth!.userId, id, body, await notesCards(body.notesTokens));
   });
 
   app.delete("/drafts/:id", async (req) => {

@@ -149,6 +149,8 @@ export const DraftInputSchema = z.object({
   bcc: addressList.default([]),
   subject: z.string().max(MAIL_SUBJECT_MAX).default(""),
   body: z.string().max(MAIL_BODY_MAX).default(""),
+  /** Step 2.6: Voidex Notes share links attached as .txt / .prsn cards (omitted: unchanged). */
+  notesTokens: z.array(z.string().regex(/^[A-Za-z0-9_-]{16,64}$/)).max(10).optional(),
 });
 
 export const DraftCreateSchema = DraftInputSchema.extend({

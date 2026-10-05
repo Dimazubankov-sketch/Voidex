@@ -3,7 +3,7 @@ import { RiArrowLeftLine } from "@remixicon/react";
 import { NotesApp as VoidexNotes, NotesConflictError, type NotesAdapter, type NotesController } from "@voidex/notes";
 import "@voidex/notes/styles.css";
 import "./notes-voidex.css";
-import { ErrorCode, type NotesShareDto } from "@voidex/shared";
+import { ErrorCode } from "@voidex/shared";
 import { api, ApiError } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { useT } from "@/lib/i18n";
@@ -53,7 +53,6 @@ function voidexAdapter(t: ReturnType<typeof useT>): NotesAdapter {
         .delete(`/api/notes/shares/${encodeURIComponent(token)}`)
         .then(() => undefined)
         .catch(fail),
-    listShares: () => api.get<NotesShareDto[]>("/api/notes/shares").catch(fail),
   };
 }
 
@@ -68,7 +67,7 @@ export function NotesApp() {
   const win = useWindow();
   const adapter = useMemo(() => voidexAdapter(t), [t]);
   const controller = useRef<NotesController | null>(null);
-  const remoteRevision = useNotesSync((s) => s.revision);
+  const remoteRevision = useNotesSync((s) => s.seq);
   const [share, setShare] = useState<string | null>(typeof win.params.share === "string" ? win.params.share : null);
 
   // A shared link opened while Notes is open: save my changes first, then show it.

@@ -15,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Preferences } from "@voidex/shared";
+import type { NotesCardDto, NotesDocKind, NotesRole, Preferences } from "@voidex/shared";
 
 const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
@@ -322,6 +322,8 @@ export const mailMessages = pgTable(
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
     sentAt: ts("sent_at"),
+    /** Step 2.6: Voidex Notes share cards attached to the letter. */
+    notesCards: jsonb("notes_cards").$type<NotesCardDto[]>().notNull().default(sql`'[]'::jsonb`),
   },
   (t) => [index("mail_messages_thread_idx").on(t.threadId), index("mail_messages_sender_idx").on(t.senderAccountId, t.status)],
 );
@@ -538,6 +540,8 @@ export const vibexMessages = pgTable(
     createdAt: createdAt(),
     /** Step 2.5: the sender deleted it; text and files are gone, a placeholder stays (replies keep their target). */
     deletedAt: ts("deleted_at"),
+    /** Step 2.6: a Voidex Notes share card (link to a note / presentation / project). */
+    notesCard: jsonb("notes_card").$type<NotesCardDto>(),
   },
   (t) => [index("vibex_messages_conversation_idx").on(t.conversationId, t.createdAt)],
 );
@@ -718,6 +722,8 @@ export const notesWorkspaces = pgTable("notes_workspaces", {
   data: jsonb("data").$type<Record<string, unknown>>().notNull(),
   revision: integer("revision").notNull().default(0),
   updatedAt: ts("updated_at").notNull().defaultNow(),
+  /** Step 2.6: converted into notes_projects / notes_documents (the JSON itself is kept). */
+  migratedAt: ts("migrated_at"),
 });
 
 /** Images in notes; the bytes live in `blobs` (purpose "notes"). */
@@ -752,9 +758,89 @@ export const notesShares = pgTable(
     data: jsonb("data").$type<Record<string, unknown>>().notNull(),
     mediaIds: uuid("media_ids").array().notNull().default(sql`'{}'::uuid[]`),
     createdAt: createdAt(),
+    /** Step 2.6: what is shared (null on old snapshot links) … */
+    resourceType: text("resource_type", { enum: ["project", "document"] }),
+    resourceId: uuid("resource_id"),
+    /** … as a copy for the recipient, or as access to the original (role). */
+    mode: text("mode", { enum: ["copy", "access"] }).notNull().default("copy"),
+    role: text("role", { enum: ["editor", "viewer"] }).notNull().default("viewer"),
+    docKind: text("doc_kind", { enum: ["note", "presentation"] }),
+    revokedAt: ts("revoked_at"),
   },
-  (t) => [index("notes_shares_owner_idx").on(t.ownerId, t.createdAt)],
+  (t) => [index("notes_shares_owner_idx").on(t.ownerId, t.createdAt), index("notes_shares_resource_idx").on(t.resourceType, t.resourceId)],
 );
+
+/** Step 2.6: a Notes project — documents live directly in it. */
+export const notesProjects = pgTable(
+  "notes_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** A Notes image path, or null (a generated preview). */
+    cover: text("cover"),
+    position: integer("position").notNull().default(0),
+    /** The id it had in the old workspace JSON (conversion is idempotent). */
+    legacyId: text("legacy_id"),
+    createdAt: createdAt(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("notes_projects_owner_idx").on(t.ownerId, t.position)],
+);
+
+/**
+ * Step 2.6: a note or a presentation. Saved on its own: a save names the
+ * revision it was based on (compare-and-swap), so two editors never silently
+ * overwrite each other. `mediaIds` are the images it shows (media access).
+ */
+export const notesDocuments = pgTable(
+  "notes_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => notesProjects.id, { onDelete: "cascade" }),
+    kind: text("kind").$type<NotesDocKind>().notNull(),
+    name: text("name").notNull(),
+    cover: text("cover"),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+    mediaIds: uuid("media_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    revision: integer("revision").notNull().default(1),
+    position: integer("position").notNull().default(0),
+    legacyId: text("legacy_id"),
+    createdAt: createdAt(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [index("notes_documents_project_idx").on(t.projectId, t.position)],
+);
+
+/** Step 2.6: people with access to someone's project or document (the owner is not listed). */
+export const notesMembers = pgTable(
+  "notes_members",
+  {
+    resourceType: text("resource_type", { enum: ["project", "document"] }).notNull(),
+    resourceId: uuid("resource_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").$type<Exclude<NotesRole, "owner">>().notNull(),
+    grantedBy: uuid("granted_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ name: "notes_members_pk", columns: [t.resourceType, t.resourceId, t.userId] }), index("notes_members_user_idx").on(t.userId)],
+);
+
+/** Step 2.6: how each person likes the Notes lists (grid / list, sorting). */
+export const notesPrefs = pgTable("notes_prefs", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
 
 /* ==========================================================================
    Notification Center (Step 2.3)

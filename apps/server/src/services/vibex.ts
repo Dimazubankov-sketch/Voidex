@@ -30,6 +30,7 @@ import {
   type VibexPersonDto,
   type VibexPostDto,
   type VibexProfileDto,
+  type NotesCardDto,
 } from "@voidex/shared";
 import type { Db, Tx } from "../db/client.js";
 import {
@@ -1190,6 +1191,7 @@ export class VibexService {
         text: r.text,
         files: files.get(r.id) ?? [],
         ...(r.sharedPost ? { sharedPost: (r.sharedPostId && posts.get(r.sharedPostId)) || null } : {}),
+        ...(r.notesCard && !r.deletedAt ? { notesCard: r.notesCard } : {}),
         createdAt: r.createdAt.toISOString(),
       });
     }
@@ -1215,7 +1217,7 @@ export class VibexService {
   async send(
     userId: string,
     conversationId: string,
-    input: { text: string; fileIds: string[]; sharedPostId?: string; kind?: VibexMessageKind; durationMs?: number; replyToId?: string },
+    input: { text: string; fileIds: string[]; sharedPostId?: string; kind?: VibexMessageKind; durationMs?: number; replyToId?: string; notesCard?: NotesCardDto },
   ): Promise<VibexMessageDto> {
     const now = this.ctx.now();
     const kind = input.kind ?? "text";
@@ -1252,6 +1254,7 @@ export class VibexService {
           kind,
           durationMs: kind === "text" ? null : (input.durationMs ?? null),
           replyToId,
+          notesCard: kind === "text" ? (input.notesCard ?? null) : null,
           createdAt: now,
         })
         .returning();
@@ -1266,7 +1269,8 @@ export class VibexService {
     });
     const dto = (await this.messageDtos(userId, [row])).get(row.id)!;
     const sender = await this.person(userId);
-    const snippet = kind === "voice" ? "🎤" : kind === "circle" ? "⏺" : row.text.slice(0, 140);
+    const card = row.notesCard ? `📄 ${row.notesCard.title}${row.notesCard.ext}` : "";
+    const snippet = kind === "voice" ? "🎤" : kind === "circle" ? "⏺" : row.text.slice(0, 140) || card;
     for (const m of members) {
       this.ctx.events.toUser(m.userId, { type: "vibex.message", conversationId, messageId: row.id, senderId: userId, senderName: sender.name, snippet });
     }
@@ -1277,7 +1281,7 @@ export class VibexService {
         app: "vibex",
         type: "vibex.message",
         title: isGroup ? conv!.title ?? sender.name : sender.name,
-        body: (isGroup ? `${sender.firstName}: ` : "") + (kind === "text" ? row.text.slice(0, 200) || (dto.files.length ? `📎 ${dto.files[0]!.filename}` : "") : kind === "voice" ? "🎤" : kind === "circle" ? "⏺" : ""),
+        body: (isGroup ? `${sender.firstName}: ` : "") + (kind === "text" ? row.text.slice(0, 200) || card || (dto.files.length ? `📎 ${dto.files[0]!.filename}` : "") : kind === "voice" ? "🎤" : kind === "circle" ? "⏺" : ""),
         actorId: userId,
         target: { chatId: conversationId, messageId: row.id, kind },
         collapseOn: "chatId",
@@ -1301,7 +1305,7 @@ export class VibexService {
     await this.ctx.db.transaction(async (tx) => {
       await tx
         .update(vibexMessages)
-        .set({ deletedAt: this.ctx.now(), text: "", sharedPostId: null, sharedPost: false, durationMs: null })
+        .set({ deletedAt: this.ctx.now(), text: "", sharedPostId: null, sharedPost: false, durationMs: null, notesCard: null })
         .where(eq(vibexMessages.id, m.id));
       const files = await tx.delete(vibexFiles).where(eq(vibexFiles.messageId, m.id)).returning({ key: vibexFiles.storageKey });
       await this.ctx.blobs.delete(files.map((f) => f.key), tx);
