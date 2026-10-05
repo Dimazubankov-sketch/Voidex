@@ -379,7 +379,8 @@ test("Share a project by VoidOps Mail: the letter carries a .txt card; deleting 
   await page.getByTestId("notes-share-edit").getByRole("switch").click();
   await page.getByTestId("notes-share-app-mail").click();
   await page.getByTestId("notes-share-search").fill(b.address);
-  await page.getByTestId("notes-share-contact").filter({ hasText: b.username }).first().click();
+  // The contact is the person (shown by name from the chat), addressed by their VoidOps Mail address.
+  await page.locator(`[data-testid="notes-share-contact"][title="${b.address.toLowerCase()}"]`).click();
   await page.getByTestId("notes-share-send").click();
   await expect(page.getByTestId("notes-share-sheet")).toHaveCount(0);
 
