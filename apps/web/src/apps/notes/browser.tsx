@@ -135,7 +135,7 @@ function Card({
           <span className="relative size-[64px] shrink-0 overflow-hidden rounded-[16px] shadow-[0_1px_3px_rgba(30,20,80,0.12)]">{cover}</span>
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-[16px] font-medium text-text">{title}</span>
+              <span className="truncate text-[16px] font-medium text-text" data-testid="notes-card-name">{title}</span>
               {badge}
             </span>
             <span className="truncate text-[13.5px] text-text-tertiary">{meta}</span>
@@ -152,7 +152,7 @@ function Card({
       <div className="absolute right-1.5 top-1.5 [&>button]:size-9 [&>button]:bg-[rgba(255,255,255,0.78)] [&>button]:text-[#3a3650] [&>button]:shadow-sm [&>button]:backdrop-blur">{menu}</div>
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-col px-1 text-left" tabIndex={-1}>
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[15px] font-semibold leading-tight text-text">{title}</span>
+          <span className="truncate text-[15px] font-semibold leading-tight text-text" data-testid="notes-card-name">{title}</span>
           {badge}
         </span>
         <span className="truncate text-[13px] text-text-tertiary">{meta}</span>

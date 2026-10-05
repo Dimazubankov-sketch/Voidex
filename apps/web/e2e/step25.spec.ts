@@ -24,11 +24,6 @@ async function api(page: Page, method: string, url: string, body?: unknown): Pro
   );
 }
 
-async function closeWindow(page: Page, id: string) {
-  await page.getByTestId(`window-${id}`).getByTestId("window-menu").first().click();
-  await page.getByTestId("menu-close").click();
-}
-
 /** Edit mode on the home screen: long press on free space (phone), the desktop menu (PC). */
 async function enterEdit(page: Page) {
   const home = page.getByTestId("home");
@@ -117,85 +112,7 @@ test("removing apps asks twice; Cancel / Esc / outside at any step keeps them; s
   await expect(page.getByTestId("remove-selection-bar")).toHaveCount(0);
 });
 
-test("Notes: a native app — continuous sheet with page breaks, paged view, images, saved to the account", async ({ page }) => {
-  await signUpViaApi(page, "Нота", "Лист");
-  await openApp(page, "notes");
-  const app = page.getByTestId("notes-app");
-  await expect(app.locator(".vn-app")).toBeVisible();
-  // No iframe, one React tree.
-  expect(await page.locator("iframe").count()).toBe(0);
-  await app.getByText("Открыть пример").click();
-  await expect(app.locator(".vn-stage.continuous")).toBeVisible();
-  const pages = app.locator(".vn-note-page");
-  const before = await pages.count();
-  // Insert a break after the quote: one more page, nothing lost.
-  await app.locator(".vn-quote .vn-editable").first().click();
-  await app.getByRole("button", { name: "Разрыв страницы после блока" }).click();
-  await expect(pages).toHaveCount(before + 1);
-  const breaks = app.getByTestId("notes-page-break");
-  await expect(breaks).toHaveCount(before);
-  // Remove it again: the pages join, all text is still there.
-  const text = await app.locator(".vn-stage").innerText();
-  await breaks.first().getByRole("button", { name: "Убрать разрыв" }).click();
-  await expect(pages).toHaveCount(before);
-  for (const line of ["Место для следующей идеи", "Меньше инструментов"]) expect(text).toContain(line);
-  await expect(app.locator(".vn-stage")).toContainText("Меньше инструментов");
-  // Paged view: the same content as separate pages with labels.
-  await app.getByTestId("notes-paged-toggle").click();
-  await expect(app.locator(".vn-stage.continuous")).toHaveCount(0);
-  await expect(app.locator(".vn-page-label").first()).toBeVisible();
-  await app.getByTestId("notes-paged-toggle").click();
-  await expect(app.locator(".vn-stage.continuous")).toBeVisible();
-  // An image (PNG) uploaded into the note; it loads through the session.
-  const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf00000301010036a2c3a90000000049454e44ae426082", "hex");
-  await app.locator(".vn-heading .vn-editable").first().click();
-  await app.locator('input[type=file][accept^="image/jpeg"]').first().setInputFiles({ name: "dot.png", mimeType: "image/png", buffer: png });
-  await expect(app.locator(".vn-image img")).toHaveAttribute("src", /^blob:/);
-  await page.keyboard.press("Escape");
-  await app.getByTestId("notes-image-size-8").click();
-  // Saved on the server (revision grows) with the image path of the Notes API.
-  await expect.poll(async () => (await api(page, "GET", "/api/notes")).body?.revision ?? 0, { timeout: 15_000 }).toBeGreaterThan(0);
-  await expect.poll(async () => JSON.stringify((await api(page, "GET", "/api/notes")).body.data), { timeout: 15_000 }).toMatch(/\/api\/notes\/media\?id=[0-9a-f-]{36}/);
-});
-
-test("Notes: closing with unsaved changes asks; a save from another device shows the conflict choice", async ({ page }) => {
-  test.skip(isMobile(page), "window menu on PC");
-  await signUpViaApi(page, "Нота", "Конфликт");
-  await openApp(page, "notes");
-  const app = page.getByTestId("notes-app");
-  await app.getByText("Открыть пример").click();
-  await expect.poll(async () => (await api(page, "GET", "/api/notes")).body?.revision ?? 0, { timeout: 15_000 }).toBeGreaterThan(0);
-  // Another device saves a newer version.
-  const server = (await api(page, "GET", "/api/notes")).body;
-  const theirs = structuredClone(server.data);
-  theirs.projects[0].name = "Версия с другого устройства";
-  expect((await api(page, "PUT", "/api/notes", { data: theirs, revision: server.revision })).status).toBe(200);
-  // Editing here now meets the newer revision: nothing is overwritten, the choice is offered.
-  await page.waitForTimeout(500);
-  await app.locator(".vn-heading .vn-editable").first().click();
-  await page.keyboard.type(" (здесь)");
-  await expect(page.getByTestId("notes-conflict")).toBeVisible({ timeout: 15_000 });
-  await page.getByTestId("notes-conflict-both").click();
-  await expect(page.getByTestId("notes-conflict")).toHaveCount(0);
-  await expect.poll(async () => JSON.stringify((await api(page, "GET", "/api/notes")).body.data), { timeout: 15_000 }).toContain("Версия с другого устройства");
-  expect(JSON.stringify((await api(page, "GET", "/api/notes")).body.data)).toContain("(копия с этого устройства)");
-
-  // Unsaved text + close: the shell asks; Cancel keeps the window, "Save and close" saves.
-  await app.locator(".vn-heading .vn-editable").first().click();
-  await page.keyboard.press("End");
-  await page.keyboard.type("!");
-  await closeWindow(page, "notes");
-  await expect(page.getByTestId("close-guard")).toBeVisible();
-  await page.getByTestId("close-guard-cancel").click();
-  await expect(page.locator('[data-testid="window-notes"][data-state="open"]')).toBeVisible();
-  await app.locator(".vn-heading .vn-editable").first().click();
-  await page.keyboard.press("End");
-  await page.keyboard.type("?");
-  await closeWindow(page, "notes");
-  await page.getByTestId("close-guard-save").click();
-  await expect(page.getByTestId("window-notes")).toHaveCount(0);
-  await expect.poll(async () => JSON.stringify((await api(page, "GET", "/api/notes")).body.data)).toContain("!?");
-});
+// Step 2.5's Notes tests (spaces, page-break button, one JSON document) are replaced by e2e/step26-notes.spec.ts.
 
 test("PC passcode: keyboard only — focus, wrong code keeps focus, Backspace, retry; phones keep the keypad", async ({ page }) => {
   await signUpViaApi(page, "Клава", "Код");

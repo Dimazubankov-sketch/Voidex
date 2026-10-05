@@ -22,20 +22,23 @@ export function ShareLanding({ token }: { token: string }) {
   const q = useQuery({ queryKey: nk.share(token), queryFn: () => notesApi.shareInfo(token), retry: false });
   const [busy, setBusy] = useState<"open" | "copy" | null>(null);
 
-  const go = (r: { projectId: string; documentId?: string }) =>
-    r.documentId ? nav.go({ screen: "doc", docId: r.documentId, back: { screen: "project", projectId: r.projectId } }) : nav.go({ screen: "project", projectId: r.projectId });
+  // A document shared on its own (not its project): Back leads to "Доступно мне", not to a project I can't open.
+  const go = (r: { projectId: string; documentId?: string }, docOnly = false) =>
+    r.documentId
+      ? nav.go({ screen: "doc", docId: r.documentId, back: docOnly ? { screen: "shared" } : { screen: "project", projectId: r.projectId } })
+      : nav.go({ screen: "project", projectId: r.projectId });
 
   const accept = async (info: NotesShareInfoDto, copy: boolean) => {
     setBusy(copy ? "copy" : "open");
     try {
       if (!copy && info.access !== "none" && info.projectId) {
-        go({ projectId: info.projectId, documentId: info.documentId });
+        go({ projectId: info.projectId, documentId: info.documentId }, info.kind !== "project" && info.access !== "owner" && info.mode === "access");
         return;
       }
       const r = await notesApi.accept(token, copy);
       await invalidateNotes();
       if (copy) toast({ title: t("notes.copyAdded"), tone: "success" });
-      go(r);
+      go(r, !copy && info.kind !== "project");
     } catch (e) {
       toast({ title: errorMessage(t, e), tone: "danger" });
       void q.refetch();
