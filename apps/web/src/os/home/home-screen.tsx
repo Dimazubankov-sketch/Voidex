@@ -24,7 +24,7 @@ import { Launcher } from "./launcher";
 import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
-import { DesktopsGlyph } from "./spaces";
+import { DesktopsGlyph, RemoveSpaceConfirm } from "./spaces";
 import { useHomeUi } from "./ui-store";
 import { GridWidget, WidgetStrip, WidgetsPanel } from "./widgets";
 import { SYSTEM_BAR_H } from "../metrics";
@@ -246,6 +246,7 @@ export function HomeScreen({
       <DragGhost layout={layout} />
       <RemoveSelectionBar />
       <RemoveAppsConfirm />
+      {ff === "desktop" && <RemoveSpaceConfirm layout={layout} />}
     </motion.main>
   );
 }

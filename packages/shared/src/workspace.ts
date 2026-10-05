@@ -625,14 +625,25 @@ export function addSpace(l: WorkspaceLayout, random: () => number = Math.random)
 }
 
 /** Removes a PC desktop; its icons move to the previous one. The first desktop stays. */
+/**
+ * Removes a PC desktop (never the first, the primary one). Step 2.5.1: its
+ * icons and widgets move to the primary desktop; their cells there are not
+ * known yet, so they settle into the first free cells (nothing overlaps,
+ * nothing lands outside the screen area).
+ */
 export function removeSpace(l: WorkspaceLayout, space: string): WorkspaceLayout {
   const i = l.desktop.spaces.findIndex((s) => s.id === space);
   if (i <= 0) return l;
   const n = clone(l);
   const [gone] = n.desktop.spaces.splice(i, 1);
-  const prev = n.desktop.spaces[i - 1]!;
-  prev.items.push(...gone!.items);
-  for (const w of n.widgets) if (w.surface === "desktop" && w.container === space) w.container = prev.id;
+  const primary = n.desktop.spaces[0]!;
+  primary.items.push(...gone!.items);
+  for (const item of gone!.items) delete n.desktop.cells[itemKey(item)];
+  for (const w of n.widgets)
+    if (w.surface === "desktop" && w.container === space) {
+      w.container = primary.id;
+      delete n.desktop.cells[widgetKey(w.id)];
+    }
   return n;
 }
 

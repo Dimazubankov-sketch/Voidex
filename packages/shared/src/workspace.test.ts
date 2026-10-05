@@ -405,3 +405,33 @@ describe("Step 2.5.1: bounded PC desktop grid", () => {
     expect(categoryOf({ categories: { mail: "tools" } } as WorkspaceLayout, "mail", "communication")).toBe("communication");
   });
 });
+
+describe("Step 2.5.1: deleting a PC desktop", () => {
+  it("moves its apps and widgets to the primary desktop (not the previous one) and drops their old cells", () => {
+    let l = norm(defaultLayout(APPS));
+    const primary = l.desktop.spaces[0]!.id;
+    const second = addSpace(l)!;
+    l = second.layout;
+    const third = addSpace(l)!;
+    l = third.layout;
+    l = norm(moveItem(l, app("mail"), { surface: "desktop", space: third.id }, 0));
+    l = addWidget(l, "calculator", { surface: "desktop", space: third.id });
+    const wid = l.widgets.find((w) => w.surface === "desktop")!.id;
+    l = { ...l, desktop: { ...l.desktop, cells: { ...l.desktop.cells, "app:mail": { c: 7, r: 3 }, [`widget:${wid}`]: { c: 2, r: 2 } } } };
+    const n = norm(removeSpace(l, third.id));
+    expect(n.desktop.spaces.map((s) => s.id)).toEqual([primary, second.id]);
+    expect(n.desktop.spaces[0]!.items).toContainEqual(app("mail"));
+    expect(n.widgets.find((w) => w.id === wid)!.container).toBe(primary);
+    expect(n.desktop.cells["app:mail"]).toBeUndefined();
+    // Everything on the primary desktop has its own cell inside a 6×3 screen.
+    const placed = placementOf(n, { surface: "desktop", space: primary }, { cols: 6, rows: 3 });
+    const cells = [...placed.values()].flatMap((p) => Array.from({ length: p.w * p.h }, (_, k) => `${p.c + (k % p.w)},${p.r + Math.floor(k / p.w)}`));
+    expect(new Set(cells).size).toBe(cells.length);
+    for (const p of placed.values()) expect(p.r + p.h).toBeLessThanOrEqual(3);
+  });
+
+  it("never removes the primary desktop", () => {
+    const l = norm(defaultLayout(APPS));
+    expect(removeSpace(l, l.desktop.spaces[0]!.id)).toBe(l);
+  });
+});

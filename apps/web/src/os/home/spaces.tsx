@@ -1,13 +1,15 @@
 import { useWallpapers } from "./wallpapers";
-import { RiAddLine, RiCheckLine } from "@remixicon/react";
+import { RiAddLine, RiCheckLine, RiDeleteBinLine } from "@remixicon/react";
 import { DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { TrimmedLogo } from "@/brand/brand";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
+import { Button } from "@/ui/controls";
+import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { DEFAULT_SWATCH, useWallpaperImage, wallpaperStyle } from "./appearance";
-import { newSpace, spaceLabel } from "./context-menu";
+import { deleteSpace, newSpace, spaceLabel } from "./context-menu";
 import { useHomeUi } from "./ui-store";
 
 /**
@@ -72,6 +74,7 @@ function useEntries(layout: WorkspaceLayout): { entries: Entry[]; canAdd: boolea
  */
 export function SpacesList({ layout, onPicked, compact, testPrefix = "dock-space" }: { layout: WorkspaceLayout; onPicked?: () => void; compact?: boolean; testPrefix?: string }) {
   const t = useT();
+  const ff = useFormFactor();
   const { entries, canAdd, add } = useEntries(layout);
   const { wallpaper } = useWallpapers();
   const image = useWallpaperImage(wallpaper);
@@ -91,9 +94,18 @@ export function SpacesList({ layout, onPicked, compact, testPrefix = "dock-space
             e.select();
             onPicked?.();
           }}
+          onContextMenu={(ev) => {
+            // Step 2.5.1 (PC): right-click a desktop → Rename / Удалить рабочий стол (not on the primary one).
+            if (ff !== "desktop") return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            onPicked?.();
+            useHomeUi.getState().openMenu({ x: ev.clientX, y: ev.clientY, target: { kind: "space", id: e.key } });
+          }}
           className="pressable flex shrink-0 flex-col items-center gap-1.5"
           style={{ width: w + 4 }}
           data-testid={`${testPrefix}-${i + 1}`}
+          data-space-id={ff === "desktop" ? e.key : undefined}
         >
           <span
             className={cx("relative block overflow-hidden rounded-[12px] border border-black/10", e.active && "ring-[2.5px] ring-primary ring-offset-2 ring-offset-transparent")}
@@ -136,3 +148,36 @@ export function SpacesList({ layout, onPicked, compact, testPrefix = "dock-space
 }
 
 
+
+/**
+ * Step 2.5.1: "Удалить рабочий стол?" — what happens is said up front (its
+ * apps, widgets and windows move to the main desktop); Cancel keeps it.
+ */
+export function RemoveSpaceConfirm({ layout }: { layout: WorkspaceLayout }) {
+  const t = useT();
+  const id = useHomeUi((s) => s.removeSpaceConfirm);
+  const close = () => useHomeUi.getState().setRemoveSpaceConfirm(null);
+  const exists = !!id && layout.desktop.spaces.findIndex((s) => s.id === id) > 0;
+  return (
+    <Sheet open={exists} onClose={close} title={t("home.removeSpaceTitle")} width={420} testId="remove-space-sheet">
+      {id && <p className="text-[15px] font-medium text-text">{spaceLabel(t, layout, id)}</p>}
+      <p className="mt-1 text-[14.5px] text-text-secondary">{t("home.removeSpaceBody")}</p>
+      <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="secondary" onClick={close} data-testid="remove-space-cancel">
+          {t("common.cancel")}
+        </Button>
+        <Button
+          variant="danger"
+          onClick={() => {
+            if (id) deleteSpace(layout, id);
+            close();
+          }}
+          data-testid="remove-space-confirm"
+        >
+          <RiDeleteBinLine className="size-4" />
+          {t("home.removeSpace")}
+        </Button>
+      </div>
+    </Sheet>
+  );
+}

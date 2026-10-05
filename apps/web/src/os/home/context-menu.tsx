@@ -67,13 +67,17 @@ export function spaceLabel(t: ReturnType<typeof useT>, l: WorkspaceLayout, id: s
   return s?.name || t("home.space", { n: i + 1 });
 }
 
-/** Removes a PC desktop: its icons and windows move to the previous one. */
+/**
+ * Removes a PC desktop (Step 2.5.1: after confirmation): its icons, widgets
+ * and windows move to the primary desktop, which can never be removed.
+ * Saved to the account like every layout change.
+ */
 export function deleteSpace(l: WorkspaceLayout, id: string) {
   const i = l.desktop.spaces.findIndex((s) => s.id === id);
   if (i <= 0) return;
-  const prev = l.desktop.spaces[i - 1]!.id;
+  const primary = l.desktop.spaces[0]!.id;
   updateLayout((x) => removeSpace(x, id));
-  useWM.getState().moveSpaceWindows(id, prev);
+  useWM.getState().moveSpaceWindows(id, primary);
 }
 
 export function newSpace() {
@@ -222,7 +226,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         const first = layout.desktop.spaces[0]?.id === id;
         return [
           { id: "rename", label: t("home.rename"), icon: <RiEditLine />, onSelect: () => ui().setRenaming({ kind: "space", id }) },
-          ...(first ? [] : [{ id: "remove-space", label: t("home.removeSpace"), icon: <RiDeleteBinLine />, onSelect: () => deleteSpace(layout, id), danger: true }]),
+          ...(first ? [] : [{ id: "remove-space", label: t("home.removeSpace"), icon: <RiDeleteBinLine />, onSelect: () => ui().setRemoveSpaceConfirm(id), danger: true }]),
         ];
       }
       case "desktop": {

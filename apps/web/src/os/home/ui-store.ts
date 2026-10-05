@@ -67,6 +67,9 @@ interface HomeUi {
   removeSel: AppId[];
   /** Step 2.5: the apps in the two-step delete confirmation (null: closed). */
   removeConfirm: AppId[] | null;
+  /** Step 2.5.1: the PC desktop waiting for "Удалить рабочий стол" to be confirmed. */
+  removeSpaceConfirm: string | null;
+  setRemoveSpaceConfirm: (id: string | null) => void;
   toggleRemoveSel: (id: AppId) => void;
   setRemoveConfirm: (ids: AppId[] | null) => void;
   setEditing: (v: boolean) => void;
@@ -100,6 +103,8 @@ export const useHomeUi = create<HomeUi>((set) => ({
   drag: null,
   removeSel: [],
   removeConfirm: null,
+  removeSpaceConfirm: null,
+  setRemoveSpaceConfirm: (removeSpaceConfirm) => set({ removeSpaceConfirm, menu: null }),
   toggleRemoveSel: (id) => set((st) => ({ removeSel: st.removeSel.includes(id) ? st.removeSel.filter((a) => a !== id) : [...st.removeSel, id] })),
   setRemoveConfirm: (removeConfirm) => set({ removeConfirm, menu: null }),
   setEditing: (editing) =>
