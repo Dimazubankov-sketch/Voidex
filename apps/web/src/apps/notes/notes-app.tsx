@@ -1,93 +1,52 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { RiArrowLeftLine } from "@remixicon/react";
-import { NotesApp as VoidexNotes, NotesConflictError, type NotesAdapter, type NotesController } from "@voidex/notes";
-import "@voidex/notes/styles.css";
-import "./notes-voidex.css";
-import { ErrorCode } from "@voidex/shared";
-import { api, ApiError } from "@/lib/api";
-import { errorMessage } from "@/lib/errors";
+import { Suspense, lazy, useEffect, useState } from "react";
+import { RiLockLine } from "@remixicon/react";
 import { useT } from "@/lib/i18n";
-import { toast } from "@/ui/overlays";
+import { Button, Spinner } from "@/ui/controls";
+import { Sheet, toast } from "@/ui/overlays";
 import { askUnsaved } from "@/os/close-guard";
-import { WindowMenuButton, useWindow } from "@/os/window-context";
+import { useWindow } from "@/os/window-context";
 import { setBeforeClose } from "@/os/window-manager";
+import { invalidateNotes } from "./data";
+import { activeDoc } from "./editor-state";
+import { ProjectScreen, ProjectsScreen, SharedScreen } from "./browser";
+import { NavContext, createNotesNav, routeFromParams, type NotesRoute } from "./route";
+import { ShareLanding } from "./share-landing";
 import { useNotesSync } from "./sync";
+import "./notes.css";
 
-/** Errors from the VOIDEX API in the words of the person's language. */
-function rethrow(t: ReturnType<typeof useT>) {
-  return (e: unknown): never => {
-    if (e instanceof ApiError && e.code === ErrorCode.NotesConflict) throw new NotesConflictError(Number(e.details.revision) || undefined);
-    throw new Error(errorMessage(t, e));
-  };
-}
+const DocScreen = lazy(() => import("./doc-screen").then((m) => ({ default: m.DocScreen })));
 
 /**
- * The Notes adapter for VOIDEX: everything goes through the signed-in session
- * (Bearer token, CSRF header, the account from the session — never a user id
- * from here). Images are private: `media` reads them with the session and the
- * editor shows them from local object URLs.
- */
-function voidexAdapter(t: ReturnType<typeof useT>): NotesAdapter {
-  const fail = rethrow(t);
-  return {
-    load: () => api.get<{ data: never; revision: number }>("/api/notes").catch(fail),
-    save: (data, revision) =>
-      api
-        .put<{ revision: number }>("/api/notes", { data, revision })
-        .then((r) => r.revision)
-        .catch(fail),
-    upload: (file) =>
-      api
-        .post<{ url: string }>("/api/notes/media", file, { headers: { "Content-Type": file.type || "application/octet-stream" } })
-        .then((r) => r.url)
-        .catch(fail),
-    media: (src) => api.get<Blob>(src).catch(fail),
-    createShare: (data) =>
-      api
-        .post<{ token: string }>("/api/notes/shares", { data })
-        .then((r) => r.token)
-        .catch(fail),
-    readShare: (token) => api.get<never>(`/api/notes/shares/${encodeURIComponent(token)}`).catch(fail),
-    revokeShare: (token) =>
-      api
-        .delete(`/api/notes/shares/${encodeURIComponent(token)}`)
-        .then(() => undefined)
-        .catch(fail),
-  };
-}
-
-/**
- * Voidex Notes inside a VOIDEX window (Step 2.5): the Notes package rendered
- * natively in this component (no iframe, no second React root), lazy-loaded
- * with its own chunk. The window keeps its header for dragging; closing with
- * unsaved changes asks first; a save from another device shows up here.
+ * Voidex Notes (Step 2.6): Projects → a project's notes and presentations →
+ * one document. The route has its own store (see route.ts), so saving,
+ * server events and window re-renders never move the person out of what
+ * they are writing; only their own action or a revoked access does.
  */
 export function NotesApp() {
   const t = useT();
   const win = useWindow();
-  const adapter = useMemo(() => voidexAdapter(t), [t]);
-  const controller = useRef<NotesController | null>(null);
-  const remoteRevision = useNotesSync((s) => s.seq);
-  const [share, setShare] = useState<string | null>(typeof win.params.share === "string" ? win.params.share : null);
+  const [nav] = useState(() => createNotesNav(routeFromParams(win.params) ?? { screen: "projects" }));
+  const route = nav((s) => s.route);
+  const [closed, setClosed] = useState<null | { title: string; body: string }>(null);
 
-  // A shared link opened while Notes is open: save my changes first, then show it.
+  // A deep link / card opened while Notes is open: save the open document first, then go.
   useEffect(() => {
-    const next = typeof win.params.share === "string" ? win.params.share : null;
-    if (!next || next === share) return;
+    const next = routeFromParams(win.params);
+    if (!next) return;
     void (async () => {
-      if (controller.current?.isDirty() && !(await controller.current.flush())) {
+      if (activeDoc.current?.isDirty() && !(await activeDoc.current.flush())) {
         toast({ title: t("closeGuard.saveFailed"), tone: "danger" });
         return;
       }
-      setShare(next);
+      nav.getState().go(next);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [win.paramsVersion]);
 
-  // Closing with unsaved changes: save, discard or stay.
+  // Closing the window with unsaved changes: save, discard or stay.
   useEffect(() => {
     setBeforeClose(win.windowId, async () => {
-      const c = controller.current;
+      const c = activeDoc.current;
       if (!c?.isDirty()) return true;
       const answer = await askUnsaved(t("notes.name"));
       if (answer === "cancel") return false;
@@ -99,44 +58,74 @@ export function NotesApp() {
     return () => setBeforeClose(win.windowId, null);
   }, [win.windowId, t]);
 
+  // Realtime: access removed / resource deleted → close what is open right away and say why.
+  const seq = useNotesSync((s) => s.seq);
+  useEffect(() => {
+    const e = useNotesSync.getState().event;
+    if (!e) return;
+    if (e.type !== "notes.access.revoked" && e.type !== "notes.resource.deleted") return;
+    const r = nav.getState().route;
+    const open = activeDoc.current;
+    const hits =
+      (r.screen === "doc" && (r.docId === e.resourceId || (e.resourceType === "project" && open?.projectId === e.resourceId))) ||
+      (r.screen === "project" && e.resourceType === "project" && r.projectId === e.resourceId);
+    void invalidateNotes();
+    if (!hits) return;
+    activeDoc.current?.lock();
+    activeDoc.current = null;
+    nav.getState().go({ screen: "projects" });
+    setClosed(
+      e.type === "notes.access.revoked"
+        ? { title: t("notes.revoked.title"), body: t("notes.revoked.body", { name: e.name }) }
+        : { title: t("notes.deleted.title"), body: t("notes.deleted.body", { name: e.name }) },
+    );
+  }, [seq, nav, t]);
+
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col"
-      data-testid="notes-app"
-      onPointerDown={(e) => {
-        // PC: the Notes header is the window's title bar.
-        if (win.formFactor !== "desktop") return;
-        const el = e.target as HTMLElement;
-        if (!el.closest(".vn-header") || el.closest("button, input, a, select, textarea, [role=tab], [role=tablist], [data-no-drag]")) return;
-        win.startDrag?.(e);
-      }}
-      onDoubleClick={(e) => {
-        if (win.formFactor !== "desktop") return;
-        const el = e.target as HTMLElement;
-        if (!el.closest(".vn-header") || el.closest("button, input, a, select, textarea, [role=tab], [data-no-drag]")) return;
-        win.toggleMaximize();
-      }}
-    >
-      {share && (
-        <div className="flex shrink-0 items-center gap-3 border-b bg-primary-soft px-4 py-2 text-[13px] text-primary-strong" data-testid="notes-share-banner">
-          <span className="min-w-0 flex-1 truncate">{t("notes.sharedView")}</span>
-          <button type="button" className="inline-flex items-center gap-1 font-semibold" onClick={() => setShare(null)} data-testid="notes-share-exit">
-            <RiArrowLeftLine className="size-4" /> {t("notes.backToMine")}
-          </button>
-        </div>
-      )}
-      <div className="relative min-h-0 flex-1">
-        <VoidexNotes
-          adapter={adapter}
-          logoUrl="/brand/app-notes.png"
-          embedded
-          share={share}
-          shareLink={(token) => `${window.location.origin}/#notes/share/${token}`}
-          remoteRevision={remoteRevision}
-          controllerRef={controller}
-          headerEnd={<WindowMenuButton />}
-        />
+    <NavContext.Provider value={nav}>
+      <div className="vn2 relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background" data-testid="notes-app" data-screen={route.screen}>
+        <Screen route={route} />
+        <Sheet open={!!closed} onClose={() => setClosed(null)} width={420} testId="notes-access-closed">
+          {closed && (
+            <div className="flex flex-col items-center gap-3 py-2 text-center">
+              <span className="grid size-14 place-items-center rounded-full bg-danger-soft text-danger">
+                <RiLockLine className="size-7" />
+              </span>
+              <h2 className="text-[19px] font-semibold text-text">{closed.title}</h2>
+              <p className="text-[14.5px] text-text-secondary">{closed.body}</p>
+              <Button className="mt-2 w-full" onClick={() => setClosed(null)} data-testid="notes-access-closed-ok">
+                {t("notes.ok")}
+              </Button>
+            </div>
+          )}
+        </Sheet>
       </div>
-    </div>
+    </NavContext.Provider>
   );
+}
+
+function Screen({ route }: { route: NotesRoute }) {
+  switch (route.screen) {
+    case "projects":
+      return <ProjectsScreen />;
+    case "project":
+      return <ProjectScreen projectId={route.projectId} key={route.projectId} />;
+    case "shared":
+      return <SharedScreen />;
+    case "share":
+      return <ShareLanding token={route.token} key={route.token} />;
+    case "doc":
+      return (
+        <Suspense
+          fallback={
+            <div className="grid flex-1 place-items-center">
+              <Spinner />
+            </div>
+          }
+        >
+          {/* Keyed by the document: switching documents remounts; saving never does. */}
+          <DocScreen docId={route.docId} back={route.back} key={route.docId} />
+        </Suspense>
+      );
+  }
 }

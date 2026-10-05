@@ -88,14 +88,15 @@ export function Workspace() {
     return () => window.removeEventListener("hashchange", follow);
   }, [hydrated]);
 
-  // Step 2.5: shared Notes links (#notes/share/<token>) open read-only in Notes.
+  // Notes deep links (Step 2.6): #notes/share/<token>, #notes/project/<id>, #notes/doc/<id>.
+  // Opening still needs the session and access on the server (else Notes says so).
   useEffect(() => {
     if (!hydrated) return;
     const follow = () => {
-      const m = /^#notes\/share\/([A-Za-z0-9_-]{16,64})$/.exec(window.location.hash);
+      const m = /^#notes\/(share|project|doc)\/([A-Za-z0-9_-]{16,64})$/.exec(window.location.hash);
       if (!m) return;
       history.replaceState(null, "", window.location.pathname + window.location.search);
-      useWM.getState().open("notes", { params: { share: m[1] } });
+      useWM.getState().open("notes", { params: { [m[1]!]: m[2] } });
     };
     follow();
     window.addEventListener("hashchange", follow);

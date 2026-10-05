@@ -1,0 +1,346 @@
+/*
+ * Voidex Notes (Step 2.6). Clean paper: no block frames, no grid, no
+ * backgrounds; the app's own tokens for everything around the paper.
+ */
+.vn2 {
+  --vn2-paper: #ffffff;
+  --vn2-ink: #1d1b29;
+  --vn2-ink-soft: #6b6880;
+  --vn2-rule: rgba(80, 70, 160, 0.12);
+  container-type: inline-size;
+}
+:root[data-theme="dark"] .vn2 {
+  --vn2-paper: #1f1f29;
+  --vn2-ink: #ececf3;
+  --vn2-ink-soft: #a3a1b7;
+  --vn2-rule: rgba(180, 170, 255, 0.16);
+}
+
+/* ---------------------------------------------------------------- browser */
+
+.vn2-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 18px 14px;
+}
+@container (max-width: 380px) {
+  .vn2-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 10px;
+  }
+}
+@container (min-width: 900px) {
+  .vn2-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+.vn2-cover {
+  box-shadow: 0 1px 2px rgba(30, 20, 80, 0.06), 0 8px 22px -12px rgba(40, 30, 120, 0.32);
+  transition: transform 160ms var(--ease-spring, ease), box-shadow 160ms ease;
+}
+.vn2-cover:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) {
+  .vn2-cover:hover {
+    box-shadow: 0 1px 2px rgba(30, 20, 80, 0.08), 0 14px 30px -14px rgba(40, 30, 120, 0.42);
+  }
+}
+.vn2-row {
+  transition: background-color 120ms ease;
+}
+@media (hover: hover) {
+  .vn2-row:hover {
+    background: var(--surface-hover);
+  }
+}
+
+/* The search field and the floating controls: the system glass. */
+.vn2-field,
+.vn2-float,
+.vn2-toolbar,
+.vn2-pagenav,
+.vn2-img-tools {
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-highlight), 0 6px 24px rgba(20, 20, 40, 0.12);
+}
+.vn2-field:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.vn2-icon-btn {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--text);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.vn2-icon-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.vn2-icon-btn:disabled {
+  opacity: 0.35;
+}
+
+/* ---------------------------------------------------------------- note paper */
+
+.vn2-note {
+  background: var(--background);
+}
+.vn2-sheet {
+  background: var(--vn2-paper);
+  color: var(--vn2-ink);
+  padding: 28px 22px 8px;
+  /* A portrait sheet that grows with the text (aspect-ratio is only the minimum). */
+  aspect-ratio: 1 / 1.414;
+}
+@container (min-width: 640px) {
+  .vn2-sheet {
+    border-radius: 18px;
+    padding: 48px 56px 12px;
+    box-shadow: 0 1px 2px rgba(30, 20, 80, 0.05), 0 18px 50px -24px rgba(40, 30, 120, 0.28);
+  }
+}
+.vn2-vertical .vn2-scroll {
+  scroll-padding-top: 64px;
+}
+
+/* Square: pages run sideways and text flows on to the next page by itself. */
+.vn2-columns {
+  color: var(--vn2-ink);
+  column-fill: auto;
+  flex-shrink: 0;
+  border-radius: 4px;
+  filter: drop-shadow(0 10px 22px rgba(40, 30, 120, 0.14));
+}
+.vn2-columns .vn2-b,
+.vn2-columns .vn2-img {
+  margin-left: 30px;
+  margin-right: 30px;
+}
+.vn2-columns {
+  box-sizing: border-box;
+  padding: 30px 0;
+}
+.vn2-square .vn2-scroll {
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+}
+
+/* Blocks: typography only. */
+.vn2-b {
+  /* Sizes live on the block: the field uses 1em (phones force fields to max(16px, 1em)). */
+  font-size: 17px;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  break-inside: avoid-column;
+}
+.vn2-text {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1em;
+  line-height: 1.6;
+  padding: 2px 0;
+  caret-color: var(--primary);
+}
+.vn2-text::placeholder {
+  color: var(--vn2-ink-soft);
+  opacity: 0.6;
+}
+.vn2-b-heading {
+  font-size: 27px;
+}
+.vn2-b-heading .vn2-text {
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  padding-top: 14px;
+}
+.vn2-b-subheading {
+  font-size: 20px;
+}
+.vn2-b-subheading .vn2-text {
+  font-weight: 650;
+  line-height: 1.4;
+  padding-top: 8px;
+}
+.vn2-b-quote {
+  padding-left: 14px;
+}
+.vn2-b-quote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.vn2-b-quote .vn2-text {
+  font-style: italic;
+  color: var(--vn2-ink-soft);
+}
+.vn2-b-code {
+  font-size: 15px;
+}
+.vn2-b-code .vn2-text {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 4px 0;
+}
+.vn2-bold .vn2-text {
+  font-weight: 700;
+}
+.vn2-italic .vn2-text {
+  font-style: italic;
+}
+.vn2-done .vn2-text {
+  color: var(--vn2-ink-soft);
+  text-decoration: line-through;
+}
+.vn2-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 13px 4px 0 6px;
+  border-radius: 999px;
+  background: var(--vn2-ink);
+}
+.vn2-check {
+  flex: none;
+  width: 21px;
+  height: 21px;
+  margin-top: 5px;
+  border-radius: 999px;
+  border: 1.6px solid color-mix(in srgb, var(--vn2-ink-soft) 70%, transparent);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.vn2-check[aria-checked="true"] {
+  background: var(--primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M10 15.17l9.2-9.2 1.41 1.42L10 18 3.64 11.64l1.42-1.42z'/%3E%3C/svg%3E") center / 15px no-repeat;
+  border-color: var(--primary);
+}
+
+/* Pictures. */
+.vn2-img {
+  display: flex;
+  padding: 8px 0;
+  break-inside: avoid-column;
+}
+.vn2-img-left {
+  justify-content: flex-start;
+}
+.vn2-img-center {
+  justify-content: center;
+}
+.vn2-img-right {
+  justify-content: flex-end;
+}
+.vn2-img img {
+  max-height: 80vh;
+  object-fit: contain;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.vn2-columns .vn2-img img {
+  max-height: calc(var(--vn2-side, 600px) - 90px);
+}
+.vn2-img-tools {
+  white-space: nowrap;
+}
+
+/* The floating top controls of an editor: a soft fade so text never runs under them unreadably. */
+.vn2-doc-top {
+  background: linear-gradient(to bottom, var(--vn2-paper) 0%, color-mix(in srgb, var(--vn2-paper) 80%, transparent) 60%, transparent 100%);
+}
+.vn2-doc-top.vn2-doc-top-pres {
+  background: none;
+}
+@container (min-width: 640px) {
+  .vn2-doc-top {
+    background: linear-gradient(to bottom, var(--background) 0%, color-mix(in srgb, var(--background) 75%, transparent) 60%, transparent 100%);
+  }
+}
+
+/* Floating bars. */
+.vn2-pagenav-raised {
+  bottom: calc(max(env(safe-area-inset-bottom), 14px) + 66px);
+}
+@container (min-width: 760px) {
+  .vn2-pagenav-raised {
+    bottom: max(env(safe-area-inset-bottom), 14px);
+  }
+}
+.vn2-toolbar-wrap {
+  padding-bottom: max(env(safe-area-inset-bottom), 14px);
+}
+
+/* ---------------------------------------------------------------- slides */
+
+.vn2-pres {
+  background: var(--background);
+}
+.vn2-pres-side {
+  background: var(--surface);
+}
+.vn2-slide {
+  background: #ffffff;
+  color: #1d1b29;
+  border-radius: 4px;
+}
+:root[data-theme="dark"] .vn2-slide {
+  background: #ffffff;
+}
+.vn2-layer {
+  line-height: 1.25;
+  overflow: visible;
+}
+.vn2-layer-title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.vn2-layer-text {
+  width: 100%;
+  height: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  font: inherit;
+  line-height: inherit;
+}
+.vn2-layer-edit {
+  cursor: pointer;
+  touch-action: none;
+}
+.vn2-layer-edit:hover {
+  outline: 1px dashed rgba(108, 92, 255, 0.5);
+  outline-offset: 2px;
+}
+.vn2-layer-selected,
+.vn2-layer-selected:hover {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  cursor: move;
+}
+.vn2-layer-locked {
+  cursor: default;
+}
+.vn2-layer-locked.vn2-layer-selected {
+  outline-style: dashed;
+}
