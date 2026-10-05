@@ -1,32 +1,31 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RiKeyLine, RiLock2Line, RiTimerLine } from "@remixicon/react";
-import { AUTO_LOCK_OPTIONS, type AutoLockMinutes, type SecurityStatusDto, type Wallpaper } from "@voidex/shared";
+import { AUTO_LOCK_OPTIONS, type AutoLockMinutes, type SecurityStatusDto } from "@voidex/shared";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
 import { faceIdSupport } from "@/lib/faceid";
-import { useLanguage, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { ensureStepUp, setSecurityStatus, useSecurityStatus } from "@/lib/security";
 import { Button, Spinner, Switch } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
-import { WallpaperPicker, Segmented, Block } from "@/os/home/appearance-panel";
-import { useWallpaperImage, wallpaperStyle } from "@/os/home/appearance";
-import { useWallpapers } from "@/os/home/wallpapers";
+import { Segmented, Block } from "@/os/home/appearance-panel";
 import { lockNow } from "@/os/lock/auto-lock";
 import { FaceGlyph } from "@/os/lock/face-glyph";
 import { PasscodePad } from "@/os/lock/passcode-pad";
 import { FaceIdSetup } from "@/os/lock/security-setup";
 import { Badge, Group, Row, SectionTitle } from "../kit";
+import type { SectionProps } from "../settings-app";
+import { WallpaperLink } from "./wallpapers";
 
 /**
- * Settings → Lock screen & wallpapers (Step 2.4): what the lock screen and
- * the desktop look like (separate wallpapers), and what protects them — the
- * code-password, Face ID on this device and auto-lock.
+ * Settings → Lock screen (Step 2.4, 2.5.1): what protects VOIDEX — the
+ * code-password, Face ID on this device, auto-lock, "lock now" — and a link
+ * to its wallpaper (chosen only in Settings → Wallpapers).
  */
-export function LockSection() {
+export function LockSection({ navigate }: SectionProps) {
   const t = useT();
-  const wp = useWallpapers();
   const status = useSecurityStatus().data;
   const support = useQuery({ queryKey: ["face-id-support"], queryFn: faceIdSupport, staleTime: Infinity }).data;
   const [codeSheet, setCodeSheet] = useState<null | "create" | "change">(null);
@@ -52,27 +51,6 @@ export function LockSection() {
     <div data-testid="settings-lock">
       <SectionTitle subtitle={t("lockSettings.subtitle")}>{t("settings.lock")}</SectionTitle>
 
-      <div className="mb-6 grid grid-cols-2 gap-3">
-        <Preview kind="lock" wallpaper={wp.lockWallpaper ?? wp.wallpaper} slot={wp.lockWallpaper ? "lock" : "desktop"} />
-        <Preview kind="desktop" wallpaper={wp.wallpaper} slot="desktop" />
-      </div>
-
-      <div className="space-y-6">
-        <WallpaperPicker
-          slot="lock"
-          title={t("lockSettings.lockWallpaper")}
-          current={wp.lockWallpaper}
-          desktop={wp.wallpaper}
-          onPick={(w) => wp.setLockWallpaper(w)}
-        />
-        <WallpaperPicker
-          title={t("lockSettings.desktopWallpaper")}
-          current={wp.wallpaper}
-          onPick={(w) => w && wp.setWallpaper(w)}
-        />
-      </div>
-
-      <div className="mt-8" />
       <Group title={t("lockSettings.code")} footer={t("lockSettings.codeHint")}>
         <Row
           icon={<RiKeyLine className="size-[18px]" />}
@@ -132,6 +110,9 @@ export function LockSection() {
           <RiLock2Line className="size-4" /> {t("lockSettings.lockNow")}
         </Button>
       </div>
+
+      <div className="mt-6" />
+      <WallpaperLink tab="lock" onOpen={() => navigate("wallpapers")} />
 
       <PasscodeSheet mode={codeSheet} onClose={() => setCodeSheet(null)} />
       <Sheet open={faceSheet} onClose={() => setFaceSheet(false)} width={460} testId="face-id-sheet">
@@ -206,35 +187,5 @@ function PasscodeSheet({ mode, onClose }: { mode: null | "create" | "change"; on
         />
       )}
     </Sheet>
-  );
-}
-
-/** A small picture of the lock screen or the desktop with its wallpaper. */
-function Preview({ kind, wallpaper, slot }: { kind: "lock" | "desktop"; wallpaper: Wallpaper; slot: "lock" | "desktop" }) {
-  const t = useT();
-  const lang = useLanguage();
-  const image = useWallpaperImage(wallpaper, slot);
-  const w = wallpaperStyle(wallpaper, image.data);
-  const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date());
-  return (
-    <div className="flex flex-col items-center gap-2" data-testid={`preview-${kind}`}>
-      <div className="relative aspect-[3/4] w-full max-w-[200px] overflow-hidden rounded-[22px] border border-black/10 shadow-tile" style={w.style}>
-        {kind === "lock" ? (
-          <div className="flex h-full flex-col items-center pt-[14%]">
-            <span className={cx("text-[30px] font-extralight leading-none tracking-tight", w.dark ? "text-white" : "text-text")}>{time}</span>
-            <span className="mt-auto mb-[16%] grid size-10 place-items-center rounded-full bg-white/70 p-2 shadow-sm backdrop-blur">
-              <FaceGlyph state="idle" className="size-full" />
-            </span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-4 gap-2 p-3 pt-[16%]">
-            {Array.from({ length: 8 }, (_, i) => (
-              <span key={i} className="aspect-square rounded-[8px] bg-white/80 shadow-sm" />
-            ))}
-          </div>
-        )}
-      </div>
-      <span className="text-[13px] font-medium text-text-secondary">{kind === "lock" ? t("lockSettings.previewLock") : t("lockSettings.previewDesktop")}</span>
-    </div>
   );
 }

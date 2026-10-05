@@ -12,7 +12,6 @@ import { IconButton } from "@/ui/controls";
 import { useWM } from "../window-manager";
 import { CATEGORY_LABEL, appCategory, appLabel, itemKey, openApp } from "./actions";
 import { labelTone, useWallpaperImage, wallpaperStyle, type LabelTone } from "./appearance";
-import { AppearanceSheet } from "./appearance-panel";
 import { BrushMenu } from "./brush-menu";
 import { ContextMenu } from "./context-menu";
 import { FolderOverlay } from "./folder-overlay";
@@ -241,7 +240,6 @@ export function HomeScreen({
       <Launcher anchor={launcherBtn} apps={apps} layout={layout} />
       <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />
       <ContextMenu layout={layout} />
-      <AppearanceSheet />
       <RenameSheet layout={layout} />
       {ff === "mobile" && <MobileSearch apps={apps} layout={layout} />}
       <DragGhost layout={layout} />

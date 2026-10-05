@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { RiCheckLine, RiEqualizerLine, RiImageAddLine } from "@remixicon/react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCheckLine, RiImageAddLine, RiImageLine } from "@remixicon/react";
 import { WALLPAPER_PRESETS, type Wallpaper } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -7,61 +7,97 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { Button, Spinner, Switch } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
 import { VoidexMark } from "@/brand/brand";
+import { FaceGlyph } from "@/os/lock/face-glyph";
 import { DEFAULT_SWATCH, PRESETS, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "@/os/home/appearance";
 import { WALLPAPER_LABEL } from "@/os/home/appearance-panel";
 import { useWallpapers } from "@/os/home/wallpapers";
-import { SectionTitle } from "../kit";
+import { Group, Row, SectionTitle } from "../kit";
 
-type Filter = "all" | "light" | "waves" | "mine";
+export type WallpaperTab = "lock" | "home";
+
+/** The tab the next opened Wallpapers screen starts on (links from Lock screen / Desktop / the home screen). */
+let nextTab: WallpaperTab = "lock";
+export function setNextWallpaperTab(tab: WallpaperTab) {
+  nextTab = tab;
+}
+
 /** A carousel entry: what applying it stores (null: the lock screen follows the home screen). */
 interface Option {
   key: string;
   wallpaper: Wallpaper | null;
   label: string;
-  kind: "light" | "wave" | "mine" | "same";
 }
 
 const same = (a: Wallpaper | null, b: Wallpaper | null) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Settings → Wallpapers (Step 2.5): Lock screen / Home screen tabs with a
- * matching preview, a carousel (the neighbours peek in at the sides, dots
- * below), Filters · Apply · Add your own, and "Синхронизация обоев в VOIDEX".
+ * Settings → Wallpapers — the one place where wallpapers are chosen (Step
+ * 2.5.1): Lock screen / Home screen (PC: Desktop) tabs, a carousel of
+ * previews (the current one in the middle, the neighbours peeking in, dots
+ * below), Apply · Add your own, and "Синхронизация обоев в VOIDEX". Other
+ * sections only link here.
+ *
+ * Geometry is fixed: the strip is exactly as wide as its column and its side
+ * padding is measured so every card (the first and the last too) can sit in
+ * the middle; cards are brought there by scrolling the strip itself, never
+ * its ancestors — so nothing around the carousel moves.
  */
 export function WallpapersSection() {
   const t = useT();
   const ff = useFormFactor();
   const wp = useWallpapers();
-  const [tab, setTab] = useState<"lock" | "home">("lock");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [tab, setTab] = useState<WallpaperTab>(() => nextTab);
   const [busy, setBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const strip = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
-  /** While a tapped card scrolls into the middle, the passing cards don't become current. */
+  /** While a chosen card scrolls into the middle, the passing cards don't become current. */
   const target = useRef<number | null>(null);
   const slot: WallpaperSlot = tab === "lock" ? "lock" : "desktop";
   const applied = tab === "lock" ? wp.lockWallpaper : wp.wallpaper;
+  const phone = ff === "mobile";
+
+  useEffect(() => () => void (nextTab = "lock"), []);
 
   const options = useMemo<Option[]>(() => {
     const all: Option[] = [];
-    if (tab === "lock") all.push({ key: "same", wallpaper: null, label: t("lockSettings.asDesktop"), kind: "same" });
-    all.push({ key: "default", wallpaper: { kind: "default" }, label: t("wallpaper.default"), kind: "light" });
-    for (const id of WALLPAPER_PRESETS) all.push({ key: id, wallpaper: { kind: "preset", id }, label: t(WALLPAPER_LABEL[id]), kind: id.startsWith("wave") ? "wave" : "light" });
-    if (applied?.kind === "image") all.push({ key: "image", wallpaper: applied, label: t("appearance.image"), kind: "mine" });
-    return all.filter((o) => filter === "all" || (filter === "light" && (o.kind === "light" || o.kind === "same")) || (filter === "waves" && o.kind === "wave") || (filter === "mine" && o.kind === "mine"));
-  }, [tab, filter, applied, t]);
+    if (tab === "lock") all.push({ key: "same", wallpaper: null, label: t("lockSettings.asDesktop") });
+    all.push({ key: "default", wallpaper: { kind: "default" }, label: t("wallpaper.default") });
+    for (const id of WALLPAPER_PRESETS) all.push({ key: id, wallpaper: { kind: "preset", id }, label: t(WALLPAPER_LABEL[id]) });
+    if (applied?.kind === "image") all.push({ key: "image", wallpaper: applied, label: t("appearance.image") });
+    return all;
+  }, [tab, applied, t]);
 
-  // Open on the wallpaper in use.
-  useEffect(() => {
+  // The strip's own width decides the card size and the side padding (no percentages of other boxes).
+  useLayoutEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, []);
+  const card = Math.round(phone ? Math.min(width * 0.56, 240) : Math.min(width * 0.5, 400)) || 220;
+  const pad = Math.max(0, Math.round((width - card) / 2));
+
+  /** Scrolls only the strip (scrollIntoView would also scroll the Settings page and the window). */
+  const centre = (i: number, smooth: boolean) => {
+    const s = strip.current;
+    const el = s?.children[i] as HTMLElement | undefined;
+    if (!s || !el) return;
+    s.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - s.clientWidth / 2, behavior: smooth ? "smooth" : "auto" });
+  };
+
+  // Open on the wallpaper in use (again when the tab changes or the strip is resized).
+  useLayoutEffect(() => {
     const i = Math.max(0, options.findIndex((o) => same(o.wallpaper, applied)));
     setIndex(i);
-    const el = strip.current?.children[i] as HTMLElement | undefined;
-    el?.scrollIntoView({ inline: "center", block: "nearest" });
+    centre(i, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, filter]);
+  }, [tab, width]);
 
   const onScroll = () => {
     const s = strip.current;
@@ -84,10 +120,11 @@ export function WallpapersSection() {
     setIndex(best);
   };
   const goTo = (i: number) => {
-    target.current = i;
+    const n = Math.max(0, Math.min(options.length - 1, i));
+    target.current = n;
     window.setTimeout(() => (target.current = null), 800);
-    setIndex(i);
-    (strip.current?.children[i] as HTMLElement | undefined)?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    setIndex(n);
+    centre(n, true);
   };
 
   const current = options[index];
@@ -104,7 +141,6 @@ export function WallpapersSection() {
       const w = await wp.upload(file, slot);
       if (tab === "lock") wp.setLockWallpaper(w);
       else wp.setWallpaper(w);
-      setFilter("all");
     } catch {
       toast({ title: t("appearance.imageFailed"), tone: "danger" });
     } finally {
@@ -112,12 +148,11 @@ export function WallpapersSection() {
     }
   };
 
-  const phone = ff === "mobile";
   return (
-    <div data-testid="settings-wallpapers">
+    <div data-testid="settings-wallpapers" data-tab={tab}>
       <SectionTitle subtitle={t("wallpapers.subtitle")}>{t("settings.wallpapers")}</SectionTitle>
 
-      <div className="mx-auto mb-4 grid max-w-[360px] grid-cols-2 gap-1 rounded-full bg-surface-secondary p-1" role="tablist">
+      <div className="mx-auto mb-4 grid w-full max-w-[380px] grid-cols-2 gap-1 rounded-full bg-surface-secondary p-1" role="tablist">
         {(["lock", "home"] as const).map((k) => (
           <button
             key={k}
@@ -125,71 +160,67 @@ export function WallpapersSection() {
             role="tab"
             aria-selected={tab === k}
             onClick={() => setTab(k)}
-            className={cx("h-10 rounded-full text-[14px] font-semibold transition", tab === k ? "bg-surface text-text shadow-sm" : "text-text-secondary")}
+            className={cx("h-10 min-w-0 truncate rounded-full px-2 text-[14px] font-semibold transition-colors", tab === k ? "bg-surface text-text shadow-sm" : "text-text-secondary")}
             data-testid={`wallpapers-tab-${k}`}
           >
-            {k === "lock" ? t("wallpapers.lock") : t("wallpapers.home")}
+            {k === "lock" ? t("wallpapers.lock") : phone ? t("wallpapers.home") : t("wallpapers.desktop")}
           </button>
         ))}
       </div>
 
-      {filtersOpen && (
-        <div className="mb-3 flex flex-wrap justify-center gap-2" data-testid="wallpapers-filters">
-          {(["all", "light", "waves", "mine"] as const).map((f) => (
+      {/* Carousel: the cards snap to the middle, the neighbours show at the sides. */}
+      <div className="relative" data-testid="wallpapers-stage">
+        <div
+          ref={strip}
+          onScroll={onScroll}
+          className="relative flex snap-x snap-mandatory gap-4 overflow-x-auto overflow-y-hidden pb-2 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ paddingInline: pad, scrollPaddingInline: pad }}
+          data-testid="wallpapers-carousel"
+        >
+          {options.map((o, i) => (
             <button
-              key={f}
+              key={o.key + tab}
               type="button"
-              aria-pressed={filter === f}
-              onClick={() => setFilter(f)}
-              className={cx("h-8 rounded-full px-3.5 text-[13px] font-medium", filter === f ? "bg-primary text-white" : "bg-surface-secondary text-text-secondary")}
-              data-testid={`wallpapers-filter-${f}`}
+              onClick={() => goTo(i)}
+              aria-label={o.label}
+              aria-current={i === index || undefined}
+              className={cx("shrink-0 snap-center transition-[transform,opacity] duration-300", i === index ? "scale-100 opacity-100" : "scale-[0.88] opacity-70")}
+              style={{ width: card }}
+              data-testid={`wallpapers-option-${o.key}`}
             >
-              {t(`wallpapers.filter.${f}`)}
+              <PreviewCard option={o} tab={tab} desktop={wp.wallpaper} slot={slot} phone={phone} applied={same(o.wallpaper, applied)} />
+              <span className="mt-2 block truncate text-center text-[13px] font-medium text-text-secondary">{o.label}</span>
             </button>
           ))}
         </div>
-      )}
-
-      {/* Carousel: the cards snap to the centre, the neighbours show at the sides. */}
-      <div
-        ref={strip}
-        onScroll={onScroll}
-        className="scroll-area -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-[18%] pb-2 pt-1 [scrollbar-width:none] sm:-mx-2"
-        data-testid="wallpapers-carousel"
-      >
+        {!phone && (
+          <>
+            <ArrowButton side="left" disabled={index <= 0} onClick={() => goTo(index - 1)} label={t("common.back")} />
+            <ArrowButton side="right" disabled={index >= options.length - 1} onClick={() => goTo(index + 1)} label={t("common.next")} />
+          </>
+        )}
+      </div>
+      <div className="mt-1 flex h-2 items-center justify-center gap-1.5" data-testid="wallpapers-dots">
         {options.map((o, i) => (
           <button
-            key={o.key + tab}
+            key={o.key}
             type="button"
-            onClick={() => goTo(i)}
+            tabIndex={-1}
             aria-label={o.label}
-            aria-current={i === index || undefined}
-            className={cx("shrink-0 snap-center transition-[transform,opacity] duration-300", i === index ? "scale-100 opacity-100" : "scale-[0.9] opacity-70")}
-            style={{ width: phone ? "64%" : "min(56%, 420px)" }}
-            data-testid={`wallpapers-option-${o.key}`}
-          >
-            <PreviewCard option={o} tab={tab} desktop={wp.wallpaper} slot={slot} phone={phone} applied={same(o.wallpaper, applied)} />
-            <span className="mt-2 block truncate text-center text-[13px] font-medium text-text-secondary">{o.label}</span>
-          </button>
-        ))}
-        {!options.length && <p className="w-full py-16 text-center text-[14px] text-text-tertiary">{t("wallpapers.none")}</p>}
-      </div>
-      <div className="mt-1 flex justify-center gap-1.5" aria-hidden data-testid="wallpapers-dots">
-        {options.map((o, i) => (
-          <span key={o.key} className={cx("h-1.5 rounded-full transition-all", i === index ? "w-5 bg-primary" : "w-1.5 bg-border-strong")} />
+            onClick={() => goTo(i)}
+            className={cx("h-1.5 rounded-full transition-all", i === index ? "w-5 bg-primary" : "w-1.5 bg-border-strong")}
+          />
         ))}
       </div>
 
-      <div className="mt-5 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-        <Button variant="secondary" onClick={() => setFiltersOpen((v) => !v)} aria-pressed={filtersOpen} data-testid="wallpapers-filters-toggle">
-          <RiEqualizerLine className="size-4" /> {t("wallpapers.filters")}
+      <div className="mx-auto mt-5 grid w-full max-w-[460px] grid-cols-2 gap-3" data-testid="wallpapers-actions">
+        <Button onClick={apply} disabled={isApplied || !current} className="min-w-0" data-testid="wallpapers-apply">
+          {isApplied ? <RiCheckLine className="size-4 shrink-0" /> : null}
+          <span className="truncate">{isApplied ? t("wallpapers.inUse") : t("wallpapers.apply")}</span>
         </Button>
-        <Button onClick={apply} disabled={isApplied || !current} data-testid="wallpapers-apply">
-          {isApplied ? <RiCheckLine className="size-4" /> : null}
-          {isApplied ? t("wallpapers.inUse") : t("wallpapers.apply")}
-        </Button>
-        <Button variant="secondary" onClick={() => input.current?.click()} disabled={busy} data-testid="wallpapers-add">
-          {busy ? <Spinner size={16} /> : <RiImageAddLine className="size-4" />} {t("wallpapers.add")}
+        <Button variant="secondary" onClick={() => input.current?.click()} disabled={busy} className="min-w-0" data-testid="wallpapers-add">
+          {busy ? <Spinner size={16} /> : <RiImageAddLine className="size-4 shrink-0" />}
+          <span className="truncate">{t("wallpapers.add")}</span>
         </Button>
         <input
           ref={input}
@@ -210,49 +241,109 @@ export function WallpapersSection() {
           <span className="block text-[15px] font-medium text-text">{t("wallpapers.sync")}</span>
           <span className="block text-[12.5px] leading-snug text-text-tertiary">{wp.sync ? t("wallpapers.syncOn") : t("wallpapers.syncOff")}</span>
         </span>
-        {syncBusy ? (
-          <Spinner size={16} />
-        ) : (
-          <Switch
-            checked={wp.sync}
-            label={t("wallpapers.sync")}
-            onChange={(on) => {
-              setSyncBusy(true);
-              void wp.setSync(on).finally(() => setSyncBusy(false));
-            }}
-          />
-        )}
+        <span className="grid w-11 shrink-0 place-items-center">
+          {syncBusy ? (
+            <Spinner size={16} />
+          ) : (
+            <Switch
+              checked={wp.sync}
+              label={t("wallpapers.sync")}
+              onChange={(on) => {
+                setSyncBusy(true);
+                void wp.setSync(on).finally(() => setSyncBusy(false));
+              }}
+            />
+          )}
+        </span>
       </div>
     </div>
   );
 }
 
-/** The wallpaper as it will look: a lock screen (time) or a home screen (icons), phone- or PC-shaped. */
-function PreviewCard({ option, tab, desktop, slot, phone, applied }: { option: Option; tab: "lock" | "home"; desktop: Wallpaper; slot: WallpaperSlot; phone: boolean; applied: boolean }) {
+function ArrowButton({ side, disabled, onClick, label }: { side: "left" | "right"; disabled: boolean; onClick: () => void; label: string }) {
+  const Icon = side === "left" ? RiArrowLeftSLine : RiArrowRightSLine;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className={cx(
+        "vx-glass-strong absolute top-[calc(50%-14px)] grid size-9 -translate-y-1/2 place-items-center rounded-full text-text shadow-tile transition-opacity disabled:pointer-events-none disabled:opacity-0",
+        side === "left" ? "left-1" : "right-1",
+      )}
+      data-testid={`wallpapers-${side === "left" ? "prev" : "next"}`}
+    >
+      <Icon className="size-5" />
+    </button>
+  );
+}
+
+/** The wallpaper as it will look: a lock screen (time, unlock) or a home screen (icons, dock), phone- or PC-shaped. */
+function PreviewCard({ option, tab, desktop, slot, phone, applied }: { option: Option; tab: WallpaperTab; desktop: Wallpaper; slot: WallpaperSlot; phone: boolean; applied: boolean }) {
   const lang = useLanguage();
   const look = option.wallpaper ?? desktop;
   const lookSlot: WallpaperSlot = option.wallpaper ? slot : "desktop";
   const image = useWallpaperImage(look, lookSlot);
   const w = look.kind === "default" ? { style: { background: DEFAULT_SWATCH }, dark: false } : wallpaperStyle(look, image.data);
   const dark = look.kind === "preset" ? !!PRESETS[look.id as keyof typeof PRESETS]?.dark : w.dark;
-  const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date());
+  const now = new Date();
+  const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(now);
+  const date = new Intl.DateTimeFormat(lang, { weekday: "long", day: "numeric", month: "long" }).format(now);
+  const ink = dark ? "text-white" : "text-text";
   return (
     <span
       className={cx("relative block w-full overflow-hidden border border-black/10 shadow-tile", phone ? "aspect-[9/17] rounded-[28px]" : "aspect-[16/10] rounded-[20px]", applied && "ring-[3px] ring-primary ring-offset-2 ring-offset-background")}
       style={w.style}
     >
       {tab === "lock" ? (
-        <span className="flex h-full flex-col items-center pt-[12%]">
-          <span className={cx("text-[34px] font-extralight leading-none tracking-tight", dark ? "text-white" : "text-text")}>{time}</span>
-          <span className="mt-auto mb-[10%] grid size-9 place-items-center rounded-full bg-white/70 p-2 shadow-sm backdrop-blur">
-            <VoidexMark className="size-full" />
+        <span className="flex h-full flex-col items-center" style={{ paddingTop: phone ? "16%" : "8%" }}>
+          <span className={cx("truncate text-[11px] font-medium opacity-80", ink)}>{date}</span>
+          <span className={cx("font-extralight leading-none tracking-tight", ink, phone ? "text-[40px]" : "text-[36px]")}>{time}</span>
+          {phone ? (
+            <span className="mt-auto mb-[8%] flex w-full items-center justify-between px-[10%]">
+              <span className="size-7 rounded-full bg-black/10 ring-1 ring-white/50 backdrop-blur" />
+              <span className="grid size-8 place-items-center rounded-full bg-white/70 p-1.5 shadow-sm backdrop-blur">
+                <FaceGlyph state="idle" className="size-full" />
+              </span>
+              <span className="size-7 rounded-full bg-black/10 ring-1 ring-white/50 backdrop-blur" />
+            </span>
+          ) : (
+            <span className="mt-auto mb-[7%] flex flex-col items-center gap-1.5">
+              <span className="grid size-8 place-items-center rounded-full bg-white/70 p-1.5 shadow-sm backdrop-blur">
+                <VoidexMark className="size-full" />
+              </span>
+              <span className="h-2 w-16 rounded-full bg-black/10" />
+            </span>
+          )}
+        </span>
+      ) : phone ? (
+        <span className="flex h-full flex-col">
+          <span className="grid grid-cols-4 gap-[9%] px-[10%] pt-[20%]">
+            {Array.from({ length: 12 }, (_, i) => (
+              <span key={i} className="aspect-square rounded-[26%] bg-white/80 shadow-sm" />
+            ))}
+          </span>
+          <span className="mx-[6%] mb-[6%] mt-auto grid grid-cols-4 gap-[9%] rounded-[18px] bg-black/[0.06] p-[5%] ring-1 ring-white/50 backdrop-blur" data-testid="wallpapers-preview-dock">
+            {Array.from({ length: 4 }, (_, i) => (
+              <span key={i} className="aspect-square rounded-[26%] bg-white/90 shadow-sm" />
+            ))}
           </span>
         </span>
       ) : (
-        <span className={cx("grid gap-[6%] p-[9%]", phone ? "grid-cols-3 pt-[22%]" : "grid-cols-6 pt-[8%]")}>
-          {Array.from({ length: phone ? 9 : 12 }, (_, i) => (
-            <span key={i} className="aspect-square rounded-[24%] bg-white/80 shadow-sm" />
-          ))}
+        <span className="flex h-full flex-col">
+          <span className="h-[7%] w-full bg-black/[0.05]" />
+          <span className="grid grid-cols-8 gap-[4%] px-[6%] pt-[6%]">
+            {Array.from({ length: 16 }, (_, i) => (
+              <span key={i} className="aspect-square rounded-[24%] bg-white/80 shadow-sm" />
+            ))}
+          </span>
+          <span className="mx-auto mb-[3%] mt-auto flex h-[11%] w-[46%] items-center gap-[4%] rounded-[10px] bg-black/[0.06] px-[3%] ring-1 ring-white/50 backdrop-blur" data-testid="wallpapers-preview-dock">
+            <span className="h-[45%] flex-[2] rounded-full bg-white/90" />
+            {Array.from({ length: 4 }, (_, i) => (
+              <span key={i} className="aspect-square h-[70%] rounded-[24%] bg-white/90" />
+            ))}
+          </span>
         </span>
       )}
       {applied && (
@@ -261,5 +352,39 @@ function PreviewCard({ option, tab, desktop, slot, phone, applied }: { option: O
         </span>
       )}
     </span>
+  );
+}
+
+/** A small live thumbnail of a wallpaper (for the links to the Wallpapers screen). */
+function Thumb({ wallpaper, slot }: { wallpaper: Wallpaper; slot: WallpaperSlot }) {
+  const image = useWallpaperImage(wallpaper, slot);
+  const style = wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data).style;
+  return <span className="block h-11 w-8 shrink-0 overflow-hidden rounded-[9px] border border-black/10 shadow-sm" style={style} aria-hidden />;
+}
+
+/**
+ * The link other sections show instead of their own picker: "Обои" with the
+ * current wallpaper; opens Settings → Wallpapers on the matching tab.
+ */
+export function WallpaperLink({ tab, onOpen, title }: { tab: WallpaperTab; onOpen: () => void; title?: string }) {
+  const t = useT();
+  const wp = useWallpapers();
+  const lock = tab === "lock";
+  const shown = lock ? (wp.lockWallpaper ?? wp.wallpaper) : wp.wallpaper;
+  return (
+    <Group title={title}>
+      <Row
+        icon={<RiImageLine className="size-[18px]" />}
+        label={lock ? t("wallpapers.changeLock") : t("wallpapers.change")}
+        hint={t("wallpapers.linkHint")}
+        right={<Thumb wallpaper={shown} slot={lock && wp.lockWallpaper ? "lock" : "desktop"} />}
+        chevron
+        onClick={() => {
+          setNextWallpaperTab(tab);
+          onOpen();
+        }}
+        testId={`wallpaper-link-${tab}`}
+      />
+    </Group>
   );
 }

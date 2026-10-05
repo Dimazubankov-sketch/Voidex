@@ -6,6 +6,7 @@ import type { WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
+import { openWallpapers } from "./actions";
 import { updateLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 
@@ -110,7 +111,7 @@ export function BrushMenu({ anchor, layout }: { anchor: RefObject<HTMLElement | 
             transition={{ duration: 0.15, ease: EASE }}
             data-testid="brush-menu"
           >
-            <Row icon={<RiImageLine />} label={t("home.wallpaper")} onClick={() => ui().setAppearanceOpen(true)} testId="brush-wallpaper" />
+            <Row icon={<RiImageLine />} label={t("home.wallpaper")} onClick={() => openWallpapers("home")} testId="brush-wallpaper" />
             <button
               type="button"
               role="menuitemradio"

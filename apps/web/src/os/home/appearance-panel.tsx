@@ -1,27 +1,20 @@
-import { useRef, useState, type ReactNode } from "react";
-import { RiCheckLine, RiDeleteBinLine, RiImageAddLine } from "@remixicon/react";
+import { useState, type ReactNode } from "react";
 import {
   DESKTOP_COLUMNS_MAX,
   DESKTOP_COLUMNS_MIN,
-  WALLPAPER_PRESETS,
   defaultLayout,
-  type Wallpaper,
   type WallpaperPreset,
   type WorkspaceLayout,
 } from "@voidex/shared";
-import { api } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
-import { Button, Spinner, Switch } from "@/ui/controls";
-import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
-import { DEFAULT_SWATCH, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "./appearance";
+import { Button, Switch } from "@/ui/controls";
+import { ConfirmDialog, toast } from "@/ui/overlays";
 import { useWorkspaceLayout, updateLayout } from "./layout";
-import { useWallpapers } from "./wallpapers";
-import { useHomeUi } from "./ui-store";
 
-/** Parts of the panel: the brush shows one at a time, Settings → Desktop all of them. */
-export type AppearancePart = "wallpaper" | "view" | "dock" | "reset";
+/** Parts of the panel (wallpapers are chosen only in Settings → Wallpapers, glass in Personalization). */
+export type AppearancePart = "view" | "dock" | "reset";
 
 /**
  * Desktop appearance and arrangement — one panel used by the brush menu on
@@ -31,7 +24,7 @@ export type AppearancePart = "wallpaper" | "view" | "dock" | "reset";
  * device (phone icons per row vs PC scale and dock) are shown on that device.
  * New wallpaper kinds are new swatches here plus a case in `wallpaperStyle`.
  */
-export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"] }: { parts?: AppearancePart[] }) {
+export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?: AppearancePart[] }) {
   const t = useT();
   const ff = useFormFactor();
   const { layout } = useWorkspaceLayout();
@@ -39,58 +32,11 @@ export function AppearancePanel({ parts = ["wallpaper", "view", "dock", "reset"]
   const setAppearance = (patch: Partial<WorkspaceLayout["appearance"]>) => updateLayout((l) => ({ ...l, appearance: { ...l.appearance, ...patch } }));
   const setDesktop = (patch: Partial<WorkspaceLayout["desktop"]>) => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, ...patch } }));
   const [confirmReset, setConfirmReset] = useState(false);
-  const wallpapers = useWallpapers();
   const pc = ff === "desktop";
 
   return (
     <div className="space-y-6" data-testid="appearance-panel">
       <p className="text-[13px] text-text-secondary">{t("appearance.synced")}</p>
-      {parts.includes("wallpaper") && (
-        <>
-          <WallpaperPicker current={wallpapers.wallpaper} onPick={(wallpaper) => wallpaper && wallpapers.setWallpaper(wallpaper)} />
-          <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
-            <Field label={t("appearance.glass")}>
-              <Segmented
-                value={a.glass}
-                options={[
-                  ["off", "appearance.glassOff"],
-                  ["medium", "appearance.glassMedium"],
-                  ["on", "appearance.glassOn"],
-                ]}
-                onChange={(glass) => setAppearance({ glass })}
-                testId="glass"
-              />
-            </Field>
-            {pc && (
-              <Field label={t("appearance.systemBar")}>
-                <Segmented
-                  value={a.systemBar}
-                  options={[
-                    ["glass", "appearance.systemBarGlass"],
-                    ["off", "appearance.systemBarOff"],
-                  ]}
-                  onChange={(systemBar) => setAppearance({ systemBar })}
-                  testId="system-bar-style"
-                />
-              </Field>
-            )}
-            {pc && (
-              <Field label={t("appearance.dock")}>
-                <Segmented
-                  value={a.dock}
-                  options={[
-                    ["glass", "appearance.systemBarGlass"],
-                    ["off", "appearance.systemBarOff"],
-                  ]}
-                  onChange={(dock) => setAppearance({ dock })}
-                  testId="dock-style"
-                />
-              </Field>
-            )}
-          </Block>
-        </>
-      )}
-
       {parts.includes("view") && (
         <Block title={t("appearance.view")}>
           <div className="flex items-center gap-3" data-testid="show-labels">
@@ -277,163 +223,3 @@ export const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
   "wave-gray-purple": "wallpaper.waveGrayPurple",
   "wave-milk-gray-purple": "wallpaper.waveMilkGrayPurple",
 };
-
-function sameWallpaper(a: Wallpaper | null, b: Wallpaper | null) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function Swatch({
-  wallpaper,
-  current,
-  onPick,
-  label,
-  testId,
-  children,
-  slot = "desktop",
-  shows,
-}: {
-  /** What picking it stores (null: the lock screen follows the desktop). */
-  wallpaper: Wallpaper | null;
-  current: Wallpaper | null;
-  onPick: (w: Wallpaper | null) => void;
-  label: string;
-  testId: string;
-  children?: ReactNode;
-  slot?: WallpaperSlot;
-  /** What it looks like, when that differs from what it stores ("as on the desktop"). */
-  shows?: { wallpaper: Wallpaper; slot: WallpaperSlot };
-}) {
-  const look = shows?.wallpaper ?? wallpaper ?? ({ kind: "default" } as Wallpaper);
-  const image = useWallpaperImage(look, shows?.slot ?? slot);
-  const style = look.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(look, image.data).style;
-  const active = sameWallpaper(wallpaper, current);
-  return (
-    <button
-      type="button"
-      onClick={() => onPick(wallpaper)}
-      aria-label={label}
-      aria-pressed={active}
-      title={label}
-      data-testid={testId}
-      className="pressable flex w-[68px] shrink-0 flex-col items-center gap-1.5"
-    >
-      <span
-        className={cx("relative block h-[92px] w-[64px] overflow-hidden rounded-[16px] border border-black/10 shadow-sm", active && "ring-[3px] ring-primary ring-offset-2")}
-        style={style}
-      >
-        {children}
-        {active && (
-          <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-white">
-            <RiCheckLine className="size-3.5" />
-          </span>
-        )}
-      </span>
-      <span className={cx("line-clamp-2 min-h-[2.5em] w-full text-center text-[11px] leading-tight", active ? "font-semibold text-text" : "text-text-secondary")}>{label}</span>
-    </button>
-  );
-}
-
-/**
- * Wallpapers for the desktop or (Step 2.4) the lock screen: the same presets
- * and an own image, each slot with its own image file. The lock screen can
- * also simply follow the desktop.
- */
-export function WallpaperPicker({
-  current,
-  onPick,
-  slot = "desktop",
-  title,
-  desktop,
-}: {
-  current: Wallpaper | null;
-  onPick: (w: Wallpaper | null) => void;
-  slot?: WallpaperSlot;
-  title?: string;
-  /** Lock slot: the desktop wallpaper (for the "as on the desktop" choice). */
-  desktop?: Wallpaper;
-}) {
-  const t = useT();
-  const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const wallpapers = useWallpapers();
-  const hasImage = current?.kind === "image";
-  const lock = slot === "lock";
-  const q = lock ? "?slot=lock" : "";
-  const tid = (id: string) => (lock ? `lock-${id}` : id);
-
-  const upload = async (file: File) => {
-    setBusy(true);
-    try {
-      // To the account, or kept on this device when wallpaper sync is off (Step 2.5).
-      onPick(await wallpapers.upload(file, slot));
-    } catch {
-      toast({ title: t("appearance.imageFailed"), tone: "danger" });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeImage = async () => {
-    onPick(lock ? null : { kind: "default" });
-    if (!wallpapers.sync) return;
-    try {
-      await api.delete(`/api/account/wallpaper${q}`);
-    } catch {
-      /* the layout no longer points at it; a later upload replaces it anyway */
-    }
-  };
-
-  return (
-    <Block title={title ?? t("appearance.wallpaper")}>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(68px,1fr))] justify-items-center gap-x-2 gap-y-3 pt-1" data-testid={tid("wallpaper-presets")}>
-        {lock && desktop && <Swatch wallpaper={null} current={current} onPick={onPick} label={t("lockSettings.asDesktop")} testId="lock-wallpaper-same" shows={{ wallpaper: desktop, slot: "desktop" }} />}
-        <Swatch wallpaper={{ kind: "default" }} current={current} onPick={onPick} label={t("wallpaper.default")} testId={tid("wallpaper-default")} />
-        {WALLPAPER_PRESETS.map((id) => (
-          <Swatch key={id} wallpaper={{ kind: "preset", id }} current={current} onPick={onPick} label={t(WALLPAPER_LABEL[id])} testId={tid(`wallpaper-preset-${id}`)} />
-        ))}
-      </div>
-      <div>
-        <div className="mb-2 text-[13px] text-text-secondary">{t("appearance.image")}</div>
-        <div className="flex flex-wrap items-center gap-3">
-          {hasImage && <Swatch wallpaper={current} current={current} onPick={onPick} label={t("appearance.image")} testId={tid("wallpaper-image")} slot={slot} />}
-          <Button variant="secondary" size="sm" onClick={() => input.current?.click()} disabled={busy} data-testid={tid("wallpaper-upload")}>
-            {busy ? <Spinner size={16} /> : <RiImageAddLine className="size-4" />}
-            {busy ? t("appearance.uploading") : t("appearance.upload")}
-          </Button>
-          {hasImage && (
-            <Button variant="ghost" size="sm" onClick={removeImage} data-testid={tid("wallpaper-remove")}>
-              <RiDeleteBinLine className="size-4" />
-              {t("appearance.removeImage")}
-            </Button>
-          )}
-        </div>
-        <p className="mt-2 text-[12px] text-text-tertiary">{t("appearance.imageHint")}</p>
-        <input
-          ref={input}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          data-testid={tid("wallpaper-file")}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (f) void upload(f);
-          }}
-        />
-      </div>
-    </Block>
-  );
-}
-
-/** Brush menu → Wallpaper (and the desktop's right-click "Wallpaper") opens this. */
-export function AppearanceSheet() {
-  const t = useT();
-  const ff = useFormFactor();
-  const open = useHomeUi((s) => s.appearanceOpen);
-  const setOpen = useHomeUi((s) => s.setAppearanceOpen);
-  return (
-    <Sheet open={open} onClose={() => setOpen(false)} title={t("appearance.wallpaper")} width={ff === "desktop" ? 560 : 480} testId="appearance-sheet">
-      <AppearancePanel parts={["wallpaper"]} />
-    </Sheet>
-  );
-}

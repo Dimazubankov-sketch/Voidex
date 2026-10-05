@@ -20,6 +20,7 @@ import {
   RiImageLine,
   RiSearchLine,
   RiCloseLine,
+  RiHome5Line,
 } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { countryName, useLanguage, useT, type MessageKey } from "@/lib/i18n";
@@ -36,7 +37,7 @@ import { LockSection } from "./sections/lock";
 import { BrandFooter } from "./kit";
 import { AboutSection, NotificationsSection, PrivacySection } from "./sections/system";
 import { PersonalizationSection } from "./sections/personalization";
-import { WallpapersSection } from "./sections/wallpapers";
+import { WallpapersSection, setNextWallpaperTab } from "./sections/wallpapers";
 
 export type SectionId =
   | "account"
@@ -105,7 +106,7 @@ const ACTIONS: { label: MessageKey; section: SectionId; words: string }[] = [
   { label: "lock.faceId", section: "lock", words: "face id faceid лицо биометрия windows hello touch id" },
   { label: "lockSettings.code", section: "lock", words: "код-пароль код пароль блокировка passcode pin" },
   { label: "settings.lock", section: "lock", words: "экран блокировки lock screen автоблокировка auto-lock" },
-  { label: "settings.wallpapers", section: "wallpapers", words: "обои фон картинка wallpaper background синхронизация обоев sync" },
+  { label: "settings.wallpapers", section: "wallpapers", words: "обои фон картинка заставка wallpaper background синхронизация обоев sync экран блокировки рабочий стол" },
   { label: "settings.notifications", section: "notifications", words: "уведомления звук баннер notifications sound banner" },
   { label: "settings.language", section: "language", words: "язык language" },
   { label: "settings.password", section: "password", words: "пароль сменить пароль password change" },
@@ -216,6 +217,7 @@ export function SettingsApp() {
   // Other apps / notifications can deep-link: open("settings", { params: { section } }).
   useEffect(() => {
     const s = win.params.section as SectionId | undefined;
+    if (s === "wallpapers" && (win.params.tab === "lock" || win.params.tab === "home")) setNextWallpaperTab(win.params.tab);
     if (s && SECTIONS.some((x) => x.id === s)) void allowed(s).then((ok) => ok && setStack([s]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [win.paramsVersion]);
@@ -281,12 +283,29 @@ export function SettingsApp() {
         <div className="flex min-w-0 flex-1 flex-col">
           <WindowHeader>
             {stack.length > 1 && (
-              <IconButton label={t("common.back")} onClick={back} size="sm">
+              <IconButton label={t("common.back")} onClick={back} size="sm" data-testid="settings-pc-back">
                 <RiArrowLeftSLine className="size-5" />
               </IconButton>
             )}
+            {/* Step 2.5.1: the way back to the Settings home page from any section. */}
+            {def && (
+              <nav className="flex min-w-0 items-center gap-1 text-[13.5px]" aria-label={t("settings.title")} data-no-drag>
+                <button
+                  type="button"
+                  onClick={() => setStack([])}
+                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-full px-2.5 font-medium text-primary transition-colors hover:bg-primary/10"
+                  data-testid="settings-home-button"
+                >
+                  <RiHome5Line className="size-4" />
+                  {t("settings.home")}
+                </button>
+                <RiArrowRightSLine className="size-4 shrink-0 text-text-tertiary" aria-hidden />
+                <span className="truncate font-medium text-text-secondary" data-testid="settings-breadcrumb">{t(def.label)}</span>
+              </nav>
+            )}
           </WindowHeader>
-          <div className="scroll-area flex-1 px-8 pb-10">
+          {/* A stable gutter: the page never shifts sideways when its scrollbar comes and goes. */}
+          <div className="scroll-area flex-1 px-8 pb-10 [scrollbar-gutter:stable]" data-testid="settings-content">
             <div className="mx-auto max-w-[640px]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={current ?? "home"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>

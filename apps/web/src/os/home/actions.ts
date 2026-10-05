@@ -60,6 +60,14 @@ export function openApp(id: AppId, from?: Element | null) {
   useWM.getState().open(id, { origin: rectOf(from?.querySelector("[data-tile]") ?? from) });
 }
 
+/** Step 2.5.1: wallpapers are chosen in one place — Settings → Wallpapers, on the given tab. */
+export function openWallpapers(tab: "lock" | "home" = "home") {
+  useHomeUi.getState().setLauncherOpen(false);
+  useHomeUi.getState().setEditing(false);
+  useHomeUi.getState().setBrushOpen(false);
+  useWM.getState().open("settings", { params: { section: "wallpapers", tab } });
+}
+
 /** A folder name iOS-style: the shared category of its apps, else "Folder". */
 function folderName(apps: AppId[]): string {
   const l = currentLayout();

@@ -6,6 +6,8 @@ import { useT } from "@/lib/i18n";
 import { Block, Segmented } from "@/os/home/appearance-panel";
 import { updateLayout, useWorkspaceLayout } from "@/os/home/layout";
 import { SectionTitle } from "../kit";
+import type { SectionProps } from "../settings-app";
+import { WallpaperLink } from "./wallpapers";
 
 const THEMES: { id: Theme; icon: typeof RiSunLine }[] = [
   { id: "light", icon: RiSunLine },
@@ -15,10 +17,10 @@ const THEMES: { id: Theme; icon: typeof RiSunLine }[] = [
 
 /**
  * Settings → Personalization (Step 2.5): the colour theme (light, dark,
- * as on the device) and the glass of the desktop — its level, and on PC the
+ * as on the device), a link to the wallpapers, and the glass of the desktop — its level, and on PC the
  * system bar and the dock separately. Saved to the account.
  */
-export function PersonalizationSection() {
+export function PersonalizationSection({ navigate }: SectionProps) {
   const t = useT();
   const ff = useFormFactor();
   const { layout } = useWorkspaceLayout();
@@ -53,6 +55,8 @@ export function PersonalizationSection() {
         </div>
         <p className="mt-2 px-1 text-[12.5px] text-text-tertiary">{t("personalization.themeHint")}</p>
       </section>
+
+      <WallpaperLink tab="lock" title={t("settings.wallpapers")} onOpen={() => navigate("wallpapers")} />
 
       <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
         <Row label={t("appearance.glass")}>

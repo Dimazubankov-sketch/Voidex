@@ -44,7 +44,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { requestClose, useWM } from "../window-manager";
 import { currentView, setView } from "./brush-menu";
-import { CATEGORY_LABEL, addToDesktop, addToFolder, appCategory, createFolderWith, openApp, ungroupFolder } from "./actions";
+import { CATEGORY_LABEL, addToDesktop, openWallpapers, addToFolder, appCategory, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
@@ -232,7 +232,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
       case "desktop": {
         // Wallpaper · View · Widgets — the same choices as the brush menu.
         const list: Entry[] = [
-          { id: "appearance", label: t("home.wallpaper"), icon: <RiImageLine />, onSelect: () => ui().setAppearanceOpen(true) },
+          { id: "appearance", label: t("home.wallpaper"), icon: <RiImageLine />, onSelect: () => openWallpapers("home") },
           {
             // One tap toggles Grid ⇄ Categories (no submenu), like the phone's brush row; the menu stays open.
             id: "view",
