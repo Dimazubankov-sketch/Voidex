@@ -386,8 +386,8 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
             </span>
           )}
         </div>
-        <div className="flex shrink-0 justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2">
-          <div className="vn2-toolbar flex items-center gap-0.5 rounded-full p-1" data-testid="notes-pres-toolbar">
+        <div className="flex min-w-0 shrink-0 justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-2">
+          <div className="vn2-toolbar vn2-pres-toolbar flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto rounded-full p-1" data-testid="notes-pres-toolbar">
             <button type="button" onClick={() => setPanel((v) => !v)} aria-pressed={panel} aria-label={t("notes.pres.panel")} title={t("notes.pres.panel")} className={cx("vn2-icon-btn size-11", panel && "text-primary")} data-testid="notes-pres-panel">
               <RiLayoutGridLine className="size-[20px]" />
             </button>

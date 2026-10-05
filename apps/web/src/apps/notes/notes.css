@@ -344,3 +344,17 @@
 .vn2-layer-locked.vn2-layer-selected {
   outline-style: dashed;
 }
+
+/* Narrow phones: the slide toolbar keeps to the screen (smaller buttons, scrolls inside if needed). */
+.vn2-pres-toolbar {
+  scrollbar-width: none;
+}
+.vn2-pres-toolbar > * {
+  flex-shrink: 0;
+}
+@container (max-width: 400px) {
+  .vn2-pres-toolbar .vn2-icon-btn {
+    width: 38px;
+    height: 38px;
+  }
+}
