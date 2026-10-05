@@ -1072,4 +1072,6 @@ export const ru: Record<MessageKey, string> = {
   "notes.transition.scale": "Масштаб",
   "notes.transition.preview": "Просмотр",
   "notes.transition.applyAll": "Применить ко всем слайдам",
+  "notes.card.note": "Заметка",
+  "notes.card.project": "Проект заметок",
 };

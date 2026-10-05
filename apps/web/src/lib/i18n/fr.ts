@@ -1057,4 +1057,6 @@ export const fr: Record<MessageKey, string> = {
   "notes.transition.scale": "Zoom",
   "notes.transition.preview": "Aperçu",
   "notes.transition.applyAll": "Appliquer à toutes les diapos",
+  "notes.card.note": "Note",
+  "notes.card.project": "Projet de notes",
 };

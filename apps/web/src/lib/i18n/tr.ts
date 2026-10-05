@@ -1057,4 +1057,6 @@ export const tr: Record<MessageKey, string> = {
   "notes.transition.scale": "Ölçek",
   "notes.transition.preview": "Önizle",
   "notes.transition.applyAll": "Tüm slaytlara uygula",
+  "notes.card.note": "Not",
+  "notes.card.project": "Not projesi",
 };

@@ -29,6 +29,7 @@ import { Button, EmptyState, IconButton, Notice, Skeleton } from "@/ui/controls"
 import { ConfirmDialog, toast } from "@/ui/overlays";
 import { useMailSummary } from "@/lib/mail-summary";
 import { draftsApi, fetchComposeDefaults, useThread, useThreadAction, useThreadList, type ThreadAction } from "./data";
+import { NotesFileCard } from "@/apps/notes/card";
 import { MessageAttachments } from "./attachments";
 import { useMail } from "./store";
 
@@ -461,6 +462,13 @@ function MessageCard({ message: m, defaultOpen }: { message: MailMessageDto; def
             </>
           )}
           <MessageAttachments items={m.attachments} />
+          {m.notesCards.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2" data-testid="message-notes-cards">
+              {m.notesCards.map((c) => (
+                <NotesFileCard key={c.token} card={c} />
+              ))}
+            </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" icon={<RiReplyLine className="size-4" />} onClick={() => reply("reply")} data-testid="reply">
               {t("mail.reply")}

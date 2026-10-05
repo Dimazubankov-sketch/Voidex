@@ -1057,4 +1057,6 @@ export const ja: Record<MessageKey, string> = {
   "notes.transition.scale": "拡大",
   "notes.transition.preview": "プレビュー",
   "notes.transition.applyAll": "すべてのスライドに適用",
+  "notes.card.note": "メモ",
+  "notes.card.project": "メモのプロジェクト",
 };

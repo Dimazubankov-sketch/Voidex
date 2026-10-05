@@ -1088,6 +1088,8 @@ export const en = {
   "notes.transition.scale": "Scale",
   "notes.transition.preview": "Preview",
   "notes.transition.applyAll": "Apply to all slides",
+  "notes.card.note": "Note",
+  "notes.card.project": "Notes project",
 } as const;
 
 export type MessageKey = keyof typeof en;

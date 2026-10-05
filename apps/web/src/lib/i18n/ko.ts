@@ -1057,4 +1057,6 @@ export const ko: Record<MessageKey, string> = {
   "notes.transition.scale": "확대/축소",
   "notes.transition.preview": "미리 보기",
   "notes.transition.applyAll": "모든 슬라이드에 적용",
+  "notes.card.note": "노트",
+  "notes.card.project": "노트 프로젝트",
 };

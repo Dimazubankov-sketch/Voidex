@@ -1057,4 +1057,6 @@ export const pt: Record<MessageKey, string> = {
   "notes.transition.scale": "Escala",
   "notes.transition.preview": "Pré-visualizar",
   "notes.transition.applyAll": "Aplicar a todos os slides",
+  "notes.card.note": "Nota",
+  "notes.card.project": "Projeto de notas",
 };

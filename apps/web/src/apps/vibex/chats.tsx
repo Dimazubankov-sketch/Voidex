@@ -28,6 +28,7 @@ import { errorMessage } from "@/lib/errors";
 import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, formatShortDate, useLanguage, useT } from "@/lib/i18n";
 import { ATTACHMENT_ACCEPT } from "@/apps/mail/attachments";
+import { NotesFileCard } from "@/apps/notes/card";
 import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { ConfirmDialog, MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
@@ -62,6 +63,8 @@ function Preview({ chat }: { chat: VibexChatDto }) {
       ? t("vibex.circle.message")
       : m.text
     ? m.text
+    : m.notesCard
+      ? `📄 ${m.notesCard.title}${m.notesCard.ext}`
     : m.sharedPost !== undefined
       ? t("vibex.chats.sharedPost")
       : m.files.some((f) => f.kind === "image")
@@ -618,6 +621,11 @@ function Bubble({
         {files.map((f) => (
           <FileChip key={f.id} file={f} tone={mine ? "mine" : "default"} />
         ))}
+        {msg.notesCard && (
+          <div className="px-1 pt-1">
+            <NotesFileCard card={msg.notesCard} tone={mine ? "mine" : "default"} />
+          </div>
+        )}
         {msg.sharedPost !== undefined && (
           <div className="w-[300px] max-w-full text-text" data-testid="message-shared-post">
             <div className={cx("flex items-center gap-1 px-2 pb-1 text-[12px]", mine ? "text-white/80" : "text-text-tertiary")}>

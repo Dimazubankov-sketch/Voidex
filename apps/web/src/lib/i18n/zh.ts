@@ -1057,4 +1057,6 @@ export const zh: Record<MessageKey, string> = {
   "notes.transition.scale": "缩放",
   "notes.transition.preview": "预览",
   "notes.transition.applyAll": "应用到所有幻灯片",
+  "notes.card.note": "笔记",
+  "notes.card.project": "笔记项目",
 };

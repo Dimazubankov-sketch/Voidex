@@ -1057,4 +1057,6 @@ export const de: Record<MessageKey, string> = {
   "notes.transition.scale": "Zoomen",
   "notes.transition.preview": "Vorschau",
   "notes.transition.applyAll": "Auf alle Folien anwenden",
+  "notes.card.note": "Notiz",
+  "notes.card.project": "Notizprojekt",
 };
