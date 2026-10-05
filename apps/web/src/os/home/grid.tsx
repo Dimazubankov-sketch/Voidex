@@ -122,7 +122,11 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         if (!p) return null;
         return (
           <div key={w.id} style={area(p)} className={cx("relative min-h-0 min-w-0", fixed && "flex items-start justify-center")} data-widget-cell={w.id} data-cell={`${p.c},${p.r}`}>
-            {renderWidget(w.id, { w: p.w * m.cell + (p.w - 1) * m.gapX, h: p.h * rowH + (p.h - 1) * m.gapY })}
+            {renderWidget(
+              w.id,
+              // PC: a widget fills its cells (with a small inset), like the icons spread over theirs.
+              fixed ? { w: Math.round(p.w * fixed.cellW - 12), h: Math.round(p.h * fixed.rowH - 12) } : { w: p.w * m.cell + (p.w - 1) * m.gapX, h: p.h * rowH + (p.h - 1) * m.gapY },
+            )}
           </div>
         );
       })}

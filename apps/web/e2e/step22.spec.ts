@@ -286,10 +286,10 @@ test("PC: widgets panel from the right-click menu; the Calculator widget sits in
   await page.keyboard.press("Escape");
   const widget = page.getByTestId("desktop-grid").getByTestId("widget-calculator");
   await expect(widget).toBeVisible();
-  // 2×2 cells: as wide as two icon cells.
+  // 2×2 cells: as wide as two cells (Step 2.5.1: minus a small inset; cells span the whole screen).
   const grid = page.getByTestId("desktop-grid");
   const cw = Number(await grid.getAttribute("data-cell-w"));
-  expect((await widget.boundingBox())!.width).toBeGreaterThan(cw * 2 - 4);
+  expect((await widget.boundingBox())!.width).toBeGreaterThan(cw * 2 - 16);
   for (const k of ["8", "+", "2", "×", "3", "="]) await widget.getByTestId(`calc-key-${k}`).click();
   await expect(widget.getByTestId("calc-widget-display")).toHaveText("14");
 

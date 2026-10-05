@@ -551,7 +551,8 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
             {layout.desktop.view === "categories" ? (
               <>
                 <WidgetStrip layout={layout} surface="desktop" container={current.id} editing={editing} />
-                <CategoryView layout={layout} items={items} maxWidth={grid ? grid.cols * grid.cellW : 9999} tone={label.tone} render={item} />
+                {/* The list view stays a centred column (the grid is what spans the whole screen). */}
+                <CategoryView layout={layout} items={items} maxWidth={Math.min(grid ? grid.cols * grid.cellW : 9999, layout.desktop.columns * m.cell + (layout.desktop.columns - 1) * m.gapX)} tone={label.tone} render={item} />
               </>
             ) : (
               grid && (

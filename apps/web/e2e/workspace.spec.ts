@@ -185,7 +185,8 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await page.getByTestId("wallpapers-option-wave-light").click();
   await page.getByTestId("wallpapers-apply").click();
   await expect(page.getByTestId("wallpapers-apply")).toBeDisabled();
-  await page.getByTestId("window-settings").getByTestId("window-menu").first().click();
+  await expect(page.getByText("Обои установлены")).toHaveCount(0, { timeout: 8000 }); // the toast covers the header
+  await page.getByTestId("window-settings").getByTestId("window-menu").last().click();
   await page.getByTestId("menu-close").click();
 
   // Everything comes back from the server after a reload.
@@ -214,6 +215,7 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await page.getByTestId("rename-input").fill("Письма");
   await page.getByTestId("rename-save").click();
   await expect(page.getByTestId("app-mail")).toHaveAccessibleName("Письма");
+  await expect(page.getByTestId("rename-sheet")).toHaveCount(0);
 
   // Drag Settings onto Mail and hold → a folder.
   const a = await center(page.getByTestId("app-settings").locator("[data-tile]"));
