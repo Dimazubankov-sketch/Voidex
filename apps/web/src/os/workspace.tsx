@@ -7,6 +7,7 @@ import { takeReopenApp } from "@/lib/known-accounts";
 import { useSession } from "@/lib/session";
 import { ApprovalPrompt } from "./approval-prompt";
 import { CloseGuard } from "./close-guard";
+import { VoidexCloudDialog } from "./cloud/cloud-dialog";
 import { useConnection, useServerEvents } from "./events";
 import { AppSwitcher } from "./app-switcher";
 import { DesktopDock, dockZone } from "./home/dock";
@@ -124,6 +125,7 @@ export function Workspace() {
       <OfflineBanner />
       <ApprovalPrompt />
       <CloseGuard />
+      <VoidexCloudDialog />
     </div>
   );
 }

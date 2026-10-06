@@ -10,6 +10,33 @@ import { Button, IconButton } from "./controls";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
+/**
+ * The part of the layout viewport the person actually sees (the phone
+ * keyboard shrinks it). Centered phone dialogs sit in it, so they never hide
+ * under the keyboard and never get pushed off the top.
+ */
+export function useVisualViewport(enabled: boolean) {
+  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!enabled) {
+      setBox(null);
+      return;
+    }
+    const v = window.visualViewport;
+    const update = () => setBox(v ? { top: v.offsetTop, height: v.height } : { top: 0, height: window.innerHeight });
+    update();
+    v?.addEventListener("resize", update);
+    v?.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      v?.removeEventListener("resize", update);
+      v?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [enabled]);
+  return box;
+}
+
 function useEscape(open: boolean, onClose: () => void) {
   useEffect(() => {
     if (!open) return;
@@ -31,6 +58,7 @@ export function Sheet({
   footer,
   width = 480,
   testId,
+  centered = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -39,15 +67,28 @@ export function Sheet({
   footer?: ReactNode;
   width?: number;
   testId?: string;
+  /** Phones too: a dialog in the middle of the visible area (above the keyboard), not a bottom sheet. */
+  centered?: boolean;
 }) {
   const ff = useFormFactor();
   const t = useT();
   useEscape(open, onClose);
-  const mobile = ff === "mobile";
+  const sheet = ff === "mobile" && !centered;
+  const mobile = sheet;
+  const vv = useVisualViewport(open && centered && ff === "mobile");
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center" data-testid={testId}>
+        <div
+          className={cx("fixed inset-x-0 z-[200] flex justify-center", sheet ? "inset-y-0 items-end sm:items-center" : "items-center")}
+          style={
+            vv
+              ? { top: vv.top, height: vv.height, paddingTop: "max(var(--safe-top), 12px)", paddingBottom: "max(var(--safe-bottom), 12px)" }
+              : { top: 0, bottom: 0 }
+          }
+          data-testid={testId}
+          data-centered={centered || undefined}
+        >
           <motion.div
             className="absolute inset-0 bg-[rgba(20,20,30,0.28)] backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
@@ -60,8 +101,9 @@ export function Sheet({
             role="dialog"
             aria-modal="true"
             className={cx(
-              "relative flex max-h-[92dvh] w-full flex-col bg-surface shadow-window",
-              mobile ? "rounded-t-[28px] pb-[max(var(--safe-bottom),12px)]" : "mx-4 rounded-[28px]",
+              "relative flex w-full flex-col bg-surface shadow-window",
+              mobile ? "max-h-[92dvh] rounded-t-[28px] pb-[max(var(--safe-bottom),12px)]" : "mx-4 max-h-full rounded-[28px]",
+              !vv && !mobile && "max-h-[92dvh]",
             )}
             style={mobile ? undefined : { maxWidth: width }}
             initial={mobile ? { y: "100%" } : { opacity: 0, scale: 0.96, y: 8 }}

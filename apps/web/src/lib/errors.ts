@@ -13,6 +13,14 @@ export function errorMessage(t: TFunction, err: unknown): string {
     const msg = t(key);
     return msg === key ? err.message || t("error.generic") : msg;
   }
+  // Step 2.7: client-side refusals (attachment checks, the cloud being off) carry a code too.
+  if (err instanceof Error && err.name === "CloudUnavailableError") return t("cloud.unavailable");
+  if (err instanceof Error && err.name === "AttachmentRejected") {
+    const key = `error.${(err as Error & { code: string }).code}` as MessageKey;
+    const msg = t(key);
+    const file = (err as Error & { filename?: string }).filename;
+    return (msg === key ? t("error.generic") : msg) + (file ? `: ${file}` : "");
+  }
   return t("error.generic");
 }
 
