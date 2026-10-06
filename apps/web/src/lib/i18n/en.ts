@@ -1112,6 +1112,17 @@ export const en = {
   "cloud.notSaved": "Not saved to VOIDEX Cloud: kept for this session only.",
   "cloud.more": "More",
   "files.saveFirst": "Save the file in the editor first",
+  "attach.title": "Choose from where?",
+  "attach.files": "VOIDEX Files",
+  "attach.media": "VOIDEX Media",
+  "attach.device": "From this device",
+  "attach.filesHint": ".txt and .prsn from Files",
+  "attach.mediaHint": "Photos and videos from Media",
+  "attach.deviceHint": "A document, photo, audio or video file",
+  "attach.filesEmpty": "There are no files in this session yet. Files from Vibex and VoidOps Mail open here once you choose “Open in Files”.",
+  "attach.mediaEmpty": "There are no photos or videos in this session yet.",
+  "attach.attach": "Attach ({n})",
+  "files.openInFiles": "Open in Files",
 } as const;
 
 export type MessageKey = keyof typeof en;

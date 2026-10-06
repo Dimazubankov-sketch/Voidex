@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiMusic2Line, RiPlayFill } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiFolderOpenLine, RiMusic2Line, RiPlayFill } from "@remixicon/react";
 import type { VibexFileDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -9,7 +9,8 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { formatBytes } from "@/apps/mail/attachments";
 import { Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
-import { saveFile, useFileUrl, useVibexMe } from "./data";
+import { opensInFiles, openInFiles } from "@/os/share/open-in-files";
+import { filesApi, saveFile, useFileUrl, useVibexMe } from "./data";
 
 function FileIcon({ mime, className }: { mime: string; className?: string }) {
   if (mime.startsWith("video/")) return <RiFilmLine className={className} />;
@@ -38,40 +39,55 @@ export function VibexImage({ file, className, onClick }: { file: VibexFileDto; c
   );
 }
 
-/** Download chip for non-image files. */
+/** Download chip for non-image files; .txt / .prsn also open in Files. */
 export function FileChip({ file, tone = "default" }: { file: VibexFileDto; tone?: "default" | "mine" }) {
   const t = useT();
   const lang = useLanguage();
   const [busy, setBusy] = useState(false);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <button
-      type="button"
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await saveFile(file);
-        } catch (e) {
-          toast({ title: errorMessage(t, e), tone: "danger" });
-        } finally {
-          setBusy(false);
-        }
-      }}
-      className={cx(
-        "pressable flex w-full min-w-0 max-w-[280px] items-center gap-3 rounded-2xl px-3 py-2 text-left",
-        tone === "mine" ? "bg-white/18 text-white" : "bg-surface-secondary",
+    <span className="flex w-full min-w-0 max-w-[280px] items-center gap-1">
+      <button
+        type="button"
+        onClick={() => void run(() => saveFile(file))}
+        className={cx(
+          "pressable flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-3 py-2 text-left",
+          tone === "mine" ? "bg-white/18 text-white" : "bg-surface-secondary",
+        )}
+        title={t("vibex.media.download")}
+        data-testid="vibex-file"
+      >
+        <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-xl", tone === "mine" ? "bg-white/20" : "bg-surface text-text-secondary")}>
+          {busy ? <Spinner size={16} /> : <FileIcon mime={file.mimeType} className="size-5" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-medium">{file.filename}</span>
+          <span className={cx("block text-[12px]", tone === "mine" ? "text-white/75" : "text-text-tertiary")}>{formatBytes(file.size, lang)}</span>
+        </span>
+        <RiDownload2Line className={cx("size-4 shrink-0", tone === "mine" ? "text-white/80" : "text-text-tertiary")} />
+      </button>
+      {opensInFiles(file.filename) && (
+        <button
+          type="button"
+          onClick={() => void run(async () => openInFiles(file.filename, await filesApi.blob(file.id)))}
+          className={cx("pressable grid size-10 shrink-0 place-items-center rounded-2xl", tone === "mine" ? "bg-white/18 text-white" : "bg-surface-secondary text-text-secondary")}
+          aria-label={t("files.openInFiles")}
+          title={t("files.openInFiles")}
+          data-testid="vibex-file-open-files"
+        >
+          <RiFolderOpenLine className="size-[18px]" />
+        </button>
       )}
-      title={t("vibex.media.download")}
-      data-testid="vibex-file"
-    >
-      <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-xl", tone === "mine" ? "bg-white/20" : "bg-surface text-text-secondary")}>
-        {busy ? <Spinner size={16} /> : <FileIcon mime={file.mimeType} className="size-5" />}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14px] font-medium">{file.filename}</span>
-        <span className={cx("block text-[12px]", tone === "mine" ? "text-white/75" : "text-text-tertiary")}>{formatBytes(file.size, lang)}</span>
-      </span>
-      <RiDownload2Line className={cx("size-4 shrink-0", tone === "mine" ? "text-white/80" : "text-text-tertiary")} />
-    </button>
+    </span>
   );
 }
 

@@ -1,6 +1,8 @@
-import type { FilesAdapter, Entry, FileData, Folder, Kind, OpenFile } from "@voidex/files";
-import { MAX_FILE, QUOTA, parseFile, serialize, validData, cleanName } from "@voidex/files";
-import type { MediaAdapter, MediaLibrary } from "@voidex/media";
+import type { FilesAdapter } from "@voidex/files";
+import type { Entry, FileData, Folder, Kind, OpenFile } from "@voidex/files/model";
+import { MAX_FILE, QUOTA, parseFile, serialize, validData, cleanName } from "@voidex/files/model";
+import type { MediaAdapter } from "@voidex/media";
+import type { MediaLibrary } from "@voidex/media/model";
 import { useSession } from "@/lib/session";
 import { CloudUnavailableError } from "./cloud";
 
@@ -20,6 +22,8 @@ export interface FilesSession extends FilesAdapter {
   /** A .txt / .prsn that arrived from outside (a Vibex / Mail attachment, a device file). */
   importFile(name: string, text: string): Promise<OpenFile>;
   count(): number;
+  /** Files and their contents right now (the attach chooser). */
+  peek(): { entry: Entry; data: FileData }[];
   /** The file to open when the Files window starts (it arrived before the window existed). */
   takePending(): string | undefined;
 }
@@ -112,6 +116,7 @@ function createFilesSession(): FilesSession {
       return f;
     },
     count: () => files.size,
+    peek: () => [...files.values()].filter((f) => !f.entry.trashed),
     takePending() {
       const id = pending;
       pending = undefined;
@@ -124,6 +129,8 @@ function createFilesSession(): FilesSession {
 export interface MediaSession extends MediaAdapter {
   /** Object URLs made this session, released on sign-out. */
   dispose(): void;
+  /** What is in the library right now (the attach chooser). */
+  peek(): MediaLibrary;
 }
 
 function createMediaSession(): MediaSession {
@@ -146,6 +153,7 @@ function createMediaSession(): MediaSession {
       urls.push(url);
       return url;
     },
+    peek: () => library,
     dispose() {
       for (const u of urls) URL.revokeObjectURL(u);
       urls.length = 0;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { RiArrowDownSLine, RiArrowUpSLine, RiAttachment2, RiCloseLine, RiDeleteBinLine, RiSendPlane2Fill } from "@remixicon/react";
-import { MAIL_SUBJECT_MAX, type MailAttachmentDto } from "@voidex/shared";
+import { MAIL_ATTACHMENTS_MAX, MAIL_SUBJECT_MAX, type MailAttachmentDto } from "@voidex/shared";
 import { ApiError } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -10,6 +10,7 @@ import { useT } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
 import { Button, IconButton, Notice, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
+import { AttachSourceSheet } from "@/os/share/attach-source";
 import { ATTACHMENT_ACCEPT, ComposerAttachments, attachmentsApi, checkFile, type PendingUpload } from "./attachments";
 import { draftsApi } from "./data";
 import { RecipientField } from "./recipients";
@@ -54,6 +55,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
   latest.current = { to, cc, bcc, subject, body };
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [chooser, setChooser] = useState(false);
   const [attachments, setAttachments] = useState<MailAttachmentDto[]>(initial.attachments ?? []);
   const [pending, setPending] = useState<PendingUpload[]>([]);
 
@@ -117,7 +119,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
       .catch(() => undefined);
   }, [initial.draftId, initial.attachments]);
 
-  async function addFiles(files: FileList | null) {
+  async function addFiles(files: FileList | File[] | null) {
     if (!files?.length) return;
     const list = [...files];
     for (const f of list) {
@@ -297,9 +299,16 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
                 {sending ? t("mail.sending") : t("mail.send")}
               </Button>
             )}
-            <IconButton label={t("mail.attach")} onClick={() => fileInput.current?.click()} data-testid="composer-attach">
+            <IconButton label={t("mail.attach")} onClick={() => setChooser(true)} data-testid="composer-attach">
               <RiAttachment2 className="size-5" />
             </IconButton>
+            <AttachSourceSheet
+              open={chooser}
+              onClose={() => setChooser(false)}
+              onDevice={() => fileInput.current?.click()}
+              onPick={(picked) => void addFiles(picked)}
+              max={Math.max(0, MAIL_ATTACHMENTS_MAX - attachments.length - pending.length)}
+            />
             <input
               ref={fileInput}
               type="file"

@@ -42,6 +42,8 @@ export const MAIL_ATTACHMENT_TYPES: Record<string, string> = {
   heif: "image/heif",
   pdf: "application/pdf",
   txt: "text/plain",
+  /** Step 2.7: VOIDEX presentation (Files): JSON, checked by content on the server. */
+  prsn: "application/vnd.voidex.prsn+json",
   csv: "text/csv",
   md: "text/markdown",
   rtf: "application/rtf",

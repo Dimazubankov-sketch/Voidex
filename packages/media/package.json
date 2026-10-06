@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/features/media/media.css",
-    "./theme-bridge.css": "./theme-bridge.css"
+    "./theme-bridge.css": "./theme-bridge.css",
+    "./model": "./src/features/media/model.ts",
+    "./utils": "./src/features/media/media-utils.ts"
   },
   "peerDependencies": {
     "react": "^19.0.0",

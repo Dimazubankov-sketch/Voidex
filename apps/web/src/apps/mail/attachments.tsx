@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiImageLine, RiMusic2Line } from "@remixicon/react";
+import { RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiFolderOpenLine, RiImageLine, RiMusic2Line } from "@remixicon/react";
 import {
   MAIL_ATTACHMENT_MAX_BYTES,
   MAIL_ATTACHMENT_TYPES,
@@ -14,6 +14,7 @@ import { errorMessage } from "@/lib/errors";
 import { useLanguage, useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
+import { opensInFiles, openInFiles } from "@/os/share/open-in-files";
 
 /** `accept` for the file picker: exactly the types the server accepts. */
 export const ATTACHMENT_ACCEPT = Object.keys(MAIL_ATTACHMENT_TYPES)
@@ -158,6 +159,16 @@ export function MessageAttachments({ items }: { items: MailAttachmentDto[] }) {
       setBusy(null);
     }
   };
+  const openFile = async (a: MailAttachmentDto) => {
+    setBusy(a.id);
+    try {
+      await openInFiles(a.filename, await attachmentsApi.blob(a.id));
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
     <div className="mt-4 space-y-2" data-testid="message-attachments">
       <div className="text-[12px] font-medium uppercase tracking-wide text-text-tertiary">
@@ -173,20 +184,33 @@ export function MessageAttachments({ items }: { items: MailAttachmentDto[] }) {
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {files.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => void download(a)}
-              className={cx("flex h-12 max-w-full items-center gap-3 rounded-2xl border px-3 text-left hover:bg-surface-hover", busy === a.id && "opacity-70")}
-              data-testid="message-attachment"
-            >
-              <FileIcon mime={a.mimeType} className="size-5 shrink-0 text-primary" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[13px] font-medium">{a.filename}</span>
-                <span className="text-[12px] text-text-tertiary">{formatBytes(a.size, lang)}</span>
-              </span>
-              {busy === a.id ? <Spinner size={14} /> : <RiDownload2Line className="size-4 shrink-0 text-text-secondary" />}
-            </button>
+            <span key={a.id} className="flex max-w-full items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void download(a)}
+                className={cx("flex h-12 max-w-full items-center gap-3 rounded-2xl border px-3 text-left hover:bg-surface-hover", busy === a.id && "opacity-70")}
+                data-testid="message-attachment"
+              >
+                <FileIcon mime={a.mimeType} className="size-5 shrink-0 text-primary" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-[13px] font-medium">{a.filename}</span>
+                  <span className="text-[12px] text-text-tertiary">{formatBytes(a.size, lang)}</span>
+                </span>
+                {busy === a.id ? <Spinner size={14} /> : <RiDownload2Line className="size-4 shrink-0 text-text-secondary" />}
+              </button>
+              {opensInFiles(a.filename) && (
+                <button
+                  type="button"
+                  onClick={() => void openFile(a)}
+                  className="grid size-12 shrink-0 place-items-center rounded-2xl border text-text-secondary hover:bg-surface-hover"
+                  aria-label={t("files.openInFiles")}
+                  title={t("files.openInFiles")}
+                  data-testid="message-attachment-open-files"
+                >
+                  <RiFolderOpenLine className="size-5" />
+                </button>
+              )}
+            </span>
           ))}
         </div>
       )}

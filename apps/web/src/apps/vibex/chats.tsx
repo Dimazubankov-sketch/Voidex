@@ -41,6 +41,7 @@ import { useSession } from "@/lib/session";
 import { NestedPost, UnavailablePost } from "./posts";
 import { markVisible, useVibex } from "./store";
 import { ChatAvatar, GroupAvatar, GroupInfoSheet, chatTitle } from "./groups";
+import { AttachSourceSheet } from "@/os/share/attach-source";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 /** Press-and-hold before a pinned chat lifts (touch and mouse alike). */
@@ -760,7 +761,8 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
     el.style.height = `${Math.min(160, el.scrollHeight)}px`;
   }, [text]);
 
-  const add = async (list: FileList | null) => {
+  const [chooser, setChooser] = useState(false);
+  const add = async (list: FileList | File[] | null) => {
     if (!list) return;
     for (const file of [...list].slice(0, Math.max(0, VIBEX_FILES_MAX - files.length - pending.length))) {
       const bad = checkVibexFile(file, "message");
@@ -903,7 +905,14 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           }}
           data-testid="chat-file"
         />
-        <IconButton label={t("vibex.chat.attach")} onClick={() => input.current?.click()} disabled={files.length + pending.length >= VIBEX_FILES_MAX} data-testid="chat-attach">
+        <AttachSourceSheet
+          open={chooser}
+          onClose={() => setChooser(false)}
+          onDevice={() => input.current?.click()}
+          onPick={(picked) => void add(picked)}
+          max={Math.max(0, VIBEX_FILES_MAX - files.length - pending.length)}
+        />
+        <IconButton label={t("vibex.chat.attach")} onClick={() => setChooser(true)} disabled={files.length + pending.length >= VIBEX_FILES_MAX} data-testid="chat-attach">
           <RiAttachment2 className="size-5" />
         </IconButton>
         <textarea
