@@ -64,6 +64,8 @@ interface WMState {
   toggleMaximize: (id: string) => void;
   restore: (id: string) => void;
   goHome: () => void;
+  /** Phone gesture bar: the open app before (-1) / after (+1) the current one, in the order they were opened. */
+  switchAdjacent: (dir: -1 | 1) => boolean;
   setRect: (id: string, rect: Rect) => void;
   setSwitcher: (open: boolean) => void;
   closeAll: () => void;
@@ -239,6 +241,16 @@ export const useWM = create<WMState>((set, get) => ({
     ) as Record<string, AppWindow>;
     set({ windows, focusedId: null, switcherOpen: false });
     persist();
+  },
+
+  switchAdjacent: (dir) => {
+    const s = get();
+    const list = Object.values(s.windows).sort((a, b) => a.openedAt - b.openedAt || a.id.localeCompare(b.id));
+    const i = list.findIndex((w) => w.id === s.focusedId);
+    const next = i < 0 ? undefined : list[i + dir];
+    if (!next) return false;
+    get().focus(next.id);
+    return true;
   },
 
   setRect: (id, rect) => {

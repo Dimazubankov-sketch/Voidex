@@ -1,5 +1,5 @@
-import { Component, Suspense, useCallback, useMemo, useRef, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { motion, type PanInfo } from "motion/react";
+import { Component, Suspense, useCallback, useMemo, useRef, useState, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { motion } from "motion/react";
 import { RiErrorWarningLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
@@ -7,6 +7,7 @@ import { cx } from "@/lib/cx";
 import { Button, Spinner } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
 import { WindowContext, type WindowApi } from "./window-context";
+import { gestureBarAction } from "./gesture-bar";
 import { foregroundId, useWM, type AppWindow, type Rect } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -171,33 +172,63 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
   );
 }
 
-/** iPhone-style home indicator: swipe up → workspace, swipe up and hold → app switcher. */
+/**
+ * iPhone-style home indicator: swipe up → workspace, swipe up and hold →
+ * app switcher, swipe sideways → the previous / next open app (Step 2.7).
+ * Its own strip below the app, so it never fights the app's own gestures;
+ * a cancelled pointer resets it; nothing touches the browser history.
+ */
 function HomeIndicator() {
   const t = useT();
   const goHome = useWM((s) => s.goHome);
   const setSwitcher = useWM((s) => s.setSwitcher);
-  const onEnd = (_: unknown, info: PanInfo) => {
-    const dy = -info.offset.y;
-    if (dy < 40) return;
-    if (dy > 160 || -info.velocity.y > 700) goHome();
-    else setSwitcher(true);
+  const switchAdjacent = useWM((s) => s.switchAdjacent);
+  const start = useRef<{ x: number; y: number; at: number; id: number } | null>(null);
+  const [shift, setShift] = useState({ x: 0, y: 0 });
+  const reset = () => {
+    start.current = null;
+    setShift({ x: 0, y: 0 });
   };
   return (
-    <motion.div
-      className="relative flex h-[calc(22px+var(--safe-bottom))] shrink-0 cursor-grab touch-none items-start justify-center"
-      drag="y"
-      dragConstraints={{ top: 0, bottom: 0 }}
-      dragElastic={{ top: 0.3, bottom: 0 }}
-      dragSnapToOrigin
-      onDragEnd={onEnd}
+    <div
+      className="relative flex h-[calc(22px+var(--safe-bottom))] shrink-0 cursor-grab touch-none select-none items-start justify-center"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId };
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const s0 = start.current;
+        if (!s0 || s0.id !== e.pointerId) return;
+        setShift({ x: Math.max(-60, Math.min(60, (e.clientX - s0.x) * 0.35)), y: Math.min(0, (e.clientY - s0.y) * 0.3) });
+      }}
+      onPointerUp={(e) => {
+        const s0 = start.current;
+        reset();
+        if (!s0 || s0.id !== e.pointerId) return;
+        const action = gestureBarAction(e.clientX - s0.x, e.clientY - s0.y, performance.now() - s0.at);
+        if (action === "prev") switchAdjacent(-1);
+        else if (action === "next") switchAdjacent(1);
+        else if (action === "home") goHome();
+        else if (action === "switcher") setSwitcher(true);
+      }}
+      onPointerCancel={reset}
+      onLostPointerCapture={() => start.current && reset()}
       aria-label={t("os.swipeHome")}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && goHome()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") goHome();
+        else if (e.key === "ArrowLeft") switchAdjacent(-1);
+        else if (e.key === "ArrowRight") switchAdjacent(1);
+      }}
       data-testid="home-indicator"
     >
-      <div className="mt-2 h-[5px] w-32 rounded-full bg-text/80" />
-    </motion.div>
+      <div
+        className="mt-2 h-[5px] w-32 rounded-full bg-text/80"
+        style={{ transform: `translate(${shift.x}px, ${shift.y}px)`, transition: start.current ? "none" : "transform 200ms ease" }}
+      />
+    </div>
   );
 }
 

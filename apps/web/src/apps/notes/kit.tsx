@@ -148,7 +148,11 @@ export function Menu({ items, onDone }: { items: MenuEntry[]; onDone: () => void
 export function MoreMenu({ items, label, testId, className, width = 250, win }: { items: MenuEntry[]; label: string; testId?: string; className?: string; width?: number; win?: boolean }) {
   const pop = usePopover();
   const w = useWindow();
-  if (win) testId = "window-menu";
+  // Step 2.7: phones have no system "…" for windows; the app's own actions stay.
+  const sys = !!win && w.formFactor === "desktop";
+  if (sys) testId = "window-menu";
+  else if (win) testId = testId ?? "notes-more";
+  if (!sys && !items.length) return null;
   return (
     <>
       <button
@@ -168,7 +172,7 @@ export function MoreMenu({ items, label, testId, className, width = 250, win }: 
       </button>
       <Popover open={pop.open} onClose={pop.close} anchor={pop.anchor} width={width} testId={testId ? `${testId}-popover` : undefined}>
         <Menu items={items} onDone={pop.close} />
-        {win && (
+        {sys && (
           <>
             {items.length > 0 && <div className="mx-2 my-1 h-px bg-border/80" />}
             <WindowMenu windowId={w.windowId} onDone={pop.close} />

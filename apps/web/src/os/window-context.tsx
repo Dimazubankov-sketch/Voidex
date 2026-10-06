@@ -50,7 +50,9 @@ export function WindowMenuButton({ className }: { className?: string }) {
 /**
  * App header = window title bar. On desktop it is the drag handle
  * (double-click maximizes); on phones it respects the status-bar inset.
- * The [...] menu is always its right-most control.
+ * The [...] menu is always its right-most control on PC. Phones have no
+ * system "…" (Step 2.7): apps are left with the gesture bar, the switcher
+ * and their own menus.
  */
 export function WindowHeader({ children, right, className, menu = true }: { children?: ReactNode; right?: ReactNode; className?: string; menu?: boolean }) {
   const win = useWindow();
@@ -76,7 +78,7 @@ export function WindowHeader({ children, right, className, menu = true }: { chil
       <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
       <div className="flex shrink-0 items-center gap-1" data-no-drag>
         {right}
-        {menu && <WindowMenuButton />}
+        {menu && ff === "desktop" && <WindowMenuButton />}
       </div>
     </div>
   );
