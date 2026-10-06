@@ -123,7 +123,7 @@ export function CalculatorGlyph({ className }: { className?: string }) {
  * launcher, folder previews and app headers (all through these components).
  * Step 2.6 took Notes to 0.76 (0.51 of the box), which read too small.
  */
-export const NOTES_OPTICAL = 0.82;
+export const NOTES_OPTICAL = 0.86;
 export const FILES_OPTICAL = 0.87;
 export const MEDIA_OPTICAL = 0.84;
 export function NotesGlyph({ className }: { className?: string }) {
