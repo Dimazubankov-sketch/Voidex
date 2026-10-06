@@ -257,3 +257,36 @@ purpose with its own quota).
   viewport keeps pinch zoom (no `user-scalable` / `maximum-scale`).
 - **PC passcode**: a keyboard-first six-cell field (phones keep the keypad).
 - **Mail** is shown as "Почта VoidOps" / "VoidOps Mail".
+
+## Step 2.7
+
+- **Files and Media** are preinstalled system apps (see `FILES_AND_MEDIA.md`);
+  existing accounts get them on the desktop and phone pages without their
+  customised dock being rewritten.
+- **Search style**: one `VoidexSearchField` (`ui/search-field.tsx`) for the
+  OS search (dock, phone pull-down), launcher, Settings, Notes, Vibex, Mail,
+  widgets and the share recipient search; Files and Media use the same
+  tokens. A rounded pill, soft solid background, clean border, not glass.
+  Tokens `--search-*` in `styles/index.css`. Settings → Personalization →
+  «Фон поиска»: Системный (follows the theme) / Белый, stored as
+  `appearance.searchAppearance` (default `system`) and applied as
+  `html[data-search]`.
+- **Wallpapers** are chosen only in Settings → Обои and from the desktop's
+  long-press / right-click → Обои; Рабочий стол, Экран блокировки and
+  Персонализация no longer show pickers or links.
+- **Phone gesture bar** (`os/gesture-bar.ts`): up = home, short up =
+  switcher, sideways past 56 px (and clearly more sideways than up) = the
+  previous / next open app in the order they were opened. Pointer cancel
+  resets it; nothing is written to the browser history.
+- **No system "…" on phones**: window menus are PC only; apps keep their
+  own menus (Notes keeps its actions).
+- **Notification Center (phone)**: full screen only (no half state); closes
+  with a swipe up on the handle or its close button; the list scrolls inside.
+  The PC panel is unchanged.
+- **PC desktop spacing**: a smaller top margin, and each row's room beyond
+  its icon is spread evenly over the rows (an offset inside the row's own
+  cell, not a transform), so system bar → first row ≈ last row → dock.
+- **Centred dialogs on phones** (`Sheet centered`): share, Users, Cloud and
+  the attach chooser sit in the visual viewport, above the keyboard.
+- **Copy**: no long dash in product UI strings; `apps/web/scripts/no-long-dash.test.mjs`
+  checks every string literal and JSX text (comments, docs and tests excluded).

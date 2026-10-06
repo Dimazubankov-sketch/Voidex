@@ -62,8 +62,12 @@ Markdown shortcuts: `# `, `## `, `- `, `[] `, `> `, ```` ``` ````.
 - **Vertical**: portrait sheets downwards. **Square**: square pages sideways,
   text flows on to the next page by itself, the wheel scrolls sideways.
   Switching keeps everything.
-- **Pages**: no page-break button. "+" → New page / Split here / Delete page
-  (its text moves to the previous page). ‹ 2 / 6 › navigation.
+- **Pages**: no page-break button. "+" → New page / Split here / Delete page.
+  Step 2.7: a page after the first is deleted with its content (asking first
+  when it has any) and the page before it is shown; the first page is
+  cleared instead ("Очистить страницу"), whether or not others follow.
+  Backspace in an empty page still joins it to the previous one.
+  ‹ 2 / 6 › navigation.
 - **Pictures**: upload, paste, drop; resize by the corner or 25/50/75/100 %;
   align; move; remove. Shown from object URLs (images are private).
 - **Saving**: debounced, compare-and-swap on `revision`. A save that finds a
@@ -85,8 +89,9 @@ Only the owner shares. Roles: owner, editor, viewer.
 - Removing someone or deleting the original closes it on their devices at
   once ("Доступ ограничен — Владелец больше не предоставляет вам доступ…");
   the server refuses their reads and writes.
-- Share sheet: search, then **Vibex** or **Почта VoidOps**, then people; copy
-  link; Users. It arrives as a file card **Name.txt** (notes, projects) or
+- Share sheet (the common VoidexShareDialog since Step 2.7): search, then
+  **Vibex** or **Почта VoidOps**, then people; copy link; Users. Centred on
+  phones too. It arrives as a file card **Name.txt** (notes, projects) or
   **Name.prsn** (presentations). Tapping a card opens Notes and resolves the
   link. Cards are built as files (`NotesCardDto`) so download / cloud / Files
   can be added later.
