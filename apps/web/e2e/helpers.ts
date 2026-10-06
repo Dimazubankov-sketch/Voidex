@@ -139,7 +139,40 @@ export async function newPage(browser: Browser, mobile: boolean) {
   return ctx.newPage();
 }
 
-export async function openApp(page: Page, id: "mail" | "settings" | "vibex" | "calculator" | "notes") {
+export async function openApp(page: Page, id: "mail" | "settings" | "vibex" | "calculator" | "notes" | "files" | "media") {
   await page.getByTestId(`app-${id}`).click();
   await expect(page.locator(`[data-testid="window-${id}"][data-state="open"]`)).toBeVisible();
+}
+
+/**
+ * Step 2.7: wallpapers are chosen only in Settings → Обои (other sections no
+ * longer link there). From anywhere in Settings: go to Обои, on this tab.
+ */
+export async function openWallpapersTab(page: Page, tab: "lock" | "home") {
+  for (let i = 0; i < 4; i++) {
+    for (const id of ["settings-nav-wallpapers", "settings-home-wallpapers"]) {
+      const el = page.getByTestId(id).last();
+      if (await el.isVisible()) {
+        await el.click();
+        await page.getByTestId(`wallpapers-tab-${tab}`).click();
+        await expect(page.getByTestId("settings-wallpapers").last()).toHaveAttribute("data-tab", tab);
+        return;
+      }
+    }
+    const back = page.getByTestId("settings-back").last();
+    if (await back.isVisible()) await back.click();
+    else await page.getByTestId("settings-home-button").click();
+    await page.waitForTimeout(300);
+  }
+  throw new Error("Settings → Обои not reachable");
+}
+
+/** Back to the Settings list (phone) / home (PC). */
+export async function settingsRoot(page: Page) {
+  for (let i = 0; i < 4; i++) {
+    const back = page.getByTestId("settings-back").last();
+    if (!(await back.isVisible())) return;
+    await back.click();
+    await page.waitForTimeout(300);
+  }
 }

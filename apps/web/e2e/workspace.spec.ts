@@ -1,5 +1,5 @@
 import { expect, test, type CDPSession, type Locator, type Page } from "@playwright/test";
-import { signUpViaApi, reloadUnlocked } from "./helpers";
+import { openWallpapersTab, settingsRoot, signUpViaApi, reloadUnlocked } from "./helpers";
 
 const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) < 900;
 
@@ -329,15 +329,15 @@ test("Settings → Desktop: scale (PC) / icons per row (phone); wallpaper and gl
   // Step 2.5.1: no wallpaper picker or glass here — a link to Wallpapers (glass: Personalization).
   await expect(page.getByTestId("wallpaper-presets")).toHaveCount(0);
   await expect(page.getByTestId("glass")).toHaveCount(0);
-  await page.getByTestId("wallpaper-link-home").click();
+  await expect(page.locator('[data-testid^="wallpaper-link-"]')).toHaveCount(0);
+  await openWallpapersTab(page, "home");
   await page.getByTestId("wallpapers-option-mist").click();
   await page.getByTestId("wallpapers-apply").click();
   await expect(page.getByTestId("home")).toHaveAttribute("style", /rgb\(240, 240, 243\)/);
   // Glass effect: a real document-wide setting (default on), in Personalization.
   await expect(page.locator("html")).toHaveAttribute("data-glass", "on");
   if (isMobile(page)) {
-    await page.getByTestId("settings-back").last().click();
-    await page.getByTestId("settings-back").last().click();
+    await settingsRoot(page);
     await page.getByTestId("settings-nav-personalization").click();
   } else await page.getByTestId("settings-nav-personalization").click();
   await page.getByTestId("personal-glass-off").click();

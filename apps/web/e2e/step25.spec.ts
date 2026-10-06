@@ -250,7 +250,7 @@ test("icons: unread badge only with unread items; Mail is 'Почта VoidOps'; 
   }
 });
 
-test("phone Notification Center: handle down = full screen, up = back; swipe a card to delete it", async ({ page }) => {
+test("phone Notification Center: opens full screen; swipe a card to delete it", async ({ page }) => {
   test.skip(!isMobile(page), "phone");
   await signUpViaApi(page, "Свайп", "Уведомлений");
   for (const title of ["Первое", "Второе"]) expect((await api(page, "POST", "/api/notifications/dev/system-update", { title, body: "Текст" })).status).toBeLessThan(300);
@@ -269,16 +269,11 @@ test("phone Notification Center: handle down = full screen, up = back; swipe a c
   const nc = page.getByTestId("notification-center");
   await expect(nc).toBeVisible();
   await expect(page.getByTestId("notification")).toHaveCount(2);
-  const handle = page.getByTestId("notification-handle");
+  // Step 2.7: the phone center is always full screen (no half state).
   await page.waitForTimeout(700); // the sheet finishes sliding in
-  let h = (await handle.boundingBox())!;
-  await drag({ x: h.x + h.width / 2, y: h.y + h.height / 2 }, 0, 200);
   await expect(nc).toHaveAttribute("data-full", "true");
-  await page.waitForTimeout(500);
-  h = (await handle.boundingBox())!;
-  await drag({ x: h.x + h.width / 2, y: h.y + h.height / 2 }, 0, -200);
-  await expect(nc).not.toHaveAttribute("data-full", "true");
-  await page.waitForTimeout(500);
+  const box = (await nc.boundingBox())!;
+  expect(Math.abs(box.height - page.viewportSize()!.height)).toBeLessThanOrEqual(2);
   // Swipe the first card sideways: deleted on the server.
   const card = (await page.getByTestId("notification").first().boundingBox())!;
   await drag({ x: card.x + 40, y: card.y + card.height / 2 }, 240, 0);

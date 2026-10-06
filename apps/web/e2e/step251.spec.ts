@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { newPage, openApp, signUpViaApi } from "./helpers";
+import { newPage, openApp, openWallpapersTab, settingsRoot, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.5.1 — stabilization: one Wallpapers screen (stable on PC), the
@@ -199,28 +199,29 @@ test("Wallpapers: one screen with Lock / Home tabs, carousel, Apply, Add your ow
   await expect(sync).toHaveAttribute("aria-checked", "true");
 });
 
-test("Settings links to the one Wallpapers screen: Lock screen → Lock tab, Desktop → Home tab; PC has a way back to Settings Home", async ({ page }) => {
+test("Step 2.7: wallpapers only in Settings → Обои: Lock screen, Desktop and Personalization have no picker or link; PC has a way back to Settings Home", async ({ page }) => {
   await signUpViaApi(page, "Ссылки", "Обоев");
   await openSettingsSection(page, "lock");
+  await expect(page.getByTestId("settings-lock")).toBeVisible();
   await expect(page.getByTestId("lock-wallpaper-presets")).toHaveCount(0);
   await expect(page.getByTestId("preview-lock")).toHaveCount(0);
-  await page.getByTestId("wallpaper-link-lock").click();
-  await expect(page.getByTestId("settings-wallpapers").last()).toHaveAttribute("data-tab", "lock");
-  if (isMobile(page)) {
-    await page.getByTestId("settings-back").last().click();
-    await page.getByTestId("settings-back").last().click();
-    await page.getByTestId("settings-nav-desktop").click();
-  } else {
-    await page.getByTestId("settings-home-button").click();
-    await expect(page.getByTestId("settings-home")).toBeVisible();
-    await page.getByTestId("settings-home-desktop").click();
-    await expect(page.getByTestId("settings-breadcrumb")).toHaveText("Рабочий стол");
+  await expect(page.locator('[data-testid^="wallpaper-link-"]')).toHaveCount(0);
+  for (const section of ["desktop", "personalization"]) {
+    await settingsRoot(page);
+    if (isMobile(page)) await page.getByTestId(`settings-nav-${section}`).click();
+    else {
+      await page.getByTestId("settings-home-button").click();
+      await expect(page.getByTestId("settings-home")).toBeVisible();
+      await page.getByTestId(`settings-home-${section}`).click();
+    }
+    await expect(page.getByTestId(`settings-${section}`)).toBeVisible();
+    await expect(page.locator('[data-testid^="wallpaper-link-"]')).toHaveCount(0);
+    await expect(page.getByTestId("wallpaper-presets")).toHaveCount(0);
+    await expect(page.getByTestId("wallpapers-carousel")).toHaveCount(0);
   }
-  await expect(page.getByTestId("appearance-panel")).toBeVisible();
-  await expect(page.getByTestId("wallpaper-presets")).toHaveCount(0);
   await expect(page.getByTestId("pc-columns")).toHaveCount(0);
-  await page.getByTestId("wallpaper-link-home").click();
-  await expect(page.getByTestId("settings-wallpapers").last()).toHaveAttribute("data-tab", "home");
+  await openWallpapersTab(page, "home");
+  await expect(page.getByTestId("wallpapers-carousel")).toBeVisible();
   if (!isMobile(page)) {
     await page.getByTestId("settings-home-button").click();
     await expect(page.getByTestId("settings-home")).toBeVisible();

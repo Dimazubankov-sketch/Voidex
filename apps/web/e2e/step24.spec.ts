@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { PASSCODE, openApp, reloadUnlocked, signUpViaApi, uniq, uniquePhoneDigits, unlock } from "./helpers";
+import { PASSCODE, openApp, openWallpapersTab, reloadUnlocked, signUpViaApi, uniq, uniquePhoneDigits, unlock } from "./helpers";
 
 /**
  * Step 2.4 — lock screen, code-password, Face ID (WebAuthn), step-up,
@@ -103,10 +103,8 @@ test("step-up: personal data asks for the code-password once the confirmation wi
 test("Settings: lock-screen wallpaper separate from the desktop; code-password change", async ({ page }) => {
   await signUpViaApi(page, "Оля", "Обоева");
   await openApp(page, "settings");
-  await page.getByTestId("settings-nav-lock").click();
-  await expect(page.getByTestId("settings-lock")).toBeVisible();
-  // Step 2.5.1: the lock screen links to the one Wallpapers screen (Lock tab).
-  await page.getByTestId("wallpaper-link-lock").click();
+  // Step 2.7: wallpapers live only in Settings → Обои (the lock section no longer links there).
+  await openWallpapersTab(page, "lock");
   const wallpapers = page.getByTestId("settings-wallpapers").last();
   await expect(wallpapers).toHaveAttribute("data-tab", "lock");
   await expect(page.getByTestId("wallpapers-option-same")).toHaveAttribute("aria-current", "true");

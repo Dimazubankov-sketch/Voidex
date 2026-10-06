@@ -52,7 +52,8 @@ async function openDoc(page: Page, name: string) {
   await expect(page.getByTestId("notes-doc")).toBeVisible();
 }
 async function docMenu(page: Page, item: string) {
-  await page.getByTestId("notes-doc").getByTestId("window-menu").click();
+  // PC: the window "…" (app actions + window actions); phones: the app's own "…" (Step 2.7).
+  await page.getByTestId("notes-doc").getByTestId(/^(window-menu|notes-more)$/).click();
   await page.getByTestId(`notes-menu-${item}`).click();
 }
 
@@ -342,7 +343,8 @@ test("Share with editing allowed: B edits the original live; Viewer makes B read
   await expect(page.getByTestId("notes-block").nth(1)).toHaveValue("Начало — от Бориса", { timeout: 15_000 });
 
   // Users: A makes B a Viewer → B's editor turns read-only.
-  await page.getByTestId("notes-doc").getByTestId("window-menu").click();
+  // PC: the window "…" (app actions + window actions); phones: the app's own "…" (Step 2.7).
+  await page.getByTestId("notes-doc").getByTestId(/^(window-menu|notes-more)$/).click();
   await page.getByTestId("notes-menu-users").click();
   const row = page.locator(`[data-testid="notes-member"][data-user="${b.id}"]`);
   await expect(row).toHaveAttribute("data-role", "editor");
@@ -458,7 +460,8 @@ test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 with an overflow 
   // A long text that fits 16:9 but not 1:1 → warning after switching.
   await page.getByTestId("notes-pres-add-text").click();
   await page.getByTestId("notes-layer-input").fill("Очень длинный текст слайда. ".repeat(14));
-  await page.getByTestId("notes-doc").getByTestId("window-menu").click();
+  // PC: the window "…" (app actions + window actions); phones: the app's own "…" (Step 2.7).
+  await page.getByTestId("notes-doc").getByTestId(/^(window-menu|notes-more)$/).click();
   await page.getByTestId("notes-menu-format-square").click();
   await expect(ed).toHaveAttribute("data-format", "square");
   await expect(page.getByTestId("notes-slide-overflow")).toBeVisible();
