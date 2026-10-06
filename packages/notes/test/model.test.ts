@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addPage, block, isPaged, mergePages, noteToPresentation, reflowPresentation, removePage, slideOverflows, splitAt, textFits } from "../src/document.ts";
+import { addPage, block, deleteOrClearPage, isPaged, pageHasContent, mergePages, noteToPresentation, reflowPresentation, removePage, slideOverflows, splitAt, textFits } from "../src/document.ts";
 
 const IMG = "/api/notes/media?id=0b9d6f7e-3a8e-4b0e-9a1a-2f2b4c5d6e7f";
 
@@ -32,6 +32,33 @@ test("pages: add, remove (content kept), merge back into one sheet", () => {
   assert.deepEqual(removed.pages[0]!.blocks.map((x) => x.text), ["один", "вторая страница"]);
   const merged = mergePages(splitAt(note(block("text", "a"), block("text", "b"), block("text", "c")), two.pages[0]!.blocks[0]!.id));
   assert.equal(merged.pages.length, 1);
+});
+
+test("page menu: a later page is deleted with its content, the first page is cleared instead", () => {
+  const n = note(block("text", "один"));
+  const { note: two } = addPage(n);
+  two.pages[1]!.blocks[0]!.text = "вторая";
+  const { note: three } = addPage(two);
+  assert.equal(pageHasContent(three, 1), true);
+  assert.equal(pageHasContent(three, 2), false);
+  // Page 2 of 3: gone with its text; show page 1.
+  const del = deleteOrClearPage(three, 1);
+  assert.equal(del.cleared, false);
+  assert.equal(del.show, 0);
+  assert.equal(del.note.pages.length, 2);
+  assert.ok(!JSON.stringify(del.note).includes("вторая"));
+  // First page while others exist: cleared, the others stay.
+  const first = deleteOrClearPage(three, 0);
+  assert.equal(first.cleared, true);
+  assert.equal(first.note.pages.length, 3);
+  assert.equal(pageHasContent(first.note, 0), false);
+  assert.equal(first.note.pages[0]!.id, three.pages[0]!.id);
+  // The only page: cleared, never removed.
+  const only = deleteOrClearPage(note(block("heading", "Заголовок"), block("text", "текст")), 0);
+  assert.equal(only.cleared, true);
+  assert.equal(only.note.pages.length, 1);
+  assert.equal(only.note.pages[0]!.blocks.length, 1);
+  assert.equal(only.note.pages[0]!.blocks[0]!.text, "");
 });
 
 test("Note → Presentation: headings become slide titles, text and lists the slide text, pictures slide pictures", () => {

@@ -56,6 +56,27 @@ export function removePage(n: NoteBody, index: number): NoteBody {
   return { ...n, pages };
 }
 
+/** True when a page holds anything (text or a picture). */
+export function pageHasContent(n: NoteBody, index: number): boolean {
+  return !!n.pages[index]?.blocks.some((b) => b.kind === "image" || b.text.trim());
+}
+
+/**
+ * The page menu's "delete" (Step 2.7). A page after the first is deleted with
+ * its content; the result says which page to show next (the one before it).
+ * The first page is never deleted: it is cleared instead (whether it is the
+ * only page or others follow), so a note always starts with a page.
+ */
+export function deleteOrClearPage(n: NoteBody, index: number): { note: NoteBody; show: number; cleared: boolean } {
+  if (index < 0 || index >= n.pages.length) return { note: n, show: 0, cleared: false };
+  if (index === 0) {
+    const pages = n.pages.map((p, i) => (i === 0 ? { ...p, blocks: [block()] } : p));
+    return { note: { ...n, pages }, show: 0, cleared: true };
+  }
+  const pages = n.pages.filter((_, i) => i !== index);
+  return { note: { ...n, pages }, show: index - 1, cleared: false };
+}
+
 /** Switching vertical ↔ square keeps everything: content reflows, pages stay logical pages. */
 export function setNoteFormat(n: NoteBody, format: NoteBody["format"]): NoteBody {
   return { ...n, format };

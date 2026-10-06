@@ -11,6 +11,7 @@ import {
   RiBold,
   RiCheckboxLine,
   RiDeleteBinLine,
+  RiEraserLine,
   RiFontSize,
   RiImageAddLine,
   RiItalic,
@@ -18,12 +19,12 @@ import {
   RiScissorsCutLine,
 } from "@remixicon/react";
 import type { NoteBlock, NoteBlockKind, NoteBody } from "@voidex/shared";
-import { addPage, block, removePage, splitAt } from "@voidex/notes";
+import { addPage, block, deleteOrClearPage, pageHasContent, removePage, splitAt } from "@voidex/notes";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
-import { Popover, toast, usePopover } from "@/ui/overlays";
+import { ConfirmDialog, Popover, toast, usePopover } from "@/ui/overlays";
 import { downscale, notesApi, useMediaUrl } from "./data";
 import { Menu } from "./kit";
 
@@ -392,9 +393,19 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
     onChange(splitAt(bodyRef.current, focused), true);
     pendingFocus.current = { id: focused, pos: 0 };
   };
+  // Step 2.7: a later page is deleted (asking first when it has content); the first page is cleared instead.
+  const [askDelete, setAskDelete] = useState<number | null>(null);
+  const runDelete = (at: number) => {
+    const r = deleteOrClearPage(bodyRef.current, at);
+    onChange(r.note, true);
+    const first = r.note.pages[r.show]?.blocks[0];
+    if (first) pendingFocus.current = { id: first.id, pos: r.cleared ? 0 : -1 };
+    requestAnimationFrame(() => goPage(r.show));
+  };
   const deletePage = () => {
     const at = Math.min(page, body.pages.length - 1);
-    onChange(removePage(bodyRef.current, at), true);
+    if (pageHasContent(bodyRef.current, at)) setAskDelete(at);
+    else runDelete(at);
   };
 
   // ------------------------------------------------------------ focused block style
@@ -534,12 +545,26 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
         onGo={goPage}
         readOnly={readOnly}
         canSplit={canSplit}
-        canDelete={body.pages.length > 1}
+        canDelete
+        clears={Math.min(page, body.pages.length - 1) === 0}
         onNew={newPage}
         onSplit={splitHere}
         onDelete={deletePage}
         raised={!readOnly}
         compact={!square}
+      />
+      <ConfirmDialog
+        open={askDelete !== null}
+        onClose={() => setAskDelete(null)}
+        onConfirm={() => {
+          const at = askDelete;
+          setAskDelete(null);
+          if (at !== null) runDelete(at);
+        }}
+        title={askDelete === 0 ? t("notes.page.clearTitle") : t("notes.page.deleteTitle")}
+        message={askDelete === 0 ? t("notes.page.clearBody") : t("notes.page.deleteBody")}
+        confirmLabel={askDelete === 0 ? t("notes.page.clearConfirm") : t("notes.page.deleteConfirm")}
+        danger
       />
 
       {!readOnly && (
@@ -564,6 +589,7 @@ function PageNav({
   readOnly,
   canSplit,
   canDelete,
+  clears,
   onNew,
   onSplit,
   onDelete,
@@ -576,6 +602,8 @@ function PageNav({
   readOnly: boolean;
   canSplit: boolean;
   canDelete: boolean;
+  /** The first page is cleared, not deleted. */
+  clears: boolean;
   onNew: () => void;
   onSplit: () => void;
   onDelete: () => void;
@@ -592,7 +620,9 @@ function PageNav({
         items={[
           { id: "page-new", label: t("notes.page.new"), icon: <RiAddLine className="size-[18px]" />, onSelect: onNew },
           ...(canSplit ? [{ id: "page-split", label: t("notes.page.split"), icon: <RiScissorsCutLine className="size-[18px]" />, onSelect: onSplit }] : []),
-          ...(canDelete ? [{ id: "page-delete", label: t("notes.page.delete"), icon: <RiDeleteBinLine className="size-[18px]" />, onSelect: onDelete, danger: true, divider: true }] : []),
+          ...(canDelete
+            ? [{ id: "page-delete", label: clears ? t("notes.page.clear") : t("notes.page.delete"), icon: clears ? <RiEraserLine className="size-[18px]" /> : <RiDeleteBinLine className="size-[18px]" />, onSelect: onDelete, danger: true, divider: true }]
+            : []),
         ]}
       />
     </Popover>
