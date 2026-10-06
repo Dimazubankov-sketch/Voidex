@@ -77,13 +77,14 @@ import { Toaster } from "../../components/ui/sonner";
 import { toast } from "sonner";
 import { type MediaItem, type MediaLibrary, type Album, type ViewOptions, defaultView, visibleItems, uid, humanBytes, durationLabel } from "./model";
 import { type MediaAdapter, httpAdapter } from "./adapter";
-import PhotoEditor from "./PhotoEditor";
-import VideoEditor from "./VideoEditor";
 import VideoPlayer from "./VideoPlayer";
 import { usePaintSelection } from "./usePaintSelection";
 import { readFileMetadata, itemBlob, saveBlob, fileName, shareItems, copyImage, zipFiles } from "./media-utils";
 import "./media.css";
 import { galleryDensity, pinchStep, swipeSection, swipeDirection, keyboardInset } from "./gestures";
+// The editors load only when something is edited (their own chunks).
+const PhotoEditor = React.lazy(() => import("./PhotoEditor"));
+const VideoEditor = React.lazy(() => import("./VideoEditor"));
 const kindNames = { all: "Все", photo: "Фото", video: "Видео", screenshot: "Скриншоты" };
 const filterNames = {
   all: "Все объекты",
@@ -1180,6 +1181,7 @@ export default function MediaApp({
     return (
       <div className={"vm-app " + (embedded ? "embedded" : "")}>
         <Toaster />
+        <React.Suspense fallback={null}>
         {editingItem.kind === "video" ? (
           <VideoEditor
             item={editingItem}
@@ -1201,6 +1203,7 @@ export default function MediaApp({
             onSave={saveEdit}
           />
         )}
+        </React.Suspense>
       </div>
     );
   const overview =
