@@ -23,8 +23,8 @@ import { useVibex, type VibexSection } from "./store";
 
 /** Width of the phone drawer (px). */
 export const DRAWER_WIDTH = 272;
-/** Step 2.5.1: the PC rail is compact — narrower, denser rows (the phone drawer keeps its touch sizes). */
-export const RAIL_WIDTH = 232;
+/** The PC rail (Step 2.7: a little larger than 2.5.1's compact rail; the phone drawer keeps its touch sizes). */
+export const RAIL_WIDTH = 252;
 export const RAIL_COLLAPSED = 60;
 
 interface Row {
@@ -40,8 +40,8 @@ interface Row {
  * switching and no separate sign-out here.
  */
 const MAIN: Row[] = [
-  { key: "feed", label: "vibex.nav.home", icon: RiHome5Line },
   { key: "me", label: "vibex.nav.myPage", icon: RiUser3Line },
+  { key: "feed", label: "vibex.nav.home", icon: RiHome5Line },
   { key: "chats", label: "vibex.nav.messages", icon: RiChat3Line },
   { key: "people", label: "vibex.nav.search", icon: RiSearchLine },
   { key: "bookmarks", label: "vibex.nav.bookmarks", icon: RiBookmarkLine },
@@ -75,13 +75,13 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         title={collapsed ? t(row.label) : undefined}
         className={cx(
           "relative flex items-center text-left font-medium transition",
-          rail ? "h-9 rounded-[10px] text-[13px]" : "h-10 rounded-xl text-[14px]",
+          rail ? "h-10 rounded-[11px] text-[14px]" : "h-10 rounded-xl text-[14px]",
           collapsed ? "justify-center" : rail ? "gap-2.5 px-2.5" : "gap-3 px-3",
           selected ? "bg-primary/10 text-primary" : "text-text hover:bg-surface-hover",
         )}
         data-testid={`vibex-nav-${row.key}`}
       >
-        <Icon className={cx(rail ? "size-[17px]" : "size-[19px]", "shrink-0", selected ? "text-primary" : "text-text-secondary")} />
+        <Icon className={cx(rail ? "size-[18px]" : "size-[19px]", "shrink-0", selected ? "text-primary" : "text-text-secondary")} />
         {!collapsed && <span className="flex-1 truncate">{t(row.label)}</span>}
         {badge > 0 && (
           <span
@@ -108,8 +108,8 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
     >
       <BrandRow drag={variant === "rail"} className={cx("flex items-center pb-2", collapsed ? "flex-col gap-2 pt-1" : "justify-between pl-1.5")}>
         <div className="flex items-center gap-2" data-system-ui>
-          <VibexGlyph className={rail ? "size-6" : "size-7"} />
-          {!collapsed && <span className={cx("font-bold tracking-tight text-text", rail ? "text-[16px]" : "text-[18px]")}>{t("vibex.title")}</span>}
+          <VibexGlyph className={rail ? "size-[26px]" : "size-7"} />
+          {!collapsed && <span className={cx("font-bold tracking-tight text-text", rail ? "text-[17px]" : "text-[18px]")}>{t("vibex.title")}</span>}
         </div>
         {variant === "drawer" ? (
           <button type="button" onClick={onClose} aria-label={t("common.close")} className="flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover">
@@ -137,11 +137,11 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         className={cx("mb-2 flex items-center transition hover:bg-surface-hover", rail ? "rounded-xl" : "rounded-2xl", collapsed ? "justify-center p-1" : rail ? "gap-2 bg-surface-secondary/70 p-1.5" : "gap-2.5 bg-surface-secondary/70 p-2")}
         data-testid="vibex-me"
       >
-        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={collapsed ? 34 : rail ? 30 : 36} />
+        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={collapsed ? 34 : rail ? 32 : 36} />
         {!collapsed && (
           <span className="min-w-0 flex-1 text-left">
-            <span className={cx("block truncate font-semibold text-text", rail ? "text-[12.5px]" : "text-[13.5px]")}>{name}</span>
-            <span className={cx("block truncate text-text-tertiary", rail ? "text-[11px]" : "text-[11.5px]")}>{me.mailAddress}</span>
+            <span className={cx("block truncate font-semibold text-text", rail ? "text-[13.5px]" : "text-[13.5px]")}>{name}</span>
+            <span className={cx("block truncate text-text-tertiary", rail ? "text-[11.5px]" : "text-[11.5px]")}>{me.mailAddress}</span>
           </span>
         )}
       </button>
