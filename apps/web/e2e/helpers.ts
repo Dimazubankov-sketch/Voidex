@@ -149,30 +149,32 @@ export async function openApp(page: Page, id: "mail" | "settings" | "vibex" | "c
  * longer link there). From anywhere in Settings: go to Обои, on this tab.
  */
 export async function openWallpapersTab(page: Page, tab: "lock" | "home") {
-  for (let i = 0; i < 4; i++) {
-    for (const id of ["settings-nav-wallpapers", "settings-home-wallpapers"]) {
-      const el = page.getByTestId(id).last();
-      if (await el.isVisible()) {
-        await el.click();
-        await page.getByTestId(`wallpapers-tab-${tab}`).click();
-        await expect(page.getByTestId("settings-wallpapers").last()).toHaveAttribute("data-tab", tab);
-        return;
-      }
-    }
-    const back = page.getByTestId("settings-back").last();
-    if (await back.isVisible()) await back.click();
-    else await page.getByTestId("settings-home-button").click();
-    await page.waitForTimeout(300);
-  }
-  throw new Error("Settings → Обои not reachable");
+  await settingsRoot(page);
+  await page.getByTestId("settings-nav-wallpapers").last().click();
+  await page.getByTestId(`wallpapers-tab-${tab}`).click();
+  await expect(page.getByTestId("settings-wallpapers").last()).toHaveAttribute("data-tab", tab);
 }
 
-/** Back to the Settings list (phone) / home (PC). */
+/** Back to the Settings list on phones (the PC sidebar is always there): back until no section page is left. */
 export async function settingsRoot(page: Page) {
-  for (let i = 0; i < 4; i++) {
-    const back = page.getByTestId("settings-back").last();
-    if (!(await back.isVisible())) return;
-    await back.click();
-    await page.waitForTimeout(300);
+  await expect(page.getByTestId("settings-nav-wallpapers").last().or(page.getByTestId("settings-back").last()).first()).toBeVisible();
+  for (let i = 0; i < 6; i++) {
+    await page.waitForTimeout(450); // a page that is sliding away is not a target
+    if (!(await page.getByTestId("settings-back").count())) return;
+    await page.getByTestId("settings-back").last().click();
   }
+  await expect(page.getByTestId("settings-back")).toHaveCount(0);
+}
+
+/** Phone (Step 2.7: no window "…"): swipe up on the gesture bar of the app in front → home. */
+export async function phoneHome(page: Page) {
+  await page.waitForTimeout(600); // the window finishes opening
+  const box = (await page.locator('section[data-state="open"] [data-testid="home-indicator"]').boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(x, y - (260 * i) / 8);
+  await page.mouse.up();
+  await expect(page.locator('section[data-state="open"]')).toHaveCount(0);
 }

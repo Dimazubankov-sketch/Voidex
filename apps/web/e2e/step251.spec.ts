@@ -424,7 +424,8 @@ test("PC dock search: an opaque field (not glass, also with dock glass on), a se
     });
   const light = await style();
   expect(light).toMatchObject({ alpha: 1, blur: "none", glass: false });
-  expect(light.rgb).toEqual([255, 255, 255]);
+  // Step 2.7: the system search field (soft solid background, same as every search in VOIDEX).
+  expect(light.rgb).toEqual([243, 242, 248]);
   // A search box, not a login field: no credential autofill, so no password-manager key.
   await expect(input).toHaveAttribute("type", "search");
   await expect(input).toHaveAttribute("autocomplete", "off");

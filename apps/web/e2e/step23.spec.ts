@@ -102,8 +102,8 @@ test("phone: a pull from the top edge opens the Notification Center (home and in
   await expect(nc.getByTestId("notification-unread")).toHaveCount(0);
   await nc.getByTestId("notification-clear").click();
   await expect(nc.getByTestId("notifications-empty")).toBeVisible();
-  // A tap on the dimmed area below the sheet closes it.
-  await page.mouse.click(200, page.viewportSize()!.height - 24);
+  // Step 2.7: full screen on phones; its close button closes it.
+  await nc.getByTestId("notifications-close").click();
   await expect(page.getByTestId("notification-center")).toHaveCount(0);
 
   // Inside an app: the same top-edge gesture.

@@ -1,5 +1,5 @@
 import { expect, test, type CDPSession, type Locator, type Page } from "@playwright/test";
-import { openWallpapersTab, settingsRoot, signUpViaApi, reloadUnlocked } from "./helpers";
+import { openWallpapersTab, phoneHome, reloadUnlocked, settingsRoot, signUpViaApi } from "./helpers";
 
 const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) < 900;
 
@@ -186,8 +186,7 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await page.getByTestId("wallpapers-apply").click();
   await expect(page.getByTestId("wallpapers-apply")).toBeDisabled();
   await expect(page.getByText("Обои установлены")).toHaveCount(0, { timeout: 8000 }); // the toast covers the header
-  await page.getByTestId("window-settings").getByTestId("window-menu").last().click();
-  await page.getByTestId("menu-close").click();
+  await phoneHome(page);
 
   // Everything comes back from the server after a reload.
   await page.waitForTimeout(600); // debounced save
@@ -394,15 +393,15 @@ test("phone: touch drag works inside a folder; first tap on − after a drag rem
   await page.waitForTimeout(300);
   await finger.up();
   await expect(overlay).toHaveCount(0);
-  // The folder of one dissolves: Mail, Settings, Vibex, Calculator and Notes are on the page again.
+  // The folder of one dissolves: Mail, Settings, Vibex, Calculator, Notes, Files and Media are on the page again.
   const top = page.locator('[data-home-container="mobile:0"] [data-home-item]');
-  await expect(top).toHaveCount(5);
+  await expect(top).toHaveCount(7);
   // Step 2.3 grid: the dropped icon glides into its cell (layout animation) — tap once everything rests.
   await page.waitForTimeout(500);
   const app = page.locator('[data-home-container="mobile:0"] [data-testid^="app-"]').first();
   await finger.tap(await center(app.getByTestId("home-remove-badge")));
   await confirmRemoval(page);
-  await expect(top).toHaveCount(4);
+  await expect(top).toHaveCount(6);
 });
 
 test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, empty dock leaves only search", async ({ page }) => {
@@ -410,7 +409,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await signUpViaApi(page, "Дан", "Ок");
   const dockOrder = () => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
   await expect(page.getByTestId("dock")).toBeVisible();
-  expect(await dockOrder()).toEqual(["mail", "settings", "vibex", "calculator", "notes"]);
+  expect(await dockOrder()).toEqual(["mail", "settings", "vibex", "calculator", "notes", "files", "media"]);
 
   // Hover the Desktops system icon → glass menu; create and switch desktops there.
   await page.getByTestId("dock-desktops").hover();
@@ -431,7 +430,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.mouse.move(a.x + 10, a.y, { steps: 2 });
   await page.mouse.move(b.x + 40, b.y, { steps: 10 });
   await page.mouse.up();
-  await expect.poll(dockOrder).toEqual(["settings", "mail", "vibex", "calculator", "notes"]);
+  await expect.poll(dockOrder).toEqual(["settings", "mail", "vibex", "calculator", "notes", "files", "media"]);
 
   // Open from the dock.
   await page.getByTestId("dock-app-mail").click();
@@ -444,7 +443,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await expect(page.getByTestId("dock").getByTestId("home-search")).toBeVisible();
 
   // Unpin all apps and the Desktops item → no glass, only the search field.
-  for (const id of ["mail", "settings", "vibex", "calculator", "notes"]) {
+  for (const id of ["mail", "settings", "vibex", "calculator", "notes", "files", "media"]) {
     await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
     await page.getByTestId(`dock-app-${id}`).click({ button: "right" });
     await page.getByTestId("menu-unpin").click();

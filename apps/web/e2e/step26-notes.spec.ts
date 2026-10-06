@@ -101,10 +101,10 @@ test("Projects: + creates a project with name and cover; grid / list and sort ar
   await expect(page.getByTestId("notes-project-list")).toBeVisible();
 
   // List view + sort by name, remembered on the server.
-  await page.getByTestId("notes-app").getByTestId("window-menu").click();
+  await page.getByTestId("notes-app").getByTestId(/^(window-menu|notes-more)$/).click();
   await page.getByTestId("notes-menu-view-list").click();
   await expect(page.getByTestId("notes-project-list")).toHaveAttribute("data-view", "list");
-  await page.getByTestId("notes-app").getByTestId("window-menu").click();
+  await page.getByTestId("notes-app").getByTestId(/^(window-menu|notes-more)$/).click();
   await page.getByTestId("notes-menu-sort-name").click();
   await expect.poll(async () => (await api(page, "GET", "/api/notes/prefs")).body).toMatchObject({ projectsView: "list", projectsSort: "name" });
   const names = () => page.getByTestId("notes-project-list").getByTestId("notes-card-name").allInnerTexts();

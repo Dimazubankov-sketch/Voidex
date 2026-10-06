@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { PASSCODE, openApp, openWallpapersTab, reloadUnlocked, signUpViaApi, uniq, uniquePhoneDigits, unlock } from "./helpers";
+import { PASSCODE, openApp, openWallpapersTab, settingsRoot, reloadUnlocked, signUpViaApi, uniq, uniquePhoneDigits, unlock } from "./helpers";
 
 /**
  * Step 2.4 — lock screen, code-password, Face ID (WebAuthn), step-up,
@@ -116,8 +116,8 @@ test("Settings: lock-screen wallpaper separate from the desktop; code-password c
   await expect(page.getByTestId("wallpapers-option-default")).toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("wallpapers-apply")).toBeDisabled();
   await page.waitForTimeout(1500); // the layout is saved to the account
-  if (isMobile(page)) await page.getByTestId("settings-back").last().click();
-  else await page.getByTestId("settings-nav-lock").click();
+  if (isMobile(page)) await settingsRoot(page);
+  await page.getByTestId("settings-nav-lock").last().click();
   await expect(page.getByTestId("settings-lock").last()).toBeVisible();
   // Change the code-password (confirmed: right after sign-up).
   await page.getByTestId("passcode-change").click();

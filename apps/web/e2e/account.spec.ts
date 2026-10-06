@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { PASSWORD, devCode, newPage, next, openApp, signUpViaApi, signUpViaUi, reloadUnlocked } from "./helpers";
+import { devCode, newPage, next, openApp, PASSWORD, phoneHome, reloadUnlocked, signUpViaApi, signUpViaUi } from "./helpers";
 
 test("new user: sign up, see data in Settings, edit, sign out, sign back in, session restores", async ({ page }) => {
   const { address } = await signUpViaUi(page);
@@ -123,23 +123,21 @@ test("change password in Settings", async ({ page }) => {
   await expect(page.getByText("Пароль изменён")).toBeVisible();
 });
 
-test("window system: open, minimize via [...] menu (phone and PC alike), reopen from launcher", async ({ page }) => {
+test("window system: open, minimize (PC: [...] menu, phone: gesture bar), reopen from launcher", async ({ page }) => {
   await signUpViaApi(page, "Ян", "Ким");
   await openApp(page, "settings");
-  await page.getByTestId("window-menu").last().click();
   const isMobile = (page.viewportSize()?.width ?? 1000) < 900;
   if (!isMobile) {
+    await page.getByTestId("window-menu").last().click();
     await expect(page.getByTestId("menu-minimize")).toBeVisible();
     await expect(page.getByTestId("menu-maximize")).toBeVisible();
     // Minimizing is the way back to the workspace; no duplicate "Workspace" item.
     await expect(page.getByTestId("menu-home")).toHaveCount(0);
     await page.getByTestId("menu-minimize").click();
   } else {
-    // Phone: "Minimize" (the PC icon and action) instead of "Workspace"; no maximize.
-    await expect(page.getByTestId("menu-home")).toHaveCount(0);
-    await expect(page.getByTestId("menu-maximize")).toHaveCount(0);
-    await expect(page.getByTestId("menu-switcher")).toBeVisible();
-    await page.getByTestId("menu-minimize").click();
+    // Step 2.7: phones have no system "…"; the gesture bar takes the app home.
+    await expect(page.getByTestId("window-menu")).toHaveCount(0);
+    await phoneHome(page);
   }
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
   await page.getByTestId("launcher-button").click();

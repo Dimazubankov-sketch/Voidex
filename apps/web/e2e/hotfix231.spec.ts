@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { newPage, openApp, signUpViaApi } from "./helpers";
+import { newPage, openApp, phoneHome, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.3.1 hotfix: the Vibex post action row stays inside its card at any
@@ -87,11 +87,10 @@ test("vibex chats: the row's “…” button doesn't cover the time and the unr
 test("phone app switcher: only the app cards — no “Desktops” button, no pages menu", async ({ page }) => {
   test.skip(!isMobile(page), "phone switcher");
   await signUpViaApi(page);
-  // Two apps running in the background (minimized from their [...] menu).
+  // Two apps running in the background (sent home with the gesture bar).
   for (const id of ["calculator", "mail"] as const) {
     await openApp(page, id);
-    await page.getByTestId(`window-${id}`).getByTestId("window-menu").first().click();
-    await page.getByTestId("menu-minimize").click();
+    await phoneHome(page);
     await expect(page.getByTestId("home")).toBeVisible();
   }
   await page.getByTestId("mobile-switcher").click();
