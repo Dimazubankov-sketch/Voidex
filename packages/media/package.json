@@ -1,0 +1,32 @@
+{
+  "name": "@voidex/media",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/features/media/media.css",
+    "./theme-bridge.css": "./theme-bridge.css"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "radix-ui": "^1.6.7",
+    "lucide-react": "^1.31.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "tailwind-merge": "3.6.0",
+    "sonner": "^2.0.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "cd reference && node tests/model.test.mjs && node tests/gestures.test.mjs && node tests/editor.test.mjs && node tests/api.test.mjs && node tests/zip.test.mjs"
+  }
+}

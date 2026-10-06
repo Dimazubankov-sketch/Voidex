@@ -1,0 +1,16 @@
+/* Merge these Tailwind 4 aliases only if absent. Do not import standalone globals.css. */
+@theme inline {
+ --color-foreground: #17171b;
+ --color-popover: #ffffff;
+ --color-popover-foreground: #17171b;
+ --color-primary-foreground: #ffffff;
+ --color-muted: #f1f0f4;
+ --color-muted-foreground: #6a6a73;
+ --color-accent: #efedff;
+ --color-accent-foreground: #17171b;
+ --color-input: #e4e4e8;
+ --color-ring: #6c5cff;
+ --color-sidebar: #f8f8fa;
+ --color-sidebar-foreground: #17171b;
+ --color-sidebar-border: #e4e4e8;
+}

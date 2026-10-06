@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {seedLibrary,validLibrary,visibleItems,defaultView,safeSrc} from '../features/media/model.ts';
+const lib=seedLibrary();assert.equal(lib.items.length,14);assert.ok(validLibrary(lib));
+assert.equal(visibleItems(lib,{...defaultView,filter:'favorites'}).length,4);
+assert.equal(visibleItems(lib,{...defaultView,kind:'video'}).length,1);
+assert.equal(visibleItems(lib,{...defaultView,kind:'screenshot'}).length,1);
+const top=visibleItems(lib,defaultView),bottom=visibleItems(lib,{...defaultView,order:'newest-bottom'});assert.deepEqual(top.map(m=>m.id),bottom.map(m=>m.id).reverse());
+assert.equal(visibleItems(lib,defaultView,'Барсик').length,2);
+assert.equal(visibleItems(lib,defaultView,'','album-travel').length,4);
+lib.items[0].hidden=true;lib.items[1].deletedAt=Date.now();assert.equal(visibleItems(lib,defaultView).length,12);assert.equal(visibleItems(lib,{...defaultView,filter:'hidden'})[0].id,lib.items[0].id);assert.equal(visibleItems(lib,{...defaultView,filter:'trash'})[0].id,lib.items[1].id);
+assert.ok(!safeSrc('javascript:alert(1)'));assert.ok(!safeSrc('https://evil.test/a.png'));
+assert.ok(!validLibrary({...lib,items:[null]}));assert.ok(!validLibrary({...lib,items:[lib.items[0],lib.items[0]]}));
+assert.ok(!validLibrary({...lib,albums:[{...lib.albums[0],itemIds:['missing']}]}));
+console.log('Model: sorting, categories, favorites, album membership, search, hidden/trash isolation and validation passed.');

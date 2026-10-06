@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {galleryDensity,pinchStep,swipeSection} from '../features/media/gestures.ts';
+import {seedLibrary,validLibrary} from '../features/media/model.ts';
+assert.equal(pinchStep(1.4),-1);assert.equal(pinchStep(.7),1);assert.equal(pinchStep(1.05),0);assert.equal(galleryDensity(0),2);assert.equal(galleryDensity(15),8);
+assert.equal(swipeSection(-150,12),'collections');assert.equal(swipeSection(120,10),'library');assert.equal(swipeSection(30,100),null);assert.equal(swipeSection(100,90),null);
+const data=seedLibrary();data.albums[0].coverId=data.albums[0].itemIds[0];assert.ok(validLibrary(data));data.albums[0].coverId='demo-11';assert.ok(!validLibrary(data));delete data.albums[0].coverId;assert.ok(validLibrary(data));
+console.log('Pinch direction, density limits, swipe/scroll separation and backward-compatible album covers passed.');
+const {swipeDirection,keyboardInset}=await import('../features/media/gestures.ts');
+assert.equal(swipeDirection(-110,8),1);assert.equal(swipeDirection(110,8),-1);
+assert.equal(swipeDirection(-50,3),0);assert.equal(swipeDirection(100,100),0);
+assert.equal(swipeDirection(-50,3,40),1);
+assert.equal(keyboardInset(800,460,0),340);assert.equal(keyboardInset(460,460,0),0);
+assert.equal(keyboardInset(800,500,30),270);assert.equal(keyboardInset(800,460,0,2),0);
+console.log('Viewer/type swipes reject vertical scroll; keyboard inset handles viewport resize, pan and pinch.');
