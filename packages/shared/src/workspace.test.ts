@@ -354,6 +354,30 @@ describe("Step 2.5 appearance: dock glass, theme, wallpaper sync", () => {
   });
 });
 
+describe("Step 2.7: search background and the Files / Media apps", () => {
+  const ALL: AppId[] = ["mail", "settings", "vibex", "notes", "files", "media"];
+  it("older layouts get the system search background; white is kept; unknown falls back", () => {
+    const old = { ...defaultLayout(ALL), appearance: { wallpaper: { kind: "default" }, captions: true } } as unknown as WorkspaceLayout;
+    expect(normalizeLayout(old, ALL).appearance.searchAppearance).toBe("system");
+    const white = normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, searchAppearance: "white" } }, ALL);
+    expect(white.appearance.searchAppearance).toBe("white");
+    expect(WorkspaceLayoutSchema.safeParse(white).success).toBe(true);
+    const bad = normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, searchAppearance: "glass" as "white" } }, ALL);
+    expect(bad.appearance.searchAppearance).toBe("system");
+  });
+  it("an existing customized layout gets Files and Media without its dock being rewritten", () => {
+    const before: AppId[] = ["mail", "settings", "vibex", "notes"];
+    const l = defaultLayout(before);
+    l.desktop.dock = ["vibex", "mail"];
+    const after = normalizeLayout(l, ALL);
+    expect(after.desktop.dock).toEqual(["vibex", "mail"]);
+    const onDesktop = after.desktop.spaces.flatMap((s) => s.items).filter((i) => i.kind === "app").map((i) => i.id);
+    expect(onDesktop).toEqual(expect.arrayContaining(["files", "media"]));
+    const onPhone = after.mobile.pages.flat().filter((i) => i.kind === "app").map((i) => i.id);
+    expect(onPhone).toEqual(expect.arrayContaining(["files", "media"]));
+  });
+});
+
 describe("Step 2.5.1: bounded PC desktop grid", () => {
   it("keeps valid stored cells and moves out-of-bounds ones to the nearest free cell", () => {
     const p = gridPlacement(6, ["a", "b", "c", "d"], { a: { c: 0, r: 0 }, b: { c: 12, r: 1 }, c: { c: 3, r: 20 }, d: { c: 5, r: 3 } }, [], 4);
