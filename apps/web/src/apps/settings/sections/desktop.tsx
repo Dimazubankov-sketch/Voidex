@@ -6,7 +6,6 @@ import { useWM } from "@/os/window-manager";
 import { useWindow } from "@/os/window-context";
 import { Group, Row, SectionTitle } from "../kit";
 import type { SectionProps } from "../settings-app";
-import { WallpaperLink } from "./wallpapers";
 
 /**
  * Settings → Desktop (Step 2.5.1): view and labels, widgets, the dock — and a
@@ -18,7 +17,6 @@ export function DesktopSection({ navigate }: SectionProps) {
   return (
     <div data-testid="settings-desktop">
       <SectionTitle>{t("settings.desktop")}</SectionTitle>
-      <WallpaperLink tab="home" onOpen={() => navigate("wallpapers")} />
       <Group>
         <Row
           icon={<RiApps2Line className="size-[18px]" />}

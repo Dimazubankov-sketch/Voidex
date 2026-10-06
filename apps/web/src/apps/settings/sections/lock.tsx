@@ -17,7 +17,6 @@ import { PasscodePad } from "@/os/lock/passcode-pad";
 import { FaceIdSetup } from "@/os/lock/security-setup";
 import { Badge, Group, Row, SectionTitle } from "../kit";
 import type { SectionProps } from "../settings-app";
-import { WallpaperLink } from "./wallpapers";
 
 /**
  * Settings → Lock screen (Step 2.4, 2.5.1): what protects VOIDEX — the
@@ -111,8 +110,6 @@ export function LockSection({ navigate }: SectionProps) {
         </Button>
       </div>
 
-      <div className="mt-6" />
-      <WallpaperLink tab="lock" onOpen={() => navigate("wallpapers")} />
 
       <PasscodeSheet mode={codeSheet} onClose={() => setCodeSheet(null)} />
       <Sheet open={faceSheet} onClose={() => setFaceSheet(false)} width={460} testId="face-id-sheet">

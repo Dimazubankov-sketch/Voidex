@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCheckLine, RiImageAddLine, RiImageLine } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCheckLine, RiImageAddLine } from "@remixicon/react";
 import { WALLPAPER_PRESETS, type Wallpaper } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -11,7 +11,7 @@ import { FaceGlyph } from "@/os/lock/face-glyph";
 import { DEFAULT_SWATCH, PRESETS, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "@/os/home/appearance";
 import { WALLPAPER_LABEL } from "@/os/home/appearance-panel";
 import { useWallpapers } from "@/os/home/wallpapers";
-import { Group, Row, SectionTitle } from "../kit";
+import { SectionTitle } from "../kit";
 
 export type WallpaperTab = "lock" | "home";
 
@@ -352,39 +352,5 @@ function PreviewCard({ option, tab, desktop, slot, phone, applied }: { option: O
         </span>
       )}
     </span>
-  );
-}
-
-/** A small live thumbnail of a wallpaper (for the links to the Wallpapers screen). */
-function Thumb({ wallpaper, slot }: { wallpaper: Wallpaper; slot: WallpaperSlot }) {
-  const image = useWallpaperImage(wallpaper, slot);
-  const style = wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data).style;
-  return <span className="block h-11 w-8 shrink-0 overflow-hidden rounded-[9px] border border-black/10 shadow-sm" style={style} aria-hidden />;
-}
-
-/**
- * The link other sections show instead of their own picker: "Обои" with the
- * current wallpaper; opens Settings → Wallpapers on the matching tab.
- */
-export function WallpaperLink({ tab, onOpen, title }: { tab: WallpaperTab; onOpen: () => void; title?: string }) {
-  const t = useT();
-  const wp = useWallpapers();
-  const lock = tab === "lock";
-  const shown = lock ? (wp.lockWallpaper ?? wp.wallpaper) : wp.wallpaper;
-  return (
-    <Group title={title}>
-      <Row
-        icon={<RiImageLine className="size-[18px]" />}
-        label={lock ? t("wallpapers.changeLock") : t("wallpapers.change")}
-        hint={t("wallpapers.linkHint")}
-        right={<Thumb wallpaper={shown} slot={lock && wp.lockWallpaper ? "lock" : "desktop"} />}
-        chevron
-        onClick={() => {
-          setNextWallpaperTab(tab);
-          onOpen();
-        }}
-        testId={`wallpaper-link-${tab}`}
-      />
-    </Group>
   );
 }
