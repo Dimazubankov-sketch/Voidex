@@ -115,16 +115,29 @@ export function CalculatorGlyph({ className }: { className?: string }) {
 }
 
 /**
- * Notes: the user's Voidex Notes logo (Step 2.5), cut out of the delivered
- * artwork without redrawing. It is a nearly solid square sheet: fitted to the
- * shared glyph box it covers ≈0.89 of it, against Mail 0.68, Vibex 0.61,
- * Settings 0.52. Step 2.6: drawn at an optical 0.76 (≈0.51 of the box, with
- * Settings and Vibex) — in every tile, the dock, search, the launcher, folder
- * previews and the Notes header, all of which go through this one component.
+ * Optical size of the solid marks (Step 2.7). Fitted to the shared glyph box,
+ * open marks cover: Mail 0.68, Vibex 0.61, Desktops 0.62, Settings 0.52,
+ * Calculator 0.40. The solid sheets cover more (Notes 0.88, Media 0.86,
+ * Files 0.79), so each is drawn smaller to cover about 0.6 of the box and
+ * read the same size as the rest: in every tile, the dock, search, the
+ * launcher, folder previews and app headers (all through these components).
+ * Step 2.6 took Notes to 0.76 (0.51 of the box), which read too small.
  */
-export const NOTES_OPTICAL = 0.76;
+export const NOTES_OPTICAL = 0.82;
+export const FILES_OPTICAL = 0.87;
+export const MEDIA_OPTICAL = 0.84;
 export function NotesGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-notes.png" className={className} optical={NOTES_OPTICAL} />;
+}
+
+/** Files: the user's folder logo (Step 2.7), cut out of the delivered artwork without redrawing. */
+export function FilesGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-files.png" className={className} optical={FILES_OPTICAL} />;
+}
+
+/** Media: the user's picture logo (Step 2.7), cut out of the delivered artwork without redrawing. */
+export function MediaGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-media.png" className={className} optical={MEDIA_OPTICAL} />;
 }
 
 /** Share of the tile the logo's content box fills — the same for every app. */

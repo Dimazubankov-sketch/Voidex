@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes";
+export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -202,6 +202,80 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
       tr: ["notlar", "belgeler", "metin", "düzenleyici", "sunum", "slaytlar", "sayfalar"],
     },
     window: { defaultWidth: 1180, defaultHeight: 780, minWidth: 380, minHeight: 500, singleton: true },
+  },
+  files: {
+    id: "files",
+    name: { en: "Files", ru: "Файлы", es: "Archivos", de: "Dateien", fr: "Fichiers", pt: "Arquivos", zh: "文件", ja: "ファイル", ko: "파일", tr: "Dosyalar" },
+    caption: {
+      en: ".txt and .prsn",
+      ru: ".txt и .prsn",
+      es: ".txt y .prsn",
+      de: ".txt und .prsn",
+      fr: ".txt et .prsn",
+      pt: ".txt e .prsn",
+      zh: ".txt 和 .prsn",
+      ja: ".txt と .prsn",
+      ko: ".txt 및 .prsn",
+      tr: ".txt ve .prsn",
+    },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    // Step 2.7: the UI ships now; its storage (VOIDEX Cloud) is not connected yet.
+    permissions: ["account.read"],
+    status: "available",
+    category: "work",
+    keywords: {
+      en: ["files", "documents", "folders", "txt", "prsn", "cloud", "downloads"],
+      ru: ["файлы", "документы", "папки", "txt", "prsn", "облако", "скачанные"],
+      es: ["archivos", "documentos", "carpetas", "txt", "prsn", "nube", "descargas"],
+      de: ["Dateien", "Dokumente", "Ordner", "txt", "prsn", "Cloud", "Downloads"],
+      fr: ["fichiers", "documents", "dossiers", "txt", "prsn", "cloud", "téléchargements"],
+      pt: ["arquivos", "documentos", "pastas", "txt", "prsn", "nuvem", "downloads"],
+      zh: ["文件", "文档", "文件夹", "txt", "prsn", "云", "下载"],
+      ja: ["ファイル", "ドキュメント", "フォルダ", "txt", "prsn", "クラウド", "ダウンロード"],
+      ko: ["파일", "문서", "폴더", "txt", "prsn", "클라우드", "다운로드"],
+      tr: ["dosyalar", "belgeler", "klasörler", "txt", "prsn", "bulut", "indirilenler"],
+    },
+    window: { defaultWidth: 1080, defaultHeight: 720, minWidth: 380, minHeight: 480, singleton: true },
+  },
+  media: {
+    id: "media",
+    name: { en: "Media", ru: "Медиатека", es: "Fototeca", de: "Mediathek", fr: "Médiathèque", pt: "Mídia", zh: "媒体库", ja: "メディア", ko: "미디어", tr: "Medya" },
+    caption: {
+      en: "Photos & videos",
+      ru: "Фото и видео",
+      es: "Fotos y vídeos",
+      de: "Fotos & Videos",
+      fr: "Photos et vidéos",
+      pt: "Fotos e vídeos",
+      zh: "照片与视频",
+      ja: "写真とビデオ",
+      ko: "사진 및 동영상",
+      tr: "Fotoğraflar ve videolar",
+    },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    // Step 2.7: the UI ships now; its storage (VOIDEX Cloud) is not connected yet.
+    permissions: ["account.read"],
+    status: "available",
+    category: "media",
+    keywords: {
+      en: ["photos", "videos", "gallery", "albums", "screenshots", "pictures", "media"],
+      ru: ["фото", "видео", "галерея", "альбомы", "скриншоты", "фотографии", "медиатека"],
+      es: ["fotos", "vídeos", "galería", "álbumes", "capturas", "imágenes"],
+      de: ["Fotos", "Videos", "Galerie", "Alben", "Bildschirmfotos", "Bilder"],
+      fr: ["photos", "vidéos", "galerie", "albums", "captures", "images"],
+      pt: ["fotos", "vídeos", "galeria", "álbuns", "capturas", "imagens"],
+      zh: ["照片", "视频", "图库", "相册", "截图", "图片"],
+      ja: ["写真", "ビデオ", "ギャラリー", "アルバム", "スクリーンショット", "画像"],
+      ko: ["사진", "동영상", "갤러리", "앨범", "스크린샷", "이미지"],
+      tr: ["fotoğraflar", "videolar", "galeri", "albümler", "ekran görüntüleri", "resimler"],
+    },
+    window: { defaultWidth: 1120, defaultHeight: 760, minWidth: 380, minHeight: 500, singleton: true },
   },
 };
 

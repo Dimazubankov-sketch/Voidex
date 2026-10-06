@@ -1,6 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import type { AppId } from "@voidex/shared";
-import { CalculatorGlyph, MailGlyph, NotesGlyph, SettingsGlyph, VibexGlyph } from "@/brand/brand";
+import { CalculatorGlyph, FilesGlyph, MailGlyph, MediaGlyph, NotesGlyph, SettingsGlyph, VibexGlyph } from "@/brand/brand";
 
 /**
  * Client half of the App Registry: how each registered app is drawn and
@@ -37,5 +37,15 @@ export const CLIENT_APPS: Record<AppId, ClientApp> = {
     Icon: NotesGlyph,
     // The editor, its UI kit and styles load with this chunk only.
     Component: lazy(() => import("@/apps/notes/notes-app").then((m) => ({ default: m.NotesApp }))),
+  },
+  files: {
+    Icon: FilesGlyph,
+    // The Files module, its editors and UI kit load with this chunk only.
+    Component: lazy(() => import("@/apps/files/files-app").then((m) => ({ default: m.FilesWindowApp }))),
+  },
+  media: {
+    Icon: MediaGlyph,
+    // The gallery loads with this chunk; its photo / video editors are split further.
+    Component: lazy(() => import("@/apps/media/media-app").then((m) => ({ default: m.MediaWindowApp }))),
   },
 };
