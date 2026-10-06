@@ -197,7 +197,7 @@ function ThreadRow({ thread }: { thread: ThreadSummaryDto }) {
   const ordered = [...thread.participants.filter((p) => p.address !== myAddress), ...thread.participants.filter((p) => p.address === myAddress)];
   const names = ordered.map((p) => (p.address === myAddress ? t("mail.me") : p.name ?? (p.address.split("@")[0] ?? p.address)));
   const avatarOf = ordered[0];
-  const who = view === "sent" || view === "drafts" ? `${t("mail.to")}: ${names.join(", ") || "—"}` : names.join(", ") || t("mail.me");
+  const who = view === "sent" || view === "drafts" ? `${t("mail.to")}: ${names.join(", ") || "…"}` : names.join(", ") || t("mail.me");
 
   const open = async () => {
     if (thread.draftId) {

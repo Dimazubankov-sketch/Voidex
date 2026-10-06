@@ -98,7 +98,7 @@ export function AboutSection() {
   const docs = useLegalList();
   const [open, setOpen] = useState<string | null>(null);
   const ua = navigator.userAgent;
-  const device = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "—";
+  const device = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Web";
   return (
     <div>
       <div className="mb-8 flex flex-col items-center pt-4 text-center">

@@ -11,7 +11,7 @@
     "dev": "pnpm -r --parallel --filter ./apps/* dev",
     "build": "pnpm --filter @voidex/web build && pnpm --filter @voidex/server build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @voidex/shared test && pnpm --filter @voidex/calculator test && pnpm --filter @voidex/notes test && pnpm --filter @voidex/files test && pnpm --filter @voidex/media test && pnpm --filter @voidex/server test",
+    "test": "pnpm --filter @voidex/shared test && pnpm --filter @voidex/calculator test && pnpm --filter @voidex/notes test && pnpm --filter @voidex/files test && pnpm --filter @voidex/media test && pnpm --filter @voidex/web test && pnpm --filter @voidex/server test",
     "test:e2e": "pnpm --filter @voidex/web test:e2e",
     "db:migrate": "pnpm --filter @voidex/server db:migrate",
     "db:generate": "pnpm --filter @voidex/server db:generate",
