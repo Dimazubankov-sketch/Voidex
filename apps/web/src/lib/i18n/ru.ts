@@ -878,7 +878,7 @@ export const ru: Record<MessageKey, string> = {
   "lock.keyboardHint": "Введите код с клавиатуры · Enter — подтвердить",
   "lock.useFaceLink": "Войти с Face ID / Windows Hello",
   "settings.personalization": "Персонализация",
-  "settings.hint.personalization": "Тема, обои, стекло",
+  "settings.hint.personalization": "Тема, фон поиска, стекло",
   "settings.wallpapers": "Обои",
   "settings.hint.wallpapers": "Экран блокировки и главный, синхронизация",
   "settings.searchEmpty": "Ничего не найдено",
@@ -1107,4 +1107,8 @@ export const ru: Record<MessageKey, string> = {
   "attach.mediaEmpty": "В Медиатеке этого сеанса пока нет фото и видео.",
   "attach.attach": "Прикрепить ({n})",
   "files.openInFiles": "Открыть в Файлах",
+  "personalization.searchBg": "Фон поиска",
+  "personalization.searchBgHint": "Все поля поиска в VOIDEX: системный фон следует теме, белый остаётся белым.",
+  "personalization.searchSystem": "Системный",
+  "personalization.searchWhite": "Белый",
 };

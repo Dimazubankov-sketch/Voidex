@@ -863,7 +863,7 @@ export const de: Record<MessageKey, string> = {
   "lock.keyboardHint": "Code eintippen · Enter bestätigt",
   "lock.useFaceLink": "Mit Face ID / Windows Hello",
   "settings.personalization": "Personalisierung",
-  "settings.hint.personalization": "Design, Hintergründe, Glas",
+  "settings.hint.personalization": "Design, Suchhintergrund, Glas",
   "settings.wallpapers": "Hintergründe",
   "settings.hint.wallpapers": "Sperr- und Startbildschirm, Sync",
   "settings.searchEmpty": "Nichts gefunden",
@@ -1092,4 +1092,8 @@ export const de: Record<MessageKey, string> = {
   "attach.mediaEmpty": "In dieser Sitzung gibt es noch keine Fotos oder Videos.",
   "attach.attach": "Anhängen ({n})",
   "files.openInFiles": "In Dateien öffnen",
+  "personalization.searchBg": "Suchhintergrund",
+  "personalization.searchBgHint": "Alle Suchfelder in VOIDEX: der Systemhintergrund folgt dem Design, Weiß bleibt weiß.",
+  "personalization.searchSystem": "System",
+  "personalization.searchWhite": "Weiß",
 };

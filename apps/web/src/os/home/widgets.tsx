@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
 import { motion } from "motion/react";
-import { RiAddLine, RiCheckLine, RiSearchLine, RiSubtractLine } from "@remixicon/react";
+import { RiAddLine, RiCheckLine, RiSubtractLine } from "@remixicon/react";
 import {
   WIDGETS_MAX,
   WIDGET_CELLS,
@@ -27,6 +27,7 @@ import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
 import { updateLayout, useWorkspaceLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 /**
  * Home-screen widgets. A small system catalogue (no widget store yet); the
@@ -231,17 +232,7 @@ export function WidgetsPanel() {
   return (
     <Sheet open={open} onClose={() => setOpen(false)} title={t("widgets.title")} width={ff === "desktop" ? 520 : 480} testId="widgets-panel">
       <div className="space-y-5">
-        <label className="flex h-11 items-center gap-2 rounded-2xl bg-surface-secondary px-3.5">
-          <RiSearchLine className="size-[18px] text-text-tertiary" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={t("widgets.search")}
-            aria-label={t("widgets.search")}
-            className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-            data-testid="widgets-search"
-          />
-        </label>
+        <VoidexSearchField value={q} onChange={setQ} placeholder={t("widgets.search")} aria-label={t("widgets.search")} testId="widgets-search" />
 
         <div className="grid gap-3" data-testid="widgets-catalog">
           {shown.map((def) => {

@@ -1,6 +1,8 @@
 @import "tailwindcss";
 /* Step 2.5: the Voidex Notes package uses Tailwind utilities in its UI kit. */
 @source "../../../../packages/notes/src";
+@source "../../../../packages/files/src";
+@source "../../../../packages/media/src";
 
 /* ===========================================================================
    VOIDEX design tokens
@@ -488,3 +490,144 @@ img[data-system-asset] { pointer-events: none; }
 :root[data-theme="dark"] .vx-settings-bg { background: linear-gradient(180deg, #1d1b2a 0%, var(--background) 220px); }
 :root[data-theme="dark"] .vx-settings-nav { background: linear-gradient(180deg, #1d1b2a 0%, var(--background) 40%); }
 .vx-profile-card { background: radial-gradient(80% 120% at 100% 0%, rgba(150, 128, 255, 0.2), rgba(150, 128, 255, 0) 60%), var(--surface); }
+
+/*
+ * Step 2.7 — one search field for the whole system (VoidexSearchField):
+ * a rounded pill, a soft solid background and a clean 1px border. Not
+ * glass. "Фон поиска" (Settings → Personalization) picks the system
+ * background (follows the theme) or white.
+ */
+:root {
+  --search-bg: #f3f2f8;
+  --search-bg-focus: #ffffff;
+  --search-border: rgba(98, 84, 170, 0.14);
+  --search-border-focus: color-mix(in srgb, var(--primary) 46%, transparent);
+  --search-text: var(--text);
+  --search-placeholder: #8f8aa6;
+  --search-icon: #8a82aa;
+  --search-shadow: 0 1px 2px rgba(40, 30, 110, 0.05);
+}
+:root[data-theme="dark"] {
+  --search-bg: #23222e;
+  --search-bg-focus: #282734;
+  --search-border: rgba(190, 182, 255, 0.14);
+  --search-placeholder: #8d8aa3;
+  --search-icon: #a39fc0;
+  --search-shadow: none;
+}
+/* White: white in both themes, with dark text so it always reads. */
+:root[data-search="white"] {
+  --search-bg: #ffffff;
+  --search-bg-focus: #ffffff;
+  --search-border: rgba(80, 70, 140, 0.16);
+  --search-text: #17171b;
+  --search-placeholder: #8a879b;
+  --search-icon: #7c7699;
+  --search-shadow: 0 1px 2px rgba(40, 30, 110, 0.06);
+}
+:root[data-theme="dark"][data-search="white"] {
+  --search-border: rgba(255, 255, 255, 0.4);
+  --search-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.vx-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--search-bg);
+  border: 1px solid var(--search-border);
+  box-shadow: var(--search-shadow);
+  color: var(--search-text);
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+.vx-search:focus-within {
+  background: var(--search-bg-focus);
+  border-color: var(--search-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.vx-search > svg {
+  flex: none;
+  color: var(--search-icon);
+}
+.vx-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--search-text);
+  caret-color: var(--primary);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.vx-search input::placeholder {
+  color: var(--search-placeholder);
+}
+.vx-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.vx-search-clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 999px;
+  color: var(--search-icon);
+}
+.vx-search-clear:hover {
+  background: color-mix(in srgb, var(--search-icon) 14%, transparent);
+}
+.vx-search-sm { height: 36px; padding: 0 6px 0 12px; font-size: 14px; }
+.vx-search-md { height: 42px; padding: 0 7px 0 14px; font-size: 15px; }
+.vx-search-lg { height: 48px; padding: 0 8px 0 16px; font-size: 16px; }
+.vx-search-sm > svg { width: 16px; height: 16px; }
+.vx-search-md > svg, .vx-search-lg > svg { width: 18px; height: 18px; }
+.vx-search-sm .vx-search-clear { width: 26px; height: 26px; }
+.vx-search-md .vx-search-clear, .vx-search-lg .vx-search-clear { width: 30px; height: 30px; }
+.vx-search[data-appearance="white"] {
+  --search-bg: #ffffff;
+  --search-bg-focus: #ffffff;
+  --search-border: rgba(80, 70, 140, 0.16);
+  --search-text: #17171b;
+  --search-placeholder: #8a879b;
+  --search-icon: #7c7699;
+}
+
+/* Step 2.7: "not saved to VOIDEX Cloud" line in Files and Media. */
+.vx-cloud-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: #5b5670;
+  background: #f4f2fb;
+  border: 1px solid rgba(98, 84, 170, 0.12);
+}
+
+/* Files and Media: their bottom pill becomes the system search field while searching. */
+.vf-bottom.searching,
+.vm-bottom.searching {
+  --vm-glass: var(--search-bg-focus);
+  background: var(--search-bg-focus);
+  border: 1px solid var(--search-border-focus);
+}
+.vf-bottom-search,
+.vm-bottom-search,
+.vm-search-bar {
+  color: var(--search-icon);
+}
+.vf-bottom-search input,
+.vm-bottom-search input,
+.vm-search-bar input {
+  color: var(--search-text) !important;
+}
+.vf-bottom-search input::placeholder,
+.vm-bottom-search input::placeholder,
+.vm-search-bar input::placeholder {
+  color: var(--search-placeholder);
+}

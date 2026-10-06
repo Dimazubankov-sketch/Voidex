@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { RiArrowLeftLine, RiCameraLine, RiCheckLine, RiCloseLine, RiGroupLine, RiLogoutBoxRLine, RiPencilLine, RiSearchLine } from "@remixicon/react";
+import { RiArrowLeftLine, RiCameraLine, RiCheckLine, RiCloseLine, RiGroupLine, RiLogoutBoxRLine, RiPencilLine } from "@remixicon/react";
 import { VIBEX_GROUP_MEMBERS_MAX, VIBEX_GROUP_TITLE_MAX, type VibexChatDto, type VibexFileDto, type VibexPersonDto } from "@voidex/shared";
 import { Avatar, initials } from "@/brand/brand";
 import { ApiError, api } from "@/lib/api";
@@ -12,6 +12,7 @@ import { Button, Spinner } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
 import { filesApi, openDirect, useChats, useFileUrl, usePeople, vk } from "./data";
 import { useVibex } from "./store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 const GROUP_PICTURE = "image/jpeg,image/png,image/webp";
 
@@ -181,18 +182,14 @@ export function NewChatSheet({ open, onClose }: { open: boolean; onClose: () => 
       {step === "people" ? (
         <div className="flex flex-col gap-3">
           <p className="text-[13.5px] text-text-secondary">{t("vibex.group.pickHint")}</p>
-          <label className="flex h-11 items-center gap-2 rounded-2xl border border-border bg-surface-secondary px-3.5">
-            <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
-            <input
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={t("vibex.people.search")}
-              className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-              data-testid="new-chat-search"
-            />
-            {people.isFetching && <Spinner size={14} />}
-          </label>
+          <VoidexSearchField
+            autoFocus
+            value={q}
+            onChange={setQ}
+            placeholder={t("vibex.people.search")}
+            testId="new-chat-search"
+            trailing={people.isFetching ? <Spinner size={14} /> : undefined}
+          />
           {picked.length > 0 && (
             <div className="flex flex-wrap gap-1.5" data-testid="new-chat-picked">
               {picked.map((p) => (

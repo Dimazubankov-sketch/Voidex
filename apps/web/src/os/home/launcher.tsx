@@ -1,5 +1,5 @@
 import { useMemo, useState, type RefObject } from "react";
-import { RiAddLine, RiSearchLine } from "@remixicon/react";
+import { RiAddLine } from "@remixicon/react";
 import type { InstalledAppDto, WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -12,6 +12,7 @@ import { addToDesktop, appLabel, openApp } from "./actions";
 import { AppGlyph } from "./icons";
 import { searchApps } from "./search";
 import { useHomeUi } from "./ui-store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 /**
  * The 9-dot menu: every installed app (also the ones removed from the desktop),
@@ -37,12 +38,12 @@ export function Launcher({ anchor, apps, layout }: { anchor: RefObject<HTMLButto
 
   const body = (
     <div data-testid="launcher">
-      <label className="mb-2 flex h-10 items-center gap-2 rounded-xl bg-surface-secondary px-3">
-        <RiSearchLine className="size-4 text-text-tertiary" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
+      <VoidexSearchField
+        className="mb-2"
+        size="sm"
+        value={q}
+        onChange={setQ}
+        onKeyDown={(e) => {
             if (e.key === "Enter" && shown[0]) {
               close();
               openApp(shown[0].id);
@@ -50,11 +51,9 @@ export function Launcher({ anchor, apps, layout }: { anchor: RefObject<HTMLButto
           }}
           placeholder={t("home.search")}
           aria-label={t("home.search")}
-          className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-          data-testid="launcher-search"
+          testId="launcher-search"
           autoFocus={ff === "desktop"}
         />
-      </label>
       <div className="px-2 pb-1.5 pt-1 text-[12px] font-medium uppercase tracking-wide text-text-tertiary">{t("launcher.all")}</div>
       {!shown.length && <div className="px-2 py-3 text-[14px] text-text-secondary">{t("home.searchNothing")}</div>}
       <div className="grid grid-cols-3 gap-1">

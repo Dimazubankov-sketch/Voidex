@@ -863,7 +863,7 @@ export const zh: Record<MessageKey, string> = {
   "lock.keyboardHint": "输入密码 · 按 Enter 确认",
   "lock.useFaceLink": "使用 Face ID / Windows Hello",
   "settings.personalization": "个性化",
-  "settings.hint.personalization": "主题、壁纸、玻璃",
+  "settings.hint.personalization": "主题、搜索背景、玻璃",
   "settings.wallpapers": "壁纸",
   "settings.hint.wallpapers": "锁屏和主屏幕、同步",
   "settings.searchEmpty": "未找到",
@@ -1092,4 +1092,8 @@ export const zh: Record<MessageKey, string> = {
   "attach.mediaEmpty": "本次会话中还没有照片或视频。",
   "attach.attach": "附加 ({n})",
   "files.openInFiles": "在文件中打开",
+  "personalization.searchBg": "搜索背景",
+  "personalization.searchBgHint": "VOIDEX 中的所有搜索框：系统背景跟随主题，白色始终为白色。",
+  "personalization.searchSystem": "系统",
+  "personalization.searchWhite": "白色",
 };

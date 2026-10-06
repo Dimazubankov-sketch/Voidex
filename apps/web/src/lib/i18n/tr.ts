@@ -863,7 +863,7 @@ export const tr: Record<MessageKey, string> = {
   "lock.keyboardHint": "Kodu yazın · Enter onaylar",
   "lock.useFaceLink": "Face ID / Windows Hello kullan",
   "settings.personalization": "Kişiselleştirme",
-  "settings.hint.personalization": "Tema, duvar kağıtları, cam",
+  "settings.hint.personalization": "Tema, arama arka planı, cam",
   "settings.wallpapers": "Duvar kâğıtları",
   "settings.hint.wallpapers": "Kilit ve ana ekran, eşitleme",
   "settings.searchEmpty": "Bir şey bulunamadı",
@@ -1092,4 +1092,8 @@ export const tr: Record<MessageKey, string> = {
   "attach.mediaEmpty": "Bu oturumda henüz fotoğraf veya video yok.",
   "attach.attach": "Ekle ({n})",
   "files.openInFiles": "Dosyalar’da aç",
+  "personalization.searchBg": "Arama arka planı",
+  "personalization.searchBgHint": "VOIDEX’teki tüm arama alanları: sistem arka planı temaya uyar, beyaz beyaz kalır.",
+  "personalization.searchSystem": "Sistem",
+  "personalization.searchWhite": "Beyaz",
 };

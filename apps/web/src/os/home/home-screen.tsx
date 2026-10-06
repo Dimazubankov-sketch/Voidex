@@ -117,6 +117,10 @@ export function HomeScreen({
   }, [layout.appearance.glass]);
   // Step 2.5: light / dark / system theme of the account.
   useTheme(layout.appearance.theme);
+  // Step 2.7: every search field reads its background from this (VoidexSearchField tokens).
+  useEffect(() => {
+    document.documentElement.dataset.search = layout.appearance.searchAppearance;
+  }, [layout.appearance.searchAppearance]);
 
   // Leaving the home screen (an app comes to the front) ends edit mode.
   useEffect(() => {

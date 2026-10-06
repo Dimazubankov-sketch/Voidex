@@ -894,7 +894,7 @@ export const en = {
   "lock.keyboardHint": "Type the code · Enter confirms",
   "lock.useFaceLink": "Use Face ID / Windows Hello",
   "settings.personalization": "Personalization",
-  "settings.hint.personalization": "Theme, wallpapers, glass",
+  "settings.hint.personalization": "Theme, search background, glass",
   "settings.wallpapers": "Wallpapers",
   "settings.hint.wallpapers": "Lock and home screen, sync",
   "settings.searchEmpty": "Nothing found",
@@ -1123,6 +1123,10 @@ export const en = {
   "attach.mediaEmpty": "There are no photos or videos in this session yet.",
   "attach.attach": "Attach ({n})",
   "files.openInFiles": "Open in Files",
+  "personalization.searchBg": "Search background",
+  "personalization.searchBgHint": "Every search field in VOIDEX: the system background follows the theme, white stays white.",
+  "personalization.searchSystem": "System",
+  "personalization.searchWhite": "White",
 } as const;
 
 export type MessageKey = keyof typeof en;

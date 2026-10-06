@@ -863,7 +863,7 @@ export const ko: Record<MessageKey, string> = {
   "lock.keyboardHint": "코드를 입력하세요 · Enter로 확인",
   "lock.useFaceLink": "Face ID / Windows Hello 사용",
   "settings.personalization": "개인 설정",
-  "settings.hint.personalization": "테마, 배경화면, 유리",
+  "settings.hint.personalization": "테마, 검색 배경, 유리",
   "settings.wallpapers": "배경화면",
   "settings.hint.wallpapers": "잠금 및 홈 화면, 동기화",
   "settings.searchEmpty": "결과 없음",
@@ -1092,4 +1092,8 @@ export const ko: Record<MessageKey, string> = {
   "attach.mediaEmpty": "이번 세션에는 아직 사진이나 동영상이 없습니다.",
   "attach.attach": "첨부 ({n})",
   "files.openInFiles": "파일에서 열기",
+  "personalization.searchBg": "검색 배경",
+  "personalization.searchBgHint": "VOIDEX의 모든 검색창: 시스템 배경은 테마를 따르고 흰색은 흰색으로 유지됩니다.",
+  "personalization.searchSystem": "시스템",
+  "personalization.searchWhite": "흰색",
 };

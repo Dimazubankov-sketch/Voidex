@@ -18,8 +18,8 @@ import {
   RiUserLine,
   RiPaletteLine,
   RiImageLine,
-  RiSearchLine,
-  RiCloseLine,
+  
+  
   RiHome5Line,
 } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
@@ -38,6 +38,7 @@ import { BrandFooter } from "./kit";
 import { AboutSection, NotificationsSection, PrivacySection } from "./sections/system";
 import { PersonalizationSection } from "./sections/personalization";
 import { WallpapersSection, setNextWallpaperTab } from "./sections/wallpapers";
+import { VoidexSearchField } from "@/ui/search-field";
 
 export type SectionId =
   | "account"
@@ -112,6 +113,7 @@ const ACTIONS: { label: MessageKey; section: SectionId; words: string }[] = [
   { label: "settings.password", section: "password", words: "пароль сменить пароль password change" },
   { label: "appearance.dock", section: "desktop", words: "док dock панель приложений размер дока" },
   { label: "personalization.theme", section: "personalization", words: "тема тёмная темная светлая dark light theme ночной режим стекло glass" },
+  { label: "personalization.searchBg", section: "personalization", words: "фон поиска поиск белый системный search background white" },
   { label: "settings.privacy", section: "privacy", words: "конфиденциальность приватность privacy данные" },
 ];
 
@@ -138,23 +140,7 @@ function searchSettings(q: string, t: ReturnType<typeof useT>) {
 function SettingsSearch({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
   const t = useT();
   return (
-    <label className={cx("flex h-11 items-center gap-2 rounded-2xl border border-border/70 bg-surface px-3 shadow-tile", className)}>
-      <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
-      <input
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={t("settings.search")}
-        aria-label={t("settings.search")}
-        className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-        data-testid="settings-search"
-      />
-      {value && (
-        <button type="button" onClick={() => onChange("")} aria-label={t("common.clear")} className="grid size-7 place-items-center rounded-full text-text-tertiary hover:bg-surface-hover">
-          <RiCloseLine className="size-4" />
-        </button>
-      )}
-    </label>
+    <VoidexSearchField className={className} value={value} onChange={onChange} placeholder={t("settings.search")} aria-label={t("settings.search")} testId="settings-search" />
   );
 }
 

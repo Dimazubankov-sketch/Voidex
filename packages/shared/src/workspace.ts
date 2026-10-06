@@ -95,6 +95,9 @@ export const DOCK_STYLES = ["glass", "off"] as const;
 export type DockStyle = (typeof DOCK_STYLES)[number];
 /** Step 2.5: colour theme. Accounts from before Step 2.5 stay light. */
 export const THEMES = ["light", "dark", "system"] as const;
+/** Step 2.7: background of every search field (Settings → Personalization → «Фон поиска»). */
+export const SEARCH_APPEARANCES = ["system", "white"] as const;
+export type SearchAppearance = (typeof SEARCH_APPEARANCES)[number];
 export type Theme = (typeof THEMES)[number];
 export const DOCK_SCALES = ["s", "m", "l"] as const;
 export type DockScale = (typeof DOCK_SCALES)[number];
@@ -169,6 +172,8 @@ export const AppearanceSchema = z.object({
    * device keeps its own (false: stored on the device, the account's stay).
    */
   syncWallpapers: z.boolean().default(true),
+  /** Step 2.7: search fields follow the theme ("system") or stay white. */
+  searchAppearance: z.enum(SEARCH_APPEARANCES).default("system"),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -236,7 +241,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system" };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -266,6 +271,7 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     labelTwoLines: base.labelTwoLines === true,
     theme: (THEMES as readonly string[]).includes(base.theme) ? base.theme : "light",
     syncWallpapers: base.syncWallpapers !== false,
+    searchAppearance: base.searchAppearance === "white" ? "white" : "system",
   };
 }
 

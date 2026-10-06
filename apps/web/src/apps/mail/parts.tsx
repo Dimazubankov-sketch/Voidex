@@ -32,6 +32,7 @@ import { draftsApi, fetchComposeDefaults, useThread, useThreadAction, useThreadL
 import { NotesFileCard } from "@/apps/notes/card";
 import { MessageAttachments } from "./attachments";
 import { useMail } from "./store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 export const FOLDERS: { view: MailView; label: MessageKey; icon: typeof RiInboxLine }[] = [
   { view: "inbox", label: "mail.inbox", icon: RiInboxLine },
@@ -103,18 +104,15 @@ export function MailSearch({ autoFocus }: { autoFocus?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
   return (
-    <label className="flex h-10 w-full max-w-[520px] items-center gap-2 rounded-2xl bg-surface-secondary px-3.5 focus-within:bg-surface focus-within:shadow-[0_0_0_2px_var(--primary)]" data-no-drag>
-      <RiSearchLine className="size-[18px] text-text-tertiary" />
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={t("mail.search")}
-        className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-        autoFocus={autoFocus}
-        type="search"
-        data-testid="mail-search"
-      />
-    </label>
+    <VoidexSearchField
+      className="w-full max-w-[520px]"
+      value={text}
+      onChange={setText}
+      placeholder={t("mail.search")}
+      autoFocus={autoFocus}
+      testId="mail-search"
+      data-no-drag
+    />
   );
 }
 

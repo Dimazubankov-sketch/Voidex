@@ -863,7 +863,7 @@ export const ja: Record<MessageKey, string> = {
   "lock.keyboardHint": "コードを入力 · Enter で確定",
   "lock.useFaceLink": "Face ID / Windows Hello を使う",
   "settings.personalization": "パーソナライズ",
-  "settings.hint.personalization": "テーマ、壁紙、ガラス",
+  "settings.hint.personalization": "テーマ、検索の背景、ガラス",
   "settings.wallpapers": "壁紙",
   "settings.hint.wallpapers": "ロック画面とホーム、同期",
   "settings.searchEmpty": "見つかりません",
@@ -1092,4 +1092,8 @@ export const ja: Record<MessageKey, string> = {
   "attach.mediaEmpty": "このセッションにはまだ写真やビデオがありません。",
   "attach.attach": "添付 ({n})",
   "files.openInFiles": "ファイルで開く",
+  "personalization.searchBg": "検索の背景",
+  "personalization.searchBgHint": "VOIDEX のすべての検索欄：システムはテーマに合わせ、白は常に白です。",
+  "personalization.searchSystem": "システム",
+  "personalization.searchWhite": "白",
 };

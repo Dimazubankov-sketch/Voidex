@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { RiBookmarkFill, RiBookmarkLine, RiCheckLine, RiLinkM, RiRepeat2Line, RiSearchLine, RiSendPlaneFill } from "@remixicon/react";
+import { RiBookmarkFill, RiBookmarkLine, RiCheckLine, RiLinkM, RiRepeat2Line, RiSendPlaneFill } from "@remixicon/react";
 import type { VibexPersonDto, VibexPostDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
@@ -11,6 +11,7 @@ import { Spinner } from "@/ui/controls";
 import { Sheet, toast } from "@/ui/overlays";
 import { postLink, sharePost, useChats, usePeople, usePostAction, useRepost, vk } from "./data";
 import { useVibex } from "./store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 /**
  * Share a post, VK-style: pick people (your chats first, or search) and send it
@@ -111,17 +112,13 @@ function ShareBody({ wrapper }: { wrapper: VibexPostDto }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex h-11 items-center gap-2 rounded-2xl bg-surface-secondary px-3.5">
-        <RiSearchLine className="size-[18px] shrink-0 text-text-tertiary" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("vibex.share.search")}
-          className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-          data-testid="share-search"
-        />
-        {people.isFetching && <Spinner size={14} />}
-      </label>
+      <VoidexSearchField
+        value={q}
+        onChange={setQ}
+        placeholder={t("vibex.share.search")}
+        testId="share-search"
+        trailing={people.isFetching ? <Spinner size={14} /> : undefined}
+      />
 
       <div className="grid grid-cols-4 gap-x-2 gap-y-3 sm:grid-cols-5" data-testid="share-contacts">
         {contacts.map((p) => {

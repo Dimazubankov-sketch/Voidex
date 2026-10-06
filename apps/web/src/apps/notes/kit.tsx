@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { RiAddLine, RiArrowLeftSLine, RiCheckLine, RiCloseLine, RiImageAddLine, RiMoreFill, RiSearchLine } from "@remixicon/react";
+import { RiAddLine, RiArrowLeftSLine, RiCheckLine, RiCloseLine, RiImageAddLine, RiMoreFill } from "@remixicon/react";
 import type { NotesDocKind } from "@voidex/shared";
 import { NotesGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
@@ -10,6 +10,7 @@ import { Popover, Sheet, toast, usePopover } from "@/ui/overlays";
 import { WindowMenu } from "@/os/system-menu";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { downscale, notesApi, useMediaUrl } from "./data";
+import { VoidexSearchField } from "@/ui/search-field";
 
 /**
  * Header of the Notes browser screens. The Notes logo has a fixed place:
@@ -68,26 +69,16 @@ export function BottomBar({
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-6" data-testid="notes-bottom-bar">
       <div className="pointer-events-auto flex w-full max-w-[560px] items-center gap-2.5">
-        <label className="vn2-field flex h-12 min-w-0 flex-1 items-center gap-2.5 rounded-full px-4">
-          <RiSearchLine className="size-[19px] shrink-0 text-text-tertiary" />
-          <input
-            type="search"
-            name="voidex-notes-search"
-            autoComplete="off"
-            enterKeyHint="search"
-            value={query}
-            onChange={(e) => onQuery(e.target.value)}
-            placeholder={placeholder}
-            aria-label={placeholder}
-            className="h-full min-w-0 flex-1 appearance-none bg-transparent text-[16px] outline-none placeholder:text-text-tertiary [&::-webkit-search-cancel-button]:hidden"
-            data-testid="notes-search"
-          />
-          {query && (
-            <button type="button" onClick={() => onQuery("")} aria-label={placeholder} className="grid size-6 place-items-center rounded-full bg-text-tertiary/25 text-text-secondary">
-              <RiCloseLine className="size-4" />
-            </button>
-          )}
-        </label>
+        <VoidexSearchField
+          className="min-w-0 flex-1 shadow-[0_6px_24px_rgba(20,20,40,0.12)]"
+          size="lg"
+          name="voidex-notes-search"
+          value={query}
+          onChange={onQuery}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          testId="notes-search"
+        />
         {(onAdd || addMenu) && (
           <button
             ref={pop.anchor}

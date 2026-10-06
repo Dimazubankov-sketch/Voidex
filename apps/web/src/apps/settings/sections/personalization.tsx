@@ -7,7 +7,7 @@ import { Block, Segmented } from "@/os/home/appearance-panel";
 import { updateLayout, useWorkspaceLayout } from "@/os/home/layout";
 import { SectionTitle } from "../kit";
 import type { SectionProps } from "../settings-app";
-import { WallpaperLink } from "./wallpapers";
+import { VoidexSearchField } from "@/ui/search-field";
 
 const THEMES: { id: Theme; icon: typeof RiSunLine }[] = [
   { id: "light", icon: RiSunLine },
@@ -16,11 +16,12 @@ const THEMES: { id: Theme; icon: typeof RiSunLine }[] = [
 ];
 
 /**
- * Settings → Personalization (Step 2.5): the colour theme (light, dark,
- * as on the device), a link to the wallpapers, and the glass of the desktop — its level, and on PC the
- * system bar and the dock separately. Saved to the account.
+ * Settings → Personalization: the colour theme (light, dark, as on the
+ * device), the background of every search field (Step 2.7), and the glass
+ * of the desktop: its level, and on PC the system bar and the dock
+ * separately. Saved to the account. Wallpapers live only in Settings → Обои.
  */
-export function PersonalizationSection({ navigate }: SectionProps) {
+export function PersonalizationSection(_: SectionProps) {
   const t = useT();
   const ff = useFormFactor();
   const { layout } = useWorkspaceLayout();
@@ -56,7 +57,20 @@ export function PersonalizationSection({ navigate }: SectionProps) {
         <p className="mt-2 px-1 text-[12.5px] text-text-tertiary">{t("personalization.themeHint")}</p>
       </section>
 
-      <WallpaperLink tab="lock" title={t("settings.wallpapers")} onOpen={() => navigate("wallpapers")} />
+      <Block title={t("personalization.searchBg")} hint={t("personalization.searchBgHint")}>
+        <Row label={t("personalization.searchBg")}>
+          <Segmented
+            value={a.searchAppearance}
+            options={[
+              ["system", "personalization.searchSystem"],
+              ["white", "personalization.searchWhite"],
+            ]}
+            onChange={(searchAppearance) => set({ searchAppearance })}
+            testId="personal-search-bg"
+          />
+        </Row>
+        <VoidexSearchField value="" onChange={() => undefined} placeholder={t("home.search")} readOnly tabIndex={-1} testId="personal-search-preview" />
+      </Block>
 
       <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
         <Row label={t("appearance.glass")}>

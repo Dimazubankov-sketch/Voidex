@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RiBookmarkLine, RiHeart3Line, RiLockLine, RiSearchLine, RiUserSearchLine } from "@remixicon/react";
+import { RiBookmarkLine, RiHeart3Line, RiLockLine, RiUserSearchLine } from "@remixicon/react";
 import type { VibexPersonDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { formatRelative, useLanguage, useT } from "@/lib/i18n";
@@ -7,6 +7,7 @@ import { EmptyState, Skeleton, Spinner } from "@/ui/controls";
 import { useChats, useHistory, usePeople, usePost, type HistoryKind } from "./data";
 import { LoadMore, PostCard, UnavailablePost } from "./posts";
 import { useVibex } from "./store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 function PersonRow({ person }: { person: VibexPersonDto }) {
   const push = useVibex((s) => s.push);
@@ -35,18 +36,15 @@ export function PeopleSection() {
   const recent = (chats.data ?? []).flatMap((c) => (c.peer ? [c.peer] : []));
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex h-12 items-center gap-2 rounded-2xl border border-border bg-surface px-4 shadow-tile">
-        <RiSearchLine className="size-5 shrink-0 text-text-tertiary" />
-        <input
-          autoFocus
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("vibex.people.search")}
-          className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-text-tertiary"
-          data-testid="people-search"
-        />
-        {people.isFetching && <Spinner size={14} />}
-      </label>
+      <VoidexSearchField
+        size="lg"
+        autoFocus
+        value={q}
+        onChange={setQ}
+        placeholder={t("vibex.people.search")}
+        testId="people-search"
+        trailing={people.isFetching ? <Spinner size={14} /> : undefined}
+      />
       {query ? (
         people.data && !people.data.length ? (
           <EmptyState icon={<RiUserSearchLine className="size-7" />} title={t("vibex.people.empty")} />

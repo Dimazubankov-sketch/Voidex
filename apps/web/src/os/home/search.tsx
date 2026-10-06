@@ -8,6 +8,7 @@ import { AppTile } from "@/brand/brand";
 import { AppGlyph } from "./icons";
 import { CATEGORY_LABEL, appCategory, appLabel, openApp } from "./actions";
 import { useHomeUi } from "./ui-store";
+import { VoidexSearchField } from "@/ui/search-field";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -106,8 +107,7 @@ export function DesktopSearchBar({ apps, layout, inDock, height = 44 }: { apps: 
       {/* Dock: the same soft hover lift as the dock apps — a transform only, the dock never reflows. */}
       <motion.label
         className={cx(
-          "flex items-center gap-2.5 rounded-full px-4 transition-shadow",
-          inDock ? "vx-dock-field" : "vx-glass focus-within:shadow-float",
+          "vx-search vx-search-dock px-4",
         )}
         style={{ height, originY: 1 }}
         whileHover={inDock ? { scale: 1.035, y: -1 } : undefined}
@@ -177,12 +177,11 @@ export function MobileSearch({ apps, layout }: { apps: InstalledAppDto[]; layout
           data-no-home-gesture
         >
           <motion.div className="flex items-center gap-2" initial={{ y: -24 }} animate={{ y: 0 }} transition={{ duration: 0.28, ease: EASE }}>
-            <label className="flex h-11 flex-1 items-center gap-2 rounded-2xl bg-surface px-3.5 shadow-tile">
-              <RiSearchLine className="size-[18px] text-text-tertiary" />
-              <input
+              <VoidexSearchField
+                className="flex-1"
                 autoFocus
                 value={search.query}
-                onChange={(e) => setSearch({ query: e.target.value })}
+                onChange={(query) => setSearch({ query })}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && results[0]) {
                     close();
@@ -193,10 +192,8 @@ export function MobileSearch({ apps, layout }: { apps: InstalledAppDto[]; layout
                 placeholder={t("home.search")}
                 aria-label={t("home.search")}
                 enterKeyHint="go"
-                className="h-full min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-text-tertiary"
-                data-testid="home-search"
+                testId="home-search"
               />
-            </label>
             <button type="button" onClick={close} className="pressable h-11 px-2 text-[16px] font-medium text-primary" data-testid="home-search-cancel">
               {t("common.cancel")}
             </button>
