@@ -158,10 +158,11 @@ export async function openWallpapersTab(page: Page, tab: "lock" | "home") {
 /** Back to the Settings list on phones (the PC sidebar is always there): back until no section page is left. */
 export async function settingsRoot(page: Page) {
   await expect(page.getByTestId("settings-nav-wallpapers").last().or(page.getByTestId("settings-back").last()).first()).toBeVisible();
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(450); // a page that is sliding away is not a target
     if (!(await page.getByTestId("settings-back").count())) return;
-    await page.getByTestId("settings-back").last().click();
+    // The page may be leaving already (then the button detaches): fine, look again.
+    await page.getByTestId("settings-back").last().click({ timeout: 2500 }).catch(() => undefined);
   }
   await expect(page.getByTestId("settings-back")).toHaveCount(0);
 }
