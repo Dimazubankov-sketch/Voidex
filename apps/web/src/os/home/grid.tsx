@@ -94,6 +94,10 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
   // While something is dragged here the grid grows to the row under the pointer (PC desktops grow downwards).
   const shownRows = fixed ? Math.max(fixed.rows, rows) : Math.max(minRows, rows + (editing ? 1 : 0), target ? target.r + 1 : 0, 1);
   const area = (p: PlacedCell) => ({ gridColumn: `${p.c + 1} / span ${p.w}`, gridRow: `${p.r + 1} / span ${p.h}` });
+  // Step 2.7 (PC): the room a row has beyond its icon is spread evenly over the rows, so the first row
+  // sits at the top of the desktop and the last at its bottom (the same space to the system bar and to
+  // the dock), with equal space between rows. A per-cell offset inside its own cell: drops map as before.
+  const spread = (r: number) => (fixed && fixed.rows > 1 ? Math.round((Math.max(0, fixed.rowH - rowH) * Math.min(r, fixed.rows - 1)) / (fixed.rows - 1)) : 0);
 
   return (
     <div
@@ -136,7 +140,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         const p = placed.get(layoutItemKey(item));
         if (!p) return null;
         return (
-          <div key={layoutItemKey(item)} style={area(p)} className={cx("flex min-h-0 min-w-0 justify-center", fixed && "items-start")} data-cell={`${p.c},${p.r}`}>
+          <div key={layoutItemKey(item)} style={{ ...area(p), ...(fixed ? { paddingTop: spread(p.r) } : {}) }} className={cx("flex min-h-0 min-w-0 justify-center", fixed && "items-start")} data-cell={`${p.c},${p.r}`}>
             {renderItem(item, j)}
           </div>
         );

@@ -552,7 +552,7 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
           data-testid="desktop-space"
           data-space={layout.desktop.spaces.findIndex((s) => s.id === current.id) + 1}
         >
-          <div ref={setHost} className="absolute inset-0 overflow-hidden px-6 pb-2 pt-4" data-home-free data-grid-host data-testid="desktop-area">
+          <div ref={setHost} className="absolute inset-0 overflow-hidden px-6 pb-0 pt-2" data-home-free data-grid-host data-testid="desktop-area">
             {layout.desktop.view === "categories" ? (
               <>
                 <WidgetStrip layout={layout} surface="desktop" container={current.id} editing={editing} />
