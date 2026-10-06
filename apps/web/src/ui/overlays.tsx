@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { RiCloseLine } from "@remixicon/react";
+import { DismissableLayer, FocusScope } from "radix-ui/internal";
 import { create } from "zustand";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -76,6 +77,7 @@ export function Sheet({
   const sheet = ff === "mobile" && !centered;
   const mobile = sheet;
   const vv = useVisualViewport(open && centered && ff === "mobile");
+  const panelRef = useRef<HTMLDivElement>(null);
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -97,38 +99,100 @@ export function Sheet({
             transition={{ duration: 0.18 }}
             onClick={onClose}
           />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            className={cx(
-              "relative flex w-full flex-col bg-surface shadow-window",
-              mobile ? "max-h-[92dvh] rounded-t-[28px] pb-[max(var(--safe-bottom),12px)]" : "mx-4 max-h-full rounded-[28px]",
-              !vv && !mobile && "max-h-[92dvh]",
-            )}
-            style={mobile ? undefined : { maxWidth: width }}
-            initial={mobile ? { y: "100%" } : { opacity: 0, scale: 0.96, y: 8 }}
-            animate={mobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
-            exit={mobile ? { y: "100%" } : { opacity: 0, scale: 0.97, y: 4 }}
-            transition={{ duration: mobile ? 0.32 : 0.2, ease: EASE }}
-            drag={mobile ? "y" : false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.6 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
-            }}
-          >
-            {mobile && <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border-strong" />}
-            {title !== undefined && (
-              <div className="flex shrink-0 items-center gap-3 px-6 pb-2 pt-5">
-                <div className="flex-1 text-[19px] font-semibold tracking-tight">{title}</div>
-                <IconButton label={t("common.close")} onClick={onClose} size="sm">
-                  <RiCloseLine className="size-5" />
-                </IconButton>
-              </div>
-            )}
-            <div className="scroll-area min-h-0 flex-1 px-6 pb-5 pt-2">{children}</div>
-            {footer && <div className="flex shrink-0 justify-end gap-2 border-t px-6 py-4">{footer}</div>}
-          </motion.div>
+          {centered ? (
+            // A centred dialog is its own layer for Radix-based content below it (the Files editor, the
+            // Media viewer): it takes the pointer and the focus, and they stay open underneath.
+            <DismissableLayer.Root
+              asChild
+              disableOutsidePointerEvents
+              onEscapeKeyDown={(e) => e.preventDefault()}
+              onPointerDownOutside={(e) => {
+                e.preventDefault();
+                onClose();
+              }}
+              onFocusOutside={(e) => e.preventDefault()}
+            >
+              <FocusScope.Root
+                asChild
+                trapped
+                loop
+                onMountAutoFocus={(e) => {
+                  e.preventDefault();
+                  panelRef.current?.focus({ preventScroll: true });
+                }}
+              >
+                  <motion.div
+                    ref={panelRef}
+                    role="dialog"
+                    aria-modal="true"
+                    tabIndex={-1}
+                    className={cx(
+                      "relative flex w-full flex-col bg-surface shadow-window outline-none",
+                      mobile ? "max-h-[92dvh] rounded-t-[28px] pb-[max(var(--safe-bottom),12px)]" : "mx-4 max-h-full rounded-[28px]",
+                      !vv && !mobile && "max-h-[92dvh]",
+                    )}
+                    style={mobile ? undefined : { maxWidth: width }}
+                    initial={mobile ? { y: "100%" } : { opacity: 0, scale: 0.96, y: 8 }}
+                    animate={mobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+                    exit={mobile ? { y: "100%" } : { opacity: 0, scale: 0.97, y: 4 }}
+                    transition={{ duration: mobile ? 0.32 : 0.2, ease: EASE }}
+                    drag={mobile ? "y" : false}
+                    dragConstraints={{ top: 0, bottom: 0 }}
+                    dragElastic={{ top: 0, bottom: 0.6 }}
+                    onDragEnd={(_, info) => {
+                      if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+                    }}
+                  >
+                    {mobile && <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border-strong" />}
+                    {title !== undefined && (
+                      <div className="flex shrink-0 items-center gap-3 px-6 pb-2 pt-5">
+                        <div className="flex-1 text-[19px] font-semibold tracking-tight">{title}</div>
+                        <IconButton label={t("common.close")} onClick={onClose} size="sm">
+                          <RiCloseLine className="size-5" />
+                        </IconButton>
+                      </div>
+                    )}
+                    <div className={cx("scroll-area min-h-0 flex-1 px-6 pb-5", title === undefined && !mobile ? "pt-5" : "pt-2")}>{children}</div>
+                    {footer && <div className="flex shrink-0 justify-end gap-2 border-t px-6 py-4">{footer}</div>}
+                  </motion.div>
+              </FocusScope.Root>
+            </DismissableLayer.Root>
+          ) : (
+            <motion.div
+              ref={panelRef}
+              role="dialog"
+              aria-modal="true"
+              tabIndex={-1}
+              className={cx(
+                "relative flex w-full flex-col bg-surface shadow-window outline-none",
+                mobile ? "max-h-[92dvh] rounded-t-[28px] pb-[max(var(--safe-bottom),12px)]" : "mx-4 max-h-full rounded-[28px]",
+                !vv && !mobile && "max-h-[92dvh]",
+              )}
+              style={mobile ? undefined : { maxWidth: width }}
+              initial={mobile ? { y: "100%" } : { opacity: 0, scale: 0.96, y: 8 }}
+              animate={mobile ? { y: 0 } : { opacity: 1, scale: 1, y: 0 }}
+              exit={mobile ? { y: "100%" } : { opacity: 0, scale: 0.97, y: 4 }}
+              transition={{ duration: mobile ? 0.32 : 0.2, ease: EASE }}
+              drag={mobile ? "y" : false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.6 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+              }}
+            >
+              {mobile && <div className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border-strong" />}
+              {title !== undefined && (
+                <div className="flex shrink-0 items-center gap-3 px-6 pb-2 pt-5">
+                  <div className="flex-1 text-[19px] font-semibold tracking-tight">{title}</div>
+                  <IconButton label={t("common.close")} onClick={onClose} size="sm">
+                    <RiCloseLine className="size-5" />
+                  </IconButton>
+                </div>
+              )}
+              <div className={cx("scroll-area min-h-0 flex-1 px-6 pb-5", title === undefined && !mobile ? "pt-5" : "pt-2")}>{children}</div>
+              {footer && <div className="flex shrink-0 justify-end gap-2 border-t px-6 py-4">{footer}</div>}
+            </motion.div>
+          )}
         </div>
       )}
     </AnimatePresence>,
