@@ -364,6 +364,12 @@ describe("Step 2.7: search background and the Files / Media apps", () => {
     expect(WorkspaceLayoutSchema.safeParse(white).success).toBe(true);
     const bad = normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, searchAppearance: "glass" as "white" } }, ALL);
     expect(bad.appearance.searchAppearance).toBe("system");
+    // Step 2.8: «Вид приложений» — media by default, any of the four kept, anything else back to media.
+    expect(normalizeLayout(old, ALL).appearance.appLook).toBe("media");
+    for (const look of ["media", "notes", "mail", "dark"] as const) {
+      expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, appLook: look } }, ALL).appearance.appLook).toBe(look);
+    }
+    expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, appLook: "neon" as "dark" } }, ALL).appearance.appLook).toBe("media");
   });
   it("an existing customized layout gets Files and Media without its dock being rewritten", () => {
     const before: AppId[] = ["mail", "settings", "vibex", "notes"];

@@ -120,11 +120,9 @@ test("calculator: system app (desktop, search, dock), lazy loaded; the original 
   for (const k of ["7", "×", "6", "solve"]) await page.locator(`#vxc-keypad [data-key="${k}"]`).click();
   await expect(answer(page)).toHaveText("42");
 
-  // History keeps the calculations of this session.
-  await page.getByTestId("calc-history-open").click();
-  await expect(page.getByTestId("calc-history").locator(".history-item").first()).toContainText("42");
-  await page.getByTestId("calc-history").getByRole("button", { name: "Закрыть" }).click();
-  await expect(page.getByTestId("calc-history")).toBeHidden();
+  // Step 2.8: no History / "how to type" buttons in the title bar.
+  await expect(page.getByTestId("calc-history-open")).toHaveCount(0);
+  await expect(page.getByTestId("calc-help-open")).toHaveCount(0);
 
   // No page scroll in either mode.
   await expectNoPageScroll(page);

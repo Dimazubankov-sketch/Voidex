@@ -89,12 +89,12 @@ test("Files: preinstalled; its structure; an honest cloud state (no quota); a .t
   const app = page.getByTestId("files-app");
   await expect(app).toBeVisible();
   for (const label of ["Все", ".txt", ".prsn", "Скачанные", "Папки"]) await expect(app.getByRole("tab", { name: label })).toBeVisible();
-  await expect(page.getByTestId("files-cloud-notice")).toContainText("Не сохранено в Облаке VOIDEX");
+  await expect(page.getByTestId("files-cloud-notice")).toContainText("Не сохранено в ViCloud");
   await expect(app.getByText(/из 5 ГБ|Облако · 5 ГБ|Добавить скачанные файлы|Доступ по ссылкам/)).toHaveCount(0);
   // One Cloud dialog for the system: the cloud is plainly not available.
   await page.getByTestId("files-cloud-link").click();
   await expect(page.getByTestId("cloud-dialog")).toBeVisible();
-  await expect(page.getByTestId("cloud-dialog-status")).toHaveText("Облако VOIDEX пока недоступно");
+  await expect(page.getByTestId("cloud-dialog-status")).toHaveText("ViCloud пока не запущен");
   await expect(page.getByTestId("cloud-dialog-body")).toHaveAttribute("data-available", "false");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("cloud-dialog")).toHaveCount(0);
@@ -184,7 +184,7 @@ test("Vibex attach: «Откуда выбрать?» has three sources; VOIDEX s
   await expect(sheet.getByText("Откуда выбрать?")).toBeVisible();
   for (const id of ["files", "media", "device"]) await expect(page.getByTestId(`attach-source-${id}`)).toBeVisible();
   await page.getByTestId("attach-source-files").click();
-  await expect(page.getByTestId("attach-source-empty")).toContainText("Облако VOIDEX пока недоступно");
+  await expect(page.getByTestId("attach-source-empty")).toContainText("ViCloud пока не запущен");
   await expect(page.getByTestId("attach-source-file")).toHaveCount(0);
   await sheet.getByText("Откуда выбрать?").click();
   await page.getByTestId("attach-source-media").click();

@@ -168,11 +168,13 @@ test("Vibex: delete my message (others can't), placeholder for both; action row 
     await mine.getByTestId("message-delete").click();
   }
   await page.getByRole("button", { name: "Удалить" }).last().click();
-  await expect(page.getByTestId("message-deleted")).toBeVisible();
+  // Step 2.8: the message disappears completely, no placeholder.
+  await expect(mine).toHaveCount(0);
   await expect(page.getByTestId("messages")).not.toContainText("Секретное сообщение");
-  // The other side sees the placeholder too.
+  await expect(page.getByTestId("messages")).not.toContainText("Сообщение удалено");
+  // The other side has nothing in its place either.
   const list = (await api(other, "GET", `/api/vibex/chats/${chat.id}/messages`)).body.items;
-  expect(list.find((m: { deleted?: boolean }) => m.deleted)).toBeTruthy();
+  expect(list).toHaveLength(1);
 
   // Posts: icon + number buttons (0 shown), views apart.
   const postText = `Пост Бори ${Date.now().toString(36)}`;

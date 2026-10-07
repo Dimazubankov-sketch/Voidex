@@ -25,7 +25,7 @@ function download(u: U, id: string) {
 }
 
 describe("vibex: deleting own messages (Step 2.5)", () => {
-  it("only the sender deletes; a placeholder stays; replies keep working; files are gone", async () => {
+  it("only the sender deletes; the message disappears completely (Step 2.8); replies keep working; files are gone", async () => {
     const [a, b, c] = [await user("Ася"), await user("Бэн"), await user("Чужой")];
     const chat = (await a.d.post("/api/vibex/chats/direct", { userId: b.id })).body as VibexChatDto;
     const file = await upload(a, "plan.txt", Buffer.from("секрет"), "message");
@@ -45,10 +45,11 @@ describe("vibex: deleting own messages (Step 2.5)", () => {
 
     for (const u of [a, b]) {
       const list = await messages(u, chat.id);
-      const gone = list.find((m) => m.id === m1.id)!;
-      expect(gone).toMatchObject({ deleted: true, text: "", files: [] });
+      // Step 2.8: nothing is left in its place, and the reply keeps no quote of it.
+      expect(list.find((m) => m.id === m1.id)).toBeUndefined();
       const r = list.find((m) => m.id === reply.id)!;
-      expect(r.replyTo).toMatchObject({ id: m1.id, text: "", deleted: true });
+      expect(r.replyTo).toBeNull();
+      expect(JSON.stringify(list)).not.toContain('"deleted"');
     }
     expect(JSON.stringify(await messages(b, chat.id))).not.toContain("Удали меня");
     expect((await download(b, file.body.id)).statusCode).toBe(404);
@@ -72,7 +73,10 @@ describe("vibex: deleting own messages (Step 2.5)", () => {
     expect(v.status).toBe(201);
     const msg = (await a.d.post(`/api/vibex/chats/${chat.id}/messages`, { text: "", kind: "voice", durationMs: 1500, fileIds: [v.body.id] })).body as VibexMessageDto;
     expect((await a.d.delete(`/api/vibex/messages/${msg.id}`)).status).toBe(200);
-    expect((await messages(b, chat.id))[0]).toMatchObject({ id: msg.id, kind: "voice", deleted: true, files: [], durationMs: null });
+    expect((await messages(b, chat.id)).some((m) => m.id === msg.id)).toBe(false);
+    // The chat's preview never shows a deleted message.
+    const listed = (await b.d.get("/api/vibex/chats")).body as VibexChatDto[];
+    expect(listed.find((x) => x.id === chat.id)?.lastMessage?.id).not.toBe(msg.id);
   });
 });
 
