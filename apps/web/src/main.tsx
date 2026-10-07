@@ -5,8 +5,10 @@ import { queryClient } from "@/lib/query";
 import { App } from "./app";
 import "./styles/index.css";
 import { applyStoredTheme } from "@/lib/theme";
+import { trackKeyboard } from "@/lib/keyboard";
 
 applyStoredTheme();
+trackKeyboard();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

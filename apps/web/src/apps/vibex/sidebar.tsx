@@ -22,10 +22,10 @@ import { useChats } from "./data";
 import { useVibex, type VibexSection } from "./store";
 
 /** Width of the phone drawer (px). */
-export const DRAWER_WIDTH = 272;
-/** The PC rail (Step 2.7: a little larger than 2.5.1's compact rail; the phone drawer keeps its touch sizes). */
-export const RAIL_WIDTH = 252;
-export const RAIL_COLLAPSED = 60;
+export const DRAWER_WIDTH = 288;
+/** The PC rail (Step 2.8: larger rows and type, the same on PC and in the phone drawer). */
+export const RAIL_WIDTH = 264;
+export const RAIL_COLLAPSED = 68;
 
 interface Row {
   key: VibexSection;
@@ -34,8 +34,8 @@ interface Row {
 }
 
 /**
- * Vibex side menu (Step 2.3): dense and structured. The Vibex mark on top,
- * the account card (my page), then the sections, a divider and Settings —
+ * Vibex side menu (Step 2.3, enlarged in Step 2.8): the Vibex mark on top,
+ * the account card (my page), the sections, and Settings at the bottom:
  * Vibex's OWN settings screen. Identity is the VOIDEX account: no account
  * switching and no separate sign-out here.
  */
@@ -75,17 +75,17 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         title={collapsed ? t(row.label) : undefined}
         className={cx(
           "relative flex items-center text-left font-medium transition",
-          rail ? "h-10 rounded-[11px] text-[14px]" : "h-10 rounded-xl text-[14px]",
-          collapsed ? "justify-center" : rail ? "gap-2.5 px-2.5" : "gap-3 px-3",
+          "h-12 rounded-[14px] text-[15.5px]",
+          collapsed ? "justify-center" : "gap-3 px-3",
           selected ? "bg-primary/10 text-primary" : "text-text hover:bg-surface-hover",
         )}
         data-testid={`vibex-nav-${row.key}`}
       >
-        <Icon className={cx(rail ? "size-[18px]" : "size-[19px]", "shrink-0", selected ? "text-primary" : "text-text-secondary")} />
+        <Icon className={cx("size-[22px] shrink-0", selected ? "text-primary" : "text-text-secondary")} />
         {!collapsed && <span className="flex-1 truncate">{t(row.label)}</span>}
         {badge > 0 && (
           <span
-            className={cx("flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-white", collapsed && "absolute -right-0.5 -top-0.5 min-w-4 px-1 text-[10px]")}
+            className={cx("flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white", collapsed && "absolute right-0.5 top-0.5 h-4 min-w-4 px-1 text-[10px]")}
             data-testid="vibex-unread"
           >
             {badge > 99 ? "99+" : badge}
@@ -100,7 +100,8 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
       className={cx(
         "flex h-full flex-col bg-surface transition-[width] duration-300 ease-out",
         variant === "rail" && "shrink-0 border-r",
-        collapsed ? "px-2 py-3" : rail ? "px-2.5 py-2.5" : "px-3 py-3",
+        collapsed ? "px-2 py-3" : "px-3 py-3",
+        variant === "drawer" && "pb-[max(env(safe-area-inset-bottom),16px)]",
         variant === "drawer" && "w-full shadow-float",
       )}
       style={rail ? { width: collapsed ? RAIL_COLLAPSED : RAIL_WIDTH } : undefined}
@@ -108,8 +109,8 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
     >
       <BrandRow drag={variant === "rail"} className={cx("flex items-center pb-2", collapsed ? "flex-col gap-2 pt-1" : "justify-between pl-1.5")}>
         <div className="flex items-center gap-2" data-system-ui>
-          <VibexGlyph className={rail ? "size-[26px]" : "size-7"} />
-          {!collapsed && <span className={cx("font-bold tracking-tight text-text", rail ? "text-[17px]" : "text-[18px]")}>{t("vibex.title")}</span>}
+          <VibexGlyph className="size-8" />
+          {!collapsed && <span className="text-[20px] font-bold tracking-tight text-text">{t("vibex.title")}</span>}
         </div>
         {variant === "drawer" ? (
           <button type="button" onClick={onClose} aria-label={t("common.close")} className="flex size-9 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover">
@@ -134,23 +135,26 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         type="button"
         onClick={() => pick("me")}
         title={collapsed ? name : undefined}
-        className={cx("mb-2 flex items-center transition hover:bg-surface-hover", rail ? "rounded-xl" : "rounded-2xl", collapsed ? "justify-center p-1" : rail ? "gap-2 bg-surface-secondary/70 p-1.5" : "gap-2.5 bg-surface-secondary/70 p-2")}
+        className={cx("mb-3 flex items-center rounded-2xl transition hover:bg-surface-hover", collapsed ? "justify-center p-1" : "gap-3 bg-surface-secondary/70 p-2.5")}
         data-testid="vibex-me"
       >
-        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={collapsed ? 34 : rail ? 32 : 36} />
+        <Avatar name={name} userId={me.id} version={me.avatarVersion} size={collapsed ? 40 : 46} />
         {!collapsed && (
           <span className="min-w-0 flex-1 text-left">
-            <span className={cx("block truncate font-semibold text-text", rail ? "text-[13.5px]" : "text-[13.5px]")}>{name}</span>
-            <span className={cx("block truncate text-text-tertiary", rail ? "text-[11.5px]" : "text-[11.5px]")}>{me.mailAddress}</span>
+            <span className="block truncate text-[15.5px] font-semibold text-text">{name}</span>
+            <span className="block truncate text-[12.5px] text-text-tertiary">{me.mailAddress}</span>
           </span>
         )}
       </button>
 
-      <nav className="flex flex-col gap-0.5" data-testid="vibex-nav">
+      <nav className="flex flex-col gap-1" data-testid="vibex-nav">
         {MAIN.map(item)}
       </nav>
-      <div className="my-2 h-px bg-border" aria-hidden />
-      <div className="flex flex-col gap-0.5">{item({ key: "settings", label: "vibex.nav.settings", icon: RiSettings4Line })}</div>
+      {/* Settings sits at the bottom: the free space is between the sections and it, not under it. */}
+      <div className="mt-auto flex flex-col gap-1 pt-3">
+        <div className="mb-2 h-px bg-border" aria-hidden />
+        {item({ key: "settings", label: "vibex.nav.settings", icon: RiSettings4Line })}
+      </div>
     </aside>
   );
 }

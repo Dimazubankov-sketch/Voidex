@@ -81,7 +81,7 @@ export function VibexRecipients({ q, picked, setPicked, t, testId }: { q: string
 /** VoidOps Mail: address book, Vibex people, or a full address typed in. */
 export function MailRecipients({ q, picked, setPicked, t, testId }: { q: string; picked: SharePick[]; setPicked: SetPicked; t: T; testId: string }) {
   const chats = useChats();
-  const contacts = useContacts(q.trim());
+  const contacts = useContacts(q.trim(), q.trim().length > 0);
   const items = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const out: SharePick[] = [];

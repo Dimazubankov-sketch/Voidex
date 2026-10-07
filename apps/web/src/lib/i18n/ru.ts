@@ -726,8 +726,6 @@ export const ru: Record<MessageKey, string> = {
   "vibex.call.audio": "Аудиозвонок",
   "vibex.call.video": "Видеозвонок",
   "vibex.call.unavailable": "Звонки пока недоступны: для них нужен сервис соединения, который ещё в разработке. Пока можно отправить голосовое сообщение или кружок.",
-  "calc.history": "История",
-  "calc.help": "Как вводить",
   "calc.solution": "Решение по шагам",
   "lock.title": "Экран блокировки",
   "lock.faceId": "Face ID",
@@ -868,7 +866,6 @@ export const ru: Record<MessageKey, string> = {
   "home.removeConfirmText2": "Это действие удалит выбранные приложения с рабочего стола VOIDEX. Данные приложений не будут удалены.",
   "home.removedManyFromDesktop": "Приложения убраны с рабочего стола: {n}. Они остались в меню приложений.",
   "vibex.chat.delete": "Удалить",
-  "vibex.chat.deleted": "Сообщение удалено",
   "vibex.chat.deleteTitle": "Удалить сообщение?",
   "vibex.chat.deleteBody": "Сообщение удалится у всех участников чата. Ответы на него останутся.",
   "vibex.circle.flip": "Сменить камеру",
@@ -1118,4 +1115,14 @@ export const ru: Record<MessageKey, string> = {
   "notes.page.clearTitle": "Очистить первую страницу?",
   "notes.page.clearBody": "Первая страница останется, но станет пустой: её текст и картинки будут удалены.",
   "notes.page.clearConfirm": "Очистить",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Удалить слайд",
+  "notes.pres.deleteSlideTitle": "Удалить этот слайд?",
+  "notes.pres.deleteSlideBody": "Слайд и всё, что на нём, будут удалены.",
+  "mail.link.insert": "Вставить ссылку",
+  "mail.link.add": "Вставить",
+  "mail.link.address": "Адрес ссылки",
+  "mail.link.invalid": "Проверьте адрес, например voidex.su",
+  "mail.link.hint": "Ссылка добавится в письмо как текст.",
+  // Step 2.8 (end)
 };

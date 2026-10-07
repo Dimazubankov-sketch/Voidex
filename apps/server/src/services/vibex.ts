@@ -1076,7 +1076,7 @@ export class VibexService {
         sql`SELECT DISTINCT ON (conversation_id) id FROM vibex_messages WHERE conversation_id IN (${sql.join(
           ids.map((i) => sql`${i}::uuid`),
           sql`, `,
-        )}) ORDER BY conversation_id, created_at DESC, id DESC`,
+        )}) AND deleted_at IS NULL ORDER BY conversation_id, created_at DESC, id DESC`,
       ),
     ]);
     const lastRows = lastIds.rows.length ? await this.ctx.db.select().from(vibexMessages).where(inArray(vibexMessages.id, lastIds.rows.map((r) => r.id))) : [];
@@ -1156,27 +1156,11 @@ export class VibexService {
     const shared = sharedIds.length ? await this.ctx.db.select().from(vibexPosts).where(and(inArray(vibexPosts.id, sharedIds), isNull(vibexPosts.deletedAt))) : [];
     const posts = await this.postDtos(viewerId, shared);
     const replyIds = [...new Set(rows.map((r) => r.replyToId).filter((x): x is string => !!x))];
-    const replied = replyIds.length ? await this.ctx.db.select().from(vibexMessages).where(inArray(vibexMessages.id, replyIds)) : [];
+    // A reply to a deleted message keeps no quote of it.
+    const replied = replyIds.length ? await this.ctx.db.select().from(vibexMessages).where(and(inArray(vibexMessages.id, replyIds), isNull(vibexMessages.deletedAt))) : [];
     const repliedBy = new Map(replied.map((m) => [m.id, m]));
     for (const r of rows) {
       const to = r.replyToId ? repliedBy.get(r.replyToId) : undefined;
-      if (r.deletedAt) {
-        // Step 2.5: deleted by its sender — only a placeholder is left.
-        out.set(r.id, {
-          id: r.id,
-          conversationId: r.conversationId,
-          senderId: r.senderId,
-          mine: r.senderId === viewerId,
-          kind: r.kind,
-          durationMs: null,
-          replyTo: null,
-          text: "",
-          files: [],
-          createdAt: r.createdAt.toISOString(),
-          deleted: true,
-        });
-        continue;
-      }
       out.set(r.id, {
         id: r.id,
         conversationId: r.conversationId,
@@ -1186,7 +1170,7 @@ export class VibexService {
         durationMs: r.durationMs,
         replyTo:
           to && to.conversationId === r.conversationId
-            ? { id: to.id, senderId: to.senderId, text: to.deletedAt ? "" : to.text.slice(0, 160), kind: to.kind, ...(to.deletedAt ? { deleted: true } : {}) }
+            ? { id: to.id, senderId: to.senderId, text: to.text.slice(0, 160), kind: to.kind }
             : null,
         text: r.text,
         files: files.get(r.id) ?? [],
@@ -1205,7 +1189,8 @@ export class VibexService {
     const rows = await this.ctx.db
       .select()
       .from(vibexMessages)
-      .where(and(eq(vibexMessages.conversationId, conversationId), olderThan(vibexMessages, c)))
+      // Step 2.8: a deleted message is gone from the history, nothing is left in its place.
+      .where(and(eq(vibexMessages.conversationId, conversationId), isNull(vibexMessages.deletedAt), olderThan(vibexMessages, c)))
       .orderBy(desc(vibexMessages.createdAt), desc(vibexMessages.id))
       .limit(limit + 1);
     const more = rows.length > limit;
@@ -1292,9 +1277,9 @@ export class VibexService {
 
   /**
    * Step 2.5: the sender deletes their own message (text, files, voice, circle)
-   * for everyone. Its text and files are removed for good; a placeholder
-   * stays so the chat and replies to it keep their place. Only the sender can
-   * do this — anyone else gets 403.
+   * for everyone. Its text and files are removed for good, and since Step 2.8
+   * nothing is left in the chat: no placeholder, no quote in replies. Only
+   * the sender can do this — anyone else gets 403.
    */
   async deleteMessage(userId: string, messageId: string) {
     const [m] = await this.ctx.db.select().from(vibexMessages).where(eq(vibexMessages.id, messageId));

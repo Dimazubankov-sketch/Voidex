@@ -191,7 +191,7 @@ function HomeIndicator() {
   };
   return (
     <div
-      className="relative flex h-[calc(22px+var(--safe-bottom))] shrink-0 cursor-grab touch-none select-none items-start justify-center"
+      className="vx-home-indicator relative flex h-[calc(22px+var(--safe-bottom))] shrink-0 cursor-grab touch-none select-none items-start justify-center"
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId };

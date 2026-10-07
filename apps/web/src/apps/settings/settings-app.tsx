@@ -373,7 +373,7 @@ function MobilePage({ onBack, children, footer }: { onBack?: () => void; childre
       </WindowHeader>
       <div className="vx-settings-bg scroll-area flex-1 px-4 pb-10 pt-1">{children}</div>
       {/* Step 2.5: phone search sits at the bottom, within thumb reach. */}
-      {footer && <div className="vx-glass-strong shrink-0 border-x-0 border-b-0 px-3 pb-2 pt-2" data-testid="settings-search-bar">{footer}</div>}
+      {footer && <div className="vx-kb-footer vx-glass-strong shrink-0 border-x-0 border-b-0 px-3 pb-2 pt-2" data-testid="settings-search-bar">{footer}</div>}
     </div>
   );
 }

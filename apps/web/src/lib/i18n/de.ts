@@ -711,8 +711,6 @@ export const de: Record<MessageKey, string> = {
   "vibex.call.audio": "Sprachanruf",
   "vibex.call.video": "Videoanruf",
   "vibex.call.unavailable": "Anrufe sind noch nicht verfügbar: Dafür wird ein Verbindungsdienst benötigt, der noch entsteht. Sende bis dahin eine Sprachnachricht oder einen Videokreis.",
-  "calc.history": "Verlauf",
-  "calc.help": "Eingabehilfe",
   "calc.solution": "Lösungsweg",
   "lock.title": "Sperrbildschirm",
   "lock.faceId": "Face ID",
@@ -853,7 +851,6 @@ export const de: Record<MessageKey, string> = {
   "home.removeConfirmText2": "Damit werden die ausgewählten Apps vom VOIDEX-Schreibtisch entfernt. Die Daten der Apps werden nicht gelöscht.",
   "home.removedManyFromDesktop": "{n} Apps vom Schreibtisch entfernt. Sie bleiben im App-Menü.",
   "vibex.chat.delete": "Löschen",
-  "vibex.chat.deleted": "Nachricht gelöscht",
   "vibex.chat.deleteTitle": "Diese Nachricht löschen?",
   "vibex.chat.deleteBody": "Sie wird für alle im Chat gelöscht. Antworten darauf bleiben.",
   "vibex.circle.flip": "Kamera wechseln",
@@ -1103,4 +1100,14 @@ export const de: Record<MessageKey, string> = {
   "notes.page.clearTitle": "Erste Seite leeren?",
   "notes.page.clearBody": "Die erste Seite bleibt, wird aber leer: Text und Bilder werden entfernt.",
   "notes.page.clearConfirm": "Leeren",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Delete slide",
+  "notes.pres.deleteSlideTitle": "Delete this slide?",
+  "notes.pres.deleteSlideBody": "The slide and everything on it will be deleted.",
+  "mail.link.insert": "Insert link",
+  "mail.link.add": "Insert",
+  "mail.link.address": "Link address",
+  "mail.link.invalid": "Check the address, for example voidex.su",
+  "mail.link.hint": "The link is added to the letter as text.",
+  // Step 2.8 (end)
 };

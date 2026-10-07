@@ -742,8 +742,6 @@ export const en = {
   "vibex.call.audio": "Audio call",
   "vibex.call.video": "Video call",
   "vibex.call.unavailable": "Calls are not available yet: they need a connection service that is still being built. Meanwhile, send a voice message or a video circle.",
-  "calc.history": "History",
-  "calc.help": "How to enter",
   "calc.solution": "Step-by-step solution",
   "lock.title": "Lock screen",
   "lock.faceId": "Face ID",
@@ -884,7 +882,6 @@ export const en = {
   "home.removeConfirmText2": "This removes the selected apps from the VOIDEX desktop. The apps' data won't be deleted.",
   "home.removedManyFromDesktop": "{n} apps removed from the desktop. They're still in the app menu.",
   "vibex.chat.delete": "Delete",
-  "vibex.chat.deleted": "Message deleted",
   "vibex.chat.deleteTitle": "Delete this message?",
   "vibex.chat.deleteBody": "It will be deleted for everyone in the chat. Replies to it stay.",
   "vibex.circle.flip": "Switch camera",
@@ -1134,6 +1131,16 @@ export const en = {
   "notes.page.clearTitle": "Clear the first page?",
   "notes.page.clearBody": "The first page stays and becomes empty; its text and pictures are removed.",
   "notes.page.clearConfirm": "Clear",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Delete slide",
+  "notes.pres.deleteSlideTitle": "Delete this slide?",
+  "notes.pres.deleteSlideBody": "The slide and everything on it will be deleted.",
+  "mail.link.insert": "Insert link",
+  "mail.link.add": "Insert",
+  "mail.link.address": "Link address",
+  "mail.link.invalid": "Check the address, for example voidex.su",
+  "mail.link.hint": "The link is added to the letter as text.",
+  // Step 2.8 (end)
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -85,14 +85,12 @@ export interface VibexMessageDto {
   /** Voice / circle length. */
   durationMs: number | null;
   /** The message this one answers (a short preview). */
-  replyTo: { id: string; senderId: string; text: string; kind: VibexMessageKind; deleted?: boolean } | null;
+  replyTo: { id: string; senderId: string; text: string; kind: VibexMessageKind } | null;
   text: string;
   files: VibexFileDto[];
   /** A post shared into the chat (null: shared, but no longer available). */
   sharedPost?: VibexPostDto | null;
   createdAt: string;
-  /** Step 2.5: deleted by its sender — show "Сообщение удалено" (text and files are gone). */
-  deleted?: boolean;
   /** Step 2.6: a Voidex Notes file card (opening it checks access in Notes). */
   notesCard?: NotesCardDto | null;
 }

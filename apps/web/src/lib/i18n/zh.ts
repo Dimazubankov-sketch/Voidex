@@ -711,8 +711,6 @@ export const zh: Record<MessageKey, string> = {
   "vibex.call.audio": "语音通话",
   "vibex.call.video": "视频通话",
   "vibex.call.unavailable": "通话暂不可用：它需要的连接服务仍在开发中。现在可以发送语音消息或圆形视频。",
-  "calc.history": "历史记录",
-  "calc.help": "输入说明",
   "calc.solution": "分步解答",
   "lock.title": "锁屏",
   "lock.faceId": "Face ID",
@@ -853,7 +851,6 @@ export const zh: Record<MessageKey, string> = {
   "home.removeConfirmText2": "此操作会将所选应用从 VOIDEX 桌面移除。应用数据不会被删除。",
   "home.removedManyFromDesktop": "已从桌面移除 {n} 个应用。它们仍在应用菜单中。",
   "vibex.chat.delete": "删除",
-  "vibex.chat.deleted": "消息已删除",
   "vibex.chat.deleteTitle": "删除这条消息？",
   "vibex.chat.deleteBody": "将为聊天中的所有人删除。回复会保留。",
   "vibex.circle.flip": "切换摄像头",
@@ -1103,4 +1100,14 @@ export const zh: Record<MessageKey, string> = {
   "notes.page.clearTitle": "清空第一页？",
   "notes.page.clearBody": "第一页会保留但变为空白：其文字和图片将被删除。",
   "notes.page.clearConfirm": "清空",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Delete slide",
+  "notes.pres.deleteSlideTitle": "Delete this slide?",
+  "notes.pres.deleteSlideBody": "The slide and everything on it will be deleted.",
+  "mail.link.insert": "Insert link",
+  "mail.link.add": "Insert",
+  "mail.link.address": "Link address",
+  "mail.link.invalid": "Check the address, for example voidex.su",
+  "mail.link.hint": "The link is added to the letter as text.",
+  // Step 2.8 (end)
 };

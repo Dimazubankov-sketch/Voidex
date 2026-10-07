@@ -28,7 +28,7 @@ import { cx } from "@/lib/cx";
 import { prefersReducedMotion, useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
-import { toast } from "@/ui/overlays";
+import { ConfirmDialog, toast } from "@/ui/overlays";
 import { downscale, notesApi, useMediaUrl } from "./data";
 
 type Change = (next: PresentationBody, structural?: boolean) => void;
@@ -103,6 +103,8 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
   const [preview, setPreview] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [panel, setPanel] = useState(ff !== "mobile");
+  // Step 2.8: the toolbar's delete asks first when the slide has something on it.
+  const [askDelete, setAskDelete] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const ratio = slideRatio(body.format);
   const i = Math.min(index, body.slides.length - 1);
@@ -412,6 +414,17 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
                 <button type="button" onClick={addSlide} aria-label={t("notes.pres.addSlide")} title={t("notes.pres.addSlide")} className="vn2-icon-btn size-11" data-testid="notes-pres-add-slide">
                   <RiAddLine className="size-[22px]" />
                 </button>
+                <button
+                  type="button"
+                  onClick={() => (body.slides[i]?.layers.length ? setAskDelete(i) : removeSlide(i))}
+                  disabled={body.slides.length <= 1}
+                  aria-label={t("notes.pres.deleteSlide")}
+                  title={t("notes.pres.deleteSlide")}
+                  className="vn2-icon-btn size-11 text-danger"
+                  data-testid="notes-pres-delete-slide"
+                >
+                  <RiDeleteBinLine className="size-[20px]" />
+                </button>
                 <input
                   ref={file}
                   type="file"
@@ -434,6 +447,19 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={askDelete !== null}
+        onClose={() => setAskDelete(null)}
+        onConfirm={() => {
+          const k = askDelete;
+          setAskDelete(null);
+          if (k !== null) removeSlide(k);
+        }}
+        title={t("notes.pres.deleteSlideTitle")}
+        message={t("notes.pres.deleteSlideBody")}
+        confirmLabel={t("notes.page.deleteConfirm")}
+        danger
+      />
     </div>
   );
 }

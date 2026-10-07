@@ -631,3 +631,15 @@ img[data-system-asset] { pointer-events: none; }
 .vm-search-bar input::placeholder {
   color: var(--search-placeholder);
 }
+
+/*
+ * Step 2.8: while the phone keyboard is open (lib/keyboard.ts sets
+ * data-keyboard and --kb on <html>), bottom bars sit just above it: no
+ * safe-area gap and no home indicator under them (the keyboard covers both).
+ */
+.vx-kb-bottom { padding-bottom: max(env(safe-area-inset-bottom), 12px); }
+:root[data-keyboard] .vx-kb-bottom { padding-bottom: calc(var(--kb, 0px) + 8px); }
+:root[data-keyboard] .vx-kb-footer { margin-bottom: var(--kb, 0px); }
+:root[data-keyboard] .vx-home-indicator { height: 0; overflow: hidden; }
+:root[data-keyboard] .vf-bottom.searching { bottom: calc(8px + var(--vf-keyboard-inset, 0px)); }
+:root[data-keyboard] .vm-bottom.searching { bottom: calc(8px + var(--vm-keyboard-inset, 0px)); }

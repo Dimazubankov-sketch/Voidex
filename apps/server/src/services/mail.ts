@@ -26,7 +26,7 @@ import {
   type NotesCardDto,
 } from "@voidex/shared";
 import type { Tx } from "../db/client.js";
-import { mailAccounts, mailAttachments, mailEntries, mailMessages, mailRecipients, mailThreads, users } from "../db/schema.js";
+import { mailAccounts, mailAttachments, mailEntries, mailMessages, mailRecipients, mailThreads, users, vibexConversations, vibexMembers, vibexMessages } from "../db/schema.js";
 import { looksLike } from "../lib/file-types.js";
 import { fail, notFound } from "../lib/errors.js";
 import type { NotificationService } from "./notifications.js";
@@ -160,6 +160,11 @@ export class MailService {
   }
 
   /** People this account has exchanged mail with — for recipient autocomplete. */
+  /**
+   * Recipient search: people you have written to or received mail from and,
+   * since Step 2.8, everyone you have a Vibex chat with (any length). An
+   * empty query lists the most recent of them.
+   */
   async contacts(userId: string, q: string): Promise<MailAddressDto[]> {
     const acc = await this.accountFor(userId);
     const like = `${escapeLike(q.trim().toLowerCase())}%`;
@@ -173,6 +178,15 @@ export class MailService {
           from ${mailEntries} e join ${mailRecipients} r on r.message_id = e.message_id
           join ${mailMessages} m on m.id = e.message_id
           where e.account_id = ${acc.id} and e.role = 'sender' and m.status = 'sent'
+        union all
+        select ma.address, u.first_name || ' ' || u.last_name, c.last_message_at
+          from ${vibexMembers} me
+          join ${vibexConversations} c on c.id = me.conversation_id and c.kind = 'direct'
+          join ${vibexMembers} peer on peer.conversation_id = c.id and peer.user_id <> me.user_id
+          join ${users} u on u.id = peer.user_id and u.status = 'active'
+          join ${mailAccounts} ma on ma.user_id = peer.user_id and ma.is_primary
+          where me.user_id = ${userId}
+            and exists (select 1 from ${vibexMessages} vm where vm.conversation_id = c.id)
       ) x
       where address <> ${acc.address} and (lower(address) like ${like} or lower(coalesce(name, '')) like ${like}
         or lower(coalesce(name, '')) like ${"% " + like})

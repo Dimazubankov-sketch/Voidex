@@ -575,6 +575,8 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
           onBold={() => current && patch(current.id, { bold: !current.bold }, true)}
           onItalic={() => current && patch(current.id, { italic: !current.italic }, true)}
           onImages={(files) => void uploadImages(files, focused)}
+          clears={Math.min(page, body.pages.length - 1) === 0}
+          onDeletePage={deletePage}
         />
       )}
     </div>
@@ -661,7 +663,8 @@ function PageNav({
 }
 
 /**
- * The minimal toolbar: text style, list, checklist, picture, bold, italic.
+ * The minimal toolbar: text style, list, checklist, picture, bold, italic,
+ * and delete page.
  * On phones it rides on top of the keyboard (visual viewport), never under it.
  */
 function Toolbar({
@@ -671,6 +674,8 @@ function Toolbar({
   onBold,
   onItalic,
   onImages,
+  clears,
+  onDeletePage,
 }: {
   current?: NoteBlock;
   uploading: boolean;
@@ -678,16 +683,18 @@ function Toolbar({
   onBold: () => void;
   onItalic: () => void;
   onImages: (files: File[]) => void;
+  /** The first page is cleared, not deleted. */
+  clears: boolean;
+  onDeletePage: () => void;
 }) {
   const t = useT();
-  const ff = useFormFactor();
-  const style = useKeyboardInset(ff === "mobile");
   const pop = usePopover();
   const file = useRef<HTMLInputElement>(null);
   // Keep the text focused when a toolbar button is pressed.
   const keep = (e: RPointerEvent) => e.preventDefault();
   return (
-    <div className="vn2-toolbar-wrap pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3" style={style} data-testid="notes-toolbar">
+    // On phones it rides just above the keyboard (Step 2.8: the shared keyboard tracker, see lib/keyboard).
+    <div className="vx-kb-bottom vn2-toolbar-wrap pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3" data-testid="notes-toolbar">
       <div className="vn2-toolbar pointer-events-auto flex items-center gap-0.5 rounded-full p-1" onPointerDown={keep}>
         <button ref={pop.anchor} type="button" onClick={pop.toggle} aria-label={t("notes.tool.style")} title={t("notes.tool.style")} className={cx("vn2-icon-btn size-11", current && current.kind !== "text" && "text-primary")} data-testid="notes-tool-style">
           <RiFontSize className="size-[21px]" />
@@ -708,6 +715,11 @@ function Toolbar({
         <button type="button" onClick={onItalic} aria-label={t("notes.tool.italic")} title={t("notes.tool.italic")} aria-pressed={!!current?.italic} className={cx("vn2-icon-btn size-11", current?.italic && "text-primary")} data-testid="notes-tool-italic">
           <RiItalic className="size-[20px]" />
         </button>
+        {/* Step 2.8: deleting the current page is one tap away (the first page is cleared instead). */}
+        <span className="mx-0.5 h-6 w-px bg-border" />
+        <button type="button" onClick={onDeletePage} aria-label={clears ? t("notes.page.clear") : t("notes.page.delete")} title={clears ? t("notes.page.clear") : t("notes.page.delete")} className="vn2-icon-btn size-11 text-danger" data-testid="notes-tool-delete-page">
+          {clears ? <RiEraserLine className="size-[20px]" /> : <RiDeleteBinLine className="size-[20px]" />}
+        </button>
         <input
           ref={file}
           type="file"
@@ -727,24 +739,6 @@ function Toolbar({
       </div>
     </div>
   );
-}
-
-/** Bottom offset that keeps a bar above the on-screen keyboard. */
-export function useKeyboardInset(on: boolean) {
-  const [inset, setInset] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!on || !vv) return;
-    const update = () => setInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
-    update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
-    return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
-    };
-  }, [on]);
-  return { paddingBottom: inset > 40 ? inset + 8 : "max(env(safe-area-inset-bottom), 14px)" };
 }
 
 /** A picture: tap to select, then width (drag the corner or 25/50/75/100%), alignment, move, remove. */

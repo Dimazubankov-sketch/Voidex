@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { RiArrowDownSLine, RiArrowUpSLine, RiAttachment2, RiCloseLine, RiDeleteBinLine, RiSendPlane2Fill } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowUpSLine, RiAttachment2, RiCloseLine, RiDeleteBinLine, RiLink, RiSendPlane2Fill } from "@remixicon/react";
 import { MAIL_ATTACHMENTS_MAX, MAIL_SUBJECT_MAX, type MailAttachmentDto } from "@voidex/shared";
 import { ApiError } from "@/lib/api";
 import { cx } from "@/lib/cx";
@@ -8,8 +8,8 @@ import { errorMessage } from "@/lib/errors";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
-import { Button, IconButton, Notice, Spinner } from "@/ui/controls";
-import { toast } from "@/ui/overlays";
+import { Button, IconButton, Notice, Spinner, TextField } from "@/ui/controls";
+import { Sheet, toast } from "@/ui/overlays";
 import { AttachSourceSheet } from "@/os/share/attach-source";
 import { ATTACHMENT_ACCEPT, ComposerAttachments, attachmentsApi, checkFile, type PendingUpload } from "./attachments";
 import { draftsApi } from "./data";
@@ -54,6 +54,23 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
   const latest = useRef({ to, cc, bcc, subject, body });
   latest.current = { to, cc, bcc, subject, body };
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  // Step 2.8: a link goes into the text as it is (plain text, no preview).
+  const [linking, setLinking] = useState(false);
+  const caret = useRef<number | null>(null);
+  const insertLink = (url: string) => {
+    const el = bodyRef.current;
+    const at = caret.current ?? body.length;
+    const before = body.slice(0, at);
+    const after = body.slice(at);
+    const piece = `${before && !/\s$/.test(before) ? " " : ""}${url}${after && !/^\s/.test(after) ? " " : ""}`;
+    setBody(before + piece + after);
+    const pos = before.length + piece.length;
+    caret.current = pos;
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  };
   const fileInput = useRef<HTMLInputElement>(null);
   const [chooser, setChooser] = useState(false);
   const [attachments, setAttachments] = useState<MailAttachmentDto[]>(initial.attachments ?? []);
@@ -283,6 +300,7 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
             ref={bodyRef}
             value={body}
             onChange={(e) => setBody(e.target.value)}
+            onSelect={(e) => (caret.current = e.currentTarget.selectionStart)}
             placeholder={t("mail.bodyPlaceholder")}
             className="scroll-area min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-[15px] leading-relaxed outline-none placeholder:text-text-tertiary"
             data-testid="composer-body"
@@ -302,6 +320,10 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
             <IconButton label={t("mail.attach")} onClick={() => setChooser(true)} data-testid="composer-attach">
               <RiAttachment2 className="size-5" />
             </IconButton>
+            <IconButton label={t("mail.link.insert")} onClick={() => setLinking(true)} data-testid="composer-link">
+              <RiLink className="size-5" />
+            </IconButton>
+            <LinkSheet open={linking} onClose={() => setLinking(false)} onInsert={insertLink} />
             <AttachSourceSheet
               open={chooser}
               onClose={() => setChooser(false)}
@@ -329,5 +351,79 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
         </>
       )}
     </motion.div>
+  );
+}
+
+/** A web address with a scheme; "voidex.su/x" becomes "https://voidex.su/x". */
+export function normalizeLink(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || /\s/.test(v)) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    if (!u.hostname.includes(".")) return null;
+    return withScheme;
+  } catch {
+    return null;
+  }
+}
+
+/** "Insert link": one field; the address goes into the letter as plain text. */
+function LinkSheet({ open, onClose, onInsert }: { open: boolean; onClose: () => void; onInsert: (url: string) => void }) {
+  const t = useT();
+  const [value, setValue] = useState("");
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setValue("");
+      setError(false);
+    }
+  }, [open]);
+  const submit = () => {
+    const url = normalizeLink(value);
+    if (!url) return setError(true);
+    onInsert(url);
+    onClose();
+  };
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={t("mail.link.insert")}
+      width={420}
+      centered
+      testId="composer-link-sheet"
+      footer={
+        <Button onClick={submit} disabled={!value.trim()} className="w-full" data-testid="composer-link-insert">
+          {t("mail.link.add")}
+        </Button>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+        className="flex flex-col gap-2"
+      >
+        <TextField
+          label={t("mail.link.address")}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(false);
+          }}
+          error={error ? t("mail.link.invalid") : undefined}
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoFocus
+          data-testid="composer-link-input"
+        />
+        <p className="px-1 text-[13px] leading-snug text-text-tertiary">{t("mail.link.hint")}</p>
+      </form>
+    </Sheet>
   );
 }

@@ -103,11 +103,12 @@ export function resolveAddress(address: string) {
   return api.get<{ address: string; exists: boolean; internal: boolean; name: string | null }>(`/api/mail/resolve${qs({ address })}`);
 }
 
-export function useContacts(q: string) {
+/** Recipient search: mail correspondents and Vibex chat partners (Step 2.8); an empty query lists the recent ones. */
+export function useContacts(q: string, enabled = true) {
   return useQuery({
-    queryKey: ["mail", "contacts", q],
-    enabled: q.trim().length > 0,
-    queryFn: () => api.get<MailAddressDto[]>(`/api/mail/contacts${qs({ q })}`),
+    queryKey: ["mail", "contacts", q.trim()],
+    enabled,
+    queryFn: () => api.get<MailAddressDto[]>(`/api/mail/contacts${qs({ q: q.trim() })}`),
     staleTime: 60_000,
   });
 }

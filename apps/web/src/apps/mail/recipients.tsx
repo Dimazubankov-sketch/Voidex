@@ -50,7 +50,15 @@ function Chip({ address, onRemove, flagged }: { address: string; onRemove: () =>
   );
 }
 
-/** Address chips with autocomplete from your own correspondence and live VOIDEX lookups. */
+const initials = (name: string) =>
+  name
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("");
+
+/** Address chips with recipient search (mail correspondents, Vibex chats) and live VOIDEX lookups. */
 export function RecipientField({
   label,
   value,
@@ -74,8 +82,9 @@ export function RecipientField({
   const [text, setText] = useState("");
   const [focused, setFocused] = useState(false);
   const input = useRef<HTMLInputElement>(null);
-  const contacts = useContacts(text);
-  const suggestions = (contacts.data ?? []).filter((c) => !value.includes(c.address)).slice(0, 5);
+  // Step 2.8: the search opens with the field (recent people first) and narrows as you type.
+  const contacts = useContacts(text, focused);
+  const suggestions = (contacts.data ?? []).filter((c) => !value.includes(c.address)).slice(0, 6);
 
   const commit = (raw: string) => {
     const parts = raw
@@ -152,10 +161,16 @@ export function RecipientField({
                 e.preventDefault();
                 commit(s.address);
               }}
-              className="flex w-full flex-col items-start rounded-xl px-3 py-2 text-left hover:bg-surface-hover"
+              className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left hover:bg-surface-hover"
+              data-testid="recipient-suggestion"
             >
-              <span className="text-[14px] font-medium">{s.name ?? s.address}</span>
-              {s.name && <span className="text-[12px] text-text-secondary">{s.address}</span>}
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[12.5px] font-semibold uppercase text-primary-strong" aria-hidden>
+                {initials(s.name ?? s.address)}
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-[14px] font-medium">{s.name ?? s.address}</span>
+                {s.name && <span className="truncate text-[12px] text-text-secondary">{s.address}</span>}
+              </span>
             </button>
           ))}
         </div>

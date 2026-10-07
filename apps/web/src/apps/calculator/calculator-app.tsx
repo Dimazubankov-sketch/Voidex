@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RiFileList3Line, RiHistoryLine, RiQuestionLine } from "@remixicon/react";
+import { RiFileList3Line } from "@remixicon/react";
 import { mountCalculator, type CalculatorController } from "@voidex/calculator/voidex";
 import { APP_REGISTRY } from "@voidex/shared";
 import { CalculatorGlyph } from "@/brand/brand";
@@ -48,19 +48,12 @@ export function CalculatorApp() {
     <div className="flex min-h-0 flex-1 flex-col bg-[#fbfaff]" data-testid="calculator-app">
       <WindowHeader
         right={
-          <>
-            {narrow && (
-              <IconButton label={t("calc.solution")} active={solutionOpen} onClick={() => ctl.current?.toggleSolution()} data-testid="calc-solution-toggle">
-                <RiFileList3Line className="size-5" />
-              </IconButton>
-            )}
-            <IconButton label={t("calc.history")} onClick={() => ctl.current?.openHistory()} data-testid="calc-history-open">
-              <RiHistoryLine className="size-5" />
+          // Step 2.8: no History / "how to type" buttons in the title bar.
+          narrow && (
+            <IconButton label={t("calc.solution")} active={solutionOpen} onClick={() => ctl.current?.toggleSolution()} data-testid="calc-solution-toggle">
+              <RiFileList3Line className="size-5" />
             </IconButton>
-            <IconButton label={t("calc.help")} onClick={() => ctl.current?.openHelp()} data-testid="calc-help-open">
-              <RiQuestionLine className="size-5" />
-            </IconButton>
-          </>
+          )
         }
       >
         <span className="flex min-w-0 items-center gap-2 pl-1.5">

@@ -711,8 +711,6 @@ export const ja: Record<MessageKey, string> = {
   "vibex.call.audio": "音声通話",
   "vibex.call.video": "ビデオ通話",
   "vibex.call.unavailable": "通話はまだ利用できません。必要な接続サービスを開発中です。代わりにボイスメッセージか丸いビデオを送れます。",
-  "calc.history": "履歴",
-  "calc.help": "入力方法",
   "calc.solution": "ステップごとの解答",
   "lock.title": "ロック画面",
   "lock.faceId": "Face ID",
@@ -853,7 +851,6 @@ export const ja: Record<MessageKey, string> = {
   "home.removeConfirmText2": "この操作で選択したアプリが VOIDEX のデスクトップから削除されます。アプリのデータは削除されません。",
   "home.removedManyFromDesktop": "{n} 個のアプリをデスクトップから削除しました。アプリメニューには残っています。",
   "vibex.chat.delete": "削除",
-  "vibex.chat.deleted": "メッセージは削除されました",
   "vibex.chat.deleteTitle": "このメッセージを削除しますか？",
   "vibex.chat.deleteBody": "チャットの全員から削除されます。返信は残ります。",
   "vibex.circle.flip": "カメラを切り替え",
@@ -1103,4 +1100,14 @@ export const ja: Record<MessageKey, string> = {
   "notes.page.clearTitle": "最初のページを消去しますか？",
   "notes.page.clearBody": "最初のページは残り、空になります（文字と画像は削除）。",
   "notes.page.clearConfirm": "消去",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Delete slide",
+  "notes.pres.deleteSlideTitle": "Delete this slide?",
+  "notes.pres.deleteSlideBody": "The slide and everything on it will be deleted.",
+  "mail.link.insert": "Insert link",
+  "mail.link.add": "Insert",
+  "mail.link.address": "Link address",
+  "mail.link.invalid": "Check the address, for example voidex.su",
+  "mail.link.hint": "The link is added to the letter as text.",
+  // Step 2.8 (end)
 };

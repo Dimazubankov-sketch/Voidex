@@ -46,9 +46,10 @@ export function NotesHeader({ onBack, right }: { onBack?: () => void; right?: Re
 }
 
 /**
- * Bottom bar of the browser screens: the search field and, to its right, the
- * one "+" (new project / new note or presentation). Thumb-reachable on
- * phones (safe area aware), the same compact bar on PC.
+ * Bottom bar of the browser screens: one centred search field with the "+"
+ * (new project / new note or presentation) inside it, at its end, as the
+ * round button in Media's search. Thumb-reachable on phones (safe area
+ * aware), the same compact bar on PC.
  */
 export function BottomBar({
   query,
@@ -67,10 +68,10 @@ export function BottomBar({
 }) {
   const pop = usePopover();
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-[max(env(safe-area-inset-bottom),12px)] pt-6" data-testid="notes-bottom-bar">
-      <div className="pointer-events-auto flex w-full max-w-[560px] items-center gap-2.5">
+    <div className="vx-kb-bottom pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pt-6" data-testid="notes-bottom-bar">
+      <div className="pointer-events-auto w-full max-w-[560px]">
         <VoidexSearchField
-          className="min-w-0 flex-1 shadow-[0_6px_24px_rgba(20,20,40,0.12)]"
+          className="w-full shadow-[0_6px_24px_rgba(20,20,40,0.12)]"
           size="lg"
           name="voidex-notes-search"
           value={query}
@@ -78,20 +79,28 @@ export function BottomBar({
           placeholder={placeholder}
           aria-label={placeholder}
           testId="notes-search"
+          trailing={
+            onAdd || addMenu ? (
+              <button
+                ref={pop.anchor}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  // The button sits inside the field's <label>: keep the tap from focusing the input.
+                  e.preventDefault();
+                  if (addMenu) pop.toggle();
+                  else onAdd?.();
+                }}
+                aria-label={addLabel}
+                title={addLabel}
+                className="-mr-1 grid size-9 shrink-0 place-items-center rounded-full bg-primary text-white shadow-[0_4px_12px_rgba(108,92,255,0.35)] transition-transform active:scale-95"
+                data-testid="notes-add"
+              >
+                <RiAddLine className="size-5" />
+              </button>
+            ) : undefined
+          }
         />
-        {(onAdd || addMenu) && (
-          <button
-            ref={pop.anchor}
-            type="button"
-            onClick={() => (addMenu ? pop.toggle() : onAdd?.())}
-            aria-label={addLabel}
-            title={addLabel}
-            className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-white shadow-float transition-transform active:scale-95"
-            data-testid="notes-add"
-          >
-            <RiAddLine className="size-6" />
-          </button>
-        )}
         {addMenu && (
           <Popover open={pop.open} onClose={pop.close} anchor={pop.anchor} width={230} testId="notes-add-menu">
             <Menu items={addMenu} onDone={pop.close} />

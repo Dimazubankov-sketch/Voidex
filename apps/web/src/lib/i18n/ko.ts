@@ -711,8 +711,6 @@ export const ko: Record<MessageKey, string> = {
   "vibex.call.audio": "음성 통화",
   "vibex.call.video": "영상 통화",
   "vibex.call.unavailable": "통화는 아직 사용할 수 없습니다. 필요한 연결 서비스가 아직 개발 중입니다. 대신 음성 메시지나 원형 영상을 보내세요.",
-  "calc.history": "기록",
-  "calc.help": "입력 방법",
   "calc.solution": "단계별 풀이",
   "lock.title": "잠금 화면",
   "lock.faceId": "Face ID",
@@ -853,7 +851,6 @@ export const ko: Record<MessageKey, string> = {
   "home.removeConfirmText2": "이 작업은 선택한 앱을 VOIDEX 바탕화면에서 삭제합니다. 앱 데이터는 삭제되지 않습니다.",
   "home.removedManyFromDesktop": "바탕화면에서 앱 {n}개를 삭제했습니다. 앱 메뉴에는 남아 있습니다.",
   "vibex.chat.delete": "삭제",
-  "vibex.chat.deleted": "메시지가 삭제됨",
   "vibex.chat.deleteTitle": "이 메시지를 삭제할까요?",
   "vibex.chat.deleteBody": "채팅의 모든 사람에게서 삭제됩니다. 답장은 남습니다.",
   "vibex.circle.flip": "카메라 전환",
@@ -1103,4 +1100,14 @@ export const ko: Record<MessageKey, string> = {
   "notes.page.clearTitle": "첫 페이지를 비울까요?",
   "notes.page.clearBody": "첫 페이지는 남지만 비워집니다. 글과 그림이 삭제됩니다.",
   "notes.page.clearConfirm": "비우기",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Delete slide",
+  "notes.pres.deleteSlideTitle": "Delete this slide?",
+  "notes.pres.deleteSlideBody": "The slide and everything on it will be deleted.",
+  "mail.link.insert": "Insert link",
+  "mail.link.add": "Insert",
+  "mail.link.address": "Link address",
+  "mail.link.invalid": "Check the address, for example voidex.su",
+  "mail.link.hint": "The link is added to the letter as text.",
+  // Step 2.8 (end)
 };

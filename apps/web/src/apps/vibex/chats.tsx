@@ -56,9 +56,7 @@ function Preview({ chat }: { chat: VibexChatDto }) {
   if (!m) return <span className="text-text-tertiary">{chat.group ? t("vibex.group.created") : t("vibex.chat.empty", { name: chat.peer?.firstName ?? "" })}</span>;
   // Groups: who wrote it.
   const author = chat.group && !m.mine ? chat.group.members.find((x) => x.id === m.senderId)?.firstName : null;
-  const what = m.deleted
-    ? t("vibex.chat.deleted")
-    : m.kind === "voice"
+  const what = m.kind === "voice"
     ? t("vibex.voice.message")
     : m.kind === "circle"
       ? t("vibex.circle.message")
@@ -75,7 +73,7 @@ function Preview({ chat }: { chat: VibexChatDto }) {
     <>
       {m.mine && <span className="text-text-secondary">{t("vibex.chats.you")} </span>}
       {author && <span className="text-text-secondary">{author}: </span>}
-      {!m.deleted && m.kind === "text" && !m.text && m.files.length > 0 &&
+      {m.kind === "text" && !m.text && m.files.length > 0 &&
         (m.files.some((f) => f.kind === "image") ? (
           <RiImageLine className="-mt-0.5 mr-1 inline size-3.5 text-text-tertiary" />
         ) : (
@@ -457,9 +455,8 @@ function ReplyQuote({ reply, mine, nameOf }: { reply: NonNullable<VibexMessageDt
   const t = useT();
   const me = useSession((s) => s.user)!;
   const who = reply.senderId === me.id ? t("vibex.chats.you") : nameOf(reply.senderId);
-  const what = reply.deleted
-    ? t("vibex.chat.deleted")
-    : reply.kind === "voice"
+  const what =
+    reply.kind === "voice"
       ? t("vibex.voice.message")
       : reply.kind === "circle"
         ? t("vibex.circle.message")
@@ -511,7 +508,7 @@ function Bubble({
   const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(msg.createdAt));
   const mine = msg.mine;
   // Phones: press and hold a message for its actions (reply, delete mine); a mouse uses the buttons.
-  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && !msg.deleted && setActions(true), ms: 450 }).handlers;
+  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && setActions(true), ms: 450 }).handlers;
   const meta = (
     <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mine ? "text-white/75" : "text-text-tertiary")}>
       {time}
@@ -553,25 +550,6 @@ function Bubble({
       />
     </Sheet>
   );
-
-  // Step 2.5: deleted by its sender — a quiet placeholder, nothing else.
-  if (msg.deleted) {
-    return (
-      <div className={cx("flex w-full items-center", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-deleted="true">
-        <div
-          className={cx(
-            "flex items-center gap-1.5 rounded-[22px] border border-dashed px-3.5 py-2 text-[14px] italic",
-            mine ? "border-primary/35 text-primary/80" : "border-border-strong text-text-tertiary",
-          )}
-          data-testid="message-deleted"
-        >
-          <RiDeleteBinLine className="size-4 shrink-0 not-italic" aria-hidden />
-          {t("vibex.chat.deleted")}
-          <span className="ml-1 text-[11px] not-italic tabular-nums opacity-80">{time}</span>
-        </div>
-      </div>
-    );
-  }
 
   if (msg.kind === "circle" && msg.files[0]) {
     return (

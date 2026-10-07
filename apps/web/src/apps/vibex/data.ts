@@ -218,7 +218,7 @@ export function useSendMessage(chatId: string) {
   });
 }
 
-/** Step 2.5: the sender deletes their message for everyone (a placeholder stays). */
+/** The sender deletes their message for everyone; since Step 2.8 it disappears from the chat completely. */
 export function useDeleteMessage(chatId: string) {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/api/vibex/messages/${id}`),
@@ -229,7 +229,7 @@ export function useDeleteMessage(chatId: string) {
               ...d,
               pages: d.pages.map((p) => ({
                 ...p,
-                items: p.items.map((m) => (m.id === id ? { ...m, deleted: true, text: "", files: [], durationMs: null, replyTo: null, sharedPost: undefined } : m)),
+                items: p.items.filter((m) => m.id !== id).map((m) => (m.replyTo?.id === id ? { ...m, replyTo: null } : m)),
               })),
             }
           : d,

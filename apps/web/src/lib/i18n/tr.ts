@@ -711,8 +711,6 @@ export const tr: Record<MessageKey, string> = {
   "vibex.call.audio": "Sesli arama",
   "vibex.call.video": "Görüntülü arama",
   "vibex.call.unavailable": "Aramalar henüz kullanılamıyor: gereken bağlantı hizmeti hâlâ geliştiriliyor. Bu arada sesli mesaj veya yuvarlak video gönderebilirsin.",
-  "calc.history": "Geçmiş",
-  "calc.help": "Nasıl girilir",
   "calc.solution": "Adım adım çözüm",
   "lock.title": "Kilit ekranı",
   "lock.faceId": "Face ID",
@@ -853,7 +851,6 @@ export const tr: Record<MessageKey, string> = {
   "home.removeConfirmText2": "Bu işlem seçili uygulamaları VOIDEX masaüstünden kaldırır. Uygulama verileri silinmez.",
   "home.removedManyFromDesktop": "{n} uygulama masaüstünden kaldırıldı. Uygulama menüsünde duruyorlar.",
   "vibex.chat.delete": "Sil",
-  "vibex.chat.deleted": "Mesaj silindi",
   "vibex.chat.deleteTitle": "Bu mesaj silinsin mi?",
   "vibex.chat.deleteBody": "Sohbetteki herkes için silinir. Yanıtlar kalır.",
   "vibex.circle.flip": "Kamerayı değiştir",
@@ -1103,4 +1100,14 @@ export const tr: Record<MessageKey, string> = {
   "notes.page.clearTitle": "İlk sayfa temizlensin mi?",
   "notes.page.clearBody": "İlk sayfa kalır ama boşalır: metni ve resimleri kaldırılır.",
   "notes.page.clearConfirm": "Temizle",
+  // Step 2.8 (begin)
+  "notes.pres.deleteSlide": "Delete slide",
+  "notes.pres.deleteSlideTitle": "Delete this slide?",
+  "notes.pres.deleteSlideBody": "The slide and everything on it will be deleted.",
+  "mail.link.insert": "Insert link",
+  "mail.link.add": "Insert",
+  "mail.link.address": "Link address",
+  "mail.link.invalid": "Check the address, for example voidex.su",
+  "mail.link.hint": "The link is added to the letter as text.",
+  // Step 2.8 (end)
 };

@@ -31,9 +31,12 @@
 .vxc .math-preview{text-align:right;overflow-x:auto;overflow-y:hidden;max-width:100%;padding-top:6px;scrollbar-width:thin}
 .vxc .math-preview:empty{display:none}
 .vxc .math-preview .katex{font-size:1.15em}
-.vxc .mode-switch{padding:4px;background:#f1f0f5;display:flex;border-radius:17px;gap:4px;margin:12px 0;flex:none}
-.vxc .mode-switch button{flex:1;border-radius:14px;padding:10px 4px;color:#84808e;background:transparent;font-size:16px;font-weight:500}
-.vxc .mode-switch button.selected{background:#fff;color:var(--purple);box-shadow:0 2px 6px #21163910}
+.vxc .mode-switch{position:relative;padding:4px;background:#f1f0f5;display:flex;border-radius:17px;gap:4px;margin:12px 0;flex:none}
+/* Step 2.8: one white pill slides between the modes instead of jumping. */
+.vxc .mode-switch::before{content:"";position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 6px);border-radius:14px;background:#fff;box-shadow:0 2px 6px #21163910;transition:transform .34s cubic-bezier(.22,1,.36,1)}
+.vxc.science .mode-switch::before{transform:translateX(calc(100% + 4px))}
+.vxc .mode-switch button{position:relative;z-index:1;flex:1;border-radius:14px;padding:10px 4px;color:#84808e;background:transparent;font-size:16px;font-weight:500;transition:color .25s ease}
+.vxc .mode-switch button.selected{color:var(--purple)}
 /* keys shrink from their comfortable size down to a touch-safe minimum before the layout changes */
 .vxc .keypad{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(var(--key-min),var(--key-max));gap:var(--gap);flex:0 1 auto;min-height:0}
 .vxc .key{height:100%;background:var(--key);border-radius:17px;font-size:clamp(22px,4.2cqh,27px);font-weight:500}
