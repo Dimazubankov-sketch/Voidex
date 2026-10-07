@@ -13,6 +13,8 @@ COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 COPY packages/calculator/package.json packages/calculator/
 COPY packages/notes/package.json packages/notes/
+COPY packages/files/package.json packages/files/
+COPY packages/media/package.json packages/media/
 RUN pnpm install --frozen-lockfile
 COPY apps ./apps
 COPY packages ./packages
