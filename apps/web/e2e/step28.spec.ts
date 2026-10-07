@@ -199,10 +199,22 @@ test("Notes: \"+\" inside the centred search field in its colours; delete page i
   // A wide PC window shows both square pages side by side (no page to scroll to): the page flow is checked on phones.
   if (!isMobile(page)) return;
   await page.getByTestId("notes-page-next").click();
+  // Wait until the sideways scroll to page 2 has finished (during it the editor still counts page 1).
+  const scroller = page.getByTestId("notes-paper-scroller");
+  let last = -1;
+  await expect
+    .poll(async () => {
+      const now = await scroller.evaluate((e) => e.scrollLeft);
+      const settled = now > 100 && now === last;
+      last = now;
+      return settled;
+    }, { intervals: [150] })
+    .toBe(true);
   await expect(page.getByTestId("notes-page-indicator")).toHaveText(/^2 \//);
   await expect(page.getByTestId("notes-tool-delete-page")).toHaveAttribute("aria-label", "Удалить страницу");
   await page.getByTestId("notes-tool-delete-page").click();
-  await page.getByRole("button", { name: "Удалить", exact: true }).last().click();
+  await expect(page.getByRole("dialog").last()).toContainText("Удалить эту страницу?");
+  await page.getByTestId("confirm-action").last().click();
   await expect(page.getByTestId("notes-note-editor")).toHaveAttribute("data-pages", "1");
   // The first page is cleared, not deleted.
   await expect(page.getByTestId("notes-tool-delete-page")).toHaveAttribute("aria-label", "Очистить страницу");
