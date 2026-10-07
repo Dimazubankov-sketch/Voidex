@@ -74,7 +74,7 @@ test("ViCloud: a Settings section with its screens, true figures and no payment;
     if (id === "plans") {
       // Exactly 50 GB, 200 GB, 1 TB; choosing works, paying does not.
       await expect(page.getByTestId("vicloud-plan-list").last().getByRole("radio")).toHaveCount(3);
-      for (const [p, label] of [["50", "50 ГБ"], ["200", "200 ГБ"], ["1tb", "1 ТБ"]]) await expect(page.getByTestId(`vicloud-plan-${p}`).last()).toContainText(label);
+      for (const [p, label] of [["50", "50 ГБ"], ["200", "200 ГБ"], ["1tb", "1 ТБ"]] as const) await expect(page.getByTestId(`vicloud-plan-${p}`).last()).toContainText(label);
       await page.getByTestId("vicloud-plan-1tb").last().click();
       await expect(page.getByTestId("vicloud-plan-1tb").last()).toHaveAttribute("aria-checked", "true");
       await expect(page.getByTestId("vicloud-upgrade").last()).toBeDisabled();
