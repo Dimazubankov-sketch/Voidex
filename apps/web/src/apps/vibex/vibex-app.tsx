@@ -238,22 +238,48 @@ function MobileVibex() {
 
   return (
     <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-      <WindowHeader className="border-b bg-surface">
-        <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
-          <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
-        </button>
-        <span className="flex-1 truncate text-center text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
-        <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search">
-          <RiSearchLine className="size-5" />
-        </IconButton>
-      </WindowHeader>
+      {section === "me" ? (
+        // Step 2.8 profile (the user's reference): the Vibex logo (opens the menu), "Profile", a round search button.
+        <WindowHeader className="h-[60px] gap-3 px-4">
+          <button
+            type="button"
+            onClick={() => setDrawer(true)}
+            aria-label={t("vibex.nav.menu")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-surface shadow-[0_2px_10px_rgba(60,40,140,0.12)]"
+            data-testid="vibex-menu"
+          >
+            <VibexGlyph className="size-[26px]" />
+          </button>
+          <span className="flex-1 truncate text-center text-[19px] font-bold tracking-tight">{t(SECTION_TITLE[section])}</span>
+          <button
+            type="button"
+            onClick={() => go("people")}
+            aria-label={t("vibex.nav.search")}
+            title={t("vibex.nav.search")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-text shadow-[0_2px_10px_rgba(60,40,140,0.12)]"
+            data-testid="vibex-search"
+          >
+            <RiSearchLine className="size-[22px]" />
+          </button>
+        </WindowHeader>
+      ) : (
+        <WindowHeader className="border-b bg-surface">
+          <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
+            <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
+          </button>
+          <span className="flex-1 truncate text-center text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
+          <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search">
+            <RiSearchLine className="size-5" />
+          </IconButton>
+        </WindowHeader>
+      )}
 
       <div className="scroll-area flex-1">{section === "chats" ? <div className="pb-20"><ChatList /></div> : <Column><SectionBody section={section} /></Column>}</div>
       {section === "chats" && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
 
       {/* No safe-area padding here: the window frame already keeps the home-indicator area below the app.
           (Adding it again squeezed this 64px bar on iPhone and pushed the icons across the divider.) */}
-      <nav className="flex h-16 shrink-0 items-center justify-around border-t bg-surface px-2" data-testid="vibex-tabbar">
+      <nav className="flex h-[68px] shrink-0 items-center justify-around border-t bg-surface px-2" data-testid="vibex-tabbar">
         {tabs.map((item) => {
           const active = item.key !== "compose" && section === item.key;
           const Icon = active ? item.fill : item.line;
@@ -268,15 +294,16 @@ function MobileVibex() {
               className="relative flex flex-1 flex-col items-center gap-0.5 py-1.5 active:scale-95"
               data-testid={`vibex-tab-${item.key}`}
             >
-              <span className="relative">
+              {/* Step 2.8 (reference): the active tab sits on a soft violet pill. */}
+              <span className={cx("relative flex h-8 w-14 items-center justify-center rounded-full transition-colors", active && "bg-primary/10")}>
                 <Icon className={cx("size-6 transition-colors", active ? "text-primary" : "text-text-tertiary")} />
                 {badge > 0 && (
-                  <span className="absolute -right-2 -top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white" data-testid="vibex-unread">
+                  <span className="absolute right-1.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white" data-testid="vibex-unread">
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
               </span>
-              <span className={cx("text-[11px] font-medium", active ? "text-primary" : "text-text-tertiary")}>{t(item.label)}</span>
+              <span className={cx("text-[12px] font-medium", active ? "text-primary" : "text-text-secondary")}>{t(item.label)}</span>
             </button>
           );
         })}

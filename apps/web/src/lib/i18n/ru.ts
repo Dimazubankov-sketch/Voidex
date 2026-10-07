@@ -1223,5 +1223,17 @@ export const ru: Record<MessageKey, string> = {
   "storage.free": "Свободно",
   "storage.byApp": "Приложения",
   "storage.footer": "Данные, которые каждое приложение хранит на этом устройстве. Откройте приложение, чтобы сгрузить его.",
+  "vibex.count.posts.one": "запись",
+  "vibex.count.posts.few": "записи",
+  "vibex.count.posts.many": "записей",
+  "vibex.count.posts.other": "записи",
+  "vibex.count.followers.one": "подписчик",
+  "vibex.count.followers.few": "подписчика",
+  "vibex.count.followers.many": "подписчиков",
+  "vibex.count.followers.other": "подписчика",
+  "vibex.count.following.one": "подписка",
+  "vibex.count.following.few": "подписки",
+  "vibex.count.following.many": "подписок",
+  "vibex.count.following.other": "подписки",
   // Step 2.8 (end)
 };

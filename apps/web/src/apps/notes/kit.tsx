@@ -93,7 +93,7 @@ export function BottomBar({
                 }}
                 aria-label={addLabel}
                 title={addLabel}
-                className="-mr-1 grid size-9 shrink-0 place-items-center rounded-full bg-primary text-white shadow-[0_4px_12px_rgba(108,92,255,0.35)] transition-transform active:scale-95"
+                className="-mr-1 grid size-9 shrink-0 place-items-center rounded-full bg-[var(--search-bg)] text-[var(--search-icon)] transition hover:brightness-95 active:scale-95"
                 data-testid="notes-add"
               >
                 <RiAddLine className="size-5" />

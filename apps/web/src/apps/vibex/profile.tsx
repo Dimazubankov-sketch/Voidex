@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  RiAddCircleLine,
   RiCameraLine,
   RiChat1Line,
   RiCloseLine,
@@ -9,7 +10,9 @@ import {
   RiImageEditLine,
   RiLink,
   RiMapPin2Line,
-  RiMore2Fill,
+  RiImageAddLine,
+  RiMoreFill,
+  RiSettings4Line,
   RiUserAddLine,
   RiUserFollowLine,
   RiUserForbidLine,
@@ -19,7 +22,7 @@ import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexFileDto, ty
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
-import { useT } from "@/lib/i18n";
+import { useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { Button, EmptyState, Skeleton, Spinner } from "@/ui/controls";
 import { Sheet, toast } from "@/ui/overlays";
@@ -39,7 +42,7 @@ import {
 } from "./data";
 import { Lightbox, VibexImage, VibexVideoTile } from "./media";
 import { PhotoEditor, type PhotoShape } from "./photo-editor";
-import { ComposerPrompt, FeedEmpty, PostList } from "./posts";
+import { FeedEmpty, PostList } from "./posts";
 import { useVibex } from "./store";
 
 /** Soft VOIDEX cover when the person has none (no stock photos): milk and two violets. */
@@ -76,9 +79,25 @@ function Pill({ icon, children, onClick, tone = "outline", testId, disabled }: {
   );
 }
 
-/** Voyzen profile: cover, avatar over it, actions; name, email, bio, site, city; counters. */
+/** Counter words with the language's plural rules ("1 запись", "5 записей"). */
+function useCount() {
+  const t = useT();
+  const lang = useLanguage();
+  const rules = new Intl.PluralRules(lang);
+  return (what: "posts" | "followers" | "following", n: number) => t(`vibex.count.${what}.${rules.select(n) as "one" | "few" | "many" | "other"}` as MessageKey);
+}
+
+/**
+ * Step 2.8 profile (the user's reference): one card with a full-width cover
+ * (camera button to change it on my own profile), the avatar in a light ring
+ * across the cover's edge, "Edit" and a round "…" beside it; then name,
+ * email, city (and bio, site), and the three counters in one row with thin
+ * dividers.
+ */
 function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: () => void }) {
   const t = useT();
+  const count = useCount();
+  const go = useVibex((s) => s.go);
   const { person } = profile;
   const openChat = useVibex((s) => s.openChat);
   const follow = useFollow(person.id);
@@ -87,6 +106,10 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
   const [busy, setBusy] = useState(false);
   const [list, setList] = useState<"followers" | "following" | null>(null);
   const [menu, setMenu] = useState(false);
+  const [photo, setPhoto] = useState<{ file: File; shape: PhotoShape } | null>(null);
+  const [uploading, setUploading] = useState<PhotoShape | null>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
   const blocked = !!me?.settings.privacy.blocked.includes(person.id);
 
   const write = async () => {
@@ -100,20 +123,71 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
       setBusy(false);
     }
   };
+  const pick = (shape: PhotoShape) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!/^image\/(jpeg|png|webp|gif|heic|heif)$/.test(file.type) && !/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(file.name)) {
+      toast({ title: t("error.attachment_type_not_allowed"), tone: "danger" });
+      return;
+    }
+    setPhoto({ file, shape });
+  };
+  const savePhoto = async (shape: PhotoShape, blob: Blob) => {
+    setUploading(shape);
+    try {
+      if (shape === "circle") await uploadAvatar(blob);
+      else await uploadCover(blob);
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const round = "flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-text shadow-[0_2px_10px_rgba(60,40,140,0.12)] transition hover:bg-surface-hover";
+  const menuItem = "flex h-11 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[14.5px] hover:bg-surface-hover";
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-tile" data-testid="profile-header">
-      <Cover person={person} version={profile.coverVersion} className="h-32 sm:h-40" />
-      <div className="px-5 pb-4">
-        <div className="relative -mt-10 flex flex-wrap items-end justify-between gap-2">
-          <span className="inline-flex rounded-full border-4 border-surface bg-surface">
-            <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={84} />
+    <div className="rounded-[28px] border border-border/60 bg-surface shadow-tile" data-testid="profile-header">
+      <div className="relative overflow-hidden rounded-t-[27px]">
+        <Cover person={person} version={profile.coverVersion} className="h-[118px] sm:h-[168px]" />
+        {profile.me && (
+          <button
+            type="button"
+            onClick={() => coverInput.current?.click()}
+            aria-label={t("vibex.profile.changeCover")}
+            title={t("vibex.profile.changeCover")}
+            className="absolute right-3 top-3 flex size-11 items-center justify-center rounded-full bg-white/80 text-[#3b3355] shadow-[0_2px_10px_rgba(60,40,140,0.15)] backdrop-blur transition hover:bg-white"
+            data-testid="profile-cover-camera"
+          >
+            {uploading === "wide" ? <Spinner size={16} /> : <RiCameraLine className="size-5" />}
+          </button>
+        )}
+      </div>
+      <div className="relative -mt-6 rounded-[24px] bg-surface px-5 pb-5 sm:px-6">
+        <div className="flex items-end justify-between gap-3">
+          <span className="relative -mt-[38px] inline-flex shrink-0 rounded-full bg-surface p-[5px] shadow-[0_0_0_1px_rgba(108,92,255,0.12),0_10px_28px_-10px_rgba(80,60,200,0.45)]" data-testid="profile-avatar">
+            <span className="block size-[96px] sm:size-[108px] [&>*]:!size-full">
+              <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={104} />
+            </span>
+            {uploading === "circle" && (
+              <span className="absolute inset-[5px] grid place-items-center rounded-full bg-black/30">
+                <Spinner size={18} />
+              </span>
+            )}
           </span>
-          <div className="mb-1 flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 pb-0.5">
             {profile.me ? (
-              <Pill icon={<RiEditLine className="size-4" />} onClick={onEdit} testId="profile-edit">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="flex h-11 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#9a86ff,#7a62f5)] px-5 text-[15px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(108,92,255,0.7)] transition hover:brightness-105"
+                data-testid="profile-edit"
+              >
+                <RiEditLine className="size-[18px]" />
                 {t("vibex.profile.edit")}
-              </Pill>
+              </button>
             ) : (
               <>
                 {profile.followed ? (
@@ -130,18 +204,32 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                     {t("vibex.person.write")}
                   </Pill>
                 )}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setMenu((m) => !m)}
-                    aria-label={t("vibex.profile.more")}
-                    className="flex size-9 items-center justify-center rounded-full border border-border bg-surface text-text-secondary hover:bg-surface-hover"
-                    data-testid="profile-more"
-                  >
-                    <RiMore2Fill className="size-4" />
-                  </button>
-                  {menu && (
-                    <div className="vx-glass-strong absolute right-0 top-11 z-10 w-48 rounded-2xl p-1.5" role="menu">
+              </>
+            )}
+            <div className="relative">
+              <button type="button" onClick={() => setMenu((m) => !m)} aria-label={t("vibex.profile.more")} className={round} data-testid="profile-more">
+                <RiMoreFill className="size-5" />
+              </button>
+              {menu && (
+                <>
+                  <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setMenu(false)} />
+                  <div className="vx-glass-strong absolute right-0 top-12 z-20 w-56 rounded-2xl p-1.5" role="menu" data-testid="profile-menu">
+                    {profile.me ? (
+                      <>
+                        <button type="button" role="menuitem" onClick={() => (setMenu(false), coverInput.current?.click())} className={menuItem} data-testid="profile-menu-cover">
+                          <RiImageEditLine className="size-[18px] text-text-secondary" />
+                          {t("vibex.profile.changeCover")}
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => (setMenu(false), avatarInput.current?.click())} className={menuItem} data-testid="profile-menu-avatar">
+                          <RiCameraLine className="size-[18px] text-text-secondary" />
+                          {t("vibex.profile.changeAvatar")}
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => (setMenu(false), go("settings"))} className={menuItem} data-testid="profile-menu-settings">
+                          <RiSettings4Line className="size-[18px] text-text-secondary" />
+                          {t("vibex.nav.settings")}
+                        </button>
+                      </>
+                    ) : (
                       <button
                         type="button"
                         role="menuitem"
@@ -151,60 +239,143 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                           settings.mutate({ privacy: { blocked: blocked ? ids.filter((x) => x !== person.id) : [...ids, person.id] } });
                           if (!blocked && profile.followed) follow.mutate(false);
                         }}
-                        className="flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[14px] text-danger hover:bg-danger-soft"
+                        className={cx(menuItem, "text-danger hover:bg-danger-soft")}
                         data-testid="profile-block"
                       >
-                        <RiUserForbidLine className="size-4" />
+                        <RiUserForbidLine className="size-[18px]" />
                         {blocked ? t("vibex.settings.unblock") : t("vibex.profile.block")}
                       </button>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div className="mt-3">
-          <h1 className="text-[20px] font-bold text-text" data-testid="profile-name">
+          <h1 className="break-words text-[24px] font-bold leading-tight tracking-tight text-text" data-testid="profile-name">
             {person.name}
           </h1>
-          <p className="text-[14px] text-text-secondary" data-selectable data-testid="profile-email">
+          <p className="mt-0.5 break-all text-[15px] text-text-secondary" data-selectable data-testid="profile-email">
             {person.address}
           </p>
-          {profile.followsMe && <span className="mt-1 inline-block rounded-full bg-surface-secondary px-2 py-0.5 text-[12px] text-text-secondary">{t("vibex.profile.followsYou")}</span>}
+          {profile.followsMe && <span className="mt-1.5 inline-block rounded-full bg-surface-secondary px-2.5 py-0.5 text-[12px] text-text-secondary">{t("vibex.profile.followsYou")}</span>}
+          {profile.city && (
+            <p className="mt-2 flex items-center gap-1.5 text-[15px] text-text-secondary" data-testid="profile-city">
+              <RiMapPin2Line className="size-[18px] shrink-0" /> <span className="min-w-0 truncate">{profile.city}</span>
+            </p>
+          )}
+          {profile.website && (
+            <a href={siteHref(profile.website)} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 flex w-fit max-w-full items-center gap-1.5 text-[14.5px] text-primary hover:underline" data-testid="profile-website">
+              <RiLink className="size-[18px] shrink-0" /> <span className="truncate">{profile.website.replace(/^https?:\/\//i, "")}</span>
+            </a>
+          )}
+          {profile.bio && (
+            <p className="mt-2.5 whitespace-pre-wrap break-words text-[14.5px] text-text" data-selectable data-testid="profile-bio">
+              {profile.bio}
+            </p>
+          )}
         </div>
-        {profile.bio && (
-          <p className="mt-2.5 whitespace-pre-wrap break-words text-[14.5px] text-text" data-selectable data-testid="profile-bio">
-            {profile.bio}
-          </p>
-        )}
-        {(profile.website || profile.city) && (
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px] text-text-secondary">
-            {profile.city && (
-              <span className="flex items-center gap-1" data-testid="profile-city">
-                <RiMapPin2Line className="size-4" /> {profile.city}
-              </span>
-            )}
-            {profile.website && (
-              <a href={siteHref(profile.website)} target="_blank" rel="noopener noreferrer nofollow" className="flex items-center gap-1 text-primary hover:underline" data-testid="profile-website">
-                <RiLink className="size-4" /> {profile.website.replace(/^https?:\/\//i, "")}
-              </a>
-            )}
+        <div className="mt-4 grid grid-cols-3" data-testid="profile-stats">
+          <div className="flex min-w-0 flex-col items-center px-1">
+            <span className="text-[22px] font-bold leading-tight tabular-nums text-text" data-testid="profile-posts-count">{profile.posts}</span>
+            <span className="max-w-full truncate text-[13.5px] text-text-secondary">{count("posts", profile.posts)}</span>
           </div>
-        )}
-        <div className="mt-3 flex gap-5 text-[14px] text-text-secondary">
-          <span>
-            <span className="font-bold text-text" data-testid="profile-posts-count">{profile.posts}</span> {t("vibex.profile.postsCount")}
-          </span>
-          <button type="button" onClick={() => setList("followers")} className="hover:text-text" data-testid="profile-followers">
-            <span className="font-bold text-text" data-testid="profile-followers-count">{profile.followers}</span> {t("vibex.profile.followers")}
+          <button type="button" onClick={() => setList("followers")} className="flex min-w-0 flex-col items-center border-l border-border px-1 transition hover:opacity-80" data-testid="profile-followers">
+            <span className="text-[22px] font-bold leading-tight tabular-nums text-text" data-testid="profile-followers-count">{profile.followers}</span>
+            <span className="max-w-full truncate text-[13.5px] text-text-secondary">{count("followers", profile.followers)}</span>
           </button>
-          <button type="button" onClick={() => setList("following")} className="hover:text-text" data-testid="profile-following">
-            <span className="font-bold text-text">{profile.following}</span> {t("vibex.profile.followingCount")}
+          <button type="button" onClick={() => setList("following")} className="flex min-w-0 flex-col items-center border-l border-border px-1 transition hover:opacity-80" data-testid="profile-following">
+            <span className="text-[22px] font-bold leading-tight tabular-nums text-text">{profile.following}</span>
+            <span className="max-w-full truncate text-[13.5px] text-text-secondary">{count("following", profile.following)}</span>
           </button>
         </div>
       </div>
       <FollowSheet userId={person.id} which={list} onClose={() => setList(null)} />
+      {profile.me && (
+        <>
+          <input ref={coverInput} type="file" accept="image/*" className="hidden" onChange={pick("wide")} data-testid="profile-cover-file" />
+          <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={pick("circle")} data-testid="profile-avatar-file" />
+          {createPortal(
+            <AnimatePresence>
+              {photo && (
+                <PhotoEditor
+                  key="photo"
+                  file={photo.file}
+                  shape={photo.shape}
+                  onCancel={() => setPhoto(null)}
+                  onConfirm={(blob) => {
+                    const shape = photo.shape;
+                    setPhoto(null);
+                    void savePhoto(shape, blob);
+                  }}
+                />
+              )}
+            </AnimatePresence>,
+            document.body,
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Profile tabs (reference): a card of three segments; the active one violet with a violet line under it. */
+function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+  const t = useT();
+  const tabs: [Tab, MessageKey][] = [
+    ["posts", "vibex.profile.posts"],
+    ["reposts", "vibex.profile.reposts"],
+    ["media", "vibex.profile.media"],
+  ];
+  return (
+    <div className="sticky top-0 z-10 flex items-stretch rounded-[22px] border border-border/60 bg-surface/95 p-1.5 shadow-tile backdrop-blur" role="tablist" data-testid="profile-tabs">
+      {tabs.map(([k, label], i) => {
+        const on = tab === k;
+        const divider = i > 0 && tab !== k && tab !== tabs[i - 1]![0];
+        return (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => onTab(k)}
+            className={cx(
+              "relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-[16px] px-1 text-[15px] font-semibold transition-colors",
+              on ? "bg-primary/[0.08] text-primary" : "text-text-secondary hover:text-text",
+              divider && "before:absolute before:inset-y-3 before:left-0 before:w-px before:bg-border",
+            )}
+            data-testid={`profile-tab-${k}`}
+          >
+            <span className="truncate">{t(label)}</span>
+            {on && <span className="absolute inset-x-[18%] -bottom-1.5 h-[3px] rounded-full bg-primary" aria-hidden />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** "What's new?" on my profile (reference): small avatar, the field, add picture, round "+". */
+function ProfileComposer() {
+  const t = useT();
+  const me = useSession((s) => s.user)!;
+  const compose = useVibex((s) => s.compose);
+  return (
+    <div className="flex items-center gap-2.5 rounded-[22px] border border-border/60 bg-surface p-2.5 shadow-tile" data-testid="profile-composer">
+      <span className="shrink-0 rounded-full p-[3px] shadow-[0_0_0_1px_rgba(108,92,255,0.1),0_6px_16px_-8px_rgba(80,60,200,0.55)]">
+        <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={38} />
+      </span>
+      <button type="button" onClick={() => compose(true)} className="flex h-12 min-w-0 flex-1 items-center rounded-[16px] bg-surface-secondary px-4 text-left text-[15px] text-text-tertiary transition hover:bg-surface-hover" data-testid="composer-prompt">
+        <span className="truncate">{t("vibex.composer.placeholder")}</span>
+      </button>
+      <button type="button" onClick={() => compose(true)} aria-label={t("vibex.composer.addPhoto")} title={t("vibex.composer.addPhoto")} className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-surface-hover" data-testid="profile-composer-image">
+        <RiImageAddLine className="size-6" />
+      </button>
+      <span className="h-7 w-px shrink-0 bg-border" aria-hidden />
+      <button type="button" onClick={() => compose(true)} aria-label={t("vibex.newPost")} title={t("vibex.newPost")} className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-surface-hover" data-testid="profile-composer-new">
+        <RiAddCircleLine className="size-7" />
+      </button>
     </div>
   );
 }
@@ -507,37 +678,17 @@ export function PersonPage({ id }: { id: string }) {
   const all = posts.data?.pages.flatMap((p) => p.items) ?? [];
   const shown = all.filter((p) => (tab === "posts" ? p.kind === "post" : p.kind === "repost"));
   const filtered = posts.data ? { ...posts, data: { ...posts.data, pages: [{ items: shown, next: null }] } } : posts;
-  const tabs: [Tab, Parameters<typeof t>[0]][] = [
-    ["posts", "vibex.profile.posts"],
-    ["reposts", "vibex.profile.reposts"],
-    ["media", "vibex.profile.media"],
-  ];
   return (
     <div className="flex flex-col gap-3" data-testid="person-page">
-      {profile.data ? <ProfileHeader profile={profile.data} onEdit={() => setEditing(true)} /> : <Skeleton className="h-[280px] rounded-2xl" />}
-      <div className="sticky top-0 z-10 flex rounded-2xl border border-border bg-surface/95 backdrop-blur" role="tablist">
-        {tabs.map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => setTab(k)}
-            className={cx("relative flex-1 py-3 text-[14px] font-semibold transition", tab === k ? "text-text" : "text-text-secondary hover:text-text")}
-            data-testid={`profile-tab-${k}`}
-          >
-            {t(label)}
-            {tab === k && <span className="absolute inset-x-6 bottom-0 h-1 rounded-full bg-primary" />}
-          </button>
-        ))}
-      </div>
+      {profile.data ? <ProfileHeader profile={profile.data} onEdit={() => setEditing(true)} /> : <Skeleton className="h-[300px] rounded-[28px]" />}
+      <ProfileTabs tab={tab} onTab={setTab} />
       {profile.data && !profile.data.visible && !profile.data.me ? (
         <EmptyState icon={<RiUserForbidLine className="size-7" />} title={t("vibex.profile.private")} />
       ) : tab === "media" ? (
         <MediaTab userId={id} />
       ) : (
         <>
-          {profile.data?.me && tab === "posts" && <ComposerPrompt />}
+          {profile.data?.me && tab === "posts" && <ProfileComposer />}
           <PostList
             query={{ ...filtered, hasNextPage: posts.hasNextPage, isFetchingNextPage: posts.isFetchingNextPage, fetchNextPage: posts.fetchNextPage }}
             empty={<FeedEmpty mine={profile.data?.me} reposts={tab === "reposts"} />}

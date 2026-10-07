@@ -1208,5 +1208,17 @@ export const fr: Record<MessageKey, string> = {
   "storage.free": "Free",
   "storage.byApp": "Apps",
   "storage.footer": "Data each app keeps on this device. Open an app to offload it.",
+  "vibex.count.posts.one": "post",
+  "vibex.count.posts.few": "posts",
+  "vibex.count.posts.many": "posts",
+  "vibex.count.posts.other": "posts",
+  "vibex.count.followers.one": "follower",
+  "vibex.count.followers.few": "followers",
+  "vibex.count.followers.many": "followers",
+  "vibex.count.followers.other": "followers",
+  "vibex.count.following.one": "following",
+  "vibex.count.following.few": "following",
+  "vibex.count.following.many": "following",
+  "vibex.count.following.other": "following",
   // Step 2.8 (end)
 };
