@@ -22,6 +22,8 @@ export interface FilesSession extends FilesAdapter {
   /** A .txt / .prsn that arrived from outside (a Vibex / Mail attachment, a device file). */
   importFile(name: string, text: string): Promise<OpenFile>;
   count(): number;
+  /** Step 2.8: bytes these files take on this device (Settings → Хранилище Voidex). */
+  bytes(): number;
   /** Files and their contents right now (the attach chooser). */
   peek(): { entry: Entry; data: FileData }[];
   /** The file to open when the Files window starts (it arrived before the window existed). */
@@ -116,6 +118,7 @@ function createFilesSession(): FilesSession {
       return f;
     },
     count: () => files.size,
+    bytes: () => [...files.values()].reduce((n, f) => n + f.entry.size, 0),
     peek: () => [...files.values()].filter((f) => !f.entry.trashed),
     takePending() {
       const id = pending;
@@ -131,12 +134,15 @@ export interface MediaSession extends MediaAdapter {
   dispose(): void;
   /** What is in the library right now (the attach chooser). */
   peek(): MediaLibrary;
+  /** Step 2.8: bytes of the pictures and videos added this session (Settings → Хранилище Voidex). */
+  bytes(): number;
 }
 
 function createMediaSession(): MediaSession {
   let library: MediaLibrary = { version: 1, items: [], albums: [] };
   let revision = 0;
   const urls: string[] = [];
+  let bytes = 0;
   return {
     async load() {
       return { data: structuredClone(library), revision };
@@ -151,12 +157,15 @@ function createMediaSession(): MediaSession {
       // Session preview only: the picture stays on this device until the cloud exists.
       const url = URL.createObjectURL(file);
       urls.push(url);
+      bytes += file.size;
       return url;
     },
     peek: () => library,
+    bytes: () => bytes,
     dispose() {
       for (const u of urls) URL.revokeObjectURL(u);
       urls.length = 0;
+      bytes = 0;
     },
   };
 }

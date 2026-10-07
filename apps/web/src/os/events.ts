@@ -40,6 +40,8 @@ function handle(event: ServerEvent) {
       // One banner per message even if several streams were briefly open.
       if (seenMessages.has(event.messageId)) break;
       seenMessages.add(event.messageId);
+      // Step 2.8: Settings → Apps → Mail → Notifications off: no banner, no sound (the Notification Center still lists it).
+      if (session.user?.preferences.apps?.mail?.notifications === false) break;
       const prefs = session.user?.preferences.notifications;
       if (prefs?.newMailBanner) {
         toast({
@@ -60,6 +62,7 @@ function handle(event: ServerEvent) {
       seenMessages.add(event.messageId);
       // No banner for a chat that is already on screen.
       if (visibleChats.has(event.conversationId) && document.visibilityState === "visible") break;
+      if (session.user?.preferences.apps?.vibex?.notifications === false) break;
       const prefs = session.user?.preferences.notifications;
       if (prefs?.newMailBanner) {
         toast({

@@ -6,6 +6,7 @@ import { useT } from "@/lib/i18n";
 import { cx } from "@/lib/cx";
 import { Button, Spinner } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
+import { AppLockGate } from "./app-lock";
 import { WindowContext, type WindowApi } from "./window-context";
 import { gestureBarAction } from "./gesture-bar";
 import { foregroundId, useWM, type AppWindow, type Rect } from "./window-manager";
@@ -92,9 +93,11 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
   const content = (
     <WindowContext.Provider value={api}>
       <AppBoundary>
-        <Suspense fallback={<AppLoading />}>
-          <App />
-        </Suspense>
+        <AppLockGate appId={win.appId} windowId={win.id}>
+          <Suspense fallback={<AppLoading />}>
+            <App />
+          </Suspense>
+        </AppLockGate>
       </AppBoundary>
     </WindowContext.Provider>
   );

@@ -477,9 +477,13 @@ export class AccountService {
   async updatePreferences(userId: string, patch: z.infer<typeof PreferencesPatchSchema>) {
     const current = await this.ctx.db.query.userPreferences.findFirst({ where: eq(userPreferences.userId, userId) });
     const base = mergePreferences(current?.data);
+    const apps = { ...base.apps };
+    for (const [id, p] of Object.entries(patch.apps ?? {})) apps[id as keyof typeof apps] = { ...apps[id as keyof typeof apps], ...p };
     const next: Preferences = {
       notifications: { ...base.notifications, ...patch.notifications },
       workspace: { ...base.workspace, ...patch.workspace },
+      vicloud: { ...base.vicloud, ...patch.vicloud },
+      apps,
     };
     if (patch.workspace?.layout) {
       // The server keeps the desktop consistent with what is really installed.
@@ -512,6 +516,8 @@ export function mergePreferences(data: Partial<Preferences> | undefined | null):
   return {
     notifications: { ...DEFAULT_PREFERENCES.notifications, ...data?.notifications },
     workspace: { ...DEFAULT_PREFERENCES.workspace, ...data?.workspace },
+    vicloud: { ...DEFAULT_PREFERENCES.vicloud, ...data?.vicloud },
+    apps: { ...data?.apps },
   };
 }
 

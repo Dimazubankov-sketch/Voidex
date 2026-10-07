@@ -97,12 +97,31 @@ export const PhoneChangeConfirmSchema = PhoneVerifySchema;
 
 export const ApprovalDecisionSchema = z.object({ decision: z.enum(["approve", "deny"]) });
 
+/**
+ * Step 2.8: ViCloud choices. ViCloud is not running yet: these are kept with
+ * the account and take effect when it starts; nothing is uploaded today.
+ */
+export const ViCloudPrefsSchema = z.object({
+  syncFiles: z.boolean(),
+  syncMedia: z.boolean(),
+  backup: z.boolean(),
+  backupMedia: z.boolean(),
+  backupCellular: z.boolean(),
+});
+export type ViCloudPrefs = z.infer<typeof ViCloudPrefsSchema>;
+/** Step 2.8: per-app settings (Settings → Apps): ask for the code-password / Face ID on open, banners and sound. */
+export const AppPrefsSchema = z.object({ lock: z.boolean(), notifications: z.boolean() });
+export type AppPrefs = z.infer<typeof AppPrefsSchema>;
+export const DEFAULT_APP_PREFS: AppPrefs = { lock: false, notifications: true };
+
 export const PreferencesSchema = z.object({
   notifications: z.object({
     newMailBanner: z.boolean(),
     showPreview: z.boolean(),
     sound: z.boolean(),
   }),
+  vicloud: ViCloudPrefsSchema,
+  apps: z.partialRecord(z.enum(APP_IDS as [string, ...string[]]), AppPrefsSchema.partial()),
   workspace: z.object({
     appOrder: z.array(z.enum(APP_IDS as [string, ...string[]])).max(100),
     /** Desktop arrangement, folders, wallpaper (see workspace.ts). Absent until first customised. */
@@ -113,9 +132,14 @@ export type Preferences = z.infer<typeof PreferencesSchema>;
 export const PreferencesPatchSchema = z.object({
   notifications: PreferencesSchema.shape.notifications.partial().optional(),
   workspace: PreferencesSchema.shape.workspace.partial().optional(),
+  vicloud: ViCloudPrefsSchema.partial().optional(),
+  /** One app's settings, merged into what is stored. */
+  apps: PreferencesSchema.shape.apps.optional(),
 });
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: { newMailBanner: true, showPreview: true, sound: false },
+  vicloud: { syncFiles: true, syncMedia: true, backup: true, backupMedia: true, backupCellular: false },
+  apps: {},
   workspace: { appOrder: ["mail", "settings"] },
 };
 

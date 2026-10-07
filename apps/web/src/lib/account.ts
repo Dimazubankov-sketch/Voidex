@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import type { MeDto, Preferences } from "@voidex/shared";
+import type { AppId, MeDto, Preferences } from "@voidex/shared";
 import { api, rawPost } from "./api";
 import { qk, queryClient } from "./query";
 import { useSession } from "./session";
@@ -48,10 +48,16 @@ export function useUpdateProfile() {
   });
 }
 
+export interface PreferencesPatch {
+  notifications?: Partial<Preferences["notifications"]>;
+  workspace?: Partial<Preferences["workspace"]>;
+  vicloud?: Partial<Preferences["vicloud"]>;
+  apps?: Preferences["apps"];
+}
+
 export function useUpdatePreferences() {
   return useMutation({
-    mutationFn: (patch: { notifications?: Partial<Preferences["notifications"]>; workspace?: Partial<Preferences["workspace"]> }) =>
-      api.patch<Preferences>("/api/preferences", patch),
+    mutationFn: (patch: PreferencesPatch) => api.patch<Preferences>("/api/preferences", patch),
     onMutate: (patch) => {
       // Optimistic: toggles respond instantly, server confirms (and syncs other devices).
       const user = useSession.getState().user;
@@ -61,6 +67,13 @@ export function useUpdatePreferences() {
         preferences: {
           notifications: { ...user.preferences.notifications, ...patch.notifications },
           workspace: { ...user.preferences.workspace, ...patch.workspace },
+          vicloud: { ...user.preferences.vicloud, ...patch.vicloud },
+          apps: Object.fromEntries(
+            [...new Set([...Object.keys(user.preferences.apps ?? {}), ...Object.keys(patch.apps ?? {})])].map((id) => [
+              id,
+              { ...user.preferences.apps?.[id as AppId], ...patch.apps?.[id as AppId] },
+            ]),
+          ),
         },
       });
       return { previous: user };

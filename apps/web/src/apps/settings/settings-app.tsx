@@ -21,6 +21,7 @@ import {
   
   
   RiHome5Line,
+  RiHardDrive2Line,
 } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { countryName, useLanguage, useT, type MessageKey } from "@/lib/i18n";
@@ -39,6 +40,9 @@ import { AboutSection, NotificationsSection, PrivacySection } from "./sections/s
 import { PersonalizationSection } from "./sections/personalization";
 import { WallpapersSection, setNextWallpaperTab } from "./sections/wallpapers";
 import { VoidexSearchField } from "@/ui/search-field";
+import { ViCloudBackupSection, ViCloudPlansSection, ViCloudPrivacySection, ViCloudSection, ViCloudStorageSection, ViCloudSyncSection, VICLOUD_ICON } from "./sections/vicloud";
+import { APPS_ICON, AppSettingsSection, AppsSection } from "./sections/apps";
+import { StorageSection } from "./sections/storage";
 
 export type SectionId =
   | "account"
@@ -56,7 +60,16 @@ export type SectionId =
   | "lock"
   | "personalization"
   | "wallpapers"
-  | "about";
+  | "about"
+  | "vicloud"
+  | "vicloud-plans"
+  | "vicloud-storage"
+  | "vicloud-backup"
+  | "vicloud-sync"
+  | "vicloud-privacy"
+  | "apps"
+  | "app"
+  | "storage";
 
 export interface SectionProps {
   navigate: (id: SectionId) => void;
@@ -68,7 +81,10 @@ interface SectionDef {
   hint?: MessageKey;
   icon: ComponentType<{ className?: string }>;
   Component: ComponentType<SectionProps>;
-  group: "account" | "app" | "privacy";
+  /** "sub": a page opened from another section (not listed on the home page). */
+  group: "account" | "services" | "app" | "privacy" | "sub";
+  /** Step 2.8: a picture tile (ViCloud, Apps) instead of the violet icon tile. */
+  image?: string;
   /** Personal / security data: opening it asks for the code-password or Face ID (when set). */
   sensitive?: boolean;
 }
@@ -81,6 +97,15 @@ const SECTIONS: SectionDef[] = [
   { id: "phone", label: "settings.phone", icon: RiPhoneLine, Component: PhoneSection, group: "account", sensitive: true },
   { id: "email", label: "settings.email", icon: RiMailLine, Component: EmailSection, group: "account" },
   { id: "devices", label: "settings.devices", hint: "settings.hint.devices", icon: RiDeviceLine, Component: DevicesSection, group: "account", sensitive: true },
+  { id: "vicloud", label: "settings.vicloud", hint: "settings.hint.vicloud", icon: RiHardDrive2Line, image: VICLOUD_ICON, Component: ViCloudSection, group: "services" },
+  { id: "apps", label: "settings.apps", hint: "settings.hint.apps", icon: RiLayoutGridLine, image: APPS_ICON, Component: AppsSection, group: "services" },
+  { id: "storage", label: "settings.storage", hint: "settings.hint.storage", icon: RiHardDrive2Line, Component: StorageSection, group: "services" },
+  { id: "vicloud-plans", label: "vicloud.plans", icon: RiHardDrive2Line, image: VICLOUD_ICON, Component: ViCloudPlansSection, group: "sub" },
+  { id: "vicloud-storage", label: "vicloud.manage", icon: RiHardDrive2Line, image: VICLOUD_ICON, Component: ViCloudStorageSection, group: "sub" },
+  { id: "vicloud-backup", label: "vicloud.backup", icon: RiHardDrive2Line, image: VICLOUD_ICON, Component: ViCloudBackupSection, group: "sub" },
+  { id: "vicloud-sync", label: "vicloud.sync", icon: RiHardDrive2Line, image: VICLOUD_ICON, Component: ViCloudSyncSection, group: "sub" },
+  { id: "vicloud-privacy", label: "vicloud.privacy", icon: RiHardDrive2Line, image: VICLOUD_ICON, Component: ViCloudPrivacySection, group: "sub" },
+  { id: "app", label: "settings.apps", icon: RiLayoutGridLine, image: APPS_ICON, Component: AppSettingsSection, group: "sub" },
   { id: "desktop", label: "settings.desktop", hint: "settings.hint.desktop", icon: RiLayoutGridLine, Component: DesktopSection, group: "app" },
   { id: "personalization", label: "settings.personalization", hint: "settings.hint.personalization", icon: RiPaletteLine, Component: PersonalizationSection, group: "app" },
   { id: "wallpapers", label: "settings.wallpapers", hint: "settings.hint.wallpapers", icon: RiImageLine, Component: WallpapersSection, group: "app" },
@@ -92,7 +117,8 @@ const SECTIONS: SectionDef[] = [
   { id: "about", label: "settings.about", hint: "settings.hint.about", icon: RiInformationLine, Component: AboutSection, group: "privacy" },
 ];
 
-const GROUPS: { id: "app" | "privacy"; label: MessageKey }[] = [
+const GROUPS: { id: "services" | "app" | "privacy"; label: MessageKey }[] = [
+  { id: "services", label: "settings.groupServices" },
   { id: "app", label: "settings.groupApp" },
   { id: "privacy", label: "settings.groupPrivacy" },
 ];
@@ -115,22 +141,29 @@ const ACTIONS: { label: MessageKey; section: SectionId; words: string }[] = [
   { label: "personalization.theme", section: "personalization", words: "тема тёмная темная светлая dark light theme ночной режим стекло glass" },
   { label: "personalization.searchBg", section: "personalization", words: "фон поиска поиск белый системный search background white" },
   { label: "settings.privacy", section: "privacy", words: "конфиденциальность приватность privacy данные" },
+  { label: "settings.vicloud", section: "vicloud", words: "vicloud облако cloud icloud синхронизация sync резервная копия backup" },
+  { label: "vicloud.plans", section: "vicloud-plans", words: "vicloud+ тариф тарифы подписка план plans 50 200 1 тб гб storage" },
+  { label: "settings.apps", section: "apps", words: "приложения программы apps applications уведомления face id сгрузить" },
+  { label: "settings.storage", section: "storage", words: "хранилище память место storage memory сгрузить offload" },
+  { label: "personalization.appLook", section: "personalization", words: "вид приложений фон приложений стиль приложений тёмная app look background" },
 ];
 
 function searchSettings(q: string, t: ReturnType<typeof useT>) {
   const needle = q.trim().toLowerCase();
   if (!needle) return [];
-  const out: { key: string; label: string; hint?: string; section: SectionId; icon: SectionDef["icon"] }[] = [];
+  const out: { key: string; label: string; hint?: string; section: SectionId; icon: SectionDef["icon"]; image?: string }[] = [];
   const seen = new Set<string>();
   const add = (key: string, label: string, section: SectionId, hint?: string) => {
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ key, label, hint, section, icon: SECTIONS.find((s) => s.id === section)!.icon });
+    const def = SECTIONS.find((s) => s.id === section)!;
+    out.push({ key, label, hint, section, icon: def.icon, image: def.image });
   };
   for (const a of ACTIONS) {
     if (`${t(a.label)} ${a.words}`.toLowerCase().includes(needle)) add(`a-${a.label}`, t(a.label), a.section, t(SECTIONS.find((s) => s.id === a.section)!.label));
   }
   for (const s of SECTIONS) {
+    if (s.group === "sub") continue;
     if (`${t(s.label)} ${s.hint ? t(s.hint) : ""}`.toLowerCase().includes(needle)) add(`s-${s.id}`, t(s.label), s.id, s.hint ? t(s.hint) : undefined);
   }
   return out;
@@ -164,7 +197,7 @@ function SearchResults({ query, onOpen }: { query: string; onOpen: (id: SectionI
           className="flex min-h-[58px] w-full items-center gap-3 px-3.5 py-2.5 text-left hover:bg-surface-hover [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70"
           data-testid={`settings-result-${r.section}`}
         >
-          <SectionIcon icon={r.icon} />
+          <SectionIcon icon={r.icon} image={r.image} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[15px] text-text">{r.label}</span>
             {r.hint && <span className="block truncate text-[12.5px] text-text-tertiary">{r.hint}</span>}
@@ -252,7 +285,7 @@ export function SettingsApp() {
                         current === s.id ? "bg-white shadow-tile" : "hover:bg-white/70",
                       )}
                     >
-                      <SectionIcon icon={s.icon} />
+                      <SectionIcon icon={s.icon} image={s.image} />
                       <span className="min-w-0 flex-1">
                         <span className={cx("block truncate text-[14px]", current === s.id ? "font-semibold text-text" : "text-text")}>{t(s.label)}</span>
                         {s.hint && <span className="block truncate text-[11.5px] text-text-tertiary">{t(s.hint)}</span>}
@@ -349,7 +382,8 @@ function BrandLine() {
 }
 
 /** The violet icon tile of a section. */
-export function SectionIcon({ icon: Icon, danger }: { icon: ComponentType<{ className?: string }>; danger?: boolean }) {
+export function SectionIcon({ icon: Icon, danger, image }: { icon: ComponentType<{ className?: string }>; danger?: boolean; image?: string }) {
+  if (image) return <img src={image} alt="" draggable={false} className="size-9 shrink-0 select-none rounded-[11px] shadow-[0_1px_3px_rgba(60,40,160,0.18)]" data-system-asset />;
   return (
     <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[12px]", danger ? "bg-danger-soft text-danger" : "bg-primary/10 text-primary")}>
       <Icon className="size-[18px]" />
@@ -411,7 +445,7 @@ function DesktopHome({ onOpen }: { onOpen: (id: SectionId) => void }) {
                 className="flex items-center gap-3 rounded-[20px] border border-border/70 bg-surface p-3 text-left shadow-tile transition hover:-translate-y-0.5"
                 data-testid={`settings-home-${s.id}`}
               >
-                <SectionIcon icon={s.icon} />
+                <SectionIcon icon={s.icon} image={s.image} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14.5px] font-medium text-text">{t(s.label)}</span>
                   {s.hint && <span className="block truncate text-[12px] text-text-tertiary">{t(s.hint)}</span>}
@@ -447,7 +481,7 @@ function MobileIndex({ onOpen }: { onOpen: (id: SectionId) => void }) {
                 data-testid={`settings-nav-${s.id}`}
                 className="flex min-h-[62px] w-full items-center gap-3 px-3.5 py-2.5 text-left active:bg-surface-secondary [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70"
               >
-                <SectionIcon icon={s.icon} />
+                <SectionIcon icon={s.icon} image={s.image} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15.5px] font-medium text-text">{t(s.label)}</span>
                   {s.hint && <span className="block truncate text-[12.5px] text-text-tertiary">{t(s.hint)}</span>}

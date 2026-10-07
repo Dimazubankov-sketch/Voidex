@@ -501,7 +501,7 @@ export function FilesApp({
             {cloudOff ? (
               <button className="vf-cloud-card" onClick={openCloud} data-testid="files-cloud-card">
                 <span>
-                  <CloudOff size={17} /> Облако VOIDEX
+                  <CloudOff size={17} /> ViCloud
                 </span>
                 <strong>Пока недоступно</strong>
                 <small>Файлы этого сеанса не сохраняются в облаке</small>
@@ -530,7 +530,7 @@ export function FilesApp({
                 <div>
                   <h1>{title}</h1>
                   <button className="vf-cloud-link" onClick={openCloud} data-testid="files-cloud-link">
-                    {cloudOff ? <CloudOff size={15} /> : <Cloud size={15} />} {cloudOff ? 'Облако VOIDEX' : 'Облако · 5 ГБ'}{' '}
+                    {cloudOff ? <CloudOff size={15} /> : <Cloud size={15} />} {cloudOff ? 'ViCloud' : 'Облако · 5 ГБ'}{' '}
                     <ChevronRight size={15} />
                   </button>
                 </div>

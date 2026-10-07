@@ -1299,7 +1299,7 @@ export default function MediaApp({
             ) : (
               <button className="vm-sync" onClick={() => (onOpenCloud ? onOpenCloud() : setCloudOpen(true))} data-testid="media-cloud-status">
                 <CloudOff size={17} />
-                Облако VOIDEX недоступно
+                ViCloud пока не запущен
               </button>
             )}
           </SidebarFooter>
@@ -1352,7 +1352,7 @@ export default function MediaApp({
                 {tab === "library" && !albumId && (
                   <button className="vm-cloud-link" onClick={() => (onOpenCloud ? onOpenCloud() : setCloudOpen(true))}>
                     {cloudAvailable ? <Cloud size={14} /> : <CloudOff size={14} />}
-                    {cloudAvailable ? "Облако · 5 ГБ" : "Облако VOIDEX"}
+                    {cloudAvailable ? "Облако · 5 ГБ" : "ViCloud"}
                     <ChevronRight size={13} />
                   </button>
                 )}
