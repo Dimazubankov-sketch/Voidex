@@ -202,7 +202,7 @@ test("Notes: \"+\" inside the centred search field in its colours; delete page i
   await expect(page.getByTestId("notes-page-indicator")).toHaveText(/^2 \//);
   await expect(page.getByTestId("notes-tool-delete-page")).toHaveAttribute("aria-label", "Удалить страницу");
   await page.getByTestId("notes-tool-delete-page").click();
-  await page.getByRole("button", { name: "Удалить" }).last().click();
+  await page.getByRole("button", { name: "Удалить", exact: true }).last().click();
   await expect(page.getByTestId("notes-note-editor")).toHaveAttribute("data-pages", "1");
   // The first page is cleared, not deleted.
   await expect(page.getByTestId("notes-tool-delete-page")).toHaveAttribute("aria-label", "Очистить страницу");
