@@ -83,7 +83,7 @@ export function NotesApp() {
 
   return (
     <NavContext.Provider value={nav}>
-      <div className="vn2 relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background" data-testid="notes-app" data-screen={route.screen}>
+      <div className="vn2 vx-app-bg relative flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="notes-app" data-screen={route.screen}>
         <Screen route={route} />
         <Sheet open={!!closed} onClose={() => setClosed(null)} width={420} testId="notes-access-closed">
           {closed && (

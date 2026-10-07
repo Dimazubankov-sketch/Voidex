@@ -121,6 +121,10 @@ export function HomeScreen({
   useEffect(() => {
     document.documentElement.dataset.search = layout.appearance.searchAppearance;
   }, [layout.appearance.searchAppearance]);
+  // Step 2.8: one look for every app window (styles/index.css, `.vx-app`).
+  useEffect(() => {
+    document.documentElement.dataset.appLook = layout.appearance.appLook;
+  }, [layout.appearance.appLook]);
 
   // Leaving the home screen (an app comes to the front) ends edit mode.
   useEffect(() => {

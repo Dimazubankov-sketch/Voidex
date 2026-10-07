@@ -56,7 +56,7 @@ export function MediaWindowApp() {
   };
 
   return (
-    <div className="vx-media flex min-h-0 flex-1 flex-col bg-[#fbfaff]" data-testid="media-app">
+    <div className="vx-media vx-app-bg flex min-h-0 flex-1 flex-col" data-testid="media-app">
       {ff === "desktop" && (
         <WindowHeader>
           <span className="flex min-w-0 items-center gap-2 pl-1.5">

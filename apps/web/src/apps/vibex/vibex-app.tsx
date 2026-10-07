@@ -64,7 +64,7 @@ function VibexShell() {
   }, [win.paramsVersion]);
 
   return (
-    <div className="relative flex min-h-0 flex-1 overflow-hidden bg-surface-secondary/50" data-testid="vibex-app">
+    <div className="vx-app-bg relative flex min-h-0 flex-1 overflow-hidden" data-testid="vibex-app">
       {ff === "desktop" ? <DesktopVibex /> : <MobileVibex />}
       <CommentsScreen />
       <PostComposer />

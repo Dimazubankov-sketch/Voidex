@@ -98,6 +98,12 @@ export const THEMES = ["light", "dark", "system"] as const;
 /** Step 2.7: background of every search field (Settings → Personalization → «Фон поиска»). */
 export const SEARCH_APPEARANCES = ["system", "white"] as const;
 export type SearchAppearance = (typeof SEARCH_APPEARANCES)[number];
+/**
+ * Step 2.8: one look for every app window (Settings → Personalization →
+ * «Вид приложений»): Media's soft violet, Notes' grey, Mail's white, or dark.
+ */
+export const APP_LOOKS = ["media", "notes", "mail", "dark"] as const;
+export type AppLook = (typeof APP_LOOKS)[number];
 export type Theme = (typeof THEMES)[number];
 export const DOCK_SCALES = ["s", "m", "l"] as const;
 export type DockScale = (typeof DOCK_SCALES)[number];
@@ -174,6 +180,8 @@ export const AppearanceSchema = z.object({
   syncWallpapers: z.boolean().default(true),
   /** Step 2.7: search fields follow the theme ("system") or stay white. */
   searchAppearance: z.enum(SEARCH_APPEARANCES).default("system"),
+  /** Step 2.8: the look of every app (background, text, cards, fields). */
+  appLook: z.enum(APP_LOOKS).default("media"),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -241,7 +249,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system" };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system", appLook: "media" };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -272,6 +280,7 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     theme: (THEMES as readonly string[]).includes(base.theme) ? base.theme : "light",
     syncWallpapers: base.syncWallpapers !== false,
     searchAppearance: base.searchAppearance === "white" ? "white" : "system",
+    appLook: (APP_LOOKS as readonly string[]).includes(base.appLook) ? base.appLook : "media",
   };
 }
 

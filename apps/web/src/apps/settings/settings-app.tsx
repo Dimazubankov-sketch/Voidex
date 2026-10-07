@@ -317,7 +317,7 @@ export function SettingsApp() {
           return (
             <motion.div
               key={`${id}-${i}`}
-              className="absolute inset-0 flex flex-col bg-surface"
+              className="vx-app-bg absolute inset-0 flex flex-col"
               style={{ zIndex: 10 + i }}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}

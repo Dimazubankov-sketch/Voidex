@@ -45,7 +45,7 @@ export function CalculatorApp() {
   }, [win.focused, win.formFactor]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#fbfaff]" data-testid="calculator-app">
+    <div className="vx-app-bg flex min-h-0 flex-1 flex-col" data-testid="calculator-app">
       <WindowHeader
         right={
           // Step 2.8: no History / "how to type" buttons in the title bar.

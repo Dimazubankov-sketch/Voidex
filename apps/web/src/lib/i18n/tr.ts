@@ -1109,5 +1109,11 @@ export const tr: Record<MessageKey, string> = {
   "mail.link.address": "Link address",
   "mail.link.invalid": "Check the address, for example voidex.su",
   "mail.link.hint": "The link is added to the letter as text.",
+  "personalization.appLook": "App appearance",
+  "personalization.appLook.media": "Like Media",
+  "personalization.appLook.notes": "Grey, like Notes",
+  "personalization.appLook.mail": "White, like Mail",
+  "personalization.appLook.dark": "Dark",
+  "personalization.appLookHint": "One style for every app: background, text, cards and fields. With the dark system theme, apps are always dark.",
   // Step 2.8 (end)
 };

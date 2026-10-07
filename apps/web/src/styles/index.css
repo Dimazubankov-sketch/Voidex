@@ -643,3 +643,157 @@ img[data-system-asset] { pointer-events: none; }
 :root[data-keyboard] .vx-home-indicator { height: 0; overflow: hidden; }
 :root[data-keyboard] .vf-bottom.searching { bottom: calc(8px + var(--vf-keyboard-inset, 0px)); }
 :root[data-keyboard] .vm-bottom.searching { bottom: calc(8px + var(--vm-keyboard-inset, 0px)); }
+
+/*
+ * Step 2.8 — «Вид приложений»: one look for every app window. `.vx-app` is
+ * the window (window-frame.tsx); <html data-app-look> comes from the
+ * account (Settings → Personalization). Apps draw with the same tokens
+ * (surface, text, border), so redefining them here changes the background,
+ * the texts, the cards, the fields and the inner sections of every app at
+ * once. With the dark theme of the system the apps are always dark.
+ */
+.vx-app { --app-bg: var(--surface); background: var(--app-bg); }
+.vx-app-bg { background: var(--app-bg); }
+.vx-app .vx-settings-bg,
+.vx-app .vx-settings-nav { background: var(--app-bg); }
+
+/* Like Media: soft violet light. */
+:root[data-app-look="media"]:not([data-theme="dark"]) .vx-app {
+  --app-bg: radial-gradient(ellipse at 92% -10%, rgba(213, 197, 251, 0.74), transparent 45%), radial-gradient(ellipse at 0% 95%, rgba(234, 227, 254, 0.67), transparent 50%), #f8f7fc;
+  --app-flat: #f8f7fc;
+  --surface: #ffffff;
+  --surface-secondary: #f3f1fa;
+  --surface-hover: #eeebf8;
+  --border: #e7e3f3;
+  --border-strong: #d9d3ec;
+  --text: #171321;
+  --text-secondary: #67637a;
+  --text-tertiary: #9a96ad;
+}
+/* Like Notes: calm grey. */
+:root[data-app-look="notes"]:not([data-theme="dark"]) .vx-app {
+  --app-bg: #ececed;
+  --app-flat: #ececed;
+  --surface: #ffffff;
+  --surface-secondary: #f3f3f5;
+  --surface-hover: #ececef;
+  --border: #e0e0e5;
+  --border-strong: #d0d0d7;
+  --text: #17171b;
+  --text-secondary: #66666f;
+  --text-tertiary: #96969f;
+}
+/* Like VoidOps Mail: white. */
+:root[data-app-look="mail"]:not([data-theme="dark"]) .vx-app {
+  --app-bg: #ffffff;
+  --app-flat: #ffffff;
+  --surface: #ffffff;
+  --surface-secondary: #f5f5f7;
+  --surface-hover: #efeff2;
+  --border: #e4e4e8;
+  --border-strong: #d4d4da;
+  --text: #17171b;
+  --text-secondary: #6a6a73;
+  --text-tertiary: #9a9aa3;
+}
+/* Dark: the look of the dark theme, for the apps only (or with the dark theme). */
+:root[data-app-look="dark"] .vx-app,
+:root[data-theme="dark"] .vx-app {
+  --app-bg: #121218;
+  --app-flat: #121218;
+  --background: #121218;
+  --background-deep: #0c0c11;
+  --surface: #1c1c25;
+  --surface-secondary: #252530;
+  --surface-hover: #2d2d3a;
+  --primary: #7f72ff;
+  --primary-hover: #9387ff;
+  --primary-soft: rgba(127, 114, 255, 0.18);
+  --primary-strong: #b9b1ff;
+  --text: #ededf3;
+  --text-secondary: #a9a9b8;
+  --text-tertiary: #7c7c8f;
+  --border: #2f2f3c;
+  --border-strong: #41414f;
+  --danger: #ff6b70;
+  --danger-soft: rgba(255, 107, 112, 0.16);
+  --success: #3fd093;
+  --success-soft: rgba(63, 208, 147, 0.15);
+  --warning: #f2ad3a;
+  --warning-soft: rgba(242, 173, 58, 0.15);
+  --shadow-tile: 0 1px 1px rgba(0, 0, 0, 0.25), 0 6px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --glass-bg: linear-gradient(160deg, rgba(40, 40, 54, 0.52) 0%, rgba(26, 26, 36, 0.4) 100%);
+  --glass-bg-strong: linear-gradient(160deg, rgba(36, 36, 48, 0.78) 0%, rgba(24, 24, 34, 0.7) 100%);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-edge: rgba(0, 0, 0, 0.35);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --search-bg: #23222e;
+  --search-bg-focus: #282734;
+  --search-border: rgba(190, 182, 255, 0.14);
+  --search-text: var(--text);
+  --search-placeholder: #8d8aa3;
+  --search-icon: #a39fc0;
+  --search-shadow: none;
+  color: var(--text);
+  color-scheme: dark;
+}
+:root[data-app-look="dark"] .vx-app .bg-white { background-color: var(--surface); }
+:root[data-app-look="dark"] .vx-app :is(.bg-white\/90, .bg-white\/85, .bg-white\/80, .bg-white\/75) { background-color: rgb(28 28 37 / 0.85); }
+:root[data-app-look="dark"] .vx-app :is(.bg-white\/70, .bg-white\/60, .bg-white\/55, .bg-white\/50) { background-color: rgb(40 40 52 / 0.6); }
+:root[data-app-look="dark"] .vx-app :is(.border-white, .border-white\/80, .border-white\/70, .border-white\/60, .border-white\/50) { border-color: rgb(255 255 255 / 0.1); }
+:root[data-app-look="dark"] .vx-app .vn2 {
+  --vn2-paper: #1f1f29;
+  --vn2-ink: #ececf3;
+  --vn2-ink-soft: #a3a1b7;
+  --vn2-rule: rgba(180, 170, 255, 0.16);
+}
+
+/* The embedded Files, Media and Calculator modules take the same background. */
+.vx-app .vm-app,
+.vx-app .vf-app,
+.vx-app .vxc { background: var(--app-bg); }
+
+/* Grey and white looks: Media's and Files' headers take the app background, not Media's violet. */
+:root:not([data-app-look="media"]) .vx-app :is(.vm-sticky-controls, .vf-header) {
+  background: color-mix(in srgb, var(--app-flat, #ffffff) 94%, transparent);
+  border-bottom-color: var(--border);
+}
+
+/* Dark: Media, Files and Calculator (their modules draw with their own colours). */
+:is(:root[data-app-look="dark"], :root[data-theme="dark"]) .vx-app {
+  & .vx-cloud-notice { color: var(--text-secondary); background: var(--surface-secondary); border-color: var(--border); }
+  & .vm-app {
+    --vm-text: var(--text);
+    --vm-muted: var(--text-tertiary);
+    --vm-glass: linear-gradient(135deg, rgba(44, 44, 58, 0.92), rgba(30, 30, 40, 0.88));
+    color: var(--text);
+  }
+  & .vm-app :is(h1, h2, h3, strong) { color: var(--text); }
+  & .vm-sticky-controls { background: color-mix(in srgb, #121218 92%, transparent); border-bottom-color: var(--border); }
+  & .vm-glass { border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+  & .vm-bottom { --vm-glass: linear-gradient(120deg, rgba(44, 44, 58, 0.94), rgba(30, 30, 40, 0.92)); }
+  & .vm-filter-line [data-slot="tabs-list"] { background: var(--surface-secondary); border-color: rgba(255, 255, 255, 0.08); box-shadow: none; }
+  & :is(.vm-round, .vm-text-link, .vm-bottom-search-toggle) { background: var(--surface-secondary); border-color: rgba(255, 255, 255, 0.08); color: var(--text-secondary); box-shadow: none; }
+  & :is(.vm-dock-indicator, .vf-dock-indicator) { background: rgba(127, 114, 255, 0.24); box-shadow: none; }
+  & .vf-app {
+    --vf-ink: var(--text);
+    --vf-muted: var(--text-tertiary);
+    --vf-line: var(--border);
+    --vf-surface: rgba(28, 28, 37, 0.85);
+    color: var(--text);
+  }
+  & .vf-app :is(h1, h2, h3, strong) { color: var(--text); }
+  & .vf-header { background: color-mix(in srgb, #121218 92%, transparent); border-bottom-color: var(--border); }
+  & .vf-icon { background: var(--surface-secondary); border-color: rgba(255, 255, 255, 0.08); box-shadow: none; color: var(--text-secondary); }
+  & .vf-folder-card { background: var(--surface); border-color: var(--border); }
+  & :is(.vf-bottom, .vf-bottom-search-toggle) { background: var(--surface-secondary); border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+  & .vxc { --key: #252530; --lavender: rgba(127, 114, 255, 0.2); --line: var(--border); --muted: var(--text-tertiary); color: var(--text); }
+  & .vxc :is(.display, .mode-switch, .pad-tabs) { background: var(--surface); }
+  & .vxc .mode-switch::before,
+  & .vxc .pad-tabs button.selected { background: var(--surface-hover); box-shadow: none; }
+  & .vxc :is(.key.function, .key.operator) { color: #b9b1ff; }
+  & .vxc :is(.science-key, .photo-actions button) { background: rgba(127, 114, 255, 0.14); color: #c4bcff; }
+  & .vxc .solution-pane { background: #121218; }
+}

@@ -116,7 +116,7 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
         aria-label={win.appId}
         data-testid={`window-${win.appId}`}
         data-state={visible ? "open" : "hidden"}
-        className="absolute inset-0 flex flex-col overflow-hidden bg-surface"
+        className="vx-app absolute inset-0 flex flex-col overflow-hidden"
         style={{ zIndex: z, pointerEvents: visible ? "auto" : "none", visibility: undefined }}
         initial={hiddenTarget}
         animate={visible ? { x: 0, y: 0, scale: 1, opacity: 1, borderRadius: 0 } : hiddenTarget}
@@ -148,7 +148,8 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
       data-testid={`window-${win.appId}`}
       data-state={minimized ? "hidden" : "open"}
       className={cx(
-        "absolute left-0 top-0 flex flex-col overflow-hidden bg-surface",
+        // Step 2.8: .vx-app carries the account's «Вид приложений» (tokens and background).
+        "vx-app absolute left-0 top-0 flex flex-col overflow-hidden",
         maximized ? "rounded-[22px]" : "rounded-[22px]",
         focused ? "shadow-window" : "shadow-surface",
       )}

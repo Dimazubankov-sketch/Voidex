@@ -65,7 +65,7 @@ export function FilesWindowApp() {
   }, [win.windowId, language, t]);
 
   return (
-    <div className="vx-files flex min-h-0 flex-1 flex-col bg-[#fbfaff]" data-testid="files-app">
+    <div className="vx-files vx-app-bg flex min-h-0 flex-1 flex-col" data-testid="files-app">
       {ff === "desktop" && (
         <WindowHeader>
           <span className="flex min-w-0 items-center gap-2 pl-1.5">

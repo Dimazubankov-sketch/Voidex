@@ -1124,5 +1124,11 @@ export const ru: Record<MessageKey, string> = {
   "mail.link.address": "Адрес ссылки",
   "mail.link.invalid": "Проверьте адрес, например voidex.su",
   "mail.link.hint": "Ссылка добавится в письмо как текст.",
+  "personalization.appLook": "Вид приложений",
+  "personalization.appLook.media": "Как в Медиатеке",
+  "personalization.appLook.notes": "Серый, как в Заметках",
+  "personalization.appLook.mail": "Белый, как в Почте",
+  "personalization.appLook.dark": "Тёмный",
+  "personalization.appLookHint": "Один стиль для всех приложений: фон, тексты, карточки и поля. С тёмной темой системы приложения всегда тёмные.",
   // Step 2.8 (end)
 };
