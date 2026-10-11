@@ -407,10 +407,11 @@ test("vibex: comment threads — root, reply, reply to a reply (one level, @name
   } else await page.getByTestId("vibex-me").click();
   await page.getByTestId("profile-tab-media").click();
   await expect(page.getByTestId("profile-media-grid").getByTestId("vibex-image")).toHaveCount(1);
+  // Step 2.9: «Публикации» opens the post itself, media first (its text folded under «Показать текст»).
   await page.getByTestId("profile-media-grid").getByTestId("vibex-image").click();
-  await expect(page.getByTestId("vibex-lightbox")).toBeVisible();
+  await expect(page.getByTestId("publication")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("vibex-lightbox")).toHaveCount(0);
+  await expect(page.getByTestId("publication")).toHaveCount(0);
   expect(a.id).toBeTruthy();
   await bPage.context().close();
 });
