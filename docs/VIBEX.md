@@ -251,3 +251,88 @@ production fell back to `default-src 'self'` and refused to play; the dev
 server sends no CSP, which hid it. `apps/server/test/csp.test.ts` asserts the
 policy; `apps/web/e2e/step26-media.spec.ts` serves the app with the server's
 real policy and plays a real recording for sender and recipient.
+
+## Step 2.9: chats, stories, circles, recorder
+
+- **Name**: «Сообщения» is «Чаты» everywhere (navigation, headings,
+  translations, aria labels, search keywords).
+- **Sections** (`chatSections(list, order)` in `packages/shared/src/vibex.ts`):
+  «Закреплённые» always first, then «Чаты» and «Группы». The filter button
+  (`chat-filter`) offers Чаты сверху / Группы сверху / Вперемешку; the choice
+  is the account setting `settings.chats.order` (default `chats-first`).
+- **Search** (`GET /api/vibex/chats/search?q=`): chat and person names,
+  addresses in both spellings (`@voidops` / `@voidops.ru`), group titles and
+  message text (plain substring over the caller's own conversations,
+  respecting `cleared_at`). On phones it appears with a light pull on the list.
+- **Long press (phone) / right click (PC)**: Открыть, Предпросмотр,
+  Уведомления вкл/выкл, Закрепить, Профиль, Удалить. On PC the preview opens
+  only after choosing Предпросмотр. Delete expands in place into
+  «Удалить у себя» and, when allowed, «Удалить у всех».
+- **Preview never reads**: `GET /chats/:id/messages` never marks anything
+  read (reading is the explicit `POST /chats/:id/read`); the preview simply
+  does not send it. e2e checks the unread count before and after.
+- **Mute** (`PATCH /api/vibex/chats/:id { muted }`, `vibex_members.muted`):
+  no notification and no banner; the unread badge turns grey.
+- **Delete** (`POST /api/vibex/chats/:id/delete { scope }`):
+  - `me`: `cleared_at` + `hidden` for the caller only; earlier messages
+    disappear for them; a new message unhides the chat.
+  - `all`: a direct chat (either member) or a group (owner only, others
+    403). The conversation, its messages and files are removed for everyone.
+- **Stories** (migration 0010: `vibex_stories`, `vibex_story_views`):
+  - each story lives 24 hours (`VIBEX_STORY_TTL_MS`), then stays in the
+    author's archive (`GET /stories/archive`);
+  - `GET /stories` returns groups for me, people I follow and my direct-chat
+    partners, under their posts privacy; mine first, then unseen;
+  - `POST /stories { fileId }` takes a photo or video uploaded with
+    purpose `story` (VOIDEX Media or the device); `POST /stories/:id/view`,
+    `GET /stories/:id/viewers` (owner only), `DELETE /stories/:id`;
+  - the chat header shows stacked avatars when collapsed; pulling further
+    expands the row with «Моя история» (+);
+  - the viewer has progress bars, tap left / right, swipe down to close,
+    hold to pause, a viewers list for my own stories.
+  - No fake stories are seeded in production.
+- **Video circles** (`circle-player.tsx`):
+  - In the chat a circle plays muted and looped, but only while it is on
+    screen (IntersectionObserver); it loads with `preload="metadata"`.
+  - Tapping it opens the expanded player with sound. That player has:
+    - a progress ring that can be dragged to seek;
+    - a collapse X to the left of the ring;
+    - a speed button cycling 1x, 1.5x, 2x (kept in the Vibex store while the
+      app is open);
+    - tap to play or pause.
+  - Starting it pauses any other sound (`takeOver`).
+- **One record button** (`record-button.tsx`), state machine idle → holding
+  → recording → cancel / locked → sending:
+  - **Phone**:
+    - a quick tap switches between voice and circle;
+    - holding records;
+    - releasing sends a clip of at least 0.6 s;
+    - sliding left past 130 px cancels;
+    - sliding up past 96 px locks the recording, and then send and trash
+      buttons appear.
+  - **PC**: holding the button or right-clicking it switches the mode; a
+    click starts a locked recording with trash on the left and send on the
+    right. Releasing the mouse never sends.
+  - The recorder stops every track and closes its audio context on cancel,
+    send and unmount.
+- **Gesture ownership**: elements marked `data-gesture-owner` (the voice
+  waveform, the circle ring, the carousel) keep their drags. The chat
+  swipe-back (`SlidePage`, `edge-swipe.ts`) does not start on them; it stays
+  on everywhere else.
+- **Feed and profile**:
+  - The feed search is a round button that expands in place into the field;
+    its X collapses it.
+  - A floating + (new post) appears on the phone feed and profile.
+  - «Закладки» moved into «История» (tabs Понравившиеся / Закладки); the
+    stored bookmarks are unchanged.
+  - The composer has a Media button (VOIDEX Media or the device) and a
+    paperclip for Files / ViCloud only (purpose `postfile`), with no
+    arbitrary device files.
+  - Profile tabs: Публикации (one grid of photos and videos with a mark;
+    `GET /people/:id/publications`), Посты, Репосты. A publication opens with
+    its text folded under «Показать текст»: it is the same post, nothing is
+    duplicated.
+  - Photo carousel: three slides rendered at a time, the index wraps
+    (`wrapIndex`), touch and mouse drag, arrows and a counter.
+- **Desktop**: a two-column layout, with the chat list at
+  `clamp(300px, 30%, 360px)` and the conversation beside it.

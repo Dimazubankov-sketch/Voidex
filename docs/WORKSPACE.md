@@ -290,3 +290,42 @@ purpose with its own quota).
   the attach chooser sit in the visual viewport, above the keyboard.
 - **Copy**: no long dash in product UI strings; `apps/web/scripts/no-long-dash.test.mjs`
   checks every string literal and JSX text (comments, docs and tests excluded).
+
+## Step 2.9: shell
+
+- **Desktop logo size** (Settings → Рабочий стол → «Размер логотипов»):
+  - Маленький, Обычный or Большой; the setting is `appearance.glyphScale`
+    (`s` / `m` / `l`) in the workspace layout, so it is saved with the account.
+  - Only the glyph inside the tile changes (`GLYPH_SCALE_BOX`). The tile,
+    grid, spacing, hit area, Dock and launcher stay the same.
+- **@voidops addresses**:
+  - Storage keeps the canonical `name@voidops.ru` (no primary key changes).
+  - `parseAddress` accepts `name@voidops` as an alias of the mail domain, so
+    sign-in, search, delivery, sharing and Vibex resolve both forms to one
+    account.
+  - The API shows `@voidops`: a `preSerialization` hook and the SSE stream
+    (`addressPresenter`) rewrite every string that is exactly a VoidOps
+    address. `GET /api/system/info` returns `publicMailDomain`.
+- **Gesture bar** (`os/gesture-bar.ts`, `window-frame.tsx` `HomeIndicator`):
+  - The app follows the finger, shrinks and rounds its corners. Snapshots of
+    the neighbouring apps slide in at the sides (`gesture-peek.tsx`).
+  - Velocity and distance decide the result:
+    - a far or fast flick up goes home;
+    - a pause past the threshold opens the switcher;
+    - a sideways move switches app;
+    - a small move settles back.
+  - Pointer cancel settles back. Reduced motion skips the springs. ArrowUp on
+    the handle opens the switcher.
+- **Live previews** (`os/snapshots.ts`):
+  - A sanitized, inert DOM clone of each window's content is taken when the
+    foreground changes, when the switcher opens and when the bar is touched.
+  - It is not a second React tree: ids and test ids are stripped and nothing
+    is interactive.
+  - Apps behind an app lock show a lock tile. The snapshot is dropped when its
+    window closes.
+  - Canvas and video frames are not captured.
+- **Side drawer** (`ui/push-drawer.tsx`, ChatGPT reference):
+  - The menu is the lower layer and the screen slides right over it, with no
+    dimming or blur.
+  - It closes with a tap on the screen, Esc, or a swipe left. It is used by
+    Mail and Vibex on phones.
