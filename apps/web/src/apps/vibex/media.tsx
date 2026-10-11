@@ -190,6 +190,7 @@ function MediaCarousel({ items, onOpen, autoplay, className }: { items: VibexFil
       }}
       data-testid="vibex-media"
       data-carousel
+      data-gesture-owner
       data-index={index}
     >
       <motion.div

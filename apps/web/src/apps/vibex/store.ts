@@ -24,6 +24,9 @@ export interface VibexUiState {
   feedSearch: boolean;
   feedQuery: string;
   setFeedSearch: (open: boolean, query?: string) => void;
+  /** Step 2.9: playback speed of expanded video circles — kept while this Vibex window lives (a new window starts at 1x). */
+  circleSpeed: number;
+  setCircleSpeed: (speed: number) => void;
   go: (s: VibexSection) => void;
   openChat: (id: string | null) => void;
   push: (p: VibexPage) => void;
@@ -49,6 +52,8 @@ export function createVibexStore() {
     feedSearch: false,
     feedQuery: "",
     setFeedSearch: (feedSearch, feedQuery = "") => set({ feedSearch, feedQuery }),
+    circleSpeed: 1,
+    setCircleSpeed: (circleSpeed) => set({ circleSpeed }),
     // Step 2.9: "Закладки" live inside "История" (its second tab).
     go: (section) =>
       set(section === "bookmarks" ? { section: "history", historyKind: "bookmarks", stack: [], chatId: null, commentsFor: null, drawer: false } : { section, stack: [], chatId: null, commentsFor: null, drawer: false }),

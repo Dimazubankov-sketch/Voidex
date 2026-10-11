@@ -20,10 +20,26 @@ import {
   type VibexPersonDto,
   type VibexPostDto,
   type VibexProfileDto,
+  type VibexChatSearchDto,
+  type VibexStoryDto,
+  type VibexStoryGroupDto,
+  type VibexStoryViewerDto,
 } from "@voidex/shared";
 import { api, qs } from "@/lib/api";
 import { applyMe } from "@/lib/account";
 import { queryClient } from "@/lib/query";
+
+/**
+ * Step 2.9: files and covers are kept as blob: URLs in the query cache. When
+ * the cache drops one (garbage collection, logout clear), its URL is revoked
+ * so the blob is freed instead of living until the page closes.
+ */
+queryClient.getQueryCache().subscribe((e) => {
+  if (e.type !== "removed") return;
+  const [scope, kind] = e.query.queryKey as unknown[];
+  const url = e.query.state.data;
+  if (scope === "vibex" && (kind === "file" || kind === "cover") && typeof url === "string" && url.startsWith("blob:")) URL.revokeObjectURL(url);
+});
 
 /** Query keys: everything under ["vibex"] so a reconnect / sign-out refreshes it all. */
 export const vk = {
@@ -44,6 +60,11 @@ export const vk = {
   media: (id: string, kind: "photo" | "video") => ["vibex", "media", id, kind] as const,
   cover: (id: string, version: number) => ["vibex", "cover", id, version] as const,
   follows: (id: string, which: "followers" | "following") => ["vibex", "follows", id, which] as const,
+  /** Step 2.9 */
+  stories: ["vibex", "stories"] as const,
+  storyArchive: ["vibex", "stories", "archive"] as const,
+  storyViewers: (id: string) => ["vibex", "stories", "viewers", id] as const,
+  chatSearch: (q: string) => ["vibex", "chat-search", q] as const,
 };
 
 // ------------------------------------------------------- me and settings
@@ -512,4 +533,85 @@ export function sharePost(postId: string, userIds: string[], text: string) {
 /** A link to a post that opens it inside VOIDEX (requires being signed in). */
 export function postLink(id: string) {
   return `${window.location.origin}/#vibex/post/${id}`;
+}
+
+// ------------------------------------------------------------- Step 2.9
+
+/** The stories header of «Чаты»: my group first, then people with unseen stories. */
+export function useStories(enabled = true) {
+  return useQuery({ queryKey: vk.stories, enabled, queryFn: () => api.get<VibexStoryGroupDto[]>("/api/vibex/stories"), staleTime: 30_000 });
+}
+
+export function useStoryArchive(enabled: boolean) {
+  return useQuery({ queryKey: vk.storyArchive, enabled, queryFn: () => api.get<VibexStoryDto[]>("/api/vibex/stories/archive") });
+}
+
+export function useStoryViewers(id: string | null) {
+  return useQuery({ queryKey: vk.storyViewers(id ?? ""), enabled: !!id, queryFn: () => api.get<VibexStoryViewerDto[]>(`/api/vibex/stories/${id}/viewers`) });
+}
+
+/** Publishes a story: the photo / video is uploaded (purpose "story"), then posted. */
+export async function publishStory(file: File) {
+  const dto = await filesApi.upload(file, "story");
+  const story = await api.post<VibexStoryDto>("/api/vibex/stories", { fileId: dto.id });
+  void queryClient.invalidateQueries({ queryKey: vk.stories });
+  return story;
+}
+
+const viewedStories = new Set<string>();
+/** "Seen" once per story on this device (the server counts once per person anyway). */
+export function markStoryViewed(story: VibexStoryDto) {
+  if (story.mine || story.seen || viewedStories.has(story.id)) return;
+  viewedStories.add(story.id);
+  void api
+    .post(`/api/vibex/stories/${story.id}/view`)
+    .then(() => {
+      queryClient.setQueryData<VibexStoryGroupDto[]>(vk.stories, (groups) =>
+        groups?.map((g) => {
+          const stories = g.stories.map((x) => (x.id === story.id ? { ...x, seen: true } : x));
+          return { ...g, stories, seen: stories.every((x) => x.seen) };
+        }),
+      );
+    })
+    .catch(() => viewedStories.delete(story.id));
+}
+
+export async function deleteStory(id: string) {
+  await api.delete(`/api/vibex/stories/${id}`);
+  void queryClient.invalidateQueries({ queryKey: vk.stories });
+}
+
+/** Search in my chats: people / groups by name or @voidops address, and messages by text. */
+export function useChatSearch(q: string) {
+  const query = q.trim();
+  return useQuery({
+    queryKey: vk.chatSearch(query),
+    enabled: query.length > 0,
+    queryFn: () => api.get<VibexChatSearchDto>(`/api/vibex/chats/search${qs({ q: query })}`),
+    staleTime: 10_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Notifications of one chat on / off (mine only). */
+export function useMuteChat() {
+  return useMutation({
+    mutationFn: (v: { id: string; muted: boolean }) => api.patch<VibexChatDto>(`/api/vibex/chats/${v.id}`, { muted: v.muted }),
+    onMutate: (v) => {
+      queryClient.setQueryData<VibexChatDto[]>(vk.chats, (list) => list?.map((c) => (c.id === v.id ? { ...c, muted: v.muted } : c)));
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: vk.chats }),
+  });
+}
+
+/** «Удалить у себя» / «Удалить у всех». */
+export function useDeleteChat() {
+  return useMutation({
+    mutationFn: (v: { id: string; scope: "me" | "all" }) => api.post(`/api/vibex/chats/${v.id}/delete`, { scope: v.scope }),
+    onSuccess: (_r, v) => {
+      queryClient.setQueryData<VibexChatDto[]>(vk.chats, (list) => list?.filter((c) => c.id !== v.id));
+      queryClient.removeQueries({ queryKey: vk.messages(v.id) });
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
 }

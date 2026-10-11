@@ -27,6 +27,8 @@ export function useEdgeSwipe(root: RefObject<HTMLElement | null>, opts: { enable
 
     const down = (e: PointerEvent) => {
       if (!o.current.enabled || e.button !== 0 || inTopEdge(e.clientY)) return;
+      // Step 2.9: players (voice waveform, circle ring, carousels) own the drags that start on them.
+      if ((e.target as HTMLElement | null)?.closest?.("[data-gesture-owner]")) return;
       const left = el.getBoundingClientRect().left;
       if (e.clientX - left > LEFT_EDGE_PX) return;
       active = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), engaged: false };

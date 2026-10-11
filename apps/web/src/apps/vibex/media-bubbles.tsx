@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RiPauseFill, RiPlayFill, RiRestartLine } from "@remixicon/react";
+import { RiPauseFill, RiPlayFill } from "@remixicon/react";
 import type { VibexFileDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
@@ -9,9 +9,12 @@ import { formatDuration } from "./recorder";
 
 const BARS = 36;
 
-/** Step 2.5: one voice message / circle plays at a time — starting one pauses the others. */
+/**
+ * Step 2.5: one voice message / circle plays with sound at a time — starting
+ * one pauses the others (Step 2.9: shared with the expanded video circle).
+ */
 let playingNow: HTMLMediaElement | null = null;
-function takeOver(el: HTMLMediaElement) {
+export function takeOver(el: HTMLMediaElement) {
   if (playingNow && playingNow !== el && !playingNow.paused) playingNow.pause();
   playingNow = el;
 }
@@ -156,6 +159,8 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
           aria-valuenow={Math.round((pos * total) / 1000)}
           aria-valuetext={formatDuration(pos * total)}
           onPointerDown={(e) => {
+            // Step 2.9: a touch that starts on the waveform belongs to seeking, never to the chat's swipe-back.
+            e.stopPropagation();
             e.currentTarget.setPointerCapture(e.pointerId);
             seek(e);
           }}
@@ -169,6 +174,7 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
             e.preventDefault();
           }}
           data-testid="voice-wave"
+          data-gesture-owner
         >
           {peaks.map((v, i) => (
             <span
@@ -214,90 +220,6 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
         />
       )}
     </div>
-  );
-}
-
-/**
- * Video circle: round video; tap plays / pauses with sound, a ring shows the
- * progress; after the end a tap replays it from the start. `playsInline`
- * keeps it in the bubble on iPhone (never the system fullscreen player).
- */
-export function CircleBubble({ file, durationMs }: { file: VibexFileDto; durationMs: number | null }) {
-  const t = useT();
-  const { data: src } = useFileUrl(file.id);
-  const video = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [ended, setEnded] = useState(false);
-  const [pos, setPos] = useState(0);
-  const size = 208;
-  const r = size / 2 - 3;
-  const c = 2 * Math.PI * r;
-  const length = (v: HTMLVideoElement) => (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : (durationMs ?? 0) / 1000);
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        const v = video.current;
-        if (!v) return;
-        if (v.paused) {
-          if (ended || v.ended) v.currentTime = 0;
-          v.muted = false;
-          void v.play();
-        } else v.pause();
-      }}
-      aria-label={playing ? t("vibex.voice.pause") : t("vibex.circle.play")}
-      className="relative block shrink-0 overflow-hidden rounded-full"
-      style={{ width: size, height: size }}
-      data-testid="circle-message"
-      data-playing={playing || undefined}
-      data-ended={ended || undefined}
-    >
-      {src ? (
-        <video
-          ref={video}
-          src={src}
-          playsInline
-          preload="metadata"
-          className="size-full rounded-full bg-black object-cover"
-          onLoadedMetadata={(e) => probeDuration(e.currentTarget)}
-          onPlay={(e) => {
-            takeOver(e.currentTarget);
-            setPlaying(true);
-            setEnded(false);
-          }}
-          onPause={() => setPlaying(false)}
-          onEnded={() => {
-            setPlaying(false);
-            setEnded(true);
-            setPos(1);
-          }}
-          onTimeUpdate={(e) => {
-            const v = e.currentTarget;
-            const d = length(v);
-            if (d && !v.seeking) setPos(Math.min(1, v.currentTime / d));
-          }}
-        />
-      ) : (
-        <span className="flex size-full items-center justify-center rounded-full bg-black/80">
-          <Spinner className="text-white" />
-        </span>
-      )}
-      <svg className="pointer-events-none absolute inset-0 -rotate-90" width={size} height={size} aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#8b7bff" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pos)} opacity={pos > 0 ? 1 : 0} />
-      </svg>
-      {!playing && (
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" data-testid={ended ? "circle-replay" : "circle-play"}>
-            {ended ? <RiRestartLine className="size-6" /> : <RiPlayFill className="size-7" />}
-          </span>
-        </span>
-      )}
-      {durationMs !== null && (
-        <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] tabular-nums text-white">
-          {formatDuration(playing || (pos > 0 && !ended) ? pos * durationMs : durationMs)}
-        </span>
-      )}
-    </button>
   );
 }
 

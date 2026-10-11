@@ -10,32 +10,31 @@ import {
   RiFileLine,
   RiImageLine,
   RiMoreFill,
+  RiNotificationOffLine,
   RiPushpin2Fill,
-  RiPushpinLine,
   RiSendPlaneFill,
   RiShareForwardLine,
-  RiUnpinLine,
-  RiUserLine,
-  RiMicLine,
   RiPhoneLine,
   RiReplyLine,
   RiVidiconLine,
 } from "@remixicon/react";
-import { VIBEX_FILES_MAX, VIBEX_MESSAGE_MAX, type VibexChatDto, type VibexFileDto, type VibexMessageDto } from "@voidex/shared";
+import { VIBEX_FILES_MAX, VIBEX_MESSAGE_MAX, chatSections, type VibexChatDto, type VibexChatOrder, type VibexFileDto, type VibexMessageDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
 import { useFormFactor } from "@/lib/form-factor";
-import { formatDate, formatShortDate, useLanguage, useT } from "@/lib/i18n";
+import { formatDate, formatShortDate, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { ATTACHMENT_ACCEPT } from "@/apps/mail/attachments";
 import { NotesFileCard } from "@/apps/notes/card";
 import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
-import { ConfirmDialog, MenuList, Popover, Sheet, toast, usePopover, type MenuItem } from "@/ui/overlays";
+import { ConfirmDialog, MenuList, Sheet, toast } from "@/ui/overlays";
 import { checkVibexFile, filesApi, markRead, useChat, useChats, useDeleteMessage, useMessages, useSendMessage, useSetPins } from "./data";
 import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
-import { CircleBubble, CircleMessageGlyph, VoiceBubble } from "./media-bubbles";
-import { CircleRecorder, VoiceRecordingBar, recordingSupported, useRecorder, type RecordKind } from "./recorder";
+import { VoiceBubble } from "./media-bubbles";
+import { CircleBubble } from "./circle-player";
+import { type RecordKind, type Recording } from "./recorder";
+import { RecordButton } from "./record-button";
 import { CallSheet, type CallKind } from "./calls";
 import { useSession } from "@/lib/session";
 import { NestedPost, UnavailablePost } from "./posts";
@@ -85,28 +84,34 @@ function Preview({ chat }: { chat: VibexChatDto }) {
 }
 
 function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) {
+  const t = useT();
   const lang = useLanguage();
   const read = chat.lastMessage?.mine && chat.peerReadAt && chat.peerReadAt >= chat.lastMessage.createdAt;
   return (
     <>
-      <ChatAvatar chat={chat} size={50} />
-      <span className="min-w-0 flex-1">
+      <ChatAvatar chat={chat} size={54} />
+      <span className="min-w-0 flex-1 self-stretch border-b border-border/60 py-2 pr-1 group-last:border-transparent">
         <span className="flex items-center gap-1.5">
-          <span className={cx("min-w-0 flex-1 truncate text-[15px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
+          <span className={cx("min-w-0 truncate text-[15.5px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
+          {chat.muted && <RiNotificationOffLine className="size-3.5 shrink-0 text-text-tertiary" aria-label={t("vibex.chats.muted")} data-testid="chat-muted" />}
+          <span className="flex-1" />
           {chat.lastMessage?.mine &&
             (read ? <RiCheckDoubleLine className="size-4 shrink-0 text-primary" /> : <RiCheckLine className="size-4 shrink-0 text-text-tertiary" />)}
-          <span className={cx("shrink-0 text-[12px] tabular-nums text-text-tertiary", HOVER_HIDE)}>{chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}</span>
+          <span className={cx("shrink-0 text-[12.5px] tabular-nums text-text-tertiary", HOVER_HIDE)}>{chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}</span>
         </span>
-        <span className="mt-0.5 flex items-center gap-2">
-          <span className="line-clamp-1 min-w-0 flex-1 text-[14px] text-text-secondary">
+        <span className="mt-0.5 flex items-start gap-2">
+          <span className="line-clamp-2 min-w-0 flex-1 text-[14px] leading-snug text-text-secondary">
             <Preview chat={chat} />
           </span>
           {chat.unread > 0 ? (
-            <span className={cx("flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white", HOVER_HIDE)} data-testid="chat-unread">
+            <span
+              className={cx("mt-0.5 flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full px-1.5 text-[12.5px] font-semibold text-white", chat.muted ? "bg-text-tertiary/70" : "bg-primary", HOVER_HIDE)}
+              data-testid="chat-unread"
+            >
               {chat.unread}
             </span>
           ) : chat.pinnedPosition !== null ? (
-            <RiPushpin2Fill className="size-4 shrink-0 rotate-45 text-text-tertiary" aria-hidden />
+            <RiPushpin2Fill className="mt-0.5 size-4 shrink-0 rotate-45 text-text-tertiary" aria-hidden />
           ) : null}
         </span>
       </span>
@@ -118,77 +123,53 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
 const HOVER_HIDE = "transition-opacity [@media(hover:hover)]:group-hover:opacity-0";
 
 function rowClass(active: boolean) {
-  return cx(
-    "flex w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left transition-colors",
-    active ? "bg-primary-soft" : "hover:bg-surface-hover",
-  );
+  return cx("flex w-full items-center gap-3 rounded-[18px] pl-2.5 text-left transition-colors", active ? "bg-primary-soft" : "hover:bg-surface-hover");
 }
 
-/** Row actions: right-click / [...] on desktop, press-and-hold on phones. */
-function useChatMenu(chat: VibexChatDto, pinnedIds: string[]) {
-  const t = useT();
-  const setPins = useSetPins();
-  const push = useVibex((s) => s.push);
-  const pinned = chat.pinnedPosition !== null;
-  const items: MenuItem[] = [
-    pinned
-      ? { id: "unpin", label: t("vibex.chats.unpin"), icon: <RiUnpinLine className="size-5" />, onSelect: () => setPins.mutate(pinnedIds.filter((id) => id !== chat.id)) }
-      : { id: "pin", label: t("vibex.chats.pin"), icon: <RiPushpinLine className="size-5" />, onSelect: () => setPins.mutate([chat.id, ...pinnedIds]) },
-    ...(chat.peer ? [{ id: "profile", label: t("vibex.chats.profile"), icon: <RiUserLine className="size-5" />, onSelect: () => push({ kind: "person", id: chat.peer!.id }) }] : []),
-  ];
-  return items;
+/** Step 2.9: what a chat row asks its list for — the preview (phones: long press) and the actions menu (PC: right click / [...]). */
+export interface ChatRowActions {
+  pinnedIds: string[];
+  onPreview: (chat: VibexChatDto) => void;
+  onMenu: (chat: VibexChatDto, at: { x: number; y: number }) => void;
 }
 
-function RowMenu({ chat, pinnedIds, open, onClose, anchor }: { chat: VibexChatDto; pinnedIds: string[]; open: boolean; onClose: () => void; anchor: React.RefObject<HTMLElement | null> }) {
-  const ff = useFormFactor();
-  const items = useChatMenu(chat, pinnedIds);
-  if (ff === "mobile") {
-    return (
-      <Sheet open={open} onClose={onClose} title={chatTitle(chat)} testId="chat-menu">
-        <MenuList items={items} onDone={onClose} />
-      </Sheet>
-    );
-  }
-  return (
-    <Popover open={open} onClose={onClose} anchor={anchor} width={230} testId="chat-menu">
-      <MenuList items={items} onDone={onClose} />
-    </Popover>
-  );
-}
-
-/** A regular chat: tap opens it; it never moves by hand (its place follows activity). */
-function ChatRow({ chat, pinnedIds }: { chat: VibexChatDto; pinnedIds: string[] }) {
+/**
+ * A regular chat: a tap opens it; it never moves by hand (its place follows
+ * activity). Step 2.9: a long press (touch) opens its preview; a right click
+ * or the [...] button (mouse) its actions.
+ */
+function ChatRow({ chat, actions }: { chat: VibexChatDto; actions: ChatRowActions }) {
   const t = useT();
   const openChat = useVibex((s) => s.openChat);
   const activeId = useVibex((s) => s.chatId);
-  const pop = usePopover();
-  const hold = useHold({ onHold: () => pop.setOpen(true) });
+  const hold = useHold({ onHold: (e) => (e.pointerType === "mouse" ? actions.onMenu(chat, { x: e.clientX, y: e.clientY }) : actions.onPreview(chat)) });
   return (
-    <div className="group relative" data-testid="chat-row" data-chat-id={chat.id} data-pinned="false">
+    <div className="group relative" data-testid="chat-row" data-chat-id={chat.id} data-pinned="false" data-kind={chat.kind}>
       <button
         type="button"
         className={rowClass(activeId === chat.id)}
         onClick={() => !hold.fired() && openChat(chat.id)}
         onContextMenu={(e) => {
           e.preventDefault();
-          pop.setOpen(true);
+          actions.onMenu(chat, { x: e.clientX, y: e.clientY });
         }}
         {...hold.handlers}
       >
         <ChatRowBody chat={chat} active={activeId === chat.id} />
       </button>
       <IconButton
-        ref={pop.anchor}
         label={t("vibex.post.more")}
         size="sm"
         // "!": IconButton is inline-flex itself; without it the button covered the time and unread badge on every row.
         className="absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile [@media(hover:hover)]:group-hover:!inline-flex"
-        onClick={pop.toggle}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          actions.onMenu(chat, { x: r.left, y: r.bottom });
+        }}
         data-testid="chat-row-menu"
       >
         <RiMoreFill className="size-4" />
       </IconButton>
-      <RowMenu chat={chat} pinnedIds={pinnedIds} open={pop.open} onClose={pop.close} anchor={pop.anchor} />
     </div>
   );
 }
@@ -259,17 +240,18 @@ function useHold({ onHold, ms = HOLD_MS }: { onHold: (e: PointerEvent) => void; 
  * A pinned chat. Press and hold lifts it (shadow, slight scale), the other
  * pinned chats fade back, and it can be dragged to a new place among the
  * pinned ones; the rest slide out of the way. Releasing settles it, and the
- * new order is saved to the account. Releasing without moving opens the menu.
+ * new order is saved to the account. Releasing without moving opens its
+ * preview (touch) or its actions (mouse).
  */
 function PinnedRow({
   chat,
-  pinnedIds,
+  actions,
   dragging,
   onLift,
   onDrop,
 }: {
   chat: VibexChatDto;
-  pinnedIds: string[];
+  actions: ChatRowActions;
   dragging: string | null;
   onLift: (id: string) => void;
   onDrop: (moved: boolean) => void;
@@ -278,13 +260,14 @@ function PinnedRow({
   const openChat = useVibex((s) => s.openChat);
   const activeId = useVibex((s) => s.chatId);
   const controls = useDragControls();
-  const pop = usePopover();
   const moved = useRef(false);
+  const last = useRef<{ x: number; y: number; mouse: boolean }>({ x: 0, y: 0, mouse: false });
   const lifted = dragging === chat.id;
   const stopScroll = useRef<(() => void) | null>(null);
   const hold = useHold({
     onHold: (e) => {
       moved.current = false;
+      last.current = { x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" };
       onLift(chat.id);
       if (navigator.vibrate) navigator.vibrate(8);
       // While lifted, a finger moves the chat instead of scrolling the list.
@@ -313,15 +296,19 @@ function PinnedRow({
         stopScroll.current?.();
         stopScroll.current = null;
         onDrop(moved.current);
-        if (!moved.current) pop.setOpen(true);
+        if (!moved.current) {
+          if (last.current.mouse) actions.onMenu(chat, last.current);
+          else actions.onPreview(chat);
+        }
       }}
       data-testid="chat-row"
       data-chat-id={chat.id}
       data-pinned="true"
+      data-kind={chat.kind}
       data-lifted={lifted || undefined}
     >
       <motion.div
-        className={cx("group relative rounded-[20px]", lifted && "bg-surface")}
+        className={cx("group relative rounded-[18px]", lifted && "bg-surface")}
         animate={{ boxShadow: lifted ? "0 18px 42px rgba(30, 20, 80, 0.20), 0 2px 6px rgba(30, 20, 80, 0.08)" : "0 0 0 rgba(0,0,0,0)" }}
         transition={{ duration: 0.22 }}
       >
@@ -331,40 +318,55 @@ function PinnedRow({
           onClick={() => !hold.fired() && openChat(chat.id)}
           onContextMenu={(e) => {
             e.preventDefault();
-            pop.setOpen(true);
+            actions.onMenu(chat, { x: e.clientX, y: e.clientY });
           }}
           {...hold.handlers}
         >
           <ChatRowBody chat={chat} active={activeId === chat.id} />
         </button>
         <IconButton
-          ref={pop.anchor}
           label={t("vibex.post.more")}
           size="sm"
           className={cx("absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile", !dragging && "[@media(hover:hover)]:group-hover:!inline-flex")}
-          onClick={pop.toggle}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            actions.onMenu(chat, { x: r.left, y: r.bottom });
+          }}
           data-testid="chat-row-menu"
         >
           <RiMoreFill className="size-4" />
         </IconButton>
       </motion.div>
-      <RowMenu chat={chat} pinnedIds={pinnedIds} open={pop.open} onClose={pop.close} anchor={pop.anchor} />
     </Reorder.Item>
   );
 }
 
-export function ChatList() {
+const SECTION_LABEL: Record<"pinned" | "chats" | "groups" | "all", MessageKey | null> = {
+  pinned: "vibex.chats.pinned",
+  chats: "vibex.chats.sectionChats",
+  groups: "vibex.chats.sectionGroups",
+  all: null,
+};
+
+/**
+ * Step 2.9 chat list: «Закреплённые» always first (their own order, press and
+ * hold to rearrange), then «Чаты» and «Группы» in the order chosen with the
+ * filter button, or one mixed list. Long press / right click: preview and
+ * actions (see ChatsPane).
+ */
+export function ChatList({ actions, order }: { actions: Omit<ChatRowActions, "pinnedIds">; order: VibexChatOrder }) {
   const t = useT();
   const chats = useChats();
   const go = useVibex((s) => s.go);
   const setPins = useSetPins();
   const list = chats.data ?? [];
-  const serverPinned = useMemo(() => list.filter((c) => c.pinnedPosition !== null).map((c) => c.id), [list]);
-  const [order, setOrder] = useState<string[] | null>(null);
+  const serverPinned = useMemo(() => list.filter((c) => c.pinnedPosition !== null).sort((a, b) => a.pinnedPosition! - b.pinnedPosition!).map((c) => c.id), [list]);
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
-  const pinnedIds = order ?? serverPinned;
+  const pinnedIds = localOrder ?? serverPinned;
   const byId = useMemo(() => new Map(list.map((c) => [c.id, c])), [list]);
-  const regular = list.filter((c) => c.pinnedPosition === null);
+  const sections = useMemo(() => chatSections(list, order).filter((s) => s.key !== "pinned"), [list, order]);
+  const rowActions: ChatRowActions = { ...actions, pinnedIds };
 
   if (chats.isPending) {
     return (
@@ -390,43 +392,52 @@ export function ChatList() {
     );
   }
 
+  const header = (key: keyof typeof SECTION_LABEL) =>
+    SECTION_LABEL[key] && (
+      <div className="flex items-center gap-1.5 px-3 pb-1 pt-2.5 text-[12px] font-semibold uppercase tracking-wide text-text-tertiary" data-testid={`chat-section-${key}`}>
+        {key === "pinned" && <RiPushpin2Fill className="size-3.5 rotate-45" />} {t(SECTION_LABEL[key]!)}
+      </div>
+    );
+
   return (
-    <div className="flex flex-col p-2" data-testid="chat-list">
+    <div className="flex flex-col px-1.5 pb-2" data-testid="chat-list" data-order={order}>
       {pinnedIds.length > 0 && (
-        <>
-          <div className="flex items-center gap-1.5 px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wide text-text-tertiary">
-            <RiPushpin2Fill className="size-3.5 rotate-45" /> {t("vibex.chats.pinned")}
-          </div>
-          <Reorder.Group axis="y" values={pinnedIds} onReorder={setOrder} className="flex flex-col" data-testid="pinned-chats">
+        <section data-testid="chat-section" data-key="pinned">
+          {header("pinned")}
+          <Reorder.Group axis="y" values={pinnedIds} onReorder={setLocalOrder} className="flex flex-col" data-testid="pinned-chats">
             {pinnedIds.map((id) => {
               const c = byId.get(id);
               return c ? (
                 <PinnedRow
                   key={id}
                   chat={c}
-                  pinnedIds={pinnedIds}
+                  actions={rowActions}
                   dragging={dragging}
                   onLift={(x) => {
-                    setOrder(pinnedIds);
+                    setLocalOrder(pinnedIds);
                     setDragging(x);
                   }}
                   onDrop={(moved) => {
                     setDragging(null);
-                    const next = order ?? pinnedIds;
+                    const next = localOrder ?? pinnedIds;
                     if (moved && next.join() !== serverPinned.join()) {
-                      setPins.mutate(next, { onSettled: () => setOrder(null) });
-                    } else setOrder(null);
+                      setPins.mutate(next, { onSettled: () => setLocalOrder(null) });
+                    } else setLocalOrder(null);
                   }}
                 />
               ) : null;
             })}
           </Reorder.Group>
-          {regular.length > 0 && <div className="mx-3 my-1.5 h-px bg-border" />}
-        </>
+        </section>
       )}
       <motion.div className="flex flex-col" animate={{ opacity: dragging ? 0.45 : 1 }} transition={{ duration: 0.22 }}>
-        {regular.map((c) => (
-          <ChatRow key={c.id} chat={c} pinnedIds={pinnedIds} />
+        {sections.map((sec) => (
+          <section key={sec.key} data-testid="chat-section" data-key={sec.key}>
+            {header(sec.key)}
+            {sec.items.map((c) => (
+              <ChatRow key={c.id} chat={c} actions={rowActions} />
+            ))}
+          </section>
         ))}
       </motion.div>
       {dragging && <span className="sr-only">{t("vibex.chats.dragHint")}</span>}
@@ -629,7 +640,16 @@ function Bubble({
   );
 }
 
-function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMessageDto) => void }) {
+/**
+ * Step 2.9: a chat's latest messages for its preview — read-only, and it
+ * never marks anything read (no POST /read: the badge, the read marker and
+ * the other person's receipts stay as they are).
+ */
+export function ChatPreviewMessages({ chat }: { chat: VibexChatDto }) {
+  return <Messages chat={chat} onReply={() => undefined} preview />;
+}
+
+function Messages({ chat, onReply, preview = false }: { chat: VibexChatDto; onReply: (m: VibexMessageDto) => void; preview?: boolean }) {
   const t = useT();
   const lang = useLanguage();
   const q = useMessages(chat.id);
@@ -650,9 +670,9 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
   // Reading: everything on screen counts as read.
   const newest = items[0];
   useEffect(() => {
-    if (!newest || newest.mine || document.visibilityState !== "visible") return;
+    if (preview || !newest || newest.mine || document.visibilityState !== "visible") return;
     void markRead(chat.id).catch(() => undefined);
-  }, [newest?.id, chat.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [newest?.id, chat.id, preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (q.isPending) {
     return (
@@ -671,7 +691,7 @@ function Messages({ chat, onReply }: { chat: VibexChatDto; onReply: (m: VibexMes
   }
   // Rendered bottom-up (column-reverse keeps the newest at the bottom without scroll math).
   return (
-    <div className="scroll-area flex flex-1 flex-col-reverse gap-1 px-3 py-3 sm:px-5" data-testid="messages">
+    <div className={cx("scroll-area flex flex-1 flex-col-reverse gap-1 px-3 py-3 sm:px-5", preview && "pointer-events-none")} data-testid={preview ? "preview-messages" : "messages"}>
       {items.map((m, i) => {
         const older = items[i + 1];
         const newer = items[i - 1];
@@ -723,9 +743,9 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
   const ff = useFormFactor();
   const me = useSession((s) => s.user)!;
   const send = useSendMessage(chatId);
-  const voice = useRecorder("voice");
-  const circle = useRecorder("circle");
-  const [sendingRec, setSendingRec] = useState(false);
+  // Step 2.9: one button for voice and video circles (a tap switches; hold to record).
+  const [recMode, setRecMode] = useState<RecordKind>("voice");
+  const [row, setRow] = useState<HTMLDivElement | null>(null);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<VibexFileDto[]>([]);
   const [pending, setPending] = useState<Pending[]>([]);
@@ -777,31 +797,11 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
     area.current?.focus();
   };
 
-  /** Starts a voice message / video circle (microphone / camera permission is asked by the browser). */
-  const record = async (kind: RecordKind) => {
-    if (!recordingSupported(kind)) {
-      toast({ title: t("vibex.voice.unsupported"), tone: "danger" });
-      return;
-    }
-    try {
-      await (kind === "voice" ? voice : circle).start();
-    } catch {
-      toast({ title: t(kind === "voice" ? "vibex.voice.noMic" : "vibex.circle.noCamera"), tone: "danger" });
-    }
-  };
-  const sendRecording = async (kind: RecordKind) => {
-    setSendingRec(true);
-    try {
-      const rec = await (kind === "voice" ? voice : circle).stop();
-      if (!rec) return;
-      const dto = await filesApi.upload(rec.file, kind);
-      await send.mutateAsync({ text: "", fileIds: [dto.id], kind, durationMs: rec.durationMs, ...(replyTo ? { replyToId: replyTo.id } : {}) });
-      onClearReply();
-    } catch (e) {
-      toast({ title: errorMessage(t, e), tone: "danger" });
-    } finally {
-      setSendingRec(false);
-    }
+  /** A finished voice message / video circle: uploaded through the Vibex file store, then sent as one message. */
+  const sendRecording = async (kind: RecordKind, rec: Recording) => {
+    const dto = await filesApi.upload(rec.file, kind);
+    await send.mutateAsync({ text: "", fileIds: [dto.id], kind, durationMs: rec.durationMs, ...(replyTo ? { replyToId: replyTo.id } : {}) });
+    onClearReply();
   };
   const empty = !text.trim() && !files.length && !pending.length;
 
@@ -855,22 +855,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           </button>
         </div>
       )}
-      <AnimatePresence>
-        {circle.state !== "idle" && <CircleRecorder
-            stream={circle.stream}
-            elapsed={circle.elapsed}
-            max={circle.max}
-            onCancel={circle.cancel}
-            onSend={() => void sendRecording("circle")}
-            sending={sendingRec}
-            facing={circle.facing}
-            onFlip={circle.canFlip ? () => void circle.flip() : undefined}
-          />}
-      </AnimatePresence>
-      {voice.state === "recording" ? (
-        <VoiceRecordingBar elapsed={voice.elapsed} levels={voice.levels.current} onCancel={voice.cancel} onSend={() => void sendRecording("voice")} sending={sendingRec} />
-      ) : (
-      <div className="vx-glass-strong flex items-end gap-1 rounded-[26px] p-1.5">
+      <div ref={setRow} className="vx-glass-strong relative flex items-end gap-1 rounded-[26px] p-1.5" data-testid="composer-row">
         <input
           ref={input}
           type="file"
@@ -910,22 +895,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           data-testid="chat-input"
         />
         {empty ? (
-          <>
-            <IconButton label={t("vibex.circle.record")} onClick={() => void record("circle")} data-testid="chat-circle">
-              <CircleMessageGlyph className="size-[22px]" />
-            </IconButton>
-            <motion.button
-              type="button"
-              onClick={() => void record("voice")}
-              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white"
-              whileTap={{ scale: 0.9 }}
-              aria-label={t("vibex.voice.record")}
-              title={t("vibex.voice.record")}
-              data-testid="chat-voice"
-            >
-              {voice.state === "starting" ? <Spinner size={16} /> : <RiMicLine className="size-[19px]" />}
-            </motion.button>
-          </>
+          <RecordButton mode={recMode} onMode={setRecMode} onRecorded={sendRecording} barHost={row} />
         ) : (
           <motion.button
             type="button"
@@ -940,7 +910,6 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           </motion.button>
         )}
       </div>
-      )}
     </div>
   );
 }

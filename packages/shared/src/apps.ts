@@ -80,7 +80,7 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
   },
   mail: {
     id: "mail",
-    // Step 2.5: the mail service is VoidOps (addresses stay @voidops.ru).
+    // Step 2.5: the mail service is VoidOps. Step 2.9: people see addresses as username@voidops (the server keeps @voidops.ru as an alias).
     name: {
       en: "VoidOps Mail",
       ru: "Почта VoidOps",
@@ -93,7 +93,7 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
       ko: "VoidOps 메일",
       tr: "VoidOps Posta",
     },
-    caption: { en: "@voidops.ru", ru: "@voidops.ru", es: "@voidops.ru", de: "@voidops.ru", fr: "@voidops.ru", pt: "@voidops.ru", zh: "@voidops.ru", ja: "@voidops.ru", ko: "@voidops.ru", tr: "@voidops.ru" },
+    caption: { en: "@voidops", ru: "@voidops", es: "@voidops", de: "@voidops", fr: "@voidops", pt: "@voidops", zh: "@voidops", ja: "@voidops", ko: "@voidops", tr: "@voidops" },
     version: "1.0.0",
     kind: "system",
     removable: false,

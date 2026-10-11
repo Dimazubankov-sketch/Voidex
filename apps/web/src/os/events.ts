@@ -62,6 +62,8 @@ function handle(event: ServerEvent) {
       seenMessages.add(event.messageId);
       // No banner for a chat that is already on screen.
       if (visibleChats.has(event.conversationId) && document.visibilityState === "visible") break;
+      // Step 2.9: notifications of this chat are off.
+      if (queryClient.getQueryData<{ id: string; muted?: boolean }[]>(["vibex", "chats"])?.some((c) => c.id === event.conversationId && c.muted)) break;
       if (session.user?.preferences.apps?.vibex?.notifications === false) break;
       const prefs = session.user?.preferences.notifications;
       if (prefs?.newMailBanner) {
@@ -106,6 +108,9 @@ function handle(event: ServerEvent) {
       break;
     case "notifications.changed":
       notificationsChanged();
+      break;
+    case "vibex.stories":
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "stories"] });
       break;
     case "vibex.profile":
       void queryClient.invalidateQueries({ queryKey: ["vibex", "profile", event.userId] });

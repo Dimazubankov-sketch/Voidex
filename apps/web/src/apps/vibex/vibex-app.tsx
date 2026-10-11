@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
 import {
   RiAddLine,
   RiArrowLeftLine,
@@ -16,7 +16,8 @@ import { useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
-import { ChatList, Conversation } from "./chats";
+import { Conversation } from "./chats";
+import { ChatsPane } from "./chat-home";
 import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
@@ -170,12 +171,18 @@ function DesktopVibex() {
   const [manual, setManual] = useState<boolean | null>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [narrow, setNarrow] = useState(false);
+  const [hostWidth, setHostWidth] = useState(1100);
   useEffect(() => {
     if (!host) return;
-    const ro = new ResizeObserver(() => setNarrow(host.clientWidth < 860));
+    const ro = new ResizeObserver(() => {
+      setNarrow(host.clientWidth < 860);
+      setHostWidth(host.clientWidth);
+    });
     ro.observe(host);
     return () => ro.disconnect();
   }, [host]);
+  // Step 2.9: the chat list column is 300–360 px (by the window's width); the conversation takes the rest.
+  const listWidth = Math.round(Math.max(300, Math.min(360, hostWidth * 0.3)));
   const collapsed = manual ?? narrow;
   const page = stack.at(-1);
 
@@ -186,13 +193,15 @@ function DesktopVibex() {
 
       {section === "chats" && !page ? (
         <div className="flex min-w-0 flex-1">
-          <section className="relative flex w-[300px] shrink-0 flex-col border-r bg-surface">
-            <WindowHeader menu={false}>
-              <span className="flex-1 pl-1.5 text-[17px] font-bold">{t("vibex.nav.messages")}</span>
-            </WindowHeader>
-            <div className="scroll-area flex-1 pb-20">
-              <ChatList />
-            </div>
+          <section className="relative flex shrink-0 flex-col border-r bg-surface" style={{ width: listWidth }} data-testid="vibex-chat-column">
+            <ChatsPane
+              header={(stories) => (
+                <WindowHeader menu={false}>
+                  <span className="flex-1 pl-1.5 text-[17px] font-bold">{t("vibex.nav.messages")}</span>
+                  {stories}
+                </WindowHeader>
+              )}
+            />
             {/* The pencil: a new conversation (a person or a group), like the feed's "+" */}
             <NewChatFab className="bottom-5 right-5" />
           </section>
@@ -286,7 +295,7 @@ function MobileVibex() {
             <RiSearchLine className="size-[22px]" />
           </button>
         </WindowHeader>
-      ) : (
+      ) : section === "chats" ? null : (
         <WindowHeader className="border-b bg-surface">
           <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
             <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
@@ -308,7 +317,29 @@ function MobileVibex() {
         </WindowHeader>
       )}
 
-      <div className="scroll-area flex-1">{section === "chats" ? <div className="pb-20"><ChatList /></div> : <Column><SectionBody section={section} /></Column>}</div>
+      {section === "chats" ? (
+        // Step 2.9 (Telegram-like): stacked story avatars beside «Чаты»; pull down for the search, then the stories.
+        <ChatsPane
+          header={(stories) => (
+            <WindowHeader className="border-b bg-surface">
+              <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
+                <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
+              </button>
+              <span className="flex min-w-0 flex-1 items-center justify-center gap-2">
+                {stories}
+                <span className="truncate text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
+              </span>
+              <span className="size-[34px] shrink-0" aria-hidden />
+            </WindowHeader>
+          )}
+        />
+      ) : (
+        <div className="scroll-area flex-1">
+          <Column>
+            <SectionBody section={section} />
+          </Column>
+        </div>
+      )}
       {section === "chats" && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
       {(section === "feed" || section === "me") && <NewPostFab className="right-4 bottom-[84px]" />}
 
@@ -376,20 +407,36 @@ function MobileVibex() {
   );
 }
 
+/**
+ * A page over the section (chat, person, post); swipe right to go back.
+ * Step 2.9 gesture ownership: a drag that starts on an interactive player
+ * (voice waveform, a circle's ring, a carousel — anything marked
+ * data-gesture-owner) belongs to it; anywhere else the swipe-back works as
+ * before (and only a clearly horizontal drag engages it).
+ */
 function SlidePage({ children, onBack, z }: { children: ReactNode; onBack: () => void; z: number }) {
+  const controls = useDragControls();
   return (
     <motion.div
       className="absolute inset-0 flex flex-col bg-surface"
-      style={{ zIndex: z }}
+      // dragListener={false} drops motion's own touch-action, so keep vertical scrolling native here.
+      style={{ zIndex: z, touchAction: "pan-y" }}
       initial={{ x: "100%" }}
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
       transition={{ duration: 0.32, ease: EASE }}
       drag="x"
+      dragListener={false}
+      dragControls={controls}
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest("[data-gesture-owner]")) return;
+        controls.start(e);
+      }}
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={{ left: 0, right: 0.8 }}
       dragDirectionLock
       onDragEnd={(_, info) => (info.offset.x > 110 || info.velocity.x > 700) && onBack()}
+      data-testid="vibex-slide-page"
     >
       {children}
     </motion.div>
