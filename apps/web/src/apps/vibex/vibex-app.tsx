@@ -418,7 +418,9 @@ function SlidePage({ children, onBack, z }: { children: ReactNode; onBack: () =>
   const controls = useDragControls();
   return (
     <motion.div
-      className="absolute inset-0 flex flex-col bg-surface"
+      // The browser's touch-action stops at the nearest scroller, so vertical lists inside the page are pan-y
+      // too: otherwise it claims a horizontal touch (pointercancel) and the swipe back never starts.
+      className="absolute inset-0 flex flex-col bg-surface [&_.scroll-area:not(.overflow-x-auto)]:touch-pan-y"
       // dragListener={false} drops motion's own touch-action, so keep vertical scrolling native here.
       style={{ zIndex: z, touchAction: "pan-y" }}
       initial={{ x: "100%" }}
