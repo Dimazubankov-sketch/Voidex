@@ -175,7 +175,10 @@ export async function phoneHome(page: Page) {
   const y = box.y + box.height / 2;
   await page.mouse.move(x, y);
   await page.mouse.down();
-  for (let i = 1; i <= 8; i++) await page.mouse.move(x, y - (260 * i) / 8);
+  // Step 2.9: velocity + distance decide. Past 40% of the screen height is home at any speed, so a
+  // slow (loaded) run can't read it as the switcher.
+  const up = (page.viewportSize()?.height ?? 844) * 0.55;
+  for (let i = 1; i <= 8; i++) await page.mouse.move(x, y - (up * i) / 8);
   await page.mouse.up();
   await expect(page.locator('section[data-state="open"]')).toHaveCount(0);
 }
