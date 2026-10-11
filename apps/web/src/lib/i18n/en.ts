@@ -585,7 +585,7 @@ export const en = {
   "home.view": "View",
   "vibex.nav.home": "Home",
   "vibex.nav.search": "Search",
-  "vibex.nav.messages": "Messages",
+  "vibex.nav.messages": "Chats",
   "vibex.nav.profile": "Profile",
   "vibex.nav.settings": "Settings",
   "vibex.nav.menu": "Menu",
@@ -696,7 +696,7 @@ export const en = {
   "vibex.profile.followsYou": "Follows you",
   "vibex.profile.more": "More",
   "vibex.profile.block": "Block",
-  "vibex.profile.media": "Photo / Video",
+  "vibex.profile.media": "Publications",
   "vibex.profile.photos": "Photo",
   "vibex.profile.videos": "Video",
   "vibex.profile.noPhotos": "No photos in posts yet",
@@ -1257,6 +1257,14 @@ export const en = {
   "appearance.glyphS": "Small",
   "appearance.glyphM": "Normal",
   "appearance.glyphL": "Large",
+  "vibex.search.close": "Close search",
+  "vibex.composer.addFile": "Attach from Files",
+  "vibex.media.carousel": "Photos and videos ({n})",
+  "vibex.profile.noPublications": "No publications yet",
+  "vibex.profile.showText": "Show text",
+  "vibex.profile.photoMark": "Photo",
+  "vibex.profile.videoMark": "Video",
+  "vibex.profile.albumMark": "Several photos",
 } as const;
 
 export type MessageKey = keyof typeof en;

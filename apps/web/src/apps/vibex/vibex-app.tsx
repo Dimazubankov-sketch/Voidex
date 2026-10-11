@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  RiAddCircleFill,
-  RiAddCircleLine,
   RiAddLine,
   RiArrowLeftLine,
   RiChat3Fill,
@@ -22,12 +20,14 @@ import { ChatList, Conversation } from "./chats";
 import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
-import { HistorySection, PeopleSection, PostPage } from "./people";
+import { HistoryScreen, PeopleResults, PeopleSection, PostPage } from "./people";
+import { ExpandingSearch } from "./expanding-search";
 import { MePage, PersonPage } from "./profile";
 import { VibexSettingsScreen } from "./settings";
 import { useEdgeSwipe } from "./edge-swipe";
 import { ShareSheet } from "./share-sheet";
-import { SidebarDrawer, SidebarPanel } from "./sidebar";
+import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
+import { PushDrawer } from "@/ui/push-drawer";
 import { useChats, useFeed } from "./data";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
 
@@ -85,12 +85,30 @@ const SECTION_TITLE: Record<VibexSection, MessageKey> = {
 
 function Feed() {
   const feed = useFeed();
+  const query = useVibex((s) => s.feedQuery).trim();
+  // Step 2.9: the header's own search shows its results in the feed's place (the header never moves).
+  if (query) {
+    return (
+      <div className="flex flex-col gap-3" data-testid="vibex-feed-results">
+        <PeopleResults query={query} />
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-3" data-testid="vibex-feed">
       <ComposerPrompt />
       <PostList query={feed} empty={<FeedEmpty />} />
     </div>
   );
+}
+
+/** Step 2.9: the feed header's search button that grows into the field (see ExpandingSearch). */
+function FeedSearch() {
+  const t = useT();
+  const open = useVibex((s) => s.feedSearch);
+  const q = useVibex((s) => s.feedQuery);
+  const set = useVibex((s) => s.setFeedSearch);
+  return <ExpandingSearch open={open} value={q} onOpen={() => set(true)} onChange={(v) => set(true, v)} onClose={() => set(false)} placeholder={t("vibex.people.search")} />;
 }
 
 function SectionBody({ section }: { section: VibexSection }) {
@@ -100,9 +118,8 @@ function SectionBody({ section }: { section: VibexSection }) {
     case "people":
       return <PeopleSection />;
     case "history":
-      return <HistorySection kind="liked" />;
     case "bookmarks":
-      return <HistorySection kind="bookmarks" />;
+      return <HistoryScreen />;
     case "settings":
       return <VibexSettingsScreen />;
     case "me":
@@ -200,6 +217,11 @@ function DesktopVibex() {
               </IconButton>
             )}
             {!page && <span className="pl-1.5 text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>}
+            {!page && section === "feed" && (
+              <span className="relative ml-auto h-10 w-[min(360px,50%)]">
+                <FeedSearch />
+              </span>
+            )}
           </WindowHeader>
           <div className="scroll-area flex-1">
             <Column>{page ? <PageBody page={page} key={`${page.kind}:${page.id}`} /> : <SectionBody section={section} />}</Column>
@@ -222,22 +244,24 @@ function MobileVibex() {
   const stack = useVibex((s) => s.stack);
   const back = useVibex((s) => s.back);
   const chatId = useVibex((s) => s.chatId);
-  const compose = useVibex((s) => s.compose);
   const drawer = useVibex((s) => s.drawer);
   const setDrawer = useVibex((s) => s.setDrawer);
+  const feedSearch = useVibex((s) => s.feedSearch);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
   const root = useRef<HTMLDivElement>(null);
   // Swipe from the left edge opens the side menu (only on the main screens, not over a chat / page).
   useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true) });
 
+  // Step 2.9: a new post is the floating "+" (feed and profile), like the pencil in «Чаты».
   const tabs = [
     { key: "feed" as const, label: "vibex.nav.home" as const, line: RiHome5Line, fill: RiHome5Fill },
-    { key: "compose" as const, label: "vibex.newPost" as const, line: RiAddCircleLine, fill: RiAddCircleFill },
     { key: "chats" as const, label: "vibex.nav.messages" as const, line: RiChat3Line, fill: RiChat3Fill },
   ];
 
   return (
     <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* Step 2.9: the system side drawer — the menu lies under the screen, which slides right over it (no dimming). */}
+      <PushDrawer open={drawer} onClose={() => setDrawer(false)} progress={drawerProgress} width={DRAWER_WIDTH} menu={<SidebarPanel variant="drawer" onClose={() => setDrawer(false)} />} testId="vibex-drawer">
       {section === "me" ? (
         // Step 2.8 profile (the user's reference): the Vibex logo (opens the menu), "Profile", a round search button.
         <WindowHeader className="h-[60px] gap-3 px-4">
@@ -267,28 +291,39 @@ function MobileVibex() {
           <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
             <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
           </button>
-          <span className="flex-1 truncate text-center text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
-          <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search">
-            <RiSearchLine className="size-5" />
-          </IconButton>
+          {section === "feed" ? (
+            // Step 2.9: the search button grows into the field over the title, in place.
+            <span className="relative flex h-10 min-w-0 flex-1 items-center">
+              <span className={cx("flex-1 truncate pl-10 text-center text-[17px] font-bold transition-opacity", feedSearch && "opacity-0")}>{t(SECTION_TITLE[section])}</span>
+              <FeedSearch />
+            </span>
+          ) : (
+            <>
+              <span className="flex-1 truncate text-center text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
+              <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search">
+                <RiSearchLine className="size-5" />
+              </IconButton>
+            </>
+          )}
         </WindowHeader>
       )}
 
       <div className="scroll-area flex-1">{section === "chats" ? <div className="pb-20"><ChatList /></div> : <Column><SectionBody section={section} /></Column>}</div>
       {section === "chats" && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
+      {(section === "feed" || section === "me") && <NewPostFab className="right-4 bottom-[84px]" />}
 
       {/* No safe-area padding here: the window frame already keeps the home-indicator area below the app.
           (Adding it again squeezed this 64px bar on iPhone and pushed the icons across the divider.) */}
       <nav className="flex h-[68px] shrink-0 items-center justify-around border-t bg-surface px-2" data-testid="vibex-tabbar">
         {tabs.map((item) => {
-          const active = item.key !== "compose" && section === item.key;
+          const active = section === item.key;
           const Icon = active ? item.fill : item.line;
           const badge = item.key === "chats" ? unread : 0;
           return (
             <button
               key={item.key}
               type="button"
-              onClick={() => (item.key === "compose" ? compose(true) : go(item.key))}
+              onClick={() => go(item.key)}
               aria-current={active ? "page" : undefined}
               aria-label={t(item.label)}
               className="relative flex flex-1 flex-col items-center gap-0.5 py-1.5 active:scale-95"
@@ -309,7 +344,6 @@ function MobileVibex() {
         })}
       </nav>
 
-      <SidebarDrawer open={drawer} onClose={() => setDrawer(false)} />
 
       {/* Chat page */}
       <AnimatePresence>
@@ -337,6 +371,7 @@ function MobileVibex() {
           </SlidePage>
         ))}
       </AnimatePresence>
+      </PushDrawer>
     </div>
   );
 }

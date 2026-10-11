@@ -1,5 +1,5 @@
-import { Component, Suspense, useCallback, useMemo, useRef, useState, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { motion } from "motion/react";
+import { Component, Suspense, useCallback, useMemo, useRef, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { animate, motion, useReducedMotion, useTransform } from "motion/react";
 import { RiErrorWarningLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
@@ -8,7 +8,9 @@ import { Button, Spinner } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
 import { AppLockGate } from "./app-lock";
 import { WindowContext, type WindowApi } from "./window-context";
-import { gestureBarAction } from "./gesture-bar";
+import { barDrag, dragRadius, dragScale, gestureBarAction, rubberUp, slideHints } from "./gesture-bar";
+import { useGesturePeek } from "./gesture-peek";
+import { captureWindow } from "./snapshots";
 import { foregroundId, useWM, type AppWindow, type Rect } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -104,30 +106,56 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
 
   if (ff === "mobile") {
     const origin = win.origin;
-    const hiddenTarget = origin
-      ? {
-          x: origin.x + origin.w / 2 - bounds.w / 2,
-          y: origin.y + origin.h / 2 - bounds.h / 2,
-          scale: Math.max(0.12, origin.w / bounds.w),
-          opacity: 0,
-          borderRadius: 60,
-        }
-      : { x: 0, y: 40, scale: 0.9, opacity: 0, borderRadius: 30 };
+    const slid = slideHints.get(win.id);
     const visible = fg && !minimized && !wm.switcherOpen;
+    // Step 2.9: where a hidden window rests — slid out sideways (a gesture-bar switch), faded in
+    // place under the switcher (the gesture already shrank it), or back into its icon.
+    const hiddenTarget =
+      slid !== undefined
+        ? { x: slid, y: 0, scale: 1, opacity: 1, borderRadius: 0 }
+        : wm.switcherOpen && fg
+          ? { x: 0, y: 0, scale: 0.62, opacity: 0, borderRadius: 34 }
+          : origin
+            ? {
+                x: origin.x + origin.w / 2 - bounds.w / 2,
+                y: origin.y + origin.h / 2 - bounds.h / 2,
+                scale: Math.max(0.12, origin.w / bounds.w),
+                opacity: 0,
+                borderRadius: 60,
+              }
+            : { x: 0, y: 40, scale: 0.9, opacity: 0, borderRadius: 30 };
+    const enterFrom = visible ? slideHints.get(`enter:${win.id}`) : undefined;
     return (
       <motion.section
         aria-label={win.appId}
         data-testid={`window-${win.appId}`}
         data-state={visible ? "open" : "hidden"}
-        className="vx-app absolute inset-0 flex flex-col overflow-hidden"
+        data-window-id={win.id}
+        className="absolute inset-0 flex flex-col"
         style={{ zIndex: z, pointerEvents: visible ? "auto" : "none", visibility: undefined }}
         initial={hiddenTarget}
-        animate={visible ? { x: 0, y: 0, scale: 1, opacity: 1, borderRadius: 0 } : hiddenTarget}
-        transition={{ duration: 0.42, ease: EASE }}
+        animate={
+          visible
+            ? enterFrom !== undefined
+              ? { x: [enterFrom, 0], y: 0, scale: 1, opacity: 1, borderRadius: 0 }
+              : { x: 0, y: 0, scale: 1, opacity: 1, borderRadius: 0 }
+            : hiddenTarget
+        }
+        transition={slid !== undefined && !visible ? { duration: 0 } : enterFrom !== undefined ? { duration: 0.34, ease: EASE } : { duration: 0.42, ease: EASE }}
+        onAnimationComplete={() => {
+          if (visible) {
+            slideHints.delete(win.id);
+            slideHints.delete(`enter:${win.id}`);
+          }
+        }}
         aria-hidden={!visible}
       >
-        <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)]">{content}</div>
-        <HomeIndicator />
+        <DraggedApp active={visible}>
+          <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)]" data-window-content={win.id}>
+            {content}
+          </div>
+          <HomeIndicator />
+        </DraggedApp>
       </motion.section>
     );
   }
@@ -177,44 +205,128 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
 }
 
 /**
- * iPhone-style home indicator: swipe up → workspace, swipe up and hold →
- * app switcher, swipe sideways → the previous / next open app (Step 2.7).
- * Its own strip below the app, so it never fights the app's own gestures;
- * a cancelled pointer resets it; nothing touches the browser history.
+ * Step 2.9: the foreground app under the finger. While the gesture bar is
+ * dragged the whole app moves with it, shrinks and rounds its corners, and
+ * its neighbours come in beside it (see GesturePeek); at rest it is a plain
+ * full-screen app.
+ */
+function DraggedApp({ active, children }: { active: boolean; children: ReactNode }) {
+  const height = useWM((s) => s.bounds.h);
+  const scale = useTransform(barDrag.y, (y) => dragScale(-y, height));
+  const radius = useTransform(barDrag.y, (y) => dragRadius(-y));
+  return (
+    <motion.div
+      className="vx-app relative flex min-h-0 flex-1 flex-col overflow-hidden"
+      style={active ? { x: barDrag.x, y: barDrag.y, scale, borderRadius: radius, transformOrigin: "50% 100%" } : undefined}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+const SETTLE = { type: "spring", stiffness: 520, damping: 46 } as const;
+
+/** Sideways switch from the gesture bar: this app slides out, the other one slides in from the other side. */
+function slideTo(dir: -1 | 1, width: number) {
+  const s = useWM.getState();
+  const from = s.focusedId;
+  const list = Object.values(s.windows).sort((a, b) => a.openedAt - b.openedAt || a.id.localeCompare(b.id));
+  const i = list.findIndex((w) => w.id === from);
+  const next = i < 0 ? undefined : list[i + dir];
+  if (!from || !next) return false;
+  // Right swipe (dir -1, the app before): this one leaves to the right, the other enters from the left.
+  const out = dir === -1 ? width : -width;
+  slideHints.set(from, out);
+  slideHints.delete(next.id);
+  slideHints.set(`enter:${next.id}`, -out);
+  barDrag.x.set(0);
+  barDrag.y.set(0);
+  return s.switchAdjacent(dir);
+}
+
+/**
+ * iPhone-style home indicator (Step 2.9: the app follows the finger):
+ *   drag up      the app moves up with the finger, shrinks into a card, the
+ *                other open apps appear beside it
+ *   release      in the middle → the app switcher; far up or a flick → home;
+ *                a small move → the app settles back
+ *   sideways     the app slides with the finger; past the threshold (or a
+ *                flick) the previous / next app slides in
+ * Velocity and distance decide; pointercancel puts everything back; with
+ * reduced motion the result is applied without the travel.
  */
 function HomeIndicator() {
   const t = useT();
   const goHome = useWM((s) => s.goHome);
   const setSwitcher = useWM((s) => s.setSwitcher);
-  const switchAdjacent = useWM((s) => s.switchAdjacent);
-  const start = useRef<{ x: number; y: number; at: number; id: number } | null>(null);
-  const [shift, setShift] = useState({ x: 0, y: 0 });
+  const reduced = useReducedMotion();
+  const start = useRef<{ x: number; y: number; at: number; id: number; axis: "x" | "y" | null; samples: { x: number; y: number; t: number }[] } | null>(null);
+  const settle = () => {
+    if (reduced) {
+      barDrag.x.set(0);
+      barDrag.y.set(0);
+      return;
+    }
+    void animate(barDrag.x, 0, SETTLE);
+    void animate(barDrag.y, 0, SETTLE);
+  };
   const reset = () => {
     start.current = null;
-    setShift({ x: 0, y: 0 });
+    useGesturePeek.setState({ active: false });
+    settle();
   };
   return (
     <div
       className="vx-home-indicator relative flex h-[calc(22px+var(--safe-bottom))] shrink-0 cursor-grab touch-none select-none items-start justify-center"
       onPointerDown={(e) => {
         if (e.button !== 0) return;
-        start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId };
+        const fg = foregroundId(useWM.getState());
+        // The switcher card shows exactly this screen.
+        if (fg) captureWindow(fg);
+        start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId, axis: null, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
       onPointerMove={(e) => {
         const s0 = start.current;
         if (!s0 || s0.id !== e.pointerId) return;
-        setShift({ x: Math.max(-60, Math.min(60, (e.clientX - s0.x) * 0.35)), y: Math.min(0, (e.clientY - s0.y) * 0.3) });
+        const dx = e.clientX - s0.x;
+        const dy = e.clientY - s0.y;
+        s0.samples.push({ x: e.clientX, y: e.clientY, t: performance.now() });
+        if (s0.samples.length > 6) s0.samples.shift();
+        if (!s0.axis) {
+          if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+          s0.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? "x" : "y";
+          useGesturePeek.setState({ active: true, axis: s0.axis });
+        }
+        if (reduced) return;
+        const height = useWM.getState().bounds.h;
+        if (s0.axis === "y") {
+          barDrag.y.set(rubberUp(dy, height));
+          barDrag.x.set(dx * 0.6);
+        } else {
+          barDrag.x.set(dx);
+          barDrag.y.set(Math.min(0, dy) * 0.2);
+        }
       }}
       onPointerUp={(e) => {
         const s0 = start.current;
-        reset();
-        if (!s0 || s0.id !== e.pointerId) return;
-        const action = gestureBarAction(e.clientX - s0.x, e.clientY - s0.y, performance.now() - s0.at);
-        if (action === "prev") switchAdjacent(-1);
-        else if (action === "next") switchAdjacent(1);
-        else if (action === "home") goHome();
+        start.current = null;
+        if (!s0 || s0.id !== e.pointerId) return reset();
+        const now = performance.now();
+        const first = s0.samples[0]!;
+        const dt = Math.max(1, now - first.t);
+        const vx = ((e.clientX - first.x) / dt) * 1000;
+        const vy = ((e.clientY - first.y) / dt) * 1000;
+        const { w, h } = useWM.getState().bounds;
+        const action = gestureBarAction(e.clientX - s0.x, e.clientY - s0.y, now - s0.at, { vx, vy, height: h });
+        useGesturePeek.setState({ active: false });
+        if (action === "prev" || action === "next") {
+          if (!slideTo(action === "prev" ? -1 : 1, w)) settle();
+          return;
+        }
+        if (action === "home") goHome();
         else if (action === "switcher") setSwitcher(true);
+        settle();
       }}
       onPointerCancel={reset}
       onLostPointerCapture={() => start.current && reset()}
@@ -223,15 +335,13 @@ function HomeIndicator() {
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter") goHome();
-        else if (e.key === "ArrowLeft") switchAdjacent(-1);
-        else if (e.key === "ArrowRight") switchAdjacent(1);
+        else if (e.key === "ArrowUp") setSwitcher(true);
+        else if (e.key === "ArrowLeft") slideTo(-1, useWM.getState().bounds.w);
+        else if (e.key === "ArrowRight") slideTo(1, useWM.getState().bounds.w);
       }}
       data-testid="home-indicator"
     >
-      <div
-        className="mt-2 h-[5px] w-32 rounded-full bg-text/80"
-        style={{ transform: `translate(${shift.x}px, ${shift.y}px)`, transition: start.current ? "none" : "transform 200ms ease" }}
-      />
+      <div className="mt-2 h-[5px] w-32 rounded-full bg-text/80" />
     </div>
   );
 }

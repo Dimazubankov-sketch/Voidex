@@ -55,7 +55,7 @@ async function launch(page: Page, id: AppId) {
 
 async function openChat(page: Page) {
   await launch(page, "vibex");
-  if (isMobile(page)) await page.getByTestId("vibex-tab-chats").or(page.getByRole("button", { name: "Сообщения" })).first().click();
+  if (isMobile(page)) await page.getByTestId("vibex-tab-chats").or(page.getByRole("button", { name: "Чаты" })).first().click();
   else await page.getByTestId("vibex-nav-chats").click();
   await page.getByTestId("chat-row").first().click();
   await expect(page.getByTestId("chat-input")).toBeVisible();

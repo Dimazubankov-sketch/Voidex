@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { RiArrowLeftSLine, RiCloseLine, RiMenuLine, RiPencilLine, RiSearchLine } from "@remixicon/react";
 import { cx } from "@/lib/cx";
+import { PushDrawer } from "@/ui/push-drawer";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
@@ -157,7 +158,27 @@ function MobileMail() {
   const [searching, setSearching] = useState(!!query);
   const me = useSession((s) => s.user)!;
 
+  // Step 2.9: the system side drawer (the folders lie under the screen, which slides right over them; no dimming).
+  const folders = (
+    <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)]" data-testid="mail-drawer-panel">
+      <div className="flex items-center gap-2 px-5 pb-3 pt-5">
+        <MailGlyph className="size-7" />
+        <div className="min-w-0">
+          <div className="text-[17px] font-semibold">{t("mail.title")}</div>
+          <div className="truncate text-[12px] text-text-secondary">{me.mailAddress}</div>
+        </div>
+      </div>
+      <div className="px-4 pb-3">
+        <ComposeButton className={cx("h-12")} />
+      </div>
+      <div className="scroll-area flex-1 px-2">
+        <FolderNav />
+      </div>
+    </div>
+  );
+
   return (
+    <PushDrawer open={drawer} onClose={() => setDrawer(false)} menu={folders} width={300} testId="mail-drawer-root">
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <WindowHeader>
         {searching ? (
@@ -224,41 +245,7 @@ function MobileMail() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Folders drawer */}
-      <AnimatePresence>
-        {drawer && (
-          <>
-            <motion.div className="absolute inset-0 z-30 bg-[rgba(20,20,30,0.25)]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDrawer(false)} />
-            <motion.aside
-              className="absolute inset-y-0 left-0 z-40 flex w-[82%] max-w-[320px] flex-col rounded-r-[28px] bg-surface shadow-window"
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ duration: 0.3, ease: EASE }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={{ left: 0.8, right: 0 }}
-              onDragEnd={(_, info) => (info.offset.x < -80 || info.velocity.x < -600) && setDrawer(false)}
-              data-testid="mail-drawer-panel"
-            >
-              <div className="flex items-center gap-2 px-5 pb-3 pt-5">
-                <MailGlyph className="size-7" />
-                <div className="min-w-0">
-                  <div className="text-[17px] font-semibold">{t("mail.title")}</div>
-                  <div className="truncate text-[12px] text-text-secondary">{me.mailAddress}</div>
-                </div>
-              </div>
-              <div className="px-4 pb-3">
-                <ComposeButton className={cx("h-12")} />
-              </div>
-              <div className="scroll-area flex-1 px-2">
-                <FolderNav />
-              </div>
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
     </div>
+    </PushDrawer>
   );
 }

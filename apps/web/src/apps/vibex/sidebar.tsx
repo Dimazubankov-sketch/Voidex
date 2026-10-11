@@ -1,7 +1,6 @@
 import type { ComponentType } from "react";
-import { animate, motion, motionValue, useTransform, type PanInfo } from "motion/react";
+import { motionValue } from "motion/react";
 import {
-  RiBookmarkLine,
   RiChat3Line,
   RiCloseLine,
   RiHeart3Line,
@@ -12,7 +11,6 @@ import {
   RiSidebarUnfoldLine,
   RiUser3Line,
 } from "@remixicon/react";
-import { useEffect } from "react";
 import { Avatar, VibexGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { useT, type MessageKey } from "@/lib/i18n";
@@ -35,7 +33,8 @@ interface Row {
 
 /**
  * Vibex side menu (Step 2.3, enlarged in Step 2.8): the Vibex mark on top,
- * the account card (my page), the sections, and Settings at the bottom:
+ * the account card (my page), the sections (Step 2.9: «Закладки» is a tab of
+ * «История», «Сообщения» are «Чаты»), and Settings at the bottom:
  * Vibex's OWN settings screen. Identity is the VOIDEX account: no account
  * switching and no separate sign-out here.
  */
@@ -44,7 +43,6 @@ const MAIN: Row[] = [
   { key: "feed", label: "vibex.nav.home", icon: RiHome5Line },
   { key: "chats", label: "vibex.nav.messages", icon: RiChat3Line },
   { key: "people", label: "vibex.nav.search", icon: RiSearchLine },
-  { key: "bookmarks", label: "vibex.nav.bookmarks", icon: RiBookmarkLine },
   { key: "history", label: "vibex.nav.history", icon: RiHeart3Line },
 ];
 
@@ -63,7 +61,7 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
   };
 
   const item = (row: Row) => {
-    const selected = row.key === section && !stack.length;
+    const selected = (row.key === section || (row.key === "history" && section === "bookmarks")) && !stack.length;
     const Icon = row.icon;
     const badge = row.key === "chats" ? unread : 0;
     return (
@@ -102,7 +100,7 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
         variant === "rail" && "shrink-0 border-r",
         collapsed ? "px-2 py-3" : "px-3 py-3",
         variant === "drawer" && "pb-[max(env(safe-area-inset-bottom),16px)]",
-        variant === "drawer" && "w-full shadow-float",
+        variant === "drawer" && "w-full",
       )}
       style={rail ? { width: collapsed ? RAIL_COLLAPSED : RAIL_WIDTH } : undefined}
       data-testid="vibex-sidebar"
@@ -174,45 +172,5 @@ function BrandRow({ drag, className, children }: { drag: boolean; className: str
   );
 }
 
-/** Drawer position shared with the left-edge swipe: 0 closed … 1 open (Vibex is a single window). */
+/** Drawer position shared with the left-edge swipe: 0 closed … 1 open (the system PushDrawer, Step 2.9). */
 export const drawerProgress = motionValue(0);
-
-/**
- * Phones: the same panel as a drawer from the left. It follows the finger —
- * opened by a swipe from the left edge (useEdgeSwipe), closed by a swipe to
- * the left or a tap outside.
- */
-export function SidebarDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const t = useT();
-  const progress = drawerProgress;
-  const x = useTransform(progress, (p) => `${(p - 1) * 100}%`);
-  const scrim = useTransform(progress, [0, 1], [0, 1]);
-
-  useEffect(() => {
-    void animate(progress, open ? 1 : 0, { type: "spring", stiffness: 420, damping: 42 });
-  }, [open, progress]);
-
-  const onPan = (_: unknown, info: PanInfo) => {
-    if (info.offset.x < 0) progress.set(Math.max(0, 1 + info.offset.x / DRAWER_WIDTH));
-  };
-  const onPanEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.x < -DRAWER_WIDTH * 0.3 || info.velocity.x < -500) onClose();
-    else void animate(progress, 1, { type: "spring", stiffness: 420, damping: 42 });
-  };
-
-  return (
-    <div className={cx("absolute inset-0 z-40", !open && "pointer-events-none")} aria-hidden={!open}>
-      <motion.button
-        type="button"
-        aria-label={t("common.close")}
-        onClick={onClose}
-        className="absolute inset-0 bg-black/30"
-        style={{ opacity: scrim }}
-        tabIndex={open ? 0 : -1}
-      />
-      <motion.div className="absolute inset-y-0 left-0 touch-pan-y" style={{ width: DRAWER_WIDTH, maxWidth: "86%", x }} onPan={onPan} onPanEnd={onPanEnd} data-testid="vibex-drawer" data-open={open || undefined}>
-        <SidebarPanel variant="drawer" onClose={onClose} />
-      </motion.div>
-    </div>
-  );
-}

@@ -20,6 +20,10 @@ export interface VibexUiState {
   commentsFor: string | null;
   /** Phones: the side menu drawer. */
   drawer: boolean;
+  /** Step 2.9: the feed header's search (grown from its button) and what is typed in it. */
+  feedSearch: boolean;
+  feedQuery: string;
+  setFeedSearch: (open: boolean, query?: string) => void;
   go: (s: VibexSection) => void;
   openChat: (id: string | null) => void;
   push: (p: VibexPage) => void;
@@ -42,7 +46,12 @@ export function createVibexStore() {
     sharing: null,
     commentsFor: null,
     drawer: false,
-    go: (section) => set({ section, stack: [], chatId: null, commentsFor: null, drawer: false }),
+    feedSearch: false,
+    feedQuery: "",
+    setFeedSearch: (feedSearch, feedQuery = "") => set({ feedSearch, feedQuery }),
+    // Step 2.9: "Закладки" live inside "История" (its second tab).
+    go: (section) =>
+      set(section === "bookmarks" ? { section: "history", historyKind: "bookmarks", stack: [], chatId: null, commentsFor: null, drawer: false } : { section, stack: [], chatId: null, commentsFor: null, drawer: false }),
     openChat: (chatId) => set({ section: "chats", chatId, stack: [] }),
     push: (p) => set((s) => (p.kind === "chat" ? { section: "chats", chatId: p.id, stack: [] } : { stack: [...s.stack, p] })),
     back: () => set((s) => (s.stack.length ? { stack: s.stack.slice(0, -1) } : { chatId: null })),

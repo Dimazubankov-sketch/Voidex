@@ -10,6 +10,8 @@ import { CloseGuard } from "./close-guard";
 import { VoidexCloudDialog } from "./cloud/cloud-dialog";
 import { useConnection, useServerEvents } from "./events";
 import { AppSwitcher } from "./app-switcher";
+import { GesturePeek } from "./gesture-peek";
+import { startSnapshots } from "./snapshots";
 import { DesktopDock, dockZone } from "./home/dock";
 import { useWorkspaceLayout } from "./home/layout";
 import { HomeScreen } from "./home/home-screen";
@@ -46,6 +48,8 @@ export function Workspace() {
   const { layout } = useWorkspaceLayout();
 
   useServerEvents();
+  // Step 2.9: the switcher's cards show each app's last screen.
+  useEffect(() => startSnapshots(), []);
   // One request for the bell's badge; later changes arrive over the event stream.
   useNotifications();
   // Phone: a pull from the very top edge opens the Notification Center (also inside apps).
@@ -116,6 +120,7 @@ export function Workspace() {
       <HomeScreen receded={anyVisible && ff === "desktop"} hidden={anyVisible && ff === "mobile"} launcherBtn={launcherBtn} brushBtn={brushBtn} />
       {ff === "desktop" && <SystemBar launcherBtn={launcherBtn} brushBtn={brushBtn} />}
       <div ref={layer} className="pointer-events-none absolute inset-x-0 [&>*]:pointer-events-auto" style={{ zIndex: 20, top, bottom: zone }} data-testid="window-layer">
+        {ff === "mobile" && <GesturePeek />}
         {hydrated && wm.order.map((id) => wm.windows[id] && <WindowFrame key={id} win={wm.windows[id]!} launcherRect={() => rectOf(launcherBtn.current)} />)}
       </div>
       {ff === "desktop" && <DesktopDock />}

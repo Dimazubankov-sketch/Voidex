@@ -127,8 +127,8 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
     status: "available",
     category: "communication",
     keywords: {
-      en: ["messenger", "chat", "messages", "feed", "posts", "social"],
-      ru: ["мессенджер", "чат", "сообщения", "лента", "посты", "соцсеть"],
+      en: ["messenger", "chat", "chats", "messages", "stories", "feed", "posts", "social"],
+      ru: ["мессенджер", "чат", "чаты", "сообщения", "истории", "лента", "посты", "соцсеть"],
       es: ["mensajería", "chat", "mensajes", "noticias", "publicaciones", "social"],
       de: ["Messenger", "Chat", "Nachrichten", "Feed", "Beiträge", "sozial"],
       fr: ["messagerie", "discussion", "messages", "fil", "publications", "social"],

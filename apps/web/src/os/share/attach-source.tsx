@@ -14,6 +14,8 @@ import { useCloudDialog, useCloudStatus } from "@/os/cloud/cloud";
 import { sessionFiles, sessionMedia } from "@/os/cloud/session";
 
 type Step = "choose" | "files" | "media";
+/** Step 2.9: which sources a chooser offers (a post's Media button: Media + device; its paperclip: Files only). */
+export type AttachSource = "files" | "media" | "device";
 const PRSN_MIME = "application/vnd.voidex.prsn+json";
 
 /**
@@ -30,6 +32,7 @@ export function AttachSourceSheet({
   onPick,
   max,
   testId = "attach-source",
+  sources = ["files", "media", "device"],
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,33 +40,34 @@ export function AttachSourceSheet({
   onPick: (files: File[]) => void;
   max: number;
   testId?: string;
+  sources?: AttachSource[];
 }) {
   const t = useT();
-  const [step, setStep] = useState<Step>("choose");
+  // One VOIDEX source alone opens straight on it (no way back to a chooser it doesn't have).
+  const only = sources.length === 1 && sources[0] !== "device" ? (sources[0] as Exclude<Step, "choose">) : null;
+  const first: Step = only ?? "choose";
+  const [step, setStep] = useState<Step>(first);
   useEffect(() => {
-    if (open) setStep("choose");
-  }, [open]);
+    if (open) setStep(first);
+  }, [open, first]);
+  const device = sources.includes("device")
+    ? () => {
+        onClose();
+        onDevice();
+      }
+    : undefined;
+  const back = only ? undefined : () => setStep("choose");
   const title = step === "choose" ? t("attach.title") : step === "files" ? t("attach.files") : t("attach.media");
   return (
     <Sheet open={open} onClose={onClose} title={title} width={460} testId={testId} centered>
       {step === "choose" ? (
-        <Choose
-          testId={testId}
-          onStep={setStep}
-          onDevice={() => {
-            onClose();
-            onDevice();
-          }}
-        />
+        <Choose testId={testId} onStep={setStep} onDevice={device} sources={sources} />
       ) : step === "files" ? (
         <FilesSource
           testId={testId}
           max={max}
-          onBack={() => setStep("choose")}
-          onDevice={() => {
-            onClose();
-            onDevice();
-          }}
+          onBack={back}
+          onDevice={device}
           onPick={(f) => {
             onClose();
             onPick(f);
@@ -73,11 +77,8 @@ export function AttachSourceSheet({
         <MediaSource
           testId={testId}
           max={max}
-          onBack={() => setStep("choose")}
-          onDevice={() => {
-            onClose();
-            onDevice();
-          }}
+          onBack={back}
+          onDevice={device}
           onPick={(f) => {
             onClose();
             onPick(f);
@@ -88,7 +89,7 @@ export function AttachSourceSheet({
   );
 }
 
-function Choose({ onStep, onDevice, testId }: { onStep: (s: Step) => void; onDevice: () => void; testId: string }) {
+function Choose({ onStep, onDevice, testId, sources }: { onStep: (s: Step) => void; onDevice?: () => void; testId: string; sources: AttachSource[] }) {
   const t = useT();
   const ff = useFormFactor();
   const rows = [
@@ -99,9 +100,9 @@ function Choose({ onStep, onDevice, testId }: { onStep: (s: Step) => void; onDev
       icon: ff === "mobile" ? <RiSmartphoneLine className="size-7 text-text-secondary" /> : <RiComputerLine className="size-7 text-text-secondary" />,
       label: t("attach.device"),
       hint: t("attach.deviceHint"),
-      run: onDevice,
+      run: () => onDevice?.(),
     },
-  ];
+  ].filter((r) => sources.includes(r.id as AttachSource));
   return (
     <div className="flex flex-col gap-2" data-testid={`${testId}-options`}>
       {rows.map((r) => (
@@ -134,7 +135,7 @@ function Back({ onBack }: { onBack: () => void }) {
 }
 
 /** Nothing to offer: the cloud is off and this session holds nothing. Says so; no fake items. */
-function Empty({ onDevice, testId, text }: { onDevice: () => void; testId: string; text: string }) {
+function Empty({ onDevice, testId, text }: { onDevice?: () => void; testId: string; text: string }) {
   const t = useT();
   const show = useCloudDialog((s) => s.show);
   const cloud = useCloudStatus();
@@ -149,9 +150,11 @@ function Empty({ onDevice, testId, text }: { onDevice: () => void; testId: strin
         <button type="button" onClick={() => show("attach")} className="h-10 rounded-full bg-surface-secondary px-4 text-[14px] font-medium text-text">
           {t("cloud.more")}
         </button>
-        <button type="button" onClick={onDevice} className="h-10 rounded-full bg-primary px-4 text-[14px] font-semibold text-white" data-testid={`${testId}-empty-device`}>
-          {t("attach.device")}
-        </button>
+        {onDevice && (
+          <button type="button" onClick={onDevice} className="h-10 rounded-full bg-primary px-4 text-[14px] font-semibold text-white" data-testid={`${testId}-empty-device`}>
+            {t("attach.device")}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -173,14 +176,14 @@ function Footer({ count, busy, onAttach }: { count: number; busy: boolean; onAtt
   );
 }
 
-function FilesSource({ onBack, onDevice, onPick, max, testId }: { onBack: () => void; onDevice: () => void; onPick: (f: File[]) => void; max: number; testId: string }) {
+function FilesSource({ onBack, onDevice, onPick, max, testId }: { onBack?: () => void; onDevice?: () => void; onPick: (f: File[]) => void; max: number; testId: string }) {
   const t = useT();
   const files = useMemo(() => sessionFiles().peek(), []);
   const [picked, setPicked] = useState<string[]>([]);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length < max ? [...p, id] : p));
   return (
     <div data-testid={`${testId}-files`}>
-      <Back onBack={onBack} />
+      {onBack && <Back onBack={onBack} />}
       {!files.length ? (
         <Empty onDevice={onDevice} testId={testId} text={t("attach.filesEmpty")} />
       ) : (
@@ -221,7 +224,7 @@ function FilesSource({ onBack, onDevice, onPick, max, testId }: { onBack: () => 
   );
 }
 
-function MediaSource({ onBack, onDevice, onPick, max, testId }: { onBack: () => void; onDevice: () => void; onPick: (f: File[]) => void; max: number; testId: string }) {
+function MediaSource({ onBack, onDevice, onPick, max, testId }: { onBack?: () => void; onDevice?: () => void; onPick: (f: File[]) => void; max: number; testId: string }) {
   const t = useT();
   const items = useMemo<MediaItem[]>(() => sessionMedia().peek().items.filter((m) => !m.deletedAt && !m.hidden), []);
   const [picked, setPicked] = useState<string[]>([]);
@@ -239,7 +242,7 @@ function MediaSource({ onBack, onDevice, onPick, max, testId }: { onBack: () => 
   };
   return (
     <div data-testid={`${testId}-media`}>
-      <Back onBack={onBack} />
+      {onBack && <Back onBack={onBack} />}
       {!items.length ? (
         <Empty onDevice={onDevice} testId={testId} text={t("attach.mediaEmpty")} />
       ) : (

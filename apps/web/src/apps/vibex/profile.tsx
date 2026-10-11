@@ -17,8 +17,11 @@ import {
   RiUserFollowLine,
   RiUserForbidLine,
   RiUserSearchLine,
+  RiPlayFill,
+  RiStackLine,
+  RiImageLine,
 } from "@remixicon/react";
-import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexFileDto, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
+import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexPostDto, type VibexProfileDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -31,8 +34,8 @@ import {
   useCoverUrl,
   useFollow,
   useFollowList,
-  usePersonMedia,
   usePersonPosts,
+  usePersonPublications,
   useProfile,
   useUpdateProfile,
   useUpdateSettings,
@@ -40,9 +43,9 @@ import {
   uploadAvatar,
   uploadCover,
 } from "./data";
-import { Lightbox, VibexImage, VibexVideoTile } from "./media";
+import { MediaGrid, VibexImage, VibexVideoTile } from "./media";
 import { PhotoEditor, type PhotoShape } from "./photo-editor";
-import { FeedEmpty, PostList } from "./posts";
+import { FeedEmpty, PostActions, PostList } from "./posts";
 import { useVibex } from "./store";
 
 /** Soft VOIDEX cover when the person has none (no stock photos): milk and two violets. */
@@ -323,10 +326,11 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
 /** Profile tabs (reference): a card of three segments; the active one violet with a violet line under it. */
 function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const t = useT();
+  // Step 2.9: Публикации · Посты · Репосты.
   const tabs: [Tab, MessageKey][] = [
+    ["media", "vibex.profile.media"],
     ["posts", "vibex.profile.posts"],
     ["reposts", "vibex.profile.reposts"],
-    ["media", "vibex.profile.media"],
   ];
   return (
     <div className="sticky top-0 z-10 flex items-stretch rounded-[22px] border border-border/60 bg-surface/95 p-1.5 shadow-tile backdrop-blur" role="tablist" data-testid="profile-tabs">
@@ -611,47 +615,48 @@ export function ProfileEditor({ profile, open, onClose }: { profile: VibexProfil
 
 // ------------------------------------------------------------------- media
 
-/** Profile "Photo / Video": every picture / video from the person's posts — no uploads of its own. */
-function MediaTab({ userId }: { userId: string }) {
+/**
+ * Step 2.9 «Публикации»: one grid of the person's media posts — each tile is
+ * a post's first photo / video with a small photo / video mark in its corner
+ * (no separate Photo / Video buttons). A tap opens the publication media
+ * first; its text stays folded under «Показать текст». The same posts are in
+ * «Посты» as full cards: two views of one post, nothing copied.
+ */
+function PublicationsTab({ userId }: { userId: string }) {
   const t = useT();
-  const [kind, setKind] = useState<"photo" | "video">("photo");
-  const q = usePersonMedia(userId, kind);
-  const [open, setOpen] = useState<number | null>(null);
+  const q = usePersonPublications(userId);
+  const [open, setOpen] = useState<VibexPostDto | null>(null);
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
-  const files: VibexFileDto[] = items.map((i) => i.file);
   return (
     <div className="flex flex-col gap-3" data-testid="profile-media">
-      <div className="mx-auto flex rounded-full bg-surface p-1 shadow-tile" role="tablist">
-        {(["photo", "video"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={kind === k}
-            onClick={() => {
-              setKind(k);
-              setOpen(null);
-            }}
-            className={cx("h-8 rounded-full px-5 text-[13.5px] font-semibold transition", kind === k ? "bg-primary text-white" : "text-text-secondary hover:text-text")}
-            data-testid={`media-kind-${k}`}
-          >
-            {t(k === "photo" ? "vibex.profile.photos" : "vibex.profile.videos")}
-          </button>
-        ))}
-      </div>
       {q.isPending ? (
         <Skeleton className="h-48 rounded-2xl" />
       ) : !items.length ? (
-        <EmptyState icon={<RiImageEditLine className="size-7" />} title={t(kind === "photo" ? "vibex.profile.noPhotos" : "vibex.profile.noVideos")} />
+        <EmptyState icon={<RiImageEditLine className="size-7" />} title={t("vibex.profile.noPublications")} />
       ) : (
         <div className="grid grid-cols-3 gap-1 overflow-hidden rounded-2xl" data-testid="profile-media-grid">
-          {items.map((i, n) =>
-            i.file.kind === "video" ? (
-              <VibexVideoTile key={i.file.id} file={i.file} className="aspect-square w-full" onClick={() => setOpen(n)} />
-            ) : (
-              <VibexImage key={i.file.id} file={i.file} className="aspect-square w-full" onClick={() => setOpen(n)} />
-            ),
-          )}
+          {items.map((p) => {
+            const first = p.media.find((m) => m.kind === "image" || m.kind === "video");
+            if (!first) return null;
+            const several = p.media.filter((m) => m.kind === "image" || m.kind === "video").length > 1;
+            return (
+              <div key={p.id} className="relative" data-testid="publication-tile" data-post-id={p.id} data-kind={first.kind}>
+                {first.kind === "video" ? (
+                  <VibexVideoTile file={first} className="aspect-square w-full" onClick={() => setOpen(p)} />
+                ) : (
+                  <VibexImage file={first} className="aspect-square w-full" onClick={() => setOpen(p)} />
+                )}
+                <span
+                  className="pointer-events-none absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"
+                  aria-label={t(first.kind === "video" ? "vibex.profile.videoMark" : several ? "vibex.profile.albumMark" : "vibex.profile.photoMark")}
+                  data-testid="publication-mark"
+                  data-mark={first.kind === "video" ? "video" : several ? "album" : "photo"}
+                >
+                  {first.kind === "video" ? <RiPlayFill className="size-3.5" /> : several ? <RiStackLine className="size-3.5" /> : <RiImageLine className="size-3.5" />}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
       {q.hasNextPage && (
@@ -659,8 +664,35 @@ function MediaTab({ userId }: { userId: string }) {
           {t("vibex.feed.more")}
         </Button>
       )}
-      <Lightbox files={files} index={open} onIndex={setOpen} />
+      <PublicationSheet post={open} onClose={() => setOpen(null)} />
     </div>
+  );
+}
+
+/** A publication, media first: the photos / videos, then «Показать текст» to unfold the caption, then the actions. */
+function PublicationSheet({ post, onClose }: { post: VibexPostDto | null; onClose: () => void }) {
+  const t = useT();
+  const [shown, setShown] = useState(false);
+  useEffect(() => setShown(false), [post?.id]);
+  return (
+    <Sheet open={!!post} onClose={onClose} width={560} testId="publication">
+      {post && (
+        <div className="flex flex-col gap-3">
+          <MediaGrid media={post.media} />
+          {post.text.trim() &&
+            (shown ? (
+              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text" data-selectable data-testid="publication-text">
+                {post.text}
+              </p>
+            ) : (
+              <button type="button" onClick={() => setShown(true)} className="w-fit rounded-full bg-surface-secondary px-3.5 py-1.5 text-[13.5px] font-semibold text-text-secondary hover:text-text" data-testid="publication-show-text">
+                {t("vibex.profile.showText")}
+              </button>
+            ))}
+          <PostActions post={post} />
+        </div>
+      )}
+    </Sheet>
   );
 }
 
@@ -672,7 +704,7 @@ export function PersonPage({ id }: { id: string }) {
   const t = useT();
   const profile = useProfile(id);
   const posts = usePersonPosts(id);
-  const [tab, setTab] = useState<Tab>("posts");
+  const [tab, setTab] = useState<Tab>("media");
   const [editing, setEditing] = useState(false);
   if (profile.isError) return <EmptyState icon={<RiUserSearchLine className="size-7" />} title={t("vibex.person.unavailable")} />;
   const all = posts.data?.pages.flatMap((p) => p.items) ?? [];
@@ -685,7 +717,7 @@ export function PersonPage({ id }: { id: string }) {
       {profile.data && !profile.data.visible && !profile.data.me ? (
         <EmptyState icon={<RiUserForbidLine className="size-7" />} title={t("vibex.profile.private")} />
       ) : tab === "media" ? (
-        <MediaTab userId={id} />
+        <PublicationsTab userId={id} />
       ) : (
         <>
           {profile.data?.me && tab === "posts" && <ProfileComposer />}

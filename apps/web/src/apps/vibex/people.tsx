@@ -8,6 +8,7 @@ import { useChats, useHistory, usePeople, usePost, type HistoryKind } from "./da
 import { LoadMore, PostCard, UnavailablePost } from "./posts";
 import { useVibex } from "./store";
 import { VoidexSearchField } from "@/ui/search-field";
+import { cx } from "@/lib/cx";
 
 function PersonRow({ person }: { person: VibexPersonDto }) {
   const push = useVibex((s) => s.push);
@@ -24,6 +25,21 @@ function PersonRow({ person }: { person: VibexPersonDto }) {
         <span className="block truncate text-[13px] text-text-tertiary">{person.address}</span>
       </span>
     </button>
+  );
+}
+
+/** People found by name or @voidops address (Step 2.9: also under the feed's own search). */
+export function PeopleResults({ query }: { query: string }) {
+  const t = useT();
+  const people = usePeople(query);
+  if (people.isPending) return <Skeleton className="h-32 rounded-2xl" />;
+  if (!people.data?.length) return <EmptyState icon={<RiUserSearchLine className="size-7" />} title={t("vibex.people.empty")} />;
+  return (
+    <div className="flex flex-col rounded-2xl border border-border bg-surface p-1.5 shadow-tile" data-testid="people-results">
+      {people.data.map((p) => (
+        <PersonRow key={p.id} person={p} />
+      ))}
+    </div>
   );
 }
 
@@ -78,7 +94,39 @@ export function PostPage({ id }: { id: string }) {
   return <PostCard post={post.data} />;
 }
 
-/** History (posts I liked) or Bookmarks (private) — separate sections of the side menu. */
+/**
+ * Step 2.9 «История»: one screen of my activity with two tabs — «Понравившиеся»
+ * (posts I liked) and «Закладки» (private bookmarks; nothing of them was lost,
+ * they just moved here from their own side-menu item).
+ */
+export function HistoryScreen() {
+  const t = useT();
+  const kind = useVibex((s) => s.historyKind);
+  const setKind = useVibex((s) => s.setHistoryKind);
+  return (
+    <div className="flex flex-col gap-3" data-testid="history-screen" data-kind={kind}>
+      <div className="mx-auto flex rounded-full border border-border/60 bg-surface p-1 shadow-tile" role="tablist" aria-label={t("vibex.nav.history")}>
+        {(["liked", "bookmarks"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={kind === k}
+            onClick={() => setKind(k)}
+            className={cx("flex h-9 items-center gap-1.5 rounded-full px-4 text-[14px] font-semibold transition", kind === k ? "bg-primary text-white" : "text-text-secondary hover:text-text")}
+            data-testid={`history-tab-${k}`}
+          >
+            {k === "liked" ? <RiHeart3Line className="size-4" /> : <RiBookmarkLine className="size-4" />}
+            {t(k === "liked" ? "vibex.history.liked" : "vibex.history.bookmarks")}
+          </button>
+        ))}
+      </div>
+      <HistorySection kind={kind} key={kind} />
+    </div>
+  );
+}
+
+/** One tab of «История»: liked posts or private bookmarks. */
 export function HistorySection({ kind }: { kind: HistoryKind }) {
   const t = useT();
   const lang = useLanguage();

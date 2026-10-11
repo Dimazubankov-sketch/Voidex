@@ -11,6 +11,7 @@ import {
   RiHeart3Fill,
   RiHeart3Line,
   RiImageAddLine,
+  RiAttachment2,
   RiLinkM,
   RiMoreFill,
   RiPencilLine,
@@ -39,7 +40,8 @@ import {
   usePostAction,
   useRepost,
 } from "./data";
-import { MediaGrid, VibexImage, VibexVideoTile } from "./media";
+import { MediaGrid, PostFiles, VibexImage, VibexVideoTile } from "./media";
+import { AttachSourceSheet } from "@/os/share/attach-source";
 import { useVibex } from "./store";
 
 // ------------------------------------------------------------------ pieces
@@ -169,7 +171,7 @@ function formatCount(n: number) {
  * equal columns; views (unique signed-in viewers) sit apart on the right.
  * Always about the original post.
  */
-function PostActions({ post }: { post: VibexPostDto }) {
+export function PostActions({ post }: { post: VibexPostDto }) {
   const t = useT();
   const action = usePostAction();
   const share = useVibex((s) => s.share);
@@ -391,8 +393,9 @@ export function NestedPost({ post, actions }: { post: VibexPostDto; actions?: bo
         </p>
       )}
       {post.media.length > 0 && (
-        <div className="px-3 pb-3">
+        <div className="flex flex-col gap-2 px-3 pb-3">
           <MediaGrid media={post.media} />
+          <PostFiles media={post.media} />
         </div>
       )}
     </div>
@@ -427,8 +430,9 @@ export function PostCard({ post }: { post: VibexPostDto }) {
       </div>
       <PostText post={post} />
       {post.media.length > 0 && (
-        <div className="px-4 pb-3">
+        <div className="flex flex-col gap-2 px-4 pb-3">
           <MediaGrid media={post.media} />
+          <PostFiles media={post.media} />
         </div>
       )}
       <PostActions post={post} />
@@ -565,26 +569,32 @@ export function PostComposer() {
   const create = useCreatePost();
   const [text, setText] = useState("");
   const [media, setMedia] = useState<VibexFileDto[]>([]);
+  // Step 2.9: files from Files / ViCloud (the paperclip), shown under the media.
+  const [docs, setDocs] = useState<VibexFileDto[]>([]);
   const [pending, setPending] = useState<Pending[]>([]);
+  const [source, setSource] = useState<"media" | "files" | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const room = Math.max(0, VIBEX_FILES_MAX - media.length - docs.length - pending.length);
 
   const reset = () => {
     setText("");
     setMedia([]);
+    setDocs([]);
     setPending([]);
   };
   const close = () => {
-    // Pictures uploaded but not published are discarded.
-    for (const m of media) void filesApi.discard(m.id).catch(() => undefined);
+    // Pictures and files uploaded but not published are discarded.
+    for (const m of [...media, ...docs]) void filesApi.discard(m.id).catch(() => undefined);
     reset();
     compose(false);
   };
 
-  const add = async (files: FileList | null) => {
+  /** Media (photos / videos from VOIDEX Media or the device) → "post"; Files attachments → "postfile". */
+  const add = async (files: FileList | File[] | null, purpose: "post" | "postfile" = "post") => {
     if (!files) return;
-    const list = [...files].slice(0, Math.max(0, VIBEX_FILES_MAX - media.length - pending.length));
+    const list = [...files].slice(0, room);
     for (const file of list) {
-      const bad = checkVibexFile(file, "post");
+      const bad = checkVibexFile(file, purpose);
       if (bad) {
         toast({ title: t(`error.${bad}`), body: file.name, tone: "danger" });
         continue;
@@ -592,8 +602,8 @@ export function PostComposer() {
       const key = `${file.name}-${Math.random()}`;
       setPending((p) => [...p, { key, file }]);
       try {
-        const dto = await filesApi.upload(file, "post");
-        setMedia((m) => [...m, dto]);
+        const dto = await filesApi.upload(file, purpose);
+        (purpose === "post" ? setMedia : setDocs)((m) => [...m, dto]);
       } catch (e) {
         toast({ title: errorMessage(t, e), body: file.name, tone: "danger" });
       } finally {
@@ -602,10 +612,10 @@ export function PostComposer() {
     }
   };
 
-  const canPublish = (text.trim().length > 0 || media.length > 0) && !pending.length && !create.isPending;
+  const canPublish = (text.trim().length > 0 || media.length > 0 || docs.length > 0) && !pending.length && !create.isPending;
   const publish = async () => {
     try {
-      await create.mutateAsync({ text, mediaIds: media.map((m) => m.id) });
+      await create.mutateAsync({ text, mediaIds: media.map((m) => m.id), fileIds: docs.map((d) => d.id) });
       reset();
       compose(false);
     } catch (e) {
@@ -634,9 +644,31 @@ export function PostComposer() {
             }}
             data-testid="composer-file"
           />
-          <IconButton label={t("vibex.composer.addPhoto")} onClick={() => input.current?.click()} disabled={media.length + pending.length >= VIBEX_FILES_MAX}>
+          {/* Step 2.9: MEDIA (VOIDEX Media or the device's photos / videos) and FILES (Files / ViCloud only). */}
+          <IconButton label={t("vibex.composer.addPhoto")} onClick={() => setSource("media")} disabled={!room} data-testid="composer-media">
             <RiImageAddLine className="size-5" />
           </IconButton>
+          <IconButton label={t("vibex.composer.addFile")} onClick={() => setSource("files")} disabled={!room} data-testid="composer-files">
+            <RiAttachment2 className="size-5" />
+          </IconButton>
+          <AttachSourceSheet
+            open={source === "media"}
+            onClose={() => setSource(null)}
+            sources={["media", "device"]}
+            onDevice={() => input.current?.click()}
+            onPick={(picked) => void add(picked, "post")}
+            max={room}
+            testId="post-media-source"
+          />
+          <AttachSourceSheet
+            open={source === "files"}
+            onClose={() => setSource(null)}
+            sources={["files"]}
+            onDevice={() => undefined}
+            onPick={(picked) => void add(picked, "postfile")}
+            max={room}
+            testId="post-files-source"
+          />
           <span className="flex-1 self-center text-[12px] tabular-nums text-text-tertiary">
             {text.length > VIBEX_POST_MAX - 200 ? `${text.length} / ${VIBEX_POST_MAX}` : ""}
           </span>
@@ -688,6 +720,27 @@ export function PostComposer() {
           </motion.div>
         )}
       </AnimatePresence>
+      {docs.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1.5" data-testid="composer-docs">
+          {docs.map((d) => (
+            <div key={d.id} className="flex items-center gap-2 rounded-2xl bg-surface-secondary px-3 py-2">
+              <RiAttachment2 className="size-4 shrink-0 text-text-tertiary" />
+              <span className="min-w-0 flex-1 truncate text-[14px]">{d.filename}</span>
+              <button
+                type="button"
+                className="flex size-7 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover"
+                aria-label={t("common.remove")}
+                onClick={() => {
+                  setDocs((x) => x.filter((y) => y.id !== d.id));
+                  void filesApi.discard(d.id).catch(() => undefined);
+                }}
+              >
+                <RiCloseLine className="size-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </Sheet>
   );
 }

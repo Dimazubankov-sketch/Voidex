@@ -73,7 +73,7 @@ test("vibex chats: the row's “…” button doesn't cover the time and the unr
   const chat = await api(other, "POST", "/api/vibex/chats/direct", { userId: a.id });
   expect((await api(other, "POST", `/api/vibex/chats/${chat.body.id}/messages`, { text: "Привет!" })).status).toBe(201);
   await openApp(page, "vibex");
-  await page.getByRole("button", { name: /Сообщения/ }).first().click();
+  await page.getByRole("button", { name: /Чаты/ }).first().click();
   const row = page.getByTestId("chat-row").first();
   await expect(row).toBeVisible();
   await expect(row.getByTestId("chat-unread")).toBeVisible();

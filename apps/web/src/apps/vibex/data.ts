@@ -64,7 +64,13 @@ export function useUpdateSettings() {
         const s = prev.settings;
         queryClient.setQueryData<VibexMeDto>(vk.me, {
           ...prev,
-          settings: { privacy: { ...s.privacy, ...patch.privacy }, notifications: { ...s.notifications, ...patch.notifications }, media: { ...s.media, ...patch.media } },
+          settings: {
+            privacy: { ...s.privacy, ...patch.privacy },
+            notifications: { ...s.notifications, ...patch.notifications },
+            media: { ...s.media, ...patch.media },
+            // Step 2.9: older servers / caches may have no chats section yet.
+            chats: { ...(s.chats ?? { order: "chats-first" }), ...patch.chats },
+          },
         });
       }
       return { prev };
@@ -288,7 +294,9 @@ export const filesApi = {
 };
 
 /** Client-side check (the server re-validates everything). Returns an error code or null. */
-export function checkVibexFile(file: File, purpose: "message" | "post"): "attachment_type_not_allowed" | "attachment_too_large" | null {
+export function checkVibexFile(file: File, purpose: "message" | "post" | "postfile" | "story"): "attachment_type_not_allowed" | "attachment_too_large" | null {
+  if (purpose === "story") purpose = "post";
+  if (purpose === "postfile") purpose = "message";
   const mime = attachmentMimeType(file.name);
   if (!mime || (purpose === "post" && !VIBEX_POST_IMAGE_TYPES.includes(mime) && !VIBEX_POST_VIDEO_TYPES.includes(mime))) return "attachment_type_not_allowed";
   if (file.size > (purpose === "post" ? VIBEX_MEDIA_MAX_BYTES : VIBEX_FILE_MAX_BYTES)) return "attachment_too_large";
@@ -329,6 +337,11 @@ function postPages(key: readonly unknown[], url: (cursor: string | null) => stri
     // Other people's changes (deleted posts, new reposts) don't arrive as events: refresh on every visit.
     staleTime: 0,
   };
+}
+
+/** Step 2.9 «Публикации»: the person's posts with a photo / video (the same posts as «Посты»). */
+export function usePersonPublications(id: string) {
+  return useInfiniteQuery(postPages(["vibex", "posts", "publications", id], (before) => `/api/vibex/people/${id}/publications${qs({ before })}`));
 }
 
 export function useFeed() {
@@ -395,7 +408,7 @@ export function usePostAction() {
 
 export function useCreatePost() {
   return useMutation({
-    mutationFn: (v: { text: string; mediaIds: string[] }) => api.post<VibexPostDto>("/api/vibex/posts", v),
+    mutationFn: (v: { text: string; mediaIds: string[]; fileIds?: string[] }) => api.post<VibexPostDto>("/api/vibex/posts", v),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: vk.feed });
       void queryClient.invalidateQueries({ queryKey: vk.posts });

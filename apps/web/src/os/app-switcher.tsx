@@ -6,6 +6,7 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { AppTile } from "@/brand/brand";
 import { IconButton } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
+import { SnapshotView } from "./gesture-peek";
 import { requestClose, useWM, type AppWindow } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -60,7 +61,9 @@ function Deck({ items }: { items: AppWindow[] }) {
   const cardYs = useRef(new Map<string, MotionValue<number>>());
   const gesture = useRef<{ axis: "x" | "y" | null; cardId: string | null; moved: boolean }>({ axis: null, cardId: null, moved: false });
 
-  const cardW = Math.min(width * 0.7, 320);
+  // Step 2.9: cards keep the screen's proportions (they show the real screen) and fit the height.
+  const bounds = useWM((s) => s.bounds);
+  const cardW = Math.min(width * 0.7, 320, (window.innerHeight * 0.6 * bounds.w) / Math.max(1, bounds.h));
   const step = cardW + GAP;
   const baseX = (i: number) => (width - cardW) / 2 - i * step;
   const clampIndex = (i: number) => Math.max(0, Math.min(items.length - 1, i));
@@ -211,6 +214,8 @@ function Card({
   const lang = useLanguage();
   const y = useMotionValue(0);
   register(y);
+  const screen = useWM((s) => s.bounds);
+  const ratio = screen.h / Math.max(1, screen.w);
   const { Icon } = CLIENT_APPS[win.appId];
   const name = APP_REGISTRY[win.appId].name[lang];
   return (
@@ -234,19 +239,15 @@ function Card({
           <RiCloseLine className="size-4" />
         </IconButton>
       </div>
+      {/* Step 2.9: the app's last screen (a static snapshot, scaled down), not an empty placeholder. */}
       <button
-        className="flex h-[58vh] w-full flex-col overflow-hidden rounded-[28px] bg-surface text-left shadow-window"
+        className="relative block w-full overflow-hidden rounded-[28px] bg-surface text-left shadow-window"
+        style={{ height: width * ratio }}
         onClick={onOpen}
         data-testid={`switcher-card-${win.appId}`}
       >
-        <div className="flex h-14 items-center gap-2 border-b px-4">
-          <div className="h-3 w-24 rounded-full bg-surface-secondary" />
-        </div>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3">
-          <AppTile size={84} glow>
-            <Icon className="size-12" />
-          </AppTile>
-          <span className="text-[16px] font-semibold">{name}</span>
+        <div className="absolute left-0 top-0 origin-top-left" style={{ width: screen.w, height: screen.h, transform: `scale(${width / screen.w})` }}>
+          <SnapshotView win={win} className="relative size-full" />
         </div>
       </button>
     </motion.div>
