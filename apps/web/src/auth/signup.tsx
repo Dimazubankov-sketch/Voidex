@@ -23,7 +23,7 @@ import { cx } from "@/lib/cx";
 import { errorMessage, fieldMessage } from "@/lib/errors";
 import { useI18n, useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
-import { useMailDomain } from "@/lib/system";
+import { usePublicMailDomain } from "@/lib/system";
 import { VoidexMark } from "@/brand/brand";
 import { Button, Checkbox, Notice, OtpInput, PasswordField, RoundNavButton, Spinner, TextField } from "@/ui/controls";
 import { BirthDateFields, CountryList, LanguageList, PhoneField, datePartsToIso, type DateParts } from "@/ui/pickers";
@@ -433,7 +433,8 @@ function MailStep({
   error: string | null;
 }) {
   const t = useT();
-  const domain = useMailDomain();
+  // Step 2.9: the address people see is username@voidops.
+  const domain = usePublicMailDomain();
   const [checking, setChecking] = useState(false);
   const seq = useRef(0);
   const username = normalizeUsername(data.username);

@@ -1221,4 +1221,9 @@ export const zh: Record<MessageKey, string> = {
   "vibex.count.following.many": "关注",
   "vibex.count.following.other": "关注",
   // Step 2.8 (end)
+  "appearance.glyphScale": "图标标志大小",
+  "appearance.glyphScaleHint": "只改变白色图块内的标志，图块和间距保持不变。",
+  "appearance.glyphS": "小",
+  "appearance.glyphM": "标准",
+  "appearance.glyphL": "大",
 };

@@ -1252,6 +1252,11 @@ export const en = {
   "vibex.count.following.many": "following",
   "vibex.count.following.other": "following",
   // Step 2.8 (end)
+  "appearance.glyphScale": "App logo size",
+  "appearance.glyphScaleHint": "Only the logo inside the white tile changes; tiles and spacing stay the same.",
+  "appearance.glyphS": "Small",
+  "appearance.glyphM": "Normal",
+  "appearance.glyphL": "Large",
 } as const;
 
 export type MessageKey = keyof typeof en;

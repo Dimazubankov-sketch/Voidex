@@ -393,7 +393,7 @@ describe("VOIDEX auth flows through otp.com", () => {
       consents: CONSENTS,
     });
     expect(reg.status).toBe(201);
-    expect(reg.body.user.mailAddress).toMatch(/@voidops\.ru$/);
+    expect(reg.body.user.mailAddress).toMatch(/@voidops$/);
   });
 
   it("the same code cannot be used twice", async () => {

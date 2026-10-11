@@ -1221,4 +1221,9 @@ export const ja: Record<MessageKey, string> = {
   "vibex.count.following.many": "フォロー中",
   "vibex.count.following.other": "フォロー中",
   // Step 2.8 (end)
+  "appearance.glyphScale": "ロゴのサイズ",
+  "appearance.glyphScaleHint": "白いタイル内のロゴだけが変わります。タイルと間隔はそのままです。",
+  "appearance.glyphS": "小",
+  "appearance.glyphM": "標準",
+  "appearance.glyphL": "大",
 };

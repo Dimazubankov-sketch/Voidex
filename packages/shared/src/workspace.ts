@@ -98,6 +98,14 @@ export const THEMES = ["light", "dark", "system"] as const;
 /** Step 2.7: background of every search field (Settings → Personalization → «Фон поиска»). */
 export const SEARCH_APPEARANCES = ["system", "white"] as const;
 export type SearchAppearance = (typeof SEARCH_APPEARANCES)[number];
+
+/**
+ * Step 2.9: size of the logo inside the white desktop tile (the tile, the grid
+ * and the hit area never change). Share of the tile the logo box fills.
+ */
+export const GLYPH_SCALES = ["s", "m", "l"] as const;
+export type GlyphScale = (typeof GLYPH_SCALES)[number];
+export const GLYPH_SCALE_BOX: Record<GlyphScale, number> = { s: 0.42, m: 0.52, l: 0.64 };
 /**
  * Step 2.8: one look for every app window (Settings → Personalization →
  * «Вид приложений»): Media's soft violet, Notes' grey, Mail's white, or dark.
@@ -182,6 +190,8 @@ export const AppearanceSchema = z.object({
   searchAppearance: z.enum(SEARCH_APPEARANCES).default("system"),
   /** Step 2.8: the look of every app (background, text, cards, fields). */
   appLook: z.enum(APP_LOOKS).default("media"),
+  /** Step 2.9: logo size inside the desktop tiles (the tile itself stays). */
+  glyphScale: z.enum(GLYPH_SCALES).default("m"),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -249,7 +259,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system", appLook: "media" };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system", appLook: "media", glyphScale: "m" };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -281,6 +291,7 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     syncWallpapers: base.syncWallpapers !== false,
     searchAppearance: base.searchAppearance === "white" ? "white" : "system",
     appLook: (APP_LOOKS as readonly string[]).includes(base.appLook) ? base.appLook : "media",
+    glyphScale: (GLYPH_SCALES as readonly string[]).includes(base.glyphScale) ? base.glyphScale : "m",
   };
 }
 

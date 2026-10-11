@@ -3,7 +3,7 @@ import { memo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { motion, motionValue } from "motion/react";
 import { RiCheckLine, RiSubtractLine } from "@remixicon/react";
-import { APP_REGISTRY, removeFromFolder, type AppId, type Folder, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
+import { APP_REGISTRY, GLYPH_SCALE_BOX, GLYPH_SCALES, removeFromFolder, type AppId, type Folder, type GlyphScale, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useLanguage, useT } from "@/lib/i18n";
 import { useMailSummary } from "@/lib/mail-summary";
@@ -194,7 +194,7 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
                 mergeTarget && "scale-110 ring-4 ring-primary/30",
               )}
             >
-              <AppGlyph id={item.id} />
+              <AppGlyph id={item.id} box={glyphBox(layout.appearance.glyphScale)} />
             </AppTile>
           ) : (
             <FolderTile folder={folder!} size={metrics.tile} highlight={mergeTarget} />
@@ -239,11 +239,20 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
   );
 });
 
-/** An app's logo at the standard size inside its tile (see GLYPH_BOX). */
-export function AppGlyph({ id }: { id: AppId }) {
+/**
+ * Step 2.9: the account's logo size for DESKTOP icons (Settings → Desktop).
+ * Only the logo inside the white tile changes; the tile, the grid and the hit
+ * area stay, and the dock, search and launcher keep the standard size.
+ */
+export function glyphBox(scale: GlyphScale | undefined): string {
+  return `${Math.round(GLYPH_SCALE_BOX[scale && (GLYPH_SCALES as readonly string[]).includes(scale) ? scale : "m"] * 100)}%`;
+}
+
+/** An app's logo inside its tile: the standard size (see GLYPH_BOX), or a desktop icon's own (`box`). */
+export function AppGlyph({ id, box = GLYPH_BOX }: { id: AppId; box?: string }) {
   const { Icon } = CLIENT_APPS[id];
   return (
-    <span className="flex items-center justify-center" style={{ width: GLYPH_BOX, height: GLYPH_BOX }}>
+    <span className="flex items-center justify-center" style={{ width: box, height: box }} data-glyph-box={box}>
       <Icon className="size-full" />
     </span>
   );
@@ -263,7 +272,7 @@ export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
       <div className="scale-110 drop-shadow-2xl">
         {drag.item.kind === "app" ? (
           <AppTile size={drag.size}>
-            <AppGlyph id={drag.item.id} />
+            <AppGlyph id={drag.item.id} box={glyphBox(layout.appearance.glyphScale)} />
           </AppTile>
         ) : folder ? (
           <FolderTile folder={folder} size={drag.size} />

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  GLYPH_SCALES,
+  GLYPH_SCALE_BOX,
   DEFAULT_APPEARANCE,
   DESKTOP_SPACES_MAX,
   MOBILE_PAGES_MAX,
@@ -463,5 +465,24 @@ describe("Step 2.5.1: deleting a PC desktop", () => {
   it("never removes the primary desktop", () => {
     const l = norm(defaultLayout(APPS));
     expect(removeSpace(l, l.desktop.spaces[0]!.id)).toBe(l);
+  });
+});
+
+describe("Step 2.9: desktop logo size", () => {
+  const ALL: AppId[] = ["mail", "settings", "vibex", "notes", "files", "media"];
+  it("defaults to the normal logo, keeps a valid choice and resets an unknown one", () => {
+    const { glyphScale: _drop, ...older } = DEFAULT_APPEARANCE;
+    const old = { ...defaultLayout(ALL), appearance: older } as unknown as WorkspaceLayout;
+    expect(normalizeLayout(old, ALL).appearance.glyphScale).toBe("m");
+    for (const s of GLYPH_SCALES) {
+      expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, glyphScale: s } }, ALL).appearance.glyphScale).toBe(s);
+    }
+    expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, glyphScale: "xl" as "l" } }, ALL).appearance.glyphScale).toBe("m");
+  });
+  it("only the logo box changes: small < normal < large, all inside the tile", () => {
+    expect(GLYPH_SCALE_BOX.s).toBeLessThan(GLYPH_SCALE_BOX.m);
+    expect(GLYPH_SCALE_BOX.m).toBeLessThan(GLYPH_SCALE_BOX.l);
+    expect(GLYPH_SCALE_BOX.l).toBeLessThan(0.8);
+    expect(GLYPH_SCALE_BOX.m).toBe(0.52);
   });
 });

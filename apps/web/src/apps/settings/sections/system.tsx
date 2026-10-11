@@ -112,7 +112,7 @@ export function AboutSection() {
       <Group>
         <Row label={t("settings.about.version")} value={info.data?.version ?? "…"} />
         <Row label={t("settings.about.environment")} value={info.data?.environment ?? "…"} />
-        <Row label={t("settings.about.mailDomain")} value={info.data ? `@${info.data.mailDomain}` : "…"} />
+        <Row label={t("settings.about.mailDomain")} value={info.data ? `@${info.data.publicMailDomain ?? info.data.mailDomain}` : "…"} />
         <Row
           label={t("settings.about.sms")}
           right={

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RiCloseLine } from "@remixicon/react";
-import { parseAddress } from "@voidex/shared";
+import { parseAddress, toPublicAddress } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
 import { useMailDomain } from "@/lib/system";
@@ -94,7 +94,8 @@ export function RecipientField({
     const next = [...value];
     for (const p of parts) {
       const parsed = parseAddress(p, domain);
-      const addr = parsed ? `${parsed.local}@${parsed.domain}` : p.toLowerCase();
+      // Step 2.9: VoidOps people are shown as x@voidops (the server accepts both spellings).
+      const addr = parsed ? toPublicAddress(`${parsed.local}@${parsed.domain}`, domain) : p.toLowerCase();
       if (!next.includes(addr)) next.push(addr);
     }
     onChange(next);

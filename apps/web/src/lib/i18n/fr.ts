@@ -1221,4 +1221,9 @@ export const fr: Record<MessageKey, string> = {
   "vibex.count.following.many": "abonnements",
   "vibex.count.following.other": "abonnements",
   // Step 2.8 (end)
+  "appearance.glyphScale": "Taille des logos",
+  "appearance.glyphScaleHint": "Seul le logo dans la tuile blanche change ; les tuiles et les espacements restent identiques.",
+  "appearance.glyphS": "Petit",
+  "appearance.glyphM": "Normal",
+  "appearance.glyphL": "Grand",
 };

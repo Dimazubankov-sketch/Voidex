@@ -101,13 +101,41 @@ export interface AddressParts {
   domain: string;
 }
 
+/**
+ * Step 2.9: the VoidOps address people see is `username@voidops` (the first
+ * label of the mail domain). It is not an internet domain: the server keeps
+ * the mail domain (`voidops.ru`) as the canonical value, and both spellings
+ * are the same identity. `@voidops.ru` stays a permanent alias for old data,
+ * links and clients.
+ */
+export function publicMailDomain(mailDomain: string): string {
+  return mailDomain.split(".")[0] || mailDomain;
+}
+
+/** `x@voidops.ru` → `x@voidops` (anything else is returned as it is). */
+export function toPublicAddress(address: string, mailDomain: string): string {
+  const suffix = `@${mailDomain}`;
+  return address.toLowerCase().endsWith(suffix.toLowerCase()) ? `${address.slice(0, -suffix.length)}@${publicMailDomain(mailDomain)}` : address;
+}
+
+/** Any accepted spelling (`x`, `x@voidops`, `x@voidops.ru`, any case) → the canonical `x@voidops.ru`; other domains unchanged. */
+export function canonicalAddress(value: string, mailDomain: string): string {
+  const p = parseAddress(value, mailDomain);
+  return p ? `${p.local}@${p.domain}` : value.trim().toLowerCase();
+}
+
+/**
+ * Splits an address. The public VoidOps form (`x@voidops`) resolves to the
+ * mail domain, so `alan@voidops` and `alan@voidops.ru` are one address.
+ */
 export function parseAddress(value: string, defaultDomain: string): AddressParts | null {
   const v = value.trim().toLowerCase();
   if (!v) return null;
   const at = v.lastIndexOf("@");
   if (at === -1) return { local: v, domain: defaultDomain };
   const local = v.slice(0, at);
-  const domain = v.slice(at + 1);
+  let domain = v.slice(at + 1);
+  if (domain === publicMailDomain(defaultDomain).toLowerCase()) domain = defaultDomain;
   if (!local || !domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return null;
   return { local, domain };
 }

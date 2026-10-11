@@ -1221,4 +1221,9 @@ export const tr: Record<MessageKey, string> = {
   "vibex.count.following.many": "takip",
   "vibex.count.following.other": "takip",
   // Step 2.8 (end)
+  "appearance.glyphScale": "Logo boyutu",
+  "appearance.glyphScaleHint": "Yalnızca beyaz kutucuğun içindeki logo değişir; kutucuklar ve aralıklar aynı kalır.",
+  "appearance.glyphS": "Küçük",
+  "appearance.glyphM": "Normal",
+  "appearance.glyphL": "Büyük",
 };

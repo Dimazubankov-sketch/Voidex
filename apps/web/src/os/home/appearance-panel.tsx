@@ -10,6 +10,8 @@ import { useT, type MessageKey } from "@/lib/i18n";
 import { Button, Switch } from "@/ui/controls";
 import { ConfirmDialog, toast } from "@/ui/overlays";
 import { useWorkspaceLayout, updateLayout } from "./layout";
+import { AppGlyph, glyphBox } from "./icons";
+import { AppTile } from "@/brand/brand";
 
 /** Parts of the panel (wallpapers are chosen only in Settings → Wallpapers, glass in Personalization). */
 export type AppearancePart = "view" | "dock" | "reset";
@@ -62,6 +64,25 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
               onChange={(view) => (pc ? setDesktop({ view }) : updateLayout((l) => ({ ...l, mobile: { ...l.mobile, view } })))}
               testId={pc ? "desktop-view" : "phone-view"}
             />
+          </Field>
+          {/* Step 2.9: the logo inside the white tile (all desktop icons at once; the tile and the grid stay). */}
+          <Field label={t("appearance.glyphScale")}>
+            <div className="flex items-center gap-3" data-testid="glyph-scale-setting">
+              <GlyphPreview scale={a.glyphScale} />
+              <div className="min-w-0 flex-1">
+                <Segmented
+                  value={a.glyphScale}
+                  options={[
+                    ["s", "appearance.glyphS"],
+                    ["m", "appearance.glyphM"],
+                    ["l", "appearance.glyphL"],
+                  ]}
+                  onChange={(glyphScale) => setAppearance({ glyphScale })}
+                  testId="glyph-scale"
+                />
+                <span className="mt-1.5 block text-[12.5px] text-text-tertiary">{t("appearance.glyphScaleHint")}</span>
+              </div>
+            </div>
           </Field>
           {pc ? (
             <>
@@ -222,3 +243,12 @@ export const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
   "wave-gray-purple": "wallpaper.waveGrayPurple",
   "wave-milk-gray-purple": "wallpaper.waveMilkGrayPurple",
 };
+
+/** A desktop tile at its real size with the chosen logo size: the tile itself never changes. */
+function GlyphPreview({ scale }: { scale: WorkspaceLayout["appearance"]["glyphScale"] }) {
+  return (
+    <AppTile size={56} className="shrink-0">
+      <AppGlyph id="vibex" box={glyphBox(scale)} />
+    </AppTile>
+  );
+}

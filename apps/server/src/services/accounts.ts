@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
+  parseAddress,
   APP_IDS,
   APP_REGISTRY,
   DEFAULT_PREFERENCES,
@@ -132,9 +133,10 @@ export class AccountService {
     const value = identifier.trim();
     const domain = this.ctx.config.mailDomain;
     if (value.includes("@")) {
-      const [local, dom] = value.toLowerCase().split("@");
-      if (dom !== domain || !local) return null;
-      return this.findByUsername(local);
+      // Step 2.9: x@voidops and x@voidops.ru are the same account.
+      const parts = parseAddress(value, domain);
+      if (!parts || parts.domain !== domain || !parts.local) return null;
+      return this.findByUsername(parts.local);
     }
     if (/^[+\d][\d\s()-]{5,}$/.test(value)) {
       const phone = parsePhone(value);

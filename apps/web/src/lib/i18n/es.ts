@@ -1221,4 +1221,9 @@ export const es: Record<MessageKey, string> = {
   "vibex.count.following.many": "siguiendo",
   "vibex.count.following.other": "siguiendo",
   // Step 2.8 (end)
+  "appearance.glyphScale": "Tamaño de los logotipos",
+  "appearance.glyphScaleHint": "Solo cambia el logotipo dentro del mosaico blanco; los mosaicos y los espacios no cambian.",
+  "appearance.glyphS": "Pequeño",
+  "appearance.glyphM": "Normal",
+  "appearance.glyphL": "Grande",
 };

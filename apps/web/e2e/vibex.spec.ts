@@ -34,7 +34,7 @@ async function apiAccount(request: APIRequestContext, first: string) {
     consents,
   });
   expect(r.user).toBeTruthy();
-  const address = `${username}@voidops.ru`;
+  const address = `${username}@voidops`;
   // Turn Vibex on for this account (its Vibex sign-in).
   const act = await request.post("/api/vibex/activate", {
     headers: { ...h, authorization: `Bearer ${r.accessToken}` },

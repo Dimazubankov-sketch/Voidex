@@ -293,8 +293,8 @@ test("VoidOps Mail: recipient search finds Vibex chats; a link goes in as text",
   await expect(suggestion).toBeVisible();
   await suggestion.click();
   await expect(page.getByTestId("recipient-chip")).toHaveAttribute("data-status", /ok|checking/);
-  await expect(page.getByTestId("recipient-chip")).toContainText(/Борис|@voidops\.ru/);
-  expect(b.address).toContain("@voidops.ru");
+  await expect(page.getByTestId("recipient-chip")).toContainText(/Борис|@voidops/);
+  expect(b.address).toContain("@voidops");
 
   await page.getByTestId("composer-body").fill("Смотри: ");
   await page.getByTestId("composer-link").click();

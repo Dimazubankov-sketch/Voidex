@@ -120,6 +120,8 @@ export interface ServerInfoDto {
   version: string;
   environment: string;
   mailDomain: string;
+  /** Step 2.9: what people see after the @ (e.g. "voidops"); `mailDomain` stays the canonical server value. */
+  publicMailDomain?: string;
   smsProvider: string;
   smsDevMode: boolean;
   /** False until a real SMS gateway is connected: registration is closed. */

@@ -1221,4 +1221,9 @@ export const de: Record<MessageKey, string> = {
   "vibex.count.following.many": "folgt",
   "vibex.count.following.other": "folgt",
   // Step 2.8 (end)
+  "appearance.glyphScale": "Logogröße",
+  "appearance.glyphScaleHint": "Nur das Logo in der weißen Kachel ändert sich; Kacheln und Abstände bleiben gleich.",
+  "appearance.glyphS": "Klein",
+  "appearance.glyphM": "Normal",
+  "appearance.glyphL": "Groß",
 };

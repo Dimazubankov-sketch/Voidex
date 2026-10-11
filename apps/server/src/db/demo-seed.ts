@@ -12,7 +12,7 @@
  * accounts and real posts.
  */
 import { deflateSync } from "node:zlib";
-import { APP_REGISTRY, DEFAULT_PREFERENCES, LEGAL_DOCUMENTS } from "@voidex/shared";
+import { APP_REGISTRY, DEFAULT_PREFERENCES, LEGAL_DOCUMENTS, canonicalAddress } from "@voidex/shared";
 import { and, eq } from "drizzle-orm";
 import type { Config } from "../config.js";
 import { hashPassword } from "../lib/password.js";
@@ -176,7 +176,8 @@ export interface DemoSeedResult {
  */
 export async function seedVibexDemo(config: Config, opts: { target?: string } = {}): Promise<DemoSeedResult> {
   if (config.production || process.env.NODE_ENV === "production") throw new Error(PRODUCTION_REFUSAL);
-  const target = opts.target?.trim().toLowerCase();
+  // Step 2.9: x@voidops and x@voidops.ru name the same account.
+  const target = opts.target?.trim() ? canonicalAddress(opts.target, config.mailDomain) : undefined;
   const { db, pool } = createDb(config.databaseUrl);
   try {
     const ctx = {

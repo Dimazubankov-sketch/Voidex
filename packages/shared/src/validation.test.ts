@@ -8,6 +8,9 @@ import {
   validateUsername,
   subjectWithPrefix,
   parseAddress,
+  canonicalAddress,
+  toPublicAddress,
+  publicMailDomain,
 } from "./index.js";
 import { maskPhone, parsePhone } from "./phone.js";
 
@@ -102,5 +105,17 @@ describe("mail helpers", () => {
     expect(parseAddress("Anna", "voidops.ru")).toEqual({ local: "anna", domain: "voidops.ru" });
     expect(parseAddress("anna@voidops.ru", "voidops.ru")).toEqual({ local: "anna", domain: "voidops.ru" });
     expect(parseAddress("anna@", "voidops.ru")).toBeNull();
+  });
+  it("Step 2.9: x@voidops and x@voidops.ru are the same address", () => {
+    expect(parseAddress("Anna@VoidOps", "voidops.ru")).toEqual({ local: "anna", domain: "voidops.ru" });
+    expect(canonicalAddress("anna@voidops", "voidops.ru")).toBe("anna@voidops.ru");
+    expect(canonicalAddress("ANNA@voidops.ru", "voidops.ru")).toBe("anna@voidops.ru");
+    expect(canonicalAddress("anna", "voidops.ru")).toBe("anna@voidops.ru");
+    expect(toPublicAddress("anna@voidops.ru", "voidops.ru")).toBe("anna@voidops");
+    expect(toPublicAddress("anna@voidops", "voidops.ru")).toBe("anna@voidops");
+    expect(toPublicAddress("bob@example.com", "voidops.ru")).toBe("bob@example.com");
+    expect(publicMailDomain("voidops.ru")).toBe("voidops");
+    // Another single-label domain is still not an address.
+    expect(parseAddress("anna@intranet", "voidops.ru")).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import { addressPresenter } from "../lib/addresses.js";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import {
@@ -216,7 +217,9 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
     });
-    const write = (event: ServerEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+    // Step 2.9: events carry addresses in their public form too (x@voidops).
+    const addresses = addressPresenter(app.ctx.config.mailDomain);
+    const write = (event: ServerEvent) => res.write(`data: ${JSON.stringify(addresses.present(event))}\n\n`);
     write({ type: "hello", sessionId: auth.sessionId });
     const unsubscribe = app.ctx.events.subscribe(auth.userId, auth.sessionId, (event) => {
       write(event);

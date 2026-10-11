@@ -94,7 +94,7 @@ export async function signUpViaUi(page: Page, opts: { first?: string; last?: str
   await expect(page.getByTestId("workspace")).toBeVisible();
   // Step 2.4: the code-password is created before the desktop is usable.
   await completeSecuritySetup(page);
-  return { username, address: `${username}@voidops.ru` };
+  return { username, address: `${username}@voidops` };
 }
 
 /** Fast sign-up through the API (still real SMS verification via the dev provider). */
@@ -117,7 +117,7 @@ export async function signUpViaApi(page: Page, first = "Борис", last = "О�
   if (opts.passcode === false) {
     // Leave the first-setup screen to the test.
     await page.reload();
-    return { username, address: `${username}@voidops.ru`, id: res.user.id as string, token: res.accessToken as string };
+    return { username, address: `${username}@voidops`, id: res.user.id as string, token: res.accessToken as string };
   }
   // The required code-password, set through the API like the setup screen does.
   const set = await page.evaluate(
@@ -127,7 +127,7 @@ export async function signUpViaApi(page: Page, first = "Борис", last = "О�
   );
   expect(set).toBe(200);
   await reloadUnlocked(page);
-  return { username, address: `${username}@voidops.ru`, id: res.user.id as string, token: res.accessToken as string };
+  return { username, address: `${username}@voidops`, id: res.user.id as string, token: res.accessToken as string };
 }
 
 export async function newPage(browser: Browser, mobile: boolean) {

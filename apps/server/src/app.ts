@@ -9,6 +9,7 @@ import { ErrorCode, type ApiErrorBody } from "@voidex/shared";
 import type { Config } from "./config.js";
 import { createDb, type Db } from "./db/client.js";
 import { assertSameOrigin } from "./http.js";
+import { addressPresenter } from "./lib/addresses.js";
 import { AppError, fail } from "./lib/errors.js";
 import { AccountService } from "./services/accounts.js";
 import { AppsService } from "./services/apps.js";
@@ -199,6 +200,10 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
   app.addHook("preHandler", async (req) => {
     if (req.url.startsWith("/api/")) assertSameOrigin(req, config);
   });
+
+  // Step 2.9: VoidOps addresses leave the API in their public form (x@voidops); storage keeps x@<mail domain>.
+  const addresses = addressPresenter(config.mailDomain);
+  app.addHook("preSerialization", async (req, _reply, payload) => (req.url.startsWith("/api/") ? addresses.present(payload) : payload));
 
   app.decorate("authenticate", async (req: FastifyRequest) => {
     const header = req.headers.authorization;

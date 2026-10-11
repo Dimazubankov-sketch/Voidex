@@ -8,6 +8,7 @@ import {
   makeSnippet,
   sanitizeFilename,
   parseAddress,
+  toPublicAddress,
   subjectWithPrefix,
   type DraftCreateInput,
   type DraftDto,
@@ -848,14 +849,16 @@ export class MailService {
       when = new Intl.DateTimeFormat(locale.lang, { dateStyle: "long", timeStyle: "short", timeZone: "UTC" }).format(m.sentAt ?? m.createdAt);
     }
     const L = QUOTE[locale.lang] ?? QUOTE.en;
-    const who = `${m.senderName} <${m.senderAddress}>`;
+    // Step 2.9: quoted headers are text people read: the public address (x@voidops).
+    const shown = (a: string) => toPublicAddress(a, this.ctx.config.mailDomain);
+    const who = `${m.senderName} <${shown(m.senderAddress)}>`;
     if (mode === "forward") {
       const header = [
         L.fwd,
         `${L.from}: ${who}`,
         `${L.date}: ${when}`,
         `${L.subject}: ${m.subject}`,
-        `${L.to}: ${visible.filter((r) => r.kind === "to").map((r) => r.address).join(", ")}`,
+        `${L.to}: ${visible.filter((r) => r.kind === "to").map((r) => shown(r.address)).join(", ")}`,
       ].join("\n");
       return { to: [], cc: [], subject: subjectWithPrefix(m.subject, "Fwd"), body: `\n\n${header}\n\n${m.body}`, forwardOfMessageId: m.id };
     }

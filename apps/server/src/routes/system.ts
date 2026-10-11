@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { sql } from "drizzle-orm";
-import { LEGAL_KEYS, isLanguageCode, DEFAULT_LANGUAGE, type ServerInfoDto } from "@voidex/shared";
+import { LEGAL_KEYS, isLanguageCode, DEFAULT_LANGUAGE, publicMailDomain, type ServerInfoDto } from "@voidex/shared";
 import { z } from "zod";
 import { parse } from "../http.js";
 
@@ -24,6 +24,7 @@ export const systemRoutes: FastifyPluginAsync = async (app) => {
     version: VERSION,
     environment: config.env,
     mailDomain: config.mailDomain,
+    publicMailDomain: publicMailDomain(config.mailDomain),
     smsProvider: app.ctx.sms.name,
     smsDevMode: app.ctx.sms.isDevelopment,
     smsAvailable: app.ctx.sms.enabled,

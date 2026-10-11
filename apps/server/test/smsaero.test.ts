@@ -335,7 +335,7 @@ describe("VOIDEX flows through SMS Aero (code made and checked by VOIDEX)", () =
       consents: CONSENTS,
     });
     expect(reg.status).toBe(201);
-    expect(reg.body.user.mailAddress).toMatch(/@voidops\.ru$/);
+    expect(reg.body.user.mailAddress).toMatch(/@voidops$/);
   });
 
   it("VerificationService limits still apply: a second code within 60 s never reaches SMS Aero", async () => {

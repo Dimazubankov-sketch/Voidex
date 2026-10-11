@@ -18,7 +18,12 @@ const KEY = "vx.knownAccounts";
 export function knownAccounts(): KnownAccount[] {
   try {
     const list = JSON.parse(localStorage.getItem(KEY) ?? "[]") as KnownAccount[];
-    return Array.isArray(list) ? list.filter((a) => a && typeof a.id === "string" && typeof a.address === "string") : [];
+    return Array.isArray(list)
+      ? list
+          .filter((a) => a && typeof a.id === "string" && typeof a.address === "string")
+          // Step 2.9: entries saved before show the public form too (x@voidops.ru → x@voidops; signing in accepts both).
+          .map((a) => ({ ...a, address: a.address.replace(/@voidops\.ru$/i, "@voidops") }))
+      : [];
   } catch {
     return [];
   }

@@ -1221,4 +1221,9 @@ export const ko: Record<MessageKey, string> = {
   "vibex.count.following.many": "팔로잉",
   "vibex.count.following.other": "팔로잉",
   // Step 2.8 (end)
+  "appearance.glyphScale": "로고 크기",
+  "appearance.glyphScaleHint": "흰색 타일 안의 로고만 바뀌며 타일과 간격은 그대로입니다.",
+  "appearance.glyphS": "작게",
+  "appearance.glyphM": "보통",
+  "appearance.glyphL": "크게",
 };

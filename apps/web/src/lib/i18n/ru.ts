@@ -1236,4 +1236,9 @@ export const ru: Record<MessageKey, string> = {
   "vibex.count.following.many": "подписок",
   "vibex.count.following.other": "подписки",
   // Step 2.8 (end)
+  "appearance.glyphScale": "Размер логотипов",
+  "appearance.glyphScaleHint": "Меняется только логотип внутри белой плитки; плитки и расстояния остаются прежними.",
+  "appearance.glyphS": "Маленький",
+  "appearance.glyphM": "Обычный",
+  "appearance.glyphL": "Большой",
 };

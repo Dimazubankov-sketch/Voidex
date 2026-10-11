@@ -123,5 +123,5 @@ export async function signUp(device: Device, overrides: Partial<{ username: stri
     consents: CONSENTS,
   });
   if (reg.status !== 201) throw new Error(`register failed: ${JSON.stringify(reg.body)}`);
-  return { phone, username, address: `${username}@voidops.ru`, user: reg.body.user, sessionId: reg.body.sessionId as string };
+  return { phone, username, address: `${username}@voidops`, legacyAddress: `${username}@voidops.ru`, user: reg.body.user, sessionId: reg.body.sessionId as string };
 }
