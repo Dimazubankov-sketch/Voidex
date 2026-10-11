@@ -60,6 +60,7 @@ export function PushDrawer({
   const radius = useTransform(progress, [0, 0.15, 1], [0, 18, 30]);
   const shadow = useTransform(progress, (p) => `-${Math.round(14 * p)}px 0 ${Math.round(40 * p)}px rgba(20, 16, 60, ${(0.14 * p).toFixed(3)})`);
   const menuWidth = useTransform(progress, () => w.current);
+  const menuVisibility = useTransform(progress, (p) => (p <= 0.001 ? "hidden" : "visible"));
 
   useEffect(() => {
     if (reduced) progress.set(open ? 1 : 0);
@@ -112,7 +113,8 @@ export function PushDrawer({
     <div ref={root} className={cx("relative flex min-h-0 min-w-0 flex-1 overflow-hidden", className)} data-testid={testId} data-open={open || undefined}>
       <motion.aside
         className="absolute inset-y-0 left-0 z-0 flex flex-col bg-surface"
-        style={{ x: menuX, width: menuWidth }}
+        // Fully closed: not painted at all (it is off screen under the app, and must not be found or hit).
+        style={{ x: menuX, width: menuWidth, visibility: menuVisibility }}
         aria-hidden={!open}
         inert={!open}
         onPointerDown={down}

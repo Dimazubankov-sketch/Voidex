@@ -14,7 +14,7 @@ test("internal mail: compose with autosave, deliver in real time, reply, archive
   const bob = await signUpViaApi(bobPage, "Борис", "Орлов");
 
   await openApp(page, "mail");
-  await page.getByTestId("compose").first().click();
+  await page.getByTestId("compose").filter({ visible: true }).first().click();
   await page.getByTestId("composer-to").fill(`${bob.username} `);
   await expect(page.getByTestId("recipient-chip")).toHaveAttribute("data-status", "ok");
   await page.getByTestId("composer-subject").fill("Отчёт за квартал");
@@ -68,7 +68,7 @@ test("internal mail: compose with autosave, deliver in real time, reply, archive
 test("drafts persist and can be continued, then discarded", async ({ page }) => {
   await signUpViaApi(page, "Дина", "Черновик");
   await openApp(page, "mail");
-  await page.getByTestId("compose").first().click();
+  await page.getByTestId("compose").filter({ visible: true }).first().click();
   await page.getByTestId("composer-subject").fill("Незаконченная мысль");
   await page.getByTestId("composer-body").fill("Черновой текст");
   await expect(page.getByTestId("draft-status")).toHaveText("Черновик сохранён");
@@ -84,7 +84,7 @@ test("drafts persist and can be continued, then discarded", async ({ page }) => 
 test("sending to a non-VOIDEX address is refused and the draft is kept", async ({ page }) => {
   await signUpViaApi(page, "Том", "Тестов");
   await openApp(page, "mail");
-  await page.getByTestId("compose").first().click();
+  await page.getByTestId("compose").filter({ visible: true }).first().click();
   await page.getByTestId("composer-to").fill("someone@gmail.com ");
   await page.getByTestId("composer-body").fill("x");
   await page.getByTestId("composer-send").click();
@@ -102,7 +102,7 @@ test("attachments: attach files and a picture, remove one before sending; the re
   );
 
   await openApp(page, "mail");
-  await page.getByTestId("compose").first().click();
+  await page.getByTestId("compose").filter({ visible: true }).first().click();
   await page.getByTestId("composer-to").fill(`${bob.username} `);
   await expect(page.getByTestId("recipient-chip")).toHaveAttribute("data-status", "ok");
   await page.getByTestId("composer-subject").fill("Документы");

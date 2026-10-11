@@ -287,7 +287,7 @@ test("VoidOps Mail: recipient search finds Vibex chats; a link goes in as text",
   const { b, other } = await twoPeople(page, browser);
   await other.context().close();
   await launch(page, "mail");
-  await page.getByTestId("compose").first().click();
+  await page.getByTestId("compose").filter({ visible: true }).first().click();
   await page.getByTestId("composer-to").fill("Бор");
   const suggestion = page.getByTestId("recipient-suggestion").filter({ hasText: "Борис Чатов" });
   await expect(suggestion).toBeVisible();
