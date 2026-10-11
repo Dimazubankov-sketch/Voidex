@@ -213,9 +213,10 @@ describe("Step 2.9: chat search", () => {
     await say(b, chat.id, "встречаемся у фонтана");
     const group = (await a.d.post("/api/vibex/groups", { title: "Путешествия", memberIds: [b.id] })).body as VibexChatDto;
     const search = async (q: string) => (await a.d.get(`/api/vibex/chats/search?q=${encodeURIComponent(q)}`)).body as VibexChatSearchDto;
-    expect((await search("Мира")).chats.map((x) => x.id)).toContain(chat.id);
-    expect((await search(b.address)).chats.map((x) => x.id)).toContain(chat.id);
-    expect((await search(b.legacy)).chats.map((x) => x.id)).toContain(chat.id);
+    // The direct chat named like the query comes first, then the newer group that only has her as a member.
+    expect((await search("Мира")).chats.map((x) => x.id)).toEqual([chat.id, group.id]);
+    expect((await search(b.address)).chats.map((x) => x.id)).toEqual([chat.id, group.id]);
+    expect((await search(b.legacy)).chats.map((x) => x.id)).toEqual([chat.id, group.id]);
     expect((await search("путеш")).chats.map((x) => x.id)).toEqual([group.id]);
     const byText = await search("фонтан");
     expect(byText.messages.map((m) => m.message.text)).toEqual(["встречаемся у фонтана"]);

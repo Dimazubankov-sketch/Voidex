@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { newPage, openApp, openWallpapersTab, settingsRoot, signUpViaApi } from "./helpers";
+import { newPage, openApp, openWallpapersTab, recordCircle, recordVoice, settingsRoot, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.5.1 — stabilization: one Wallpapers screen (stable on PC), the
@@ -40,10 +40,7 @@ test("Vibex: a recorded voice message plays, pauses, seeks and shows its duratio
   await page.getByTestId("chat-row").first().click();
 
   // Record ~2.5 s from the (fake) microphone and send.
-  await page.getByTestId("chat-voice").click();
-  await expect(page.getByTestId("voice-recording")).toBeVisible();
-  await page.waitForTimeout(2600);
-  await page.getByTestId("voice-send").click();
+  await recordVoice(page, 2600);
   const voice = page.getByTestId("voice-message");
   await expect(voice).toHaveCount(1);
   await expect(voice.getByTestId("voice-play")).toBeEnabled();
@@ -68,41 +65,43 @@ test("Vibex: a recorded voice message plays, pauses, seeks and shows its duratio
   await expect.poll(() => audio.evaluate((a: HTMLAudioElement) => a.currentTime / a.duration)).toBeGreaterThan(0.6);
   await expect(voice.getByTestId("voice-wave")).not.toHaveAttribute("aria-valuenow", "0");
 
-  // A video circle from the (fake) camera.
-  await page.getByTestId("chat-circle").click();
-  await expect(page.getByTestId("circle-recorder")).toBeVisible();
-  await page.waitForTimeout(2600);
-  await page.getByTestId("circle-send").click();
+  // A video circle from the (fake) camera (Step 2.9: the same button, switched to circles).
+  await recordCircle(page, 2600);
   const circle = page.getByTestId("circle-message");
   await expect(circle).toHaveCount(1);
   const video = circle.locator("video");
   await expect(video).toHaveAttribute("playsinline", "");
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => (Number.isFinite(v.duration) ? v.duration : -1)), { timeout: 10_000 }).toBeGreaterThan(0.5);
-  // The bubble stays a circle.
+  // The bubble stays a circle; on screen it loops by itself, muted.
   const box = (await circle.boundingBox())!;
   expect(Math.abs(box.width - box.height)).toBeLessThan(2);
   expect(await video.evaluate((v) => parseFloat(getComputedStyle(v).borderRadius) >= v.clientWidth / 2)).toBe(true);
+  expect(await video.evaluate((v: HTMLVideoElement) => v.muted && v.loop)).toBe(true);
 
-  // Tap: plays with sound; the voice message (if playing) stops — one at a time.
+  // Tap: the circle opens larger and plays with sound; the voice message stops — one sound at a time.
   await voice.getByTestId("voice-play").click();
   await expect(voice).toHaveAttribute("data-playing", "true");
   await circle.click();
-  await expect(circle).toHaveAttribute("data-playing", "true");
+  const expanded = page.getByTestId("circle-expanded");
+  const big = page.getByTestId("circle-expanded-video");
+  await expect(expanded).toHaveAttribute("data-playing", "true");
   await expect(voice).not.toHaveAttribute("data-playing", "true");
-  expect(await video.evaluate((v: HTMLVideoElement) => v.muted)).toBe(false);
-  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.2);
-  // Tap again: pause.
-  await circle.click();
-  await expect(circle).not.toHaveAttribute("data-playing", "true");
+  expect(await big.evaluate((v: HTMLVideoElement) => v.muted)).toBe(false);
+  await expect.poll(() => big.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.2);
+  // Tap on the video: pause; again: play.
+  await big.click();
+  await expect(expanded).not.toHaveAttribute("data-playing", "true");
   // Let it end, then a tap replays from the start.
-  await video.evaluate((v: HTMLVideoElement) => {
+  await big.evaluate((v: HTMLVideoElement) => {
     v.currentTime = Math.max(0, v.duration - 0.2);
     return v.play();
   });
-  await expect(circle).toHaveAttribute("data-ended", "true", { timeout: 5000 });
-  await circle.click();
-  await expect(circle).toHaveAttribute("data-playing", "true");
-  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeLessThan(1.5);
+  await expect(expanded).not.toHaveAttribute("data-playing", "true", { timeout: 5000 });
+  await big.click();
+  await expect(expanded).toHaveAttribute("data-playing", "true");
+  await expect.poll(() => big.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeLessThan(1.5);
+  await page.getByTestId("circle-collapse").click();
+  await expect(expanded).toHaveCount(0);
   await other.context().close();
 });
 

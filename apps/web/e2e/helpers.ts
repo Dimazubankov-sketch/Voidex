@@ -179,3 +179,30 @@ export async function phoneHome(page: Page) {
   await page.mouse.up();
   await expect(page.locator('section[data-state="open"]')).toHaveCount(0);
 }
+
+/**
+ * Step 2.9: the composer's one record button (voice ↔ circle). With a mouse a
+ * click starts a hands-free recording (nothing is sent by a stray mouse-up)
+ * and a second click on the same button sends it; a right click switches
+ * microphone ↔ video circle.
+ */
+export async function recordVoice(page: Page, ms = 1500) {
+  const btn = page.getByTestId("chat-record");
+  if ((await btn.getAttribute("data-mode")) !== "voice") await btn.click({ button: "right" });
+  await expect(btn).toHaveAttribute("data-mode", "voice");
+  await btn.click();
+  await expect(btn).toHaveAttribute("data-state", "locked");
+  await expect(page.getByTestId("voice-recording")).toBeVisible();
+  await page.waitForTimeout(ms);
+  await btn.click();
+}
+
+export async function recordCircle(page: Page, ms = 1500) {
+  const btn = page.getByTestId("chat-record");
+  if ((await btn.getAttribute("data-mode")) !== "circle") await btn.click({ button: "right" });
+  await expect(btn).toHaveAttribute("data-mode", "circle");
+  await btn.click();
+  await expect(page.getByTestId("circle-recorder")).toHaveAttribute("data-state", "locked");
+  await page.waitForTimeout(ms);
+  await page.getByTestId("circle-send").click();
+}

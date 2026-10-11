@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { newPage, openApp, signUpViaApi } from "./helpers";
+import { newPage, openApp, recordCircle, recordVoice, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.6 — Vibex voice messages and video circles under the production
@@ -74,10 +74,7 @@ test("Vibex media under the production CSP: a recorded voice message and a video
   await page.getByTestId("chat-row").first().click();
 
   // A real recording from the (fake) microphone, uploaded, read back as a blob.
-  await page.getByTestId("chat-voice").click();
-  await expect(page.getByTestId("voice-recording")).toBeVisible();
-  await page.waitForTimeout(2400);
-  await page.getByTestId("voice-send").click();
+  await recordVoice(page, 2400);
   const voice = page.getByTestId("voice-message");
   await expect(voice).toHaveCount(1);
   const audio = voice.locator("audio");
@@ -89,18 +86,19 @@ test("Vibex media under the production CSP: a recorded voice message and a video
   await voice.getByTestId("voice-play").click();
 
   // A video circle from the (fake) camera.
-  await page.getByTestId("chat-circle").click();
-  await expect(page.getByTestId("circle-recorder")).toBeVisible();
-  await page.waitForTimeout(1800);
-  await page.getByTestId("circle-send").click();
+  await recordCircle(page, 1800);
   const circle = page.getByTestId("circle-message");
   await expect(circle).toHaveCount(1);
   const video = circle.locator("video");
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.src.startsWith("blob:"))).toBe(true);
-  await circle.click();
-  await expect(circle).toHaveAttribute("data-playing", "true");
+  // Step 2.9: it loops by itself, muted; a tap opens it larger with sound.
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.2);
-  await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0);
+  await circle.click();
+  const big = page.getByTestId("circle-expanded-video");
+  await expect(page.getByTestId("circle-expanded")).toHaveAttribute("data-playing", "true");
+  await expect.poll(() => big.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.2);
+  await expect.poll(() => big.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBeGreaterThan(0);
+  await page.getByTestId("circle-collapse").click();
 
   // The recipient gets both and can play them too.
   await openApp(other, "vibex");
@@ -114,7 +112,7 @@ test("Vibex media under the production CSP: a recorded voice message and a video
   await expect.poll(() => theirAudio.evaluate((a: HTMLAudioElement) => a.currentTime)).toBeGreaterThan(0.2);
   const theirCircle = other.getByTestId("circle-message");
   await theirCircle.click();
-  await expect.poll(() => theirCircle.locator("video").evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.2);
+  await expect.poll(() => other.getByTestId("circle-expanded-video").evaluate((v: HTMLVideoElement) => v.currentTime)).toBeGreaterThan(0.2);
 
   // Nothing was blocked by the policy (media, the waveform's blob read, anything else).
   expect(await violations(page)).toEqual([]);

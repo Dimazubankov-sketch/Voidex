@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { newPage, openApp, signUpViaApi, reloadUnlocked } from "./helpers";
+import { newPage, openApp, recordVoice, signUpViaApi, reloadUnlocked } from "./helpers";
 
 /**
  * Step 2.3: one VOIDEX identity for every app, the Notification Center (phone
@@ -433,10 +433,7 @@ test("vibex chat: text, file, voice message recorded from the microphone; reply;
   await page.getByTestId("chat-send").click();
   await expect(page.getByTestId("vibex-file")).toHaveCount(1);
   // Voice: record ~1.5 s from the fake microphone and send.
-  await page.getByTestId("chat-voice").click();
-  await expect(page.getByTestId("voice-recording")).toBeVisible();
-  await page.waitForTimeout(1500);
-  await page.getByTestId("voice-send").click();
+  await recordVoice(page, 1500);
   await expect(page.getByTestId("voice-message")).toHaveCount(1);
   // Reply to the first message (hover button on PC).
   const first = page.getByTestId("message").filter({ hasText: "Привет, Пётр!" });
