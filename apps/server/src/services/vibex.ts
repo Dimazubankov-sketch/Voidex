@@ -1505,7 +1505,22 @@ export class VibexService {
     if (!query) return { chats: [], messages: [] };
     const all = await this.chats(userId);
     const has = (v: string | undefined | null) => !!v && v.toLowerCase().includes(query);
-    const chats = all.filter((c) => (c.group ? has(c.group.title) || c.group.members.some((m) => m.id !== userId && (has(m.name) || has(m.address))) : has(c.peer?.name) || has(c.peer?.handle) || has(c.peer?.address)));
+    // A chat named like the query (person or group title) comes before a group that only has such a member.
+    const rank = (c: VibexChatDto) =>
+      c.group
+        ? has(c.group.title)
+          ? 0
+          : c.group.members.some((m) => m.id !== userId && (has(m.name) || has(m.address)))
+            ? 1
+            : -1
+        : has(c.peer?.name) || has(c.peer?.handle) || has(c.peer?.address)
+          ? 0
+          : -1;
+    const chats = all
+      .map((c) => ({ c, r: rank(c) }))
+      .filter((x) => x.r >= 0)
+      .sort((a, b) => a.r - b.r)
+      .map((x) => x.c);
     const ids = all.map((c) => c.id);
     let messages: VibexChatSearchDto["messages"] = [];
     if (ids.length) {
