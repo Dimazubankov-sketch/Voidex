@@ -487,6 +487,12 @@ export const vibexMembers = pgTable(
     joinedAt: ts("joined_at").notNull().defaultNow(),
     /** Groups: the creator is "owner" (renames, adds and removes people). */
     role: text("role", { enum: ["owner", "member"] }).notNull().default("member"),
+    /** Step 2.9: this member turned the chat's notifications off. */
+    muted: boolean("muted").notNull().default(false),
+    /** Step 2.9 "delete for me": history up to here is gone for this member (the others keep it). */
+    clearedAt: ts("cleared_at"),
+    /** Step 2.9: removed from this member's list until a new message arrives. */
+    hidden: boolean("hidden").notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.conversationId, t.userId] }), index("vibex_members_user_idx").on(t.userId)],
 );
@@ -554,7 +560,8 @@ export const vibexFiles = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    purpose: text("purpose", { enum: ["message", "post", "voice", "circle", "group"] }).notNull(),
+    /** Step 2.9: "story" (a story's photo / video) and "postfile" (a Files attachment on a post). */
+    purpose: text("purpose", { enum: ["message", "post", "voice", "circle", "group", "story", "postfile"] }).notNull(),
     /** Set when the message / post is sent; until then only the owner sees it. */
     messageId: uuid("message_id").references(() => vibexMessages.id, { onDelete: "cascade" }),
     postId: uuid("post_id").references(() => vibexPosts.id, { onDelete: "cascade" }),
@@ -599,6 +606,43 @@ export const vibexBookmarks = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.postId, t.userId] }), index("vibex_bookmarks_user_idx").on(t.userId, t.createdAt)],
+);
+
+/**
+ * Step 2.9: a story — one photo or video, visible for 24 hours (`expiresAt`),
+ * then only in its author's archive. Soft-deleted by its author.
+ */
+export const vibexStories = pgTable(
+  "vibex_stories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => vibexFiles.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["photo", "video"] }).notNull(),
+    createdAt: createdAt(),
+    expiresAt: ts("expires_at").notNull(),
+    deletedAt: ts("deleted_at"),
+  },
+  (t) => [index("vibex_stories_owner_idx").on(t.ownerId, t.createdAt), index("vibex_stories_expires_idx").on(t.expiresAt), uniqueIndex("vibex_stories_file_uq").on(t.fileId)],
+);
+
+/** Step 2.9: who saw a story (once per person; the author is not counted). */
+export const vibexStoryViews = pgTable(
+  "vibex_story_views",
+  {
+    storyId: uuid("story_id")
+      .notNull()
+      .references(() => vibexStories.id, { onDelete: "cascade" }),
+    viewerId: uuid("viewer_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    viewedAt: ts("viewed_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ name: "vibex_story_views_pk", columns: [t.storyId, t.viewerId] }), index("vibex_story_views_viewer_idx").on(t.viewerId)],
 );
 
 /**

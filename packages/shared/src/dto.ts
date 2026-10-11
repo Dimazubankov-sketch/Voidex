@@ -241,6 +241,8 @@ export type ServerEvent =
   | { type: "notifications.changed" }
   /** Vibex: follows / profile of this person changed. */
   | { type: "vibex.profile"; userId: string }
+  /** Step 2.9: someone's stories changed (new, seen, deleted): the stories header refreshes. */
+  | { type: "vibex.stories"; userId: string }
   /** Vibex: a new chat message (to every member's devices). */
   | { type: "vibex.message"; conversationId: string; messageId: string; senderId: string; senderName: string; snippet: string }
   /** Vibex: chats changed (read receipts, pins) — refresh the list. */

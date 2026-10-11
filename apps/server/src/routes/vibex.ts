@@ -21,6 +21,10 @@ import {
   VibexSettingsUpdateSchema,
   VibexUploadPurposeSchema,
   VibexViewsSchema,
+  VibexChatSearchQuerySchema,
+  VibexChatUpdateSchema,
+  VibexCreateStorySchema,
+  VibexDeleteChatSchema,
 } from "@voidex/shared";
 import { z } from "zod";
 import { parse } from "../http.js";
@@ -100,6 +104,13 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
     return vibex.personPosts(req.auth!.userId, id, q.before, q.limit);
   });
 
+  /** Step 2.9 "Публикации": the person's posts with a photo / video (the same posts, media first). */
+  app.get("/people/:id/publications", async (req) => {
+    const { id } = parse(idParam, req.params);
+    const q = parse(VibexCursorQuerySchema, req.query);
+    return vibex.publications(req.auth!.userId, id, q.before, q.limit);
+  });
+
   // ----------------------------------------------------------------- chats
   app.get("/chats", async (req) => vibex.chats(req.auth!.userId));
 
@@ -115,8 +126,21 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
 
   app.put("/chats/pins", limit(120), async (req) => vibex.setPins(req.auth!.userId, parse(VibexPinsSchema, req.body).conversationIds));
 
+  /** Step 2.9: people, groups and message text in my chats. */
+  app.get("/chats/search", limit(120), async (req) => vibex.searchChats(req.auth!.userId, parse(VibexChatSearchQuerySchema, req.query).q));
+
+  /** Step 2.9: my settings of one chat (notifications on / off). */
+  app.patch("/chats/:id", limit(120), async (req) => vibex.updateChat(req.auth!.userId, parse(idParam, req.params).id, parse(VibexChatUpdateSchema, req.body)));
+
+  /** Step 2.9: delete the chat for me, or for everyone (who may: see VibexService.deleteChat). */
+  app.post("/chats/:id/delete", limit(60), async (req) => vibex.deleteChat(req.auth!.userId, parse(idParam, req.params).id, parse(VibexDeleteChatSchema, req.body).scope));
+
   app.get("/chats/:id", async (req) => vibex.chat(req.auth!.userId, parse(idParam, req.params).id));
 
+  /**
+   * The history. Reading it never marks the chat read (Step 2.9: a long-press
+   * preview uses exactly this); only POST /chats/:id/read does.
+   */
   app.get("/chats/:id/messages", async (req) => {
     const { id } = parse(idParam, req.params);
     const q = parse(VibexCursorQuerySchema, req.query);
@@ -224,6 +248,17 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
     const { id } = parse(idParam, req.params);
     return vibex.share(req.auth!.userId, id, parse(VibexShareSchema, req.body));
   });
+
+  // --------------------------------------------------------------- stories (Step 2.9)
+  app.get("/stories", async (req) => vibex.storyFeed(req.auth!.userId));
+  app.get("/stories/archive", async (req) => vibex.storyArchive(req.auth!.userId));
+  app.post("/stories", limit(30), async (req, reply) => {
+    reply.status(201);
+    return vibex.createStory(req.auth!.userId, parse(VibexCreateStorySchema, req.body).fileId);
+  });
+  app.post("/stories/:id/view", limit(600), async (req) => vibex.viewStory(req.auth!.userId, parse(idParam, req.params).id));
+  app.get("/stories/:id/viewers", async (req) => vibex.storyViewers(req.auth!.userId, parse(idParam, req.params).id));
+  app.delete("/stories/:id", limit(60), async (req) => vibex.deleteStory(req.auth!.userId, parse(idParam, req.params).id));
 
   // --------------------------------------------------------------- history
   app.get("/history", async (req) => {

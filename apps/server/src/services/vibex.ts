@@ -31,6 +31,13 @@ import {
   type VibexPostDto,
   type VibexProfileDto,
   type NotesCardDto,
+  VIBEX_STORY_TTL_MS,
+  VIBEX_STORY_TYPES,
+  canDeleteChatForAll,
+  type VibexChatSearchDto,
+  type VibexStoryDto,
+  type VibexStoryGroupDto,
+  type VibexStoryViewerDto,
 } from "@voidex/shared";
 import type { Db, Tx } from "../db/client.js";
 import {
@@ -49,6 +56,8 @@ import {
   vibexPosts,
   vibexProfiles,
   vibexReports,
+  vibexStories,
+  vibexStoryViews,
 } from "../db/schema.js";
 import { looksLike } from "../lib/file-types.js";
 import { fail, notFound } from "../lib/errors.js";
@@ -58,6 +67,7 @@ import type { NotificationService } from "./notifications.js";
 type FileRow = typeof vibexFiles.$inferSelect;
 type PostRow = typeof vibexPosts.$inferSelect;
 type MessageRow = typeof vibexMessages.$inferSelect;
+type StoryRow = typeof vibexStories.$inferSelect;
 
 const IMAGE_PREVIEW = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const VIDEO_PREVIEW = new Set(VIBEX_POST_VIDEO_TYPES);
@@ -121,9 +131,12 @@ const UPLOAD_RULES: Record<VibexUploadPurpose, { types: string[] | null; max: nu
   circle: { types: VIBEX_CIRCLE_TYPES, max: VIBEX_MEDIA_MAX_BYTES },
   // Step 2.4: a group chat's picture.
   group: { types: ["image/jpeg", "image/png", "image/webp"], max: VIBEX_COVER_MAX_BYTES },
+  // Step 2.9: a story's photo / video, and a Files attachment on a post (any accepted type).
+  story: { types: VIBEX_STORY_TYPES, max: VIBEX_MEDIA_MAX_BYTES },
+  postfile: { types: null, max: VIBEX_FILE_MAX_BYTES },
 };
-/** An uploaded file is still "pending" (cleanable) unless a group uses it as its picture. */
-const notAGroupPicture = sql`NOT EXISTS (SELECT 1 FROM vibex_conversations c WHERE c.avatar_file_id = ${vibexFiles.id})`;
+/** An uploaded file is still "pending" (cleanable) unless a group uses it as its picture or a story shows it. */
+const notAGroupPicture = sql`NOT EXISTS (SELECT 1 FROM vibex_conversations c WHERE c.avatar_file_id = ${vibexFiles.id}) AND NOT EXISTS (SELECT 1 FROM vibex_stories s WHERE s.file_id = ${vibexFiles.id})`;
 const PURPOSE_OF_KIND: Record<VibexMessageKind, VibexUploadPurpose> = { text: "message", voice: "voice", circle: "circle" };
 
 /**
@@ -178,13 +191,17 @@ export class VibexService {
     return (await this.settingsOf([userId])).get(userId)!;
   }
 
-  async updateSettings(userId: string, patch: { privacy?: Partial<VibexSettings["privacy"]>; notifications?: Partial<VibexSettings["notifications"]>; media?: Partial<VibexSettings["media"]> }): Promise<VibexSettings> {
+  async updateSettings(
+    userId: string,
+    patch: { privacy?: Partial<VibexSettings["privacy"]>; notifications?: Partial<VibexSettings["notifications"]>; media?: Partial<VibexSettings["media"]>; chats?: Partial<VibexSettings["chats"]> },
+  ): Promise<VibexSettings> {
     await this.ensureProfile(userId);
     const cur = await this.settings(userId);
     const next = readSettings({
       privacy: { ...cur.privacy, ...patch.privacy },
       notifications: { ...cur.notifications, ...patch.notifications },
       media: { ...cur.media, ...patch.media },
+      chats: { ...cur.chats, ...patch.chats },
     });
     next.privacy.blocked = [...new Set(next.privacy.blocked.filter((id) => id !== userId))];
     await this.ctx.db.update(vibexProfiles).set({ settings: next }).where(eq(vibexProfiles.userId, userId));
@@ -510,6 +527,12 @@ export class VibexService {
     } else if (row.postId) {
       const [p] = await this.ctx.db.select().from(vibexPosts).where(eq(vibexPosts.id, row.postId));
       allowed = !!p && (p.authorId === viewerId || (!p.deletedAt && (await this.canSee(viewerId, p.authorId, "posts"))));
+    } else if (row.purpose === "story") {
+      // Step 2.9: its author always (the archive); others while the story is live and they may see the author's posts.
+      const [st] = await this.ctx.db.select().from(vibexStories).where(eq(vibexStories.fileId, row.id));
+      allowed =
+        row.ownerId === viewerId ||
+        (!!st && !st.deletedAt && st.expiresAt > this.ctx.now() && (await this.canSee(viewerId, st.ownerId, "posts")));
     } else {
       allowed = row.ownerId === viewerId;
     }
@@ -520,7 +543,7 @@ export class VibexService {
   }
 
   /** Claims uploaded files for a message / post (owner, purpose and "not yet sent" are enforced). */
-  private async claimFiles(tx: Tx, ownerId: string, purpose: VibexUploadPurpose, ids: string[], target: { messageId: string } | { postId: string }) {
+  private async claimFiles(tx: Tx, ownerId: string, purpose: VibexUploadPurpose, ids: string[], target: { messageId: string } | { postId: string }, offset = 0) {
     if (!ids.length) return;
     const unique = [...new Set(ids)];
     if (unique.length > VIBEX_FILES_MAX) throw fail(ErrorCode.AttachmentLimit, "Too many files.", { status: 422, details: { max: VIBEX_FILES_MAX } });
@@ -532,7 +555,7 @@ export class VibexService {
     for (const [i, id] of unique.entries()) {
       await tx
         .update(vibexFiles)
-        .set({ ...target, position: i })
+        .set({ ...target, position: offset + i })
         .where(eq(vibexFiles.id, id));
     }
   }
@@ -667,6 +690,19 @@ export class VibexService {
     return this.page(viewerId, eq(vibexPosts.authorId, userId), cursor, limit);
   }
 
+  /**
+   * Step 2.9 "Публикации": the person's own posts that carry a photo or a
+   * video — the same posts as in "Посты", shown media first (no copies).
+   */
+  publications(viewerId: string, userId: string, cursor?: string, limit = 30) {
+    const types = [...VIBEX_POST_IMAGE_TYPES, ...VIBEX_POST_VIDEO_TYPES];
+    const withMedia = sql`EXISTS (SELECT 1 FROM vibex_files f WHERE f.post_id = ${vibexPosts.id} AND f.mime_type IN (${sql.join(
+      types.map((t) => sql`${t}`),
+      sql`, `,
+    )}))`;
+    return this.page(viewerId, and(eq(vibexPosts.authorId, userId), eq(vibexPosts.kind, "post"), withMedia), cursor, limit);
+  }
+
   private async livePost(id: string, db: Db | Tx = this.ctx.db): Promise<PostRow> {
     const [row] = await db.select().from(vibexPosts).where(and(eq(vibexPosts.id, id), isNull(vibexPosts.deletedAt)));
     if (!row) throw notFound("Post");
@@ -679,10 +715,12 @@ export class VibexService {
     return (await this.postDtos(viewerId, [row])).get(row.id)!;
   }
 
-  async createPost(authorId: string, input: { text: string; mediaIds: string[] }): Promise<VibexPostDto> {
+  async createPost(authorId: string, input: { text: string; mediaIds: string[]; fileIds?: string[] }): Promise<VibexPostDto> {
     const row = await this.ctx.db.transaction(async (tx) => {
       const [p] = await tx.insert(vibexPosts).values({ authorId, kind: "post", text: input.text.trim() }).returning();
       await this.claimFiles(tx, authorId, "post", input.mediaIds, { postId: p!.id });
+      // Step 2.9: Files attachments (only my own "postfile" uploads) come after the pictures / videos.
+      await this.claimFiles(tx, authorId, "postfile", input.fileIds ?? [], { postId: p!.id }, input.mediaIds.length);
       return p!;
     });
     this.feedChanged(row.id);
@@ -948,6 +986,8 @@ export class VibexService {
           { conversationId: conv!.id, userId: otherId },
         ])
         .onConflictDoNothing();
+      // Step 2.9: opening a chat I deleted for myself puts it back (with an empty history).
+      await tx.update(vibexMembers).set({ hidden: false }).where(and(eq(vibexMembers.conversationId, conv!.id), eq(vibexMembers.userId, userId)));
       return conv!.id;
     });
     return this.chat(userId, id);
@@ -1053,7 +1093,11 @@ export class VibexService {
 
   /** My chats: pinned first (my order), then by last activity. Empty chats are listed only once pinned. */
   async chats(userId: string): Promise<VibexChatDto[]> {
-    const mine = await this.ctx.db.select({ id: vibexMembers.conversationId }).from(vibexMembers).where(eq(vibexMembers.userId, userId));
+    // Step 2.9: a chat I deleted for myself stays out of my list until a new message arrives.
+    const mine = await this.ctx.db
+      .select({ id: vibexMembers.conversationId })
+      .from(vibexMembers)
+      .where(and(eq(vibexMembers.userId, userId), eq(vibexMembers.hidden, false)));
     const list = await this.chatDtos(userId, mine.map((m) => m.id));
     return list
       .filter((c) => c.lastMessage || c.pinnedPosition !== null || c.kind === "group")
@@ -1081,8 +1125,11 @@ export class VibexService {
     ]);
     const lastRows = lastIds.rows.length ? await this.ctx.db.select().from(vibexMessages).where(inArray(vibexMessages.id, lastIds.rows.map((r) => r.id))) : [];
     const lastDtos = await this.messageDtos(userId, lastRows);
-    const lastByConv = new Map(lastRows.map((m) => [m.conversationId, lastDtos.get(m.id)!]));
     const mineByConv = new Map(members.filter((m) => m.userId === userId).map((m) => [m.conversationId, m]));
+    // Step 2.9: what I deleted for myself is not my "last message" any more.
+    const lastByConv = new Map(
+      lastRows.filter((m) => !mineByConv.get(m.conversationId)?.clearedAt || m.createdAt > mineByConv.get(m.conversationId)!.clearedAt!).map((m) => [m.conversationId, lastDtos.get(m.id)!]),
+    );
     const peerByConv = new Map(members.filter((m) => m.userId !== userId).map((m) => [m.conversationId, m]));
     const people = await this.persons([...new Set(members.map((m) => m.userId))]);
     const settings = await this.settingsOf([userId, ...[...peerByConv.values()].map((m) => m.userId)]);
@@ -1098,6 +1145,7 @@ export class VibexService {
           ne(vibexMessages.senderId, userId),
           isNull(vibexMessages.deletedAt),
           or(isNull(vibexMembers.lastReadAt), gt(vibexMessages.createdAt, vibexMembers.lastReadAt)),
+          or(isNull(vibexMembers.clearedAt), gt(vibexMessages.createdAt, vibexMembers.clearedAt)),
         ),
       )
       .groupBy(vibexMessages.conversationId);
@@ -1127,6 +1175,8 @@ export class VibexService {
           unread: unreadBy.get(c.id) ?? 0,
           pinnedPosition: me.pinnedPosition,
           peerReadAt: null,
+          muted: me.muted,
+          canDeleteForAll: me.role === "owner",
         });
         continue;
       }
@@ -1143,6 +1193,8 @@ export class VibexService {
         pinnedPosition: me.pinnedPosition,
         // Read receipts only when both people share them.
         peerReadAt: myReceipts && settings.get(peer.userId)!.privacy.readReceipts ? (peer.lastReadAt?.toISOString() ?? null) : null,
+        muted: me.muted,
+        canDeleteForAll: true,
       });
     }
     return out;
@@ -1182,15 +1234,28 @@ export class VibexService {
     return out;
   }
 
-  /** History of a chat, newest first (the client shows it bottom-up). */
+  /**
+   * History of a chat, newest first (the client shows it bottom-up).
+   * Step 2.9: reading the history never marks anything read (that is
+   * `read()` alone), so a long-press preview leaves unread counts, read
+   * receipts and notifications exactly as they were.
+   */
   async messages(userId: string, conversationId: string, cursor?: string, limit = 50): Promise<VibexPage<VibexMessageDto>> {
-    await this.membership(userId, conversationId);
+    const me = await this.membership(userId, conversationId);
     const c = decodeCursor(cursor);
     const rows = await this.ctx.db
       .select()
       .from(vibexMessages)
       // Step 2.8: a deleted message is gone from the history, nothing is left in its place.
-      .where(and(eq(vibexMessages.conversationId, conversationId), isNull(vibexMessages.deletedAt), olderThan(vibexMessages, c)))
+      // Step 2.9: nor is what I deleted for myself (the chat's history up to `clearedAt`).
+      .where(
+        and(
+          eq(vibexMessages.conversationId, conversationId),
+          isNull(vibexMessages.deletedAt),
+          me.clearedAt ? gt(vibexMessages.createdAt, me.clearedAt) : undefined,
+          olderThan(vibexMessages, c),
+        ),
+      )
       .orderBy(desc(vibexMessages.createdAt), desc(vibexMessages.id))
       .limit(limit + 1);
     const more = rows.length > limit;
@@ -1206,8 +1271,9 @@ export class VibexService {
   ): Promise<VibexMessageDto> {
     const now = this.ctx.now();
     const kind = input.kind ?? "text";
-    const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
+    const members = await this.ctx.db.select({ userId: vibexMembers.userId, muted: vibexMembers.muted }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
     if (!members.some((m) => m.userId === userId)) throw notFound("Chat");
+    const muted = new Set(members.filter((m) => m.muted).map((m) => m.userId));
     const [conv] = await this.ctx.db.select({ kind: vibexConversations.kind, title: vibexConversations.title }).from(vibexConversations).where(eq(vibexConversations.id, conversationId));
     const isGroup = conv?.kind === "group";
     const others = members.filter((m) => m.userId !== userId).map((m) => m.userId);
@@ -1245,6 +1311,8 @@ export class VibexService {
         .returning();
       await this.claimFiles(tx, userId, PURPOSE_OF_KIND[kind], input.fileIds, { messageId: m!.id });
       await tx.update(vibexConversations).set({ lastMessageAt: now }).where(eq(vibexConversations.id, conversationId));
+      // Step 2.9: a chat someone deleted for themselves comes back to their list with the new message.
+      await tx.update(vibexMembers).set({ hidden: false }).where(and(eq(vibexMembers.conversationId, conversationId), eq(vibexMembers.hidden, true)));
       // Sending reads the chat up to here.
       await tx
         .update(vibexMembers)
@@ -1260,7 +1328,8 @@ export class VibexService {
       this.ctx.events.toUser(m.userId, { type: "vibex.message", conversationId, messageId: row.id, senderId: userId, senderName: sender.name, snippet });
     }
     for (const other of others) {
-      if (!settings.get(other)!.notifications.messages) continue;
+      // Step 2.9: notifications off for this chat (or for all messages): no notification.
+      if (!settings.get(other)!.notifications.messages || muted.has(other)) continue;
       await this.notifications?.tryNotify({
         userId: other,
         app: "vibex",
@@ -1373,5 +1442,254 @@ export class VibexService {
       conversations.push(chat.id);
     }
     return { conversationIds: conversations };
+  }
+
+  // ------------------------------------------------------- Step 2.9: chats
+
+  /** My settings of one chat: notifications on / off. */
+  async updateChat(userId: string, conversationId: string, input: { muted: boolean }): Promise<VibexChatDto> {
+    await this.membership(userId, conversationId);
+    await this.ctx.db
+      .update(vibexMembers)
+      .set({ muted: input.muted })
+      .where(and(eq(vibexMembers.conversationId, conversationId), eq(vibexMembers.userId, userId)));
+    this.ctx.events.toUser(userId, { type: "vibex.chats", conversationId });
+    return this.chat(userId, conversationId);
+  }
+
+  /**
+   * "Удалить у себя": the history up to now disappears for me only and the
+   * chat leaves my list (a new message brings it back, from that message on).
+   * "Удалить у всех": the chat and everything in it is removed for every
+   * member — either person of a direct chat, or a group's owner; anyone else
+   * gets 403.
+   */
+  async deleteChat(userId: string, conversationId: string, scope: "me" | "all") {
+    const me = await this.membership(userId, conversationId);
+    const [conv] = await this.ctx.db.select().from(vibexConversations).where(eq(vibexConversations.id, conversationId));
+    if (!conv) throw notFound("Chat");
+    const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
+    if (scope === "me") {
+      await this.ctx.db
+        .update(vibexMembers)
+        .set({ clearedAt: this.ctx.now(), hidden: true, pinnedPosition: null, lastReadAt: this.ctx.now() })
+        .where(and(eq(vibexMembers.conversationId, conversationId), eq(vibexMembers.userId, userId)));
+      this.ctx.events.toUser(userId, { type: "vibex.chats", conversationId });
+      await this.notifications?.markTargetRead(userId, "chatId", conversationId);
+      return { ok: true };
+    }
+    if (!canDeleteChatForAll({ kind: conv.kind, group: conv.kind === "group" ? { role: me.role } as VibexChatDto["group"] : null })) {
+      throw fail(ErrorCode.Forbidden, "Only the group's owner can delete it for everyone.", { status: 403 });
+    }
+    await this.ctx.db.transaction(async (tx) => {
+      const files = await tx
+        .select({ key: vibexFiles.storageKey })
+        .from(vibexFiles)
+        .innerJoin(vibexMessages, eq(vibexMessages.id, vibexFiles.messageId))
+        .where(eq(vibexMessages.conversationId, conversationId));
+      // Members, messages and their files go with the conversation (ON DELETE cascade).
+      await tx.delete(vibexConversations).where(eq(vibexConversations.id, conversationId));
+      await this.ctx.blobs.delete(files.map((f) => f.key), tx);
+    });
+    for (const m of members) this.ctx.events.toUser(m.userId, { type: "vibex.chats", conversationId });
+    await this.notifications?.removeTarget("chatId", conversationId);
+    return { ok: true };
+  }
+
+  /**
+   * Search in my chats: people by name or @voidops address, groups by title,
+   * and messages by their text (what I can still see of each chat).
+   */
+  async searchChats(userId: string, q: string): Promise<VibexChatSearchDto> {
+    const query = q.replace(/^@/, "").trim().toLowerCase();
+    if (!query) return { chats: [], messages: [] };
+    const all = await this.chats(userId);
+    const has = (v: string | undefined | null) => !!v && v.toLowerCase().includes(query);
+    const chats = all.filter((c) => (c.group ? has(c.group.title) || c.group.members.some((m) => m.id !== userId && (has(m.name) || has(m.address))) : has(c.peer?.name) || has(c.peer?.handle) || has(c.peer?.address)));
+    const ids = all.map((c) => c.id);
+    let messages: VibexChatSearchDto["messages"] = [];
+    if (ids.length) {
+      const rows = await this.ctx.db
+        .select({ m: vibexMessages })
+        .from(vibexMessages)
+        .innerJoin(vibexMembers, and(eq(vibexMembers.conversationId, vibexMessages.conversationId), eq(vibexMembers.userId, userId)))
+        .where(
+          and(
+            inArray(vibexMessages.conversationId, ids),
+            isNull(vibexMessages.deletedAt),
+            eq(vibexMessages.kind, "text"),
+            or(isNull(vibexMembers.clearedAt), gt(vibexMessages.createdAt, vibexMembers.clearedAt)),
+            ilike(vibexMessages.text, `%${escapeLike(query)}%`),
+          ),
+        )
+        .orderBy(desc(vibexMessages.createdAt))
+        .limit(20);
+      const dtos = await this.messageDtos(userId, rows.map((r) => r.m));
+      const byId = new Map(all.map((c) => [c.id, c]));
+      messages = rows.map((r) => ({ chat: byId.get(r.m.conversationId)!, message: dtos.get(r.m.id)! })).filter((x) => x.chat && x.message);
+    }
+    return { chats, messages };
+  }
+
+  // ----------------------------------------------------- Step 2.9: stories
+
+  private async storyDtos(viewerId: string, rows: StoryRow[]): Promise<VibexStoryDto[]> {
+    if (!rows.length) return [];
+    const ids = rows.map((r) => r.id);
+    const [people, files, seen, counts] = await Promise.all([
+      this.persons(rows.map((r) => r.ownerId)),
+      this.ctx.db.select().from(vibexFiles).where(inArray(vibexFiles.id, rows.map((r) => r.fileId))),
+      this.ctx.db.select({ id: vibexStoryViews.storyId }).from(vibexStoryViews).where(and(inArray(vibexStoryViews.storyId, ids), eq(vibexStoryViews.viewerId, viewerId))),
+      this.ctx.db
+        .select({ id: vibexStoryViews.storyId, n: sql<number>`count(*)::int` })
+        .from(vibexStoryViews)
+        .where(inArray(vibexStoryViews.storyId, ids))
+        .groupBy(vibexStoryViews.storyId),
+    ]);
+    const fileBy = new Map(files.map((f) => [f.id, fileDto(f)]));
+    const seenSet = new Set(seen.map((r) => r.id));
+    const countBy = new Map(counts.map((r) => [r.id, r.n]));
+    const now = this.ctx.now();
+    return rows
+      .filter((r) => people.has(r.ownerId) && fileBy.has(r.fileId))
+      .map((r) => {
+        const mine = r.ownerId === viewerId;
+        return {
+          id: r.id,
+          owner: people.get(r.ownerId)!,
+          file: fileBy.get(r.fileId)!,
+          kind: r.kind,
+          createdAt: r.createdAt.toISOString(),
+          expiresAt: r.expiresAt.toISOString(),
+          archived: r.expiresAt <= now,
+          seen: mine || seenSet.has(r.id),
+          views: mine ? (countBy.get(r.id) ?? 0) : 0,
+          mine,
+        };
+      });
+  }
+
+  /** Publishes a story from my uploaded photo / video (purpose "story"); it lives 24 hours. */
+  async createStory(ownerId: string, fileId: string): Promise<VibexStoryDto> {
+    await this.ensureProfile(ownerId);
+    const now = this.ctx.now();
+    const row = await this.ctx.db.transaction(async (tx) => {
+      const [f] = await tx
+        .select()
+        .from(vibexFiles)
+        .where(and(eq(vibexFiles.id, fileId), eq(vibexFiles.ownerId, ownerId), eq(vibexFiles.purpose, "story"), isNull(vibexFiles.messageId), isNull(vibexFiles.postId)));
+      if (!f) throw notFound("File");
+      const [taken] = await tx.select({ id: vibexStories.id }).from(vibexStories).where(eq(vibexStories.fileId, f.id));
+      if (taken) throw fail(ErrorCode.ValidationFailed, "This file is already a story.");
+      const kind = VIBEX_POST_VIDEO_TYPES.includes(f.mimeType) ? ("video" as const) : ("photo" as const);
+      const [st] = await tx
+        .insert(vibexStories)
+        .values({ ownerId, fileId: f.id, kind, createdAt: now, expiresAt: new Date(now.getTime() + VIBEX_STORY_TTL_MS) })
+        .returning();
+      return st!;
+    });
+    for (const u of await this.storyAudience(ownerId)) this.ctx.events.toUser(u, { type: "vibex.stories", userId: ownerId });
+    return (await this.storyDtos(ownerId, [row]))[0]!;
+  }
+
+  /** Who gets my story in their header: me, my followers and the people I have a direct chat with. */
+  private async storyAudience(ownerId: string): Promise<string[]> {
+    const [followers, peers] = await Promise.all([
+      this.ctx.db.select({ id: vibexFollows.followerId }).from(vibexFollows).where(eq(vibexFollows.followeeId, ownerId)),
+      this.directPeers(ownerId),
+    ]);
+    return [...new Set([ownerId, ...followers.map((f) => f.id), ...peers])];
+  }
+
+  private async directPeers(userId: string): Promise<string[]> {
+    const rows = await this.ctx.db.execute<{ id: string }>(sql`
+      SELECT DISTINCT peer.user_id AS id
+        FROM vibex_members me
+        JOIN vibex_conversations c ON c.id = me.conversation_id AND c.kind = 'direct'
+        JOIN vibex_members peer ON peer.conversation_id = c.id AND peer.user_id <> me.user_id
+       WHERE me.user_id = ${userId}`);
+    return rows.rows.map((r) => r.id);
+  }
+
+  /**
+   * The stories header of "Чаты": live stories of the people I follow or
+   * chat with (and mine, always first), each person's unseen ones first in
+   * the row. Stories past their 24 hours are not here.
+   */
+  async storyFeed(viewerId: string): Promise<VibexStoryGroupDto[]> {
+    const [follows, peers] = await Promise.all([
+      this.ctx.db.select({ id: vibexFollows.followeeId }).from(vibexFollows).where(eq(vibexFollows.followerId, viewerId)),
+      this.directPeers(viewerId),
+    ]);
+    const owners = [...new Set([viewerId, ...follows.map((f) => f.id), ...peers])];
+    const now = this.ctx.now();
+    const rows = await this.ctx.db
+      .select()
+      .from(vibexStories)
+      .where(and(inArray(vibexStories.ownerId, owners), isNull(vibexStories.deletedAt), gt(vibexStories.expiresAt, now)))
+      .orderBy(asc(vibexStories.createdAt))
+      .limit(500);
+    const settings = await this.settingsOf(owners);
+    const visible: StoryRow[] = [];
+    for (const r of rows) if (r.ownerId === viewerId || (await this.canSee(viewerId, r.ownerId, "posts", settings.get(r.ownerId)))) visible.push(r);
+    const dtos = await this.storyDtos(viewerId, visible);
+    const groups = new Map<string, VibexStoryGroupDto>();
+    for (const d of dtos) {
+      const g = groups.get(d.owner.id) ?? { person: d.owner, stories: [], seen: true, mine: d.mine };
+      g.stories.push(d);
+      g.seen = g.seen && d.seen;
+      groups.set(d.owner.id, g);
+    }
+    return [...groups.values()].sort((a, b) => {
+      if (a.mine !== b.mine) return a.mine ? -1 : 1;
+      if (a.seen !== b.seen) return a.seen ? 1 : -1;
+      return b.stories.at(-1)!.createdAt.localeCompare(a.stories.at(-1)!.createdAt);
+    });
+  }
+
+  /** My stories that are past their 24 hours (the archive), newest first. */
+  async storyArchive(ownerId: string): Promise<VibexStoryDto[]> {
+    const rows = await this.ctx.db
+      .select()
+      .from(vibexStories)
+      .where(and(eq(vibexStories.ownerId, ownerId), isNull(vibexStories.deletedAt), lt(vibexStories.expiresAt, this.ctx.now())))
+      .orderBy(desc(vibexStories.createdAt))
+      .limit(200);
+    return this.storyDtos(ownerId, rows);
+  }
+
+  /** "Seen": counted once per person; the author's own views and stories I can't see are ignored. */
+  async viewStory(viewerId: string, storyId: string) {
+    const [st] = await this.ctx.db.select().from(vibexStories).where(eq(vibexStories.id, storyId));
+    if (!st || st.deletedAt || (st.ownerId !== viewerId && (st.expiresAt <= this.ctx.now() || !(await this.canSee(viewerId, st.ownerId, "posts"))))) throw notFound("Story");
+    if (st.ownerId !== viewerId) {
+      const inserted = await this.ctx.db.insert(vibexStoryViews).values({ storyId, viewerId }).onConflictDoNothing().returning();
+      if (inserted.length) this.ctx.events.toUser(st.ownerId, { type: "vibex.stories", userId: st.ownerId });
+    }
+    return { ok: true };
+  }
+
+  /** Who saw my story (its author only). */
+  async storyViewers(ownerId: string, storyId: string): Promise<VibexStoryViewerDto[]> {
+    const [st] = await this.ctx.db.select().from(vibexStories).where(and(eq(vibexStories.id, storyId), eq(vibexStories.ownerId, ownerId)));
+    if (!st) throw notFound("Story");
+    const rows = await this.ctx.db.select().from(vibexStoryViews).where(eq(vibexStoryViews.storyId, storyId)).orderBy(desc(vibexStoryViews.viewedAt));
+    const people = await this.persons(rows.map((r) => r.viewerId));
+    return rows.filter((r) => people.has(r.viewerId)).map((r) => ({ person: people.get(r.viewerId)!, viewedAt: r.viewedAt.toISOString() }));
+  }
+
+  /** The author removes a story (live or archived); its file goes with it. */
+  async deleteStory(ownerId: string, storyId: string) {
+    const [st] = await this.ctx.db
+      .update(vibexStories)
+      .set({ deletedAt: this.ctx.now() })
+      .where(and(eq(vibexStories.id, storyId), eq(vibexStories.ownerId, ownerId), isNull(vibexStories.deletedAt)))
+      .returning();
+    if (!st) throw notFound("Story");
+    const files = await this.ctx.db.select({ key: vibexFiles.storageKey }).from(vibexFiles).where(eq(vibexFiles.id, st.fileId));
+    // The row keeps its id for views already counted; the picture itself is gone.
+    await this.ctx.blobs.delete(files.map((f) => f.key));
+    for (const u of await this.storyAudience(ownerId)) this.ctx.events.toUser(u, { type: "vibex.stories", userId: ownerId });
+    return { ok: true };
   }
 }

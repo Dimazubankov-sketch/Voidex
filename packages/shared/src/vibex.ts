@@ -120,6 +120,10 @@ export interface VibexChatDto {
   pinnedPosition: number | null;
   /** The other person has read everything up to here (read receipts). */
   peerReadAt: string | null;
+  /** Step 2.9: I turned this chat's notifications off. */
+  muted?: boolean;
+  /** Step 2.9: I may delete it for everyone (direct chats: either person; groups: the owner). */
+  canDeleteForAll?: boolean;
 }
 
 export interface VibexHistoryItemDto {
@@ -184,6 +188,9 @@ export interface VibexMediaItemDto {
 }
 
 export const VIBEX_AUDIENCES = ["everyone", "followers", "nobody"] as const;
+/** Step 2.9: sections of the chat list (pinned are always on top). */
+export const VIBEX_CHAT_ORDERS = ["chats-first", "groups-first", "mixed"] as const;
+export type VibexChatOrder = (typeof VIBEX_CHAT_ORDERS)[number];
 export type VibexAudience = (typeof VIBEX_AUDIENCES)[number];
 
 export const VibexSettingsSchema = z.object({
@@ -209,6 +216,10 @@ export const VibexSettingsSchema = z.object({
     autoplay: z.boolean().default(true),
     quality: z.enum(["auto", "high", "saver"]).default("auto"),
   }).default({ autoplay: true, quality: "auto" }),
+  /** Step 2.9: the chat list — pinned always first, then chats and groups in this order (or mixed). */
+  chats: z.object({
+    order: z.enum(VIBEX_CHAT_ORDERS).default("chats-first"),
+  }).default({ order: "chats-first" }),
 });
 export type VibexSettings = z.infer<typeof VibexSettingsSchema>;
 export const DEFAULT_VIBEX_SETTINGS: VibexSettings = VibexSettingsSchema.parse({});
@@ -218,6 +229,7 @@ export const VibexSettingsUpdateSchema = z.object({
   privacy: VibexSettingsSchema.shape.privacy.unwrap().partial().optional(),
   notifications: VibexSettingsSchema.shape.notifications.unwrap().partial().optional(),
   media: VibexSettingsSchema.shape.media.unwrap().partial().optional(),
+  chats: VibexSettingsSchema.shape.chats.unwrap().partial().optional(),
 });
 
 /** Profile editor: names are the VOIDEX account's own (one identity); the rest is Vibex. */
@@ -301,15 +313,19 @@ export const VibexCreatePostSchema = z
   .object({
     text: z.string().max(VIBEX_POST_MAX).default(""),
     mediaIds: z.array(z.string().uuid()).max(VIBEX_FILES_MAX).default([]),
+    /** Step 2.9: files from Files / ViCloud attached to the post (upload purpose "postfile"). */
+    fileIds: z.array(z.string().uuid()).max(VIBEX_FILES_MAX).default([]),
   })
-  .refine((p) => p.text.trim().length > 0 || p.mediaIds.length > 0, { message: "Empty post", path: ["text"] });
+  .refine((p) => p.text.trim().length > 0 || p.mediaIds.length > 0 || p.fileIds.length > 0, { message: "Empty post", path: ["text"] })
+  .refine((p) => p.mediaIds.length + p.fileIds.length <= VIBEX_FILES_MAX, { message: "Too many files", path: ["fileIds"] });
 
 export const VibexShareSchema = z.object({
   userIds: z.array(z.string().uuid()).min(1).max(20),
   text: z.string().max(VIBEX_MESSAGE_MAX).default(""),
 });
 
-export const VibexUploadPurposeSchema = z.enum(["message", "post", "voice", "circle", "group"]);
+/** Step 2.9: "story" (a story's photo / video) and "postfile" (a Files attachment on a post). */
+export const VibexUploadPurposeSchema = z.enum(["message", "post", "voice", "circle", "group", "story", "postfile"]);
 export type VibexUploadPurpose = z.infer<typeof VibexUploadPurposeSchema>;
 
 export const VibexHistoryQuerySchema = VibexCursorQuerySchema.extend({ kind: z.enum(["liked", "bookmarks"]) });
@@ -329,3 +345,92 @@ export const VibexActivateSchema = z.object({
   email: z.string().trim().toLowerCase().max(254),
   password: z.string().min(1).max(256),
 });
+
+// ------------------------------------------------------------------ Step 2.9
+
+/** A story lives this long; then only its author sees it (the archive). */
+export const VIBEX_STORY_TTL_MS = 24 * 60 * 60 * 1000;
+export const VIBEX_STORY_TYPES = [...VIBEX_POST_IMAGE_TYPES, ...VIBEX_POST_VIDEO_TYPES];
+
+export interface VibexStoryDto {
+  id: string;
+  owner: VibexPersonDto;
+  file: VibexFileDto;
+  kind: "photo" | "video";
+  createdAt: string;
+  expiresAt: string;
+  /** Past its 24 hours: only in the author's archive. */
+  archived: boolean;
+  /** I have seen it. */
+  seen: boolean;
+  /** The author only: how many people saw it (others get 0). */
+  views: number;
+  mine: boolean;
+}
+
+/** One person's current stories (the feed of the Chats header). */
+export interface VibexStoryGroupDto {
+  person: VibexPersonDto;
+  stories: VibexStoryDto[];
+  /** Every story of this person was seen by me. */
+  seen: boolean;
+  mine: boolean;
+}
+
+export interface VibexStoryViewerDto {
+  person: VibexPersonDto;
+  viewedAt: string;
+}
+
+export const VibexCreateStorySchema = z.object({ fileId: z.string().uuid() });
+
+/** Step 2.9: my settings of one chat. */
+export const VibexChatUpdateSchema = z.object({ muted: z.boolean() });
+
+/** Step 2.9: "Удалить у себя" / "Удалить у всех". */
+export const VibexDeleteChatSchema = z.object({ scope: z.enum(["me", "all"]) });
+
+export const VibexChatSearchQuerySchema = z.object({ q: z.string().trim().min(1).max(80) });
+
+/** Chats found by name / @voidops address / group title, and messages found by their text. */
+export interface VibexChatSearchDto {
+  chats: VibexChatDto[];
+  messages: { chat: VibexChatDto; message: VibexMessageDto }[];
+}
+
+/** Who may delete a whole chat for everyone: either person of a direct chat, a group's owner. */
+export function canDeleteChatForAll(chat: Pick<VibexChatDto, "kind" | "group">): boolean {
+  return chat.kind === "direct" || chat.group?.role === "owner";
+}
+
+/**
+ * The chat list, top to bottom: pinned (their own order, always first), then
+ * chats and groups as sections in the chosen order, or one mixed list. Within
+ * a section: the latest activity first.
+ */
+export function chatSections<T extends Pick<VibexChatDto, "kind" | "pinnedPosition" | "lastMessageAt">>(
+  list: T[],
+  order: VibexChatOrder,
+): { key: "pinned" | "chats" | "groups" | "all"; items: T[] }[] {
+  const pinned = list.filter((c) => c.pinnedPosition !== null).sort((a, b) => a.pinnedPosition! - b.pinnedPosition!);
+  const rest = list.filter((c) => c.pinnedPosition === null).sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  const out: { key: "pinned" | "chats" | "groups" | "all"; items: T[] }[] = [];
+  if (pinned.length) out.push({ key: "pinned", items: pinned });
+  if (order === "mixed") {
+    if (rest.length) out.push({ key: "all", items: rest });
+    return out;
+  }
+  const chats = rest.filter((c) => c.kind === "direct");
+  const groups = rest.filter((c) => c.kind === "group");
+  for (const key of order === "groups-first" ? (["groups", "chats"] as const) : (["chats", "groups"] as const)) {
+    const items = key === "chats" ? chats : groups;
+    if (items.length) out.push({ key, items });
+  }
+  return out;
+}
+
+/** Circular index (photo carousel): …, n-1 ← 0 → 1, …; any step size, both ways. */
+export function wrapIndex(i: number, n: number): number {
+  if (n <= 0) return 0;
+  return ((i % n) + n) % n;
+}
