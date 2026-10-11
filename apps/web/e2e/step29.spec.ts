@@ -32,8 +32,11 @@ test("desktop logo size: only the logo inside the white tile changes; saved with
   await signUpViaApi(page, "Логотип", "Размеров");
   const tile = page.getByTestId("app-mail").locator("[data-glyph-box]").first();
   await expect(tile).toHaveAttribute("data-glyph-box", "52%");
-  const tileBox = await page.getByTestId("app-mail").locator("[data-system-ui]").first().boundingBox();
-  const cell = await page.getByTestId("app-mail").boundingBox();
+  // Layout size (not the on-screen box: hover / press scale the tile slightly).
+  const tileSize = () => page.getByTestId("app-mail").locator("[data-system-ui]").first().evaluate((e: HTMLElement) => ({ width: e.offsetWidth, height: e.offsetHeight }));
+  const tileBox = await tileSize();
+  const cellWidth = () => page.getByTestId("app-mail").evaluate((e: HTMLElement) => e.offsetWidth);
+  const cell = await cellWidth();
   await openApp(page, "settings");
   await page.getByTestId("settings-nav-desktop").last().click();
   await expect(page.getByTestId("glyph-scale-setting")).toBeVisible();
@@ -44,8 +47,8 @@ test("desktop logo size: only the logo inside the white tile changes; saved with
   await page.waitForTimeout(500);
   await expect(page.getByTestId("app-mail").locator("[data-glyph-box]").first()).toHaveAttribute("data-glyph-box", "64%");
   // The white tile and the cell keep their size.
-  expect(await page.getByTestId("app-mail").locator("[data-system-ui]").first().boundingBox()).toMatchObject({ width: tileBox!.width, height: tileBox!.height });
-  expect((await page.getByTestId("app-mail").boundingBox())!.width).toBe(cell!.width);
+  expect(await tileSize()).toEqual(tileBox);
+  expect(await cellWidth()).toBe(cell);
   // Saved with the account: a new start keeps it.
   await reloadUnlocked(page);
   await expect(page.getByTestId("app-mail").locator("[data-glyph-box]").first()).toHaveAttribute("data-glyph-box", "64%");
