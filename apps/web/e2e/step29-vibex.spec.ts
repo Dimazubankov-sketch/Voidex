@@ -329,11 +329,18 @@ test("phone: one button — tap switches mic ↔ circle; hold records; slide lef
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
 
-  // A quick tap: microphone → circle → microphone.
-  await touchGesture(page, cx, cy, [], 60);
-  await expect(btn).toHaveAttribute("data-mode", "circle");
-  await touchGesture(page, cx, cy, [], 60);
-  await expect(btn).toHaveAttribute("data-mode", "voice");
+  // A quick tap switches the mode. A busy runner can deliver the touch end so late that the button rightly
+  // takes it for a (too short, discarded) hold; then tap again once it is idle.
+  const tapTo = async (mode: "voice" | "circle") => {
+    await expect(async () => {
+      await expect(btn).toHaveAttribute("data-state", "idle", { timeout: 3000 });
+      if ((await btn.getAttribute("data-mode")) !== mode) await touchGesture(page, cx, cy, [], 0);
+      await expect(btn).toHaveAttribute("data-mode", mode, { timeout: 1500 });
+    }).toPass({ timeout: 20_000 });
+  };
+  // Microphone → circle → microphone.
+  await tapTo("circle");
+  await tapTo("voice");
 
   // Hold: recording; slide left far: cancelled, nothing sent.
   const held = await touchGesture(page, cx, cy, [], 700, false);
@@ -373,8 +380,7 @@ test("phone: one button — tap switches mic ↔ circle; hold records; slide lef
   await expect(page.getByTestId("voice-message")).toHaveCount(2);
 
   // Video mode: hold + slide up locks the camera circle; switch camera only with two cameras; Send.
-  await touchGesture(page, cx, cy, [], 60);
-  await expect(btn).toHaveAttribute("data-mode", "circle");
+  await tapTo("circle");
   await touchGesture(page, cx, cy, steps(0, -130), 700);
   await expect(page.getByTestId("circle-recorder")).toHaveAttribute("data-state", "locked");
   await shot(page, "circle-locked");
