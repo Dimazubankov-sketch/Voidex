@@ -1,13 +1,11 @@
-import { useState } from "react";
 import { RiBookmarkLine, RiHeart3Line, RiLockLine, RiUserSearchLine } from "@remixicon/react";
 import type { VibexPersonDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { formatRelative, useLanguage, useT } from "@/lib/i18n";
-import { EmptyState, Skeleton, Spinner } from "@/ui/controls";
-import { useChats, useHistory, usePeople, usePost, type HistoryKind } from "./data";
+import { EmptyState, Skeleton } from "@/ui/controls";
+import { useHistory, usePeople, usePost, type HistoryKind } from "./data";
 import { LoadMore, PostCard, UnavailablePost } from "./posts";
 import { useVibex } from "./store";
-import { VoidexSearchField } from "@/ui/search-field";
 import { cx } from "@/lib/cx";
 
 function PersonRow({ person }: { person: VibexPersonDto }) {
@@ -39,50 +37,6 @@ export function PeopleResults({ query }: { query: string }) {
       {people.data.map((p) => (
         <PersonRow key={p.id} person={p} />
       ))}
-    </div>
-  );
-}
-
-export function PeopleSection() {
-  const t = useT();
-  const [q, setQ] = useState("");
-  const query = q.trim();
-  const people = usePeople(query);
-  const chats = useChats();
-  const recent = (chats.data ?? []).flatMap((c) => (c.peer ? [c.peer] : []));
-  return (
-    <div className="flex flex-col gap-3">
-      <VoidexSearchField
-        size="lg"
-        autoFocus
-        value={q}
-        onChange={setQ}
-        placeholder={t("vibex.people.search")}
-        testId="people-search"
-        trailing={people.isFetching ? <Spinner size={14} /> : undefined}
-      />
-      {query ? (
-        people.data && !people.data.length ? (
-          <EmptyState icon={<RiUserSearchLine className="size-7" />} title={t("vibex.people.empty")} />
-        ) : (
-          <div className="flex flex-col rounded-2xl border border-border bg-surface p-1.5 shadow-tile" data-testid="people-results">
-            {(people.data ?? []).map((p) => (
-              <PersonRow key={p.id} person={p} />
-            ))}
-          </div>
-        )
-      ) : recent.length ? (
-        <>
-          <div className="px-2 pt-1 text-[12px] font-semibold uppercase tracking-wide text-text-tertiary">{t("vibex.people.recent")}</div>
-          <div className="flex flex-col rounded-2xl border border-border bg-surface p-1.5 shadow-tile">
-            {recent.map((p) => (
-              <PersonRow key={p.id} person={p} />
-            ))}
-          </div>
-        </>
-      ) : (
-        <EmptyState icon={<RiUserSearchLine className="size-7" />} title={t("vibex.people.title")} hint={t("vibex.people.hint")} />
-      )}
     </div>
   );
 }

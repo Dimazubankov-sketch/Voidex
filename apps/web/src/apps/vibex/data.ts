@@ -687,6 +687,9 @@ export function useActivityCount() {
   return useQuery({ queryKey: vk.activityCount, queryFn: () => api.get<{ unread: number }>("/api/vibex/activity/count"), staleTime: Infinity });
 }
 
+/** After following someone back from the activity tab: its buttons ("Подписаться" → "Сообщение") refresh. */
+export const queryActivityAfterFollow = () => void queryClient.invalidateQueries({ queryKey: vk.activity, exact: true });
+
 export const readActivity = () =>
   api.post<{ ok: true; unread: number }>("/api/vibex/activity/read").then(() => queryClient.setQueryData(vk.activityCount, { unread: 0 }));
 

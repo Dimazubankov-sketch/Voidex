@@ -5,6 +5,7 @@ import {
   RiCloseLine,
   RiHeart3Line,
   RiHome5Line,
+  RiNotification3Line,
   RiSearchLine,
   RiSettings4Line,
   RiSidebarFoldLine,
@@ -16,7 +17,7 @@ import { cx } from "@/lib/cx";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useWindow } from "@/os/window-context";
-import { useChats } from "./data";
+import { useActivityCount, useChats } from "./data";
 import { useVibex, type VibexSection } from "./store";
 
 /** Width of the phone drawer (px). */
@@ -43,6 +44,7 @@ const MAIN: Row[] = [
   { key: "feed", label: "vibex.nav.home", icon: RiHome5Line },
   { key: "chats", label: "vibex.nav.messages", icon: RiChat3Line },
   { key: "people", label: "vibex.nav.search", icon: RiSearchLine },
+  { key: "activity", label: "vibex.nav.activity", icon: RiNotification3Line },
   { key: "history", label: "vibex.nav.history", icon: RiHeart3Line },
 ];
 
@@ -53,6 +55,7 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
   const stack = useVibex((s) => s.stack);
   const go = useVibex((s) => s.go);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
+  const activityUnread = useActivityCount().data?.unread ?? 0;
   const name = `${me.firstName} ${me.lastName}`;
   const rail = variant === "rail";
   const pick = (key: VibexSection) => {
@@ -63,7 +66,7 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
   const item = (row: Row) => {
     const selected = (row.key === section || (row.key === "history" && section === "bookmarks")) && !stack.length;
     const Icon = row.icon;
-    const badge = row.key === "chats" ? unread : 0;
+    const badge = row.key === "chats" ? unread : row.key === "activity" ? activityUnread : 0;
     return (
       <button
         key={row.key}

@@ -336,3 +336,89 @@ real policy and plays a real recording for sender and recipient.
     (`wrapIndex`), touch and mouse drag, arrows and a counter.
 - **Desktop**: a two-column layout, with the chat list at
   `clamp(300px, 30%, 360px)` and the conversation beside it.
+
+## Step 2.10: gestures, chats, message actions, circles, Search and Notifications
+
+### Shell
+
+- **Phone gesture bar** (`os/gesture-bar.ts`, `os/window-frame.tsx`). The app follows the finger and shrinks progressively.
+  - **Decision** (`gestureBarAction`):
+    - a small move (< 48 px) puts the app back;
+    - dragging high (> 40 % of the screen) or a quick flick (> 1400 px/s) goes home;
+    - anything in between (a short smooth swipe, or held in the middle) glides into the switcher;
+    - sideways switches apps.
+  - **Fixed x**: every window binds its own transform and resets it to 0 whenever it is not under the finger. The shared `barDrag` values also keep a permanent observer: motion stops an animation nobody listens to, which used to freeze the app 1-2 px sideways after the switcher.
+- **Gesture priority** (`os/gesture-priority.ts`), highest first:
+  1. circle seek;
+  2. voice seek;
+  3. swipe to reply;
+  4. chat scroll;
+  5. chat swipe back;
+  6. gesture bar.
+
+  Owners mark their element `data-gesture-owner`. `mayStart()` / `ownedByChild()` are used by swipe-to-reply, `SlidePage` and the edge swipe.
+- **Shared UI**:
+  - `ui/edge-swipe.ts`: the left-edge swipe that pulls a `PushDrawer` (Vibex and Mail).
+  - `ui/expanding-search.tsx`: the round search button that grows into the field (Vibex feed and Mail).
+
+### Chats
+
+- The header starts folded on phones and PC.
+  - A pull, or a wheel up at the top, opens one level at a time: first the search, then the stories.
+  - Scrolling, pushing up, or a wheel down folds it again.
+- The pencil creates a group (one person or more). A private chat starts from the chat search, a profile or a shared post.
+- Chats are separate rounded cards on the `--chat-card` token:
+  - grey on a white app or the PC column;
+  - white on the grey or violet looks;
+  - dark in the dark look.
+- **Preview** (long press, or right click → Предпросмотр):
+  - not full screen, and the whole history scrolls;
+  - nothing is read: no read receipt and no `lastReadAt` change (server and e2e A/B tests);
+  - a tap on a message or a control opens the real chat;
+  - there is no «Открыть» item.
+
+### Messages
+
+Long press (phones) or right click (PC) opens the actions. The chat dims and the message stays lifted in place.
+
+- **Actions**: Ответить, Скопировать, Редактировать (mine, text), Закрепить (direct chats: both people; groups: the owner), Переслать, Удалить, Выбрать.
+- **Delete**:
+  - «Удалить у себя» works on any message (`vibex_message_hides`).
+  - «Удалить у всех» works on my own messages only, checked per message; a batch with someone else's message is refused.
+- **Multi-select**: round selectors; the composer becomes Переслать / Удалить / Закрыть.
+- **Swipe left to reply**: a finger gesture with a threshold and a tick. PC replies from the hover button or the menu.
+- **API**:
+  - `PATCH /messages/:id`
+  - `POST /messages/delete {ids, scope}`
+  - `POST /messages/forward {messageIds, conversationIds}`: copies, with their own files, showing «Переслано от …».
+  - `PUT /chats/:id/pin {messageId|null}`
+- **Events**: `vibex.message.updated`.
+
+### Video circles
+
+- **Recording** (`circle-camera.ts`):
+  - A MediaRecorder records a canvas fed by the current camera, plus the microphone. A camera switch only swaps the feed: one file, and the timer goes on.
+  - Pause and resume are supported; the time counts only what was recorded.
+  - Zoom is the camera's own `zoom` constraint, from max(1, min). It is hidden when the camera has none.
+- **While recording**: the composer stays, with «Отмена» in its middle, and the camera covers only the chat above it.
+- **Player**: opens in place in the chat.
+  - X sits on the right of the ring.
+  - A tap on the video plays or pauses.
+  - Speed and ring seek are kept.
+  - It closes at the end.
+
+### Search and Notifications tabs
+
+- **Phone bar**: Главная | Поиск | Уведомления | Чаты | Профиль. Below 380 px only the icons show (labels stay for screen readers).
+- **Search** (`search-tab.tsx`): a large field.
+  - **Empty field**: a lazy grid of everyone's public photo and video posts (`GET /explore`).
+  - **Query**: accounts first (exact @username or address, then names), then posts by text or `#tag` (`GET /search`).
+- **Notifications** (`activity-tab.tsx`): `vibex_activity` holds follow, like, repost, comment, reply, group, a followed person's post and their story.
+  - **Grouping**: Актуальное / Вчера / Последние 7 дней / Более ранние.
+  - **Each item**: avatars (likes of one post are grouped), text, relative time, and a thumbnail or Подписаться / Сообщение.
+  - **Read state**:
+    - Opening the tab reads everything on the server.
+    - The badge is live through `vibex.activity`, never polled.
+  - Undoing a like, follow or repost removes its item.
+  - This tab is separate from the system Notification Center.
+- **Migration** `0011_vibex_message_actions_activity` is additive only.

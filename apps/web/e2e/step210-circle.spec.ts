@@ -33,7 +33,7 @@ async function fakeDevices(page: Page, opts: { zoom?: boolean } = {}) {
       };
       if (zoom) {
         const caps = MediaStreamTrack.prototype.getCapabilities;
-        MediaStreamTrack.prototype.getCapabilities = function () {
+        MediaStreamTrack.prototype.getCapabilities = function (this: MediaStreamTrack) {
           const base = caps ? caps.call(this) : {};
           return this.kind === "video" ? { ...base, zoom: { min: 0.5, max: 3, step: 0.1 } } : base;
         } as typeof caps;

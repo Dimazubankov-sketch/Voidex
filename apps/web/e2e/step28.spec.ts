@@ -285,7 +285,8 @@ test("Vibex profile per the reference; post cards unchanged", async ({ page }) =
   await expect(page.getByTestId("post-card").first()).toContainText("hello");
   await noHorizontalOverflow(page);
   if (isMobile(page)) {
-    await expect(page.getByText("Профиль", { exact: true })).toBeVisible();
+    // The header's title (Step 2.10: «Профиль» is also a tab of the bottom bar).
+    await expect(page.locator('[data-testid="vibex-menu"] ~ span').getByText("Профиль", { exact: true })).toBeVisible();
     await expect(page.getByTestId("vibex-search")).toBeVisible();
   }
 });

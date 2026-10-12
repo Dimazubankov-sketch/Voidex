@@ -7,7 +7,12 @@ import {
   RiChat3Line,
   RiHome5Fill,
   RiHome5Line,
+  RiNotification3Fill,
+  RiNotification3Line,
+  RiSearchFill,
   RiSearchLine,
+  RiUser3Fill,
+  RiUser3Line,
 } from "@remixicon/react";
 import { Avatar, VibexGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
@@ -21,7 +26,9 @@ import { ChatsPane } from "./chat-home";
 import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
-import { HistoryScreen, PeopleResults, PeopleSection, PostPage } from "./people";
+import { HistoryScreen, PeopleResults, PostPage } from "./people";
+import { SearchScreen } from "./search-tab";
+import { ActivityScreen } from "./activity-tab";
 import { ExpandingSearch } from "@/ui/expanding-search";
 import { MePage, PersonPage } from "./profile";
 import { VibexSettingsScreen } from "./settings";
@@ -30,7 +37,7 @@ import { mayStart } from "@/os/gesture-priority";
 import { ShareSheet } from "./share-sheet";
 import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
 import { PushDrawer } from "@/ui/push-drawer";
-import { useChats, useFeed } from "./data";
+import { useActivityCount, useChats, useFeed } from "./data";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -78,6 +85,7 @@ function VibexShell() {
 const SECTION_TITLE: Record<VibexSection, MessageKey> = {
   feed: "vibex.nav.home",
   people: "vibex.nav.search",
+  activity: "vibex.nav.activity",
   chats: "vibex.nav.messages",
   history: "vibex.nav.history",
   bookmarks: "vibex.nav.bookmarks",
@@ -118,7 +126,10 @@ function SectionBody({ section }: { section: VibexSection }) {
     case "feed":
       return <Feed />;
     case "people":
-      return <PeopleSection />;
+      // Step 2.10: the Search tab (accounts, posts, the grid of public photos and videos).
+      return <SearchScreen />;
+    case "activity":
+      return <ActivityScreen />;
     case "history":
     case "bookmarks":
       return <HistoryScreen />;
@@ -264,9 +275,14 @@ function MobileVibex() {
   useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true), progress: drawerProgress, width: DRAWER_WIDTH });
 
   // Step 2.9: a new post is the floating "+" (feed and profile), like the pencil in «Чаты».
+  // Step 2.10: Главная | Поиск | Уведомления | Чаты | Профиль.
+  const activityUnread = useActivityCount().data?.unread ?? 0;
   const tabs = [
     { key: "feed" as const, label: "vibex.nav.home" as const, line: RiHome5Line, fill: RiHome5Fill },
+    { key: "people" as const, label: "vibex.nav.search" as const, line: RiSearchLine, fill: RiSearchFill },
+    { key: "activity" as const, label: "vibex.nav.activity" as const, line: RiNotification3Line, fill: RiNotification3Fill },
     { key: "chats" as const, label: "vibex.nav.messages" as const, line: RiChat3Line, fill: RiChat3Fill },
+    { key: "me" as const, label: "vibex.nav.profile" as const, line: RiUser3Line, fill: RiUser3Fill },
   ];
 
   return (
@@ -317,7 +333,7 @@ function MobileVibex() {
             <span className="relative flex h-10 min-w-0 flex-1 items-center">
               <FeedSearch />
             </span>
-          ) : section === "history" || section === "bookmarks" ? null : (
+          ) : section === "history" || section === "bookmarks" || section === "people" || section === "activity" ? null : (
             // Step 2.10: «История» has no search button.
             <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search" className="relative z-[1] ml-auto">
               <RiSearchLine className="size-5" />
@@ -354,11 +370,12 @@ function MobileVibex() {
 
       {/* No safe-area padding here: the window frame already keeps the home-indicator area below the app.
           (Adding it again squeezed this 64px bar on iPhone and pushed the icons across the divider.) */}
-      <nav className="flex h-[68px] shrink-0 items-center justify-around border-t bg-surface px-2" data-testid="vibex-tabbar">
+      {/* Step 2.10: five tabs; on narrow phones (< 380 px) the icons carry them (the labels stay for screen readers). */}
+      <nav className="flex h-[68px] shrink-0 items-center justify-around border-t bg-surface px-1" data-testid="vibex-tabbar">
         {tabs.map((item) => {
           const active = section === item.key;
           const Icon = active ? item.fill : item.line;
-          const badge = item.key === "chats" ? unread : 0;
+          const badge = item.key === "chats" ? unread : item.key === "activity" ? activityUnread : 0;
           return (
             <button
               key={item.key}
@@ -366,19 +383,22 @@ function MobileVibex() {
               onClick={() => go(item.key)}
               aria-current={active ? "page" : undefined}
               aria-label={t(item.label)}
-              className="relative flex flex-1 flex-col items-center gap-0.5 py-1.5 active:scale-95"
+              className="relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 active:scale-95"
               data-testid={`vibex-tab-${item.key}`}
             >
               {/* Step 2.8 (reference): the active tab sits on a soft violet pill. */}
-              <span className={cx("relative flex h-8 w-14 items-center justify-center rounded-full transition-colors", active && "bg-primary/10")}>
+              <span className={cx("relative flex h-8 w-12 items-center justify-center rounded-full transition-colors", active && "bg-primary/10")}>
                 <Icon className={cx("size-6 transition-colors", active ? "text-primary" : "text-text-tertiary")} />
                 {badge > 0 && (
-                  <span className="absolute right-1.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white" data-testid="vibex-unread">
+                  <span
+                    className="absolute right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white"
+                    data-testid={item.key === "activity" ? "vibex-activity-unread" : "vibex-unread"}
+                  >
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
               </span>
-              <span className={cx("text-[12px] font-medium", active ? "text-primary" : "text-text-secondary")}>{t(item.label)}</span>
+              <span className={cx("max-w-full truncate px-0.5 text-[11px] font-medium max-[379px]:sr-only", active ? "text-primary" : "text-text-secondary")}>{t(item.label)}</span>
             </button>
           );
         })}
