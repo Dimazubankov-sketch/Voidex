@@ -1,23 +1,24 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { animate } from "motion/react";
-import { LEFT_EDGE_PX, inTopEdge } from "@/os/metrics";
+import { inTopEdge } from "@/os/metrics";
 import { ownedByChild } from "@/os/gesture-priority";
 import type { MotionValue } from "motion/react";
 
 const ENGAGE_PX = 12;
 
 /**
- * Phones: a swipe from the LEFT EDGE of the app opens its side drawer
- * (PushDrawer), following the finger; the drawer closes with a swipe to the
- * left. Step 2.10: shared by Vibex and Mail. Past ~35 % of the drawer (or a
- * quick flick) it opens; a small move puts it back.
+ * Phones: a swipe to the right opens the app's side drawer (PushDrawer),
+ * following the finger; the drawer closes with a swipe to the left. Shared
+ * by Vibex and Mail. Past ~35 % of the drawer (or a quick flick) it opens; a
+ * small move puts it back.
  *
- * Priority (see os/notifications/gesture.ts): a touch from the top edge is the
- * Notification Center's; only touches starting within LEFT_EDGE_PX of the
- * app's left side are considered here, and only a clearly horizontal move
- * engages — vertical scrolling, horizontal media swipes (which start away
- * from the edge) and the browser's own back gesture (which starts outside the
- * page, at the screen edge on iOS) are left alone.
+ * Step 2.10: the swipe may start anywhere on the screen, not only at its left
+ * edge. What stays out (os/gesture-priority):
+ *   - a touch from the top edge (the Notification Center's);
+ *   - players, seek bars and carousels (data-gesture-owner);
+ *   - anything that scrolls sideways itself (the stories strip, galleries);
+ *   - text fields (a drag there selects text);
+ *   - a move that is not clearly horizontal (vertical scrolling stays native).
  */
 export function useEdgeSwipe(
   root: RefObject<HTMLElement | null>,
@@ -34,9 +35,7 @@ export function useEdgeSwipe(
     const down = (e: PointerEvent) => {
       if (!o.current.enabled || e.button !== 0 || inTopEdge(e.clientY)) return;
       // Step 2.9: players (voice waveform, circle ring, carousels) own the drags that start on them.
-      if (ownedByChild(e.target)) return;
-      const left = el.getBoundingClientRect().left;
-      if (e.clientX - left > LEFT_EDGE_PX) return;
+      if (ownedByChild(e.target) || inSideScroller(e.target, el) || (e.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable=true]")) return;
       active = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), engaged: false };
     };
     const move = (e: PointerEvent) => {
@@ -49,6 +48,11 @@ export function useEdgeSwipe(
           return;
         }
         if (dx < ENGAGE_PX || dx < Math.abs(dy) * 1.3) return;
+        // Something is being dragged by hand (a pinned chat lifted to reorder): not the menu.
+        if (el.querySelector("[data-lifted]")) {
+          active = null;
+          return;
+        }
         active.engaged = true;
       }
       const p = o.current.progress;
@@ -90,4 +94,15 @@ export function useEdgeSwipe(
       el.removeEventListener("click", click, true);
     };
   }, [root]);
+}
+
+/** Is the touch on something that scrolls sideways by itself (between the target and the app root)? */
+function inSideScroller(target: EventTarget | null, root: HTMLElement): boolean {
+  for (let n = target as HTMLElement | null; n && n !== root; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 1) {
+      const ox = getComputedStyle(n).overflowX;
+      if (ox === "auto" || ox === "scroll") return true;
+    }
+  }
+  return false;
 }

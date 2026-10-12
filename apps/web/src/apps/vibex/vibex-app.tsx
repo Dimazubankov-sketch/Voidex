@@ -271,7 +271,7 @@ function MobileVibex() {
   const feedSearch = useVibex((s) => s.feedSearch);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
   const root = useRef<HTMLDivElement>(null);
-  // Swipe from the left edge opens the side menu (only on the main screens, not over a chat / page).
+  // A swipe to the right from anywhere opens the side menu (only on the main screens, not over a chat / page).
   useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true), progress: drawerProgress, width: DRAWER_WIDTH });
 
   // Step 2.9: a new post is the floating "+" (feed and profile), like the pencil in «Чаты».
@@ -286,7 +286,8 @@ function MobileVibex() {
   ];
 
   return (
-    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    // Step 2.10: vertical lists scroll natively but leave sideways moves to the page (the drawer swipe starts anywhere).
+    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col [&_.scroll-area:not(.overflow-x-auto)]:touch-pan-y">
       {/* Step 2.9: the system side drawer — the menu lies under the screen, which slides right over it (no dimming). */}
       <PushDrawer open={drawer} onClose={() => setDrawer(false)} progress={drawerProgress} width={DRAWER_WIDTH} menu={<SidebarPanel variant="drawer" onClose={() => setDrawer(false)} />} testId="vibex-drawer">
       {section === "me" ? (

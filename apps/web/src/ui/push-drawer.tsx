@@ -61,6 +61,7 @@ export function PushDrawer({
   const shadow = useTransform(progress, (p) => `-${Math.round(14 * p)}px 0 ${Math.round(40 * p)}px rgba(20, 16, 60, ${(0.14 * p).toFixed(3)})`);
   const menuWidth = useTransform(progress, () => w.current);
   const menuVisibility = useTransform(progress, (p) => (p <= 0.001 ? "hidden" : "visible"));
+  const contentOpacity = useTransform(progress, [0, 1], [1, 0.5]);
 
   useEffect(() => {
     if (reduced) progress.set(open ? 1 : 0);
@@ -130,7 +131,10 @@ export function PushDrawer({
         style={{ x: fgX, borderTopLeftRadius: radius, borderBottomLeftRadius: radius, boxShadow: shadow }}
         data-testid={`${testId}-screen`}
       >
-        {children}
+        {/* Step 2.10: while the menu is out, the screen's contents (texts, pictures) fade to half; its background stays. */}
+        <motion.div className="relative flex min-h-0 min-w-0 flex-1 flex-col" style={{ opacity: contentOpacity }} data-testid={`${testId}-content`}>
+          {children}
+        </motion.div>
         {open && (
           // The visible part of the screen: a tap closes the menu. Transparent: the screen is never dimmed.
           <button

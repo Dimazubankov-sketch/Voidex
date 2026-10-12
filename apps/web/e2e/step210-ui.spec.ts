@@ -102,3 +102,55 @@ for (const width of [320, 390, 430]) {
     await expect(page.getByTestId("vibex-search")).toHaveCount(0);
   });
 }
+
+/** A finger drag (real touch events) from (x, y) by (dx, dy). */
+async function fingerDrag(page: Page, x: number, y: number, dx: number, dy: number, steps = 10) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + (dx * i) / steps, y: y + (dy * i) / steps }] });
+    await page.waitForTimeout(20);
+  }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+}
+
+for (const app of ["vibex", "mail"] as const) {
+  test(`${app}: a swipe to the right from the middle of the screen opens the side menu; the screen's contents fade to half, its background stays`, async ({ page }) => {
+    test.skip(!isMobile(page), "phone gesture");
+    await signUpViaApi(page, "Свайп", "Отовсюду");
+    await openApp(page, app);
+    await page.waitForTimeout(600);
+    const root = page.getByTestId(app === "vibex" ? "vibex-drawer" : "mail-drawer-root");
+    const screen = page.getByTestId(app === "vibex" ? "vibex-drawer-screen" : "mail-drawer-root-screen");
+    const content = page.getByTestId(app === "vibex" ? "vibex-drawer-content" : "mail-drawer-root-content");
+    const bg = () => screen.evaluate((el) => `${getComputedStyle(el).backgroundColor} ${getComputedStyle(el).backgroundImage}`);
+    const bgClosed = await bg();
+    const box = (await screen.boundingBox())!;
+    const mid = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+
+    // A vertical move in the middle: not the menu.
+    await fingerDrag(page, mid.x, mid.y, 6, -160);
+    await page.waitForTimeout(400);
+    await expect(root).not.toHaveAttribute("data-open", "true");
+
+    // A short sideways move: back to its place.
+    await fingerDrag(page, mid.x - 60, mid.y, 40, 0, 4);
+    await page.waitForTimeout(500);
+    await expect(root).not.toHaveAttribute("data-open", "true");
+    expect((await screen.boundingBox())!.x).toBeLessThan(2);
+
+    // From the middle, far enough: the menu opens.
+    await fingerDrag(page, mid.x - 80, mid.y, 170, 4);
+    await expect(root).toHaveAttribute("data-open", "true");
+    await page.waitForTimeout(700);
+    expect(Number(await content.evaluate((el) => getComputedStyle(el).opacity))).toBeCloseTo(0.5, 2);
+    expect(await bg()).toBe(bgClosed);
+    expect(await screen.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+
+    // Closed again: the contents are fully visible.
+    await page.getByTestId(app === "vibex" ? "vibex-drawer-catcher" : "mail-drawer-root-catcher").click({ position: { x: 40, y: 300 } });
+    await expect(root).not.toHaveAttribute("data-open", "true");
+    await page.waitForTimeout(700);
+    expect(await content.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+  });
+}

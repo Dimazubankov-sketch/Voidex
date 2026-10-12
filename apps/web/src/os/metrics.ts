@@ -6,10 +6,9 @@ export const SYSTEM_BAR_H = 40;
  * A touch that STARTS inside one belongs to the system gesture, never to the
  * app or the home screen underneath:
  *   top    → Notification Center (phone, everywhere)
- *   left   → apps with a side menu (Vibex), back gestures
+ * (Step 2.10: an app's side menu opens with a swipe from anywhere, see ui/edge-swipe.ts.)
  */
 export const TOP_EDGE_PX = 28;
-export const LEFT_EDGE_PX = 22;
 
 let probe: HTMLDivElement | null = null;
 /** Safe-area inset at the top (iOS notch / status bar) in px — env() resolved by a hidden probe. */

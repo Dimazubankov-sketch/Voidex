@@ -358,7 +358,16 @@ real policy and plays a real recording for sender and recipient.
 
   Owners mark their element `data-gesture-owner`. `mayStart()` / `ownedByChild()` are used by swipe-to-reply, `SlidePage` and the edge swipe.
 - **Shared UI**:
-  - `ui/edge-swipe.ts`: the left-edge swipe that pulls a `PushDrawer` (Vibex and Mail).
+  - `ui/edge-swipe.ts`: a swipe to the right that pulls a `PushDrawer` (Vibex and Mail). It may start anywhere on the screen, not only at the left edge. These stay out:
+    - the top edge (Notification Center);
+    - players and carousels (`data-gesture-owner`);
+    - sideways scrollers (the stories strip);
+    - text fields;
+    - a pinned chat lifted to reorder;
+    - moves that are not clearly horizontal.
+
+    The main screens' vertical lists are `touch-action: pan-y`, so the browser leaves sideways moves to the page.
+  - **PushDrawer**: while the menu is out, the screen's contents fade to 50 % opacity; its background colour does not change.
   - `ui/expanding-search.tsx`: the round search button that grows into the field (Vibex feed and Mail).
 
 ### Chats

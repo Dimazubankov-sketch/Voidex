@@ -172,7 +172,7 @@ function MobileMail() {
     setQuery("");
     setSearching(false);
   };
-  // Step 2.10: a swipe from the left edge pulls the folders drawer out with the finger (as in Vibex).
+  // Step 2.10: a swipe to the right (from anywhere) pulls the folders drawer out with the finger (as in Vibex).
   const root = useRef<HTMLDivElement>(null);
   const drawerProgress = useMotionValue(0);
   useEdgeSwipe(root, { enabled: !drawer && !threadId, onOpen: () => setDrawer(true), progress: drawerProgress, width: 300 });
@@ -197,7 +197,8 @@ function MobileMail() {
   );
 
   return (
-    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    // Step 2.10: vertical lists scroll natively but leave sideways moves to the page (the drawer swipe starts anywhere).
+    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col [&_.scroll-area:not(.overflow-x-auto)]:touch-pan-y">
     <PushDrawer open={drawer} onClose={() => setDrawer(false)} menu={folders} width={300} progress={drawerProgress} testId="mail-drawer-root">
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <WindowHeader>
