@@ -194,7 +194,9 @@ test("Notes: \"+\" inside the centred search field in its colours; delete page i
   const data = { kind: "note", format: "square", pages: [{ id: "p1", blocks: [{ id: "b1", kind: "text", text: "Первая" }] }, { id: "p2", blocks: [{ id: "b2", kind: "text", text: "Вторая" }] }] };
   expect((await api(page, "POST", `/api/notes/projects/${p.id}/documents`, { kind: "note", name: "Две страницы", data })).status).toBe(201);
   await reloadUnlocked(page);
-  if (!(await page.getByTestId("notes-app").count())) await launch(page, "notes");
+  // After a reload the window can come back hidden (not in front): bring it forward, not just "exists".
+  if (!(await page.locator('[data-testid="window-notes"][data-state="open"]').count())) await launch(page, "notes");
+  await expect(page.locator('[data-testid="window-notes"][data-state="open"]')).toBeVisible();
   await page.getByTestId("notes-project-list").getByTestId("notes-card-name").getByText("Проект 2.8", { exact: true }).first().click();
   await page.getByTestId("notes-doc-list").getByTestId("notes-card-name").getByText("Две страницы", { exact: true }).first().click();
   await expect(page.getByTestId("notes-note-editor")).toHaveAttribute("data-pages", "2");
