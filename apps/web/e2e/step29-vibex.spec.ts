@@ -551,8 +551,22 @@ test("posts: Media (VOIDEX Media / device) and a Files paperclip (Files only, no
   const carousel = page.locator("[data-carousel]").first();
   await expect(carousel).toHaveAttribute("data-index", "0");
   expect(await carousel.locator("[data-slide]").count()).toBe(3);
-  const box = (await carousel.boundingBox())!;
+  // Measure only once the window has finished opening (on PC it grows out of its icon).
+  const stableBox = async () => {
+    let prev: { x: number; y: number; width: number; height: number } | null = null;
+    await expect
+      .poll(async () => {
+        const b = await carousel.boundingBox();
+        const same = !!prev && !!b && Math.abs(b.x - prev.x) < 0.5 && Math.abs(b.y - prev.y) < 0.5 && Math.abs(b.width - prev.width) < 0.5;
+        prev = b;
+        return same;
+      })
+      .toBe(true);
+    return prev!;
+  };
+  const box = await stableBox();
   const swipe = async (dx: number) => {
+    const box = await stableBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + box.width / 2 + (dx * i) / 8, box.y + box.height / 2);
