@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { newPage, openApp, recordCircle, recordVoice, signUpViaApi } from "./helpers";
+import { newPage, openApp, profileActionRow, recordCircle, recordVoice, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.9 — Vibex reconstruction: «Чаты» (sections, filter, search, stories,
@@ -618,4 +618,26 @@ test("profile: tabs Публикации · Посты · Репосты; one me
   await page.getByTestId("vibex-new-post").click();
   await expect(page.getByTestId("post-composer")).toBeVisible();
   void me;
+});
+
+test("profile (hotfix): «Редактировать» never enters the fixed «…» zone, with a safe gap, at 320 / 390 / 430 and on PC", async ({ page }) => {
+  await signUpViaApi(page, "Константин", "Длиннофамильный");
+  await launchVibex(page);
+  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  await page.getByTestId("vibex-nav-me").last().click();
+  await expect(page.getByTestId("profile-header")).toBeVisible();
+  const widths = isMobile(page) ? [320, 390, 430] : [page.viewportSize()!.width];
+  for (const width of widths) {
+    if (isMobile(page)) await page.setViewportSize({ width, height: 844 });
+    const row = await profileActionRow(page);
+    expect(row.settled, `settled at ${width}`).toBe(true);
+    // A fixed 44 px zone for "…", the button inside it, both on one row.
+    expect(Math.round(row.zoneRight - row.zoneLeft)).toBe(44);
+    expect(row.moreLeft).toBeGreaterThanOrEqual(row.zoneLeft - 0.5);
+    expect(Math.abs(row.editTop - row.moreTop)).toBeLessThan(2);
+    // No overlap and a safe gap; nothing leaves the screen.
+    expect(row.gap, `gap at ${width}`).toBeGreaterThanOrEqual(6);
+    expect(row.editLeft).toBeGreaterThanOrEqual(0);
+    expect(row.zoneRight).toBeLessThanOrEqual(row.width);
+  }
 });

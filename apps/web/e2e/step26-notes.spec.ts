@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { newPage, openApp, reloadUnlocked, signUpViaApi } from "./helpers";
+import { newPage, openApp, reloadUnlocked, replaceValue, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.6 — Voidex Notes: Projects → notes and presentations (no spaces),
@@ -97,7 +97,9 @@ test("Projects: + creates a project with name and cover; grid / list and sort ar
   await api(page, "POST", "/api/notes/projects", { name: "Бета" });
   await api(page, "POST", "/api/notes/projects", { name: "Гамма" });
   await reloadUnlocked(page);
-  if (!(await page.getByTestId("notes-app").count())) await openApp(page, "notes");
+  // After a reload the window can come back behind the home screen: bring it to the front, not just "exists".
+  if (!(await page.locator('[data-testid="window-notes"][data-state="open"]').count())) await openApp(page, "notes");
+  await expect(page.locator('[data-testid="window-notes"][data-state="open"]')).toBeVisible();
   await expect(page.getByTestId("notes-project-list")).toBeVisible();
 
   // List view + sort by name, remembered on the server.
@@ -120,7 +122,7 @@ test("Projects: + creates a project with name and cover; grid / list and sort ar
   expect(alpha.cover).toMatch(/^\/api\/notes\/media\?id=/);
   await page.getByTestId(`notes-project-more-${alpha.id}`).click();
   await page.getByTestId("notes-menu-edit").click();
-  await page.getByTestId("notes-cover-name").fill("Альфа 2");
+  await replaceValue(page.getByTestId("notes-cover-name"), "Альфа", "Альфа 2");
   await page.getByTestId("notes-cover-remove").click();
   await page.getByTestId("notes-cover-save").click();
   await expect.poll(async () => (await api(page, "GET", `/api/notes/projects/${alpha.id}`)).body.project).toMatchObject({ name: "Альфа 2", cover: null });

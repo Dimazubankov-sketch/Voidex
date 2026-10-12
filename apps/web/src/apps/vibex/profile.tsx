@@ -180,7 +180,8 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
               </span>
             )}
           </span>
-          {/* My own profile: edit + "…" always stay on one line (the label shortens on a narrow phone). */}
+          {/* My own profile: edit + "…" always stay on one line. "…" has its own fixed 44 px zone that never
+              shrinks; the edit button takes only what is left (its label shortens, it never enters that zone). */}
           <div className={cx("flex min-w-0 items-center justify-end gap-2 pb-0.5", profile.me ? "flex-nowrap" : "flex-wrap")}>
             {profile.me ? (
               <button
@@ -190,7 +191,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                 data-testid="profile-edit"
               >
                 <RiEditLine className="size-[18px] shrink-0" />
-                <span className="truncate">{t("vibex.profile.edit")}</span>
+                <span className="min-w-0 truncate">{t("vibex.profile.edit")}</span>
               </button>
             ) : (
               <>
@@ -210,7 +211,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                 )}
               </>
             )}
-            <div className="relative">
+            <div className="relative w-11 shrink-0" data-testid="profile-more-zone">
               <button type="button" onClick={() => setMenu((m) => !m)} aria-label={t("vibex.profile.more")} className={round} data-testid="profile-more">
                 <RiMoreFill className="size-5" />
               </button>

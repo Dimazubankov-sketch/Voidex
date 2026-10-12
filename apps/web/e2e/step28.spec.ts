@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import type { AppId } from "@voidex/shared";
-import { newPage, openApp, phoneHome, reloadUnlocked, settingsRoot, signUpViaApi } from "./helpers";
+import { newPage, openApp, phoneHome, profileActionRow, reloadUnlocked, settingsRoot, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.8: ViCloud in Settings (no fake cloud, no payment), Settings → Apps
@@ -268,10 +268,10 @@ test("Vibex profile per the reference; post cards unchanged", async ({ page }) =
   const avatar = (await page.getByTestId("profile-avatar").boundingBox())!;
   expect(avatar.y).toBeLessThan(cover.y + cover.height);
   expect(avatar.y + avatar.height).toBeGreaterThan(cover.y + cover.height);
-  // Edit and "…" do not overlap.
-  const edit = (await page.getByTestId("profile-edit").boundingBox())!;
-  const more = (await page.getByTestId("profile-more").boundingBox())!;
-  expect(edit.x + edit.width).toBeLessThanOrEqual(more.x);
+  // Edit and "…" do not overlap (measured in one frame after the slide settles).
+  const row = await profileActionRow(page);
+  expect(row.settled).toBe(true);
+  expect(row.gap).toBeGreaterThanOrEqual(6);
   // Tabs (Step 2.9): Публикации first and active (violet), then Посты / Репосты.
   await expect(page.getByTestId("profile-tab-media")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("profile-tab-media")).toHaveCSS("color", "rgb(108, 92, 255)");

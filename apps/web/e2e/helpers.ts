@@ -1,4 +1,4 @@
-import { expect, type Browser, type Page } from "@playwright/test";
+import { expect, type Browser, type Locator, type Page } from "@playwright/test";
 
 export const PASSWORD = "Violet-Orbit-42";
 /** The code-password every e2e account creates (Step 2.4: required for new accounts). */
@@ -208,4 +208,47 @@ export async function recordCircle(page: Page, ms = 1500) {
   await expect(page.getByTestId("circle-recorder")).toHaveAttribute("data-state", "locked");
   await page.waitForTimeout(ms);
   await page.getByTestId("circle-send").click();
+}
+
+/**
+ * Step 2.9 hotfix: the own-profile action row, measured in ONE frame once fonts are loaded and the page has
+ * stopped moving (the screen slides back after the side menu closes; two separate measurements taken during
+ * that slide used to report a false overlap). Returns the gap between "Редактировать" and the "…" zone.
+ */
+export async function profileActionRow(page: Page) {
+  await page.getByTestId("profile-edit").waitFor();
+  return page.evaluate(async () => {
+    await document.fonts.ready;
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
+    const read = () => {
+      const r = (id: string) => document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect();
+      const edit = r("profile-edit");
+      const zone = r("profile-more-zone");
+      const more = r("profile-more");
+      return { editLeft: edit.left, editRight: edit.right, zoneLeft: zone.left, zoneRight: zone.right, moreLeft: more.left, moreRight: more.right, editTop: edit.top, moreTop: more.top, width: innerWidth };
+    };
+    // Settled: the same rectangles in 5 consecutive frames (at most ~3 s).
+    let prev = read();
+    let same = 0;
+    for (let i = 0; i < 180 && same < 5; i++) {
+      await frame();
+      const cur = read();
+      same = Math.abs(cur.editRight - prev.editRight) < 0.5 && Math.abs(cur.zoneLeft - prev.zoneLeft) < 0.5 ? same + 1 : 0;
+      prev = cur;
+    }
+    return { ...prev, gap: prev.zoneLeft - prev.editRight, settled: same >= 5 };
+  });
+}
+
+/**
+ * Replace (never append to) an input's value. A sheet can show its field for a frame or two before it is
+ * filled with the current value; typing into that frame used to end up in front of the value arriving
+ * after it ("АльфаАльфа 2"). Wait for the current value, clear, type, and check the exact result.
+ */
+export async function replaceValue(field: Locator, current: string, next: string) {
+  await expect(field).toHaveValue(current);
+  await field.fill("");
+  await expect(field).toHaveValue("");
+  await field.fill(next);
+  await expect(field).toHaveValue(next);
 }
