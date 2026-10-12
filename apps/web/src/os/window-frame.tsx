@@ -1,5 +1,5 @@
-import { Component, Suspense, useCallback, useMemo, useRef, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { animate, motion, useReducedMotion, useTransform } from "motion/react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { RiErrorWarningLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
@@ -212,12 +212,35 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
  */
 function DraggedApp({ active, children }: { active: boolean; children: ReactNode }) {
   const height = useWM((s) => s.bounds.h);
-  const scale = useTransform(barDrag.y, (y) => dragScale(-y, height));
-  const radius = useTransform(barDrag.y, (y) => dragRadius(-y));
+  // Step 2.10: each window has its own transform, always bound and back at 0 whenever it is not the one
+  // under the finger. (Unbinding the shared values used to leave the last transform on the element, so an
+  // app could come back shifted sideways or still scaled.)
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  useEffect(() => {
+    if (!active) {
+      x.set(0);
+      y.set(0);
+      return;
+    }
+    x.set(barDrag.x.get());
+    y.set(barDrag.y.get());
+    const offX = barDrag.x.on("change", (v) => x.set(v));
+    const offY = barDrag.y.on("change", (v) => y.set(v));
+    return () => {
+      offX();
+      offY();
+      x.set(0);
+      y.set(0);
+    };
+  }, [active, x, y]);
+  const scale = useTransform(y, (v) => dragScale(-v, height));
+  const radius = useTransform(y, (v) => dragRadius(-v));
   return (
     <motion.div
       className="vx-app relative flex min-h-0 flex-1 flex-col overflow-hidden"
-      style={active ? { x: barDrag.x, y: barDrag.y, scale, borderRadius: radius, transformOrigin: "50% 100%" } : undefined}
+      style={{ x, y, scale, borderRadius: radius, transformOrigin: "50% 100%" }}
+      data-dragged-app
     >
       {children}
     </motion.div>
@@ -267,8 +290,8 @@ function HomeIndicator() {
       barDrag.y.set(0);
       return;
     }
-    void animate(barDrag.x, 0, SETTLE);
-    void animate(barDrag.y, 0, SETTLE);
+    // Always ends at exactly 0: a spring that "rests" a pixel short would leave the app shifted.
+    for (const v of [barDrag.x, barDrag.y]) void animate(v, 0, { ...SETTLE, restDelta: 0.01, restSpeed: 0.5, onComplete: () => v.set(0) });
   };
   const reset = () => {
     start.current = null;

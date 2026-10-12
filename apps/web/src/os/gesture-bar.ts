@@ -2,16 +2,20 @@ import { motionValue } from "motion/react";
 
 /** Horizontal travel (px) that switches apps; it must also clearly beat the vertical travel. */
 export const SWITCH_THRESHOLD = 56;
-/** Upward travel (px) below which a release puts the app back. */
-export const SWITCHER_MIN_UP = 64;
+/** Upward travel (px) below which a release puts the app back (Step 2.10: a small gesture). */
+export const SWITCHER_MIN_UP = 48;
+/** Release speed up (px/s) that counts as a quick flick: straight home. */
+export const FLICK_HOME_VY = 1400;
 
 /**
  * Pure decision of the phone gesture bar: what a finished swipe does.
  *
- *   sideways (distance, or a quick flick)   → the app opened before / after
- *   up, released in the middle              → the app switcher
- *   up far (≈40 % of the screen) or a fast flick up → home
- *   too small                               → the app goes back to its place
+ *   sideways (distance, or a quick flick)           → the app opened before / after
+ *   a small move up (< 48 px)                       → the app goes back to its place
+ *   a quick sharp flick up                          → home
+ *   held and dragged high (≈40 % of the screen)     → home
+ *   anything in between (a short smooth swipe, or
+ *   held in the middle and released)                → the app glides into the switcher
  *
  * `vx` / `vy` are the release velocities in px/s (up is negative), `height`
  * the screen height.
@@ -23,10 +27,10 @@ export function gestureBarAction(dx: number, dy: number, ms: number, opts: { vx?
   const vy = opts.vy ?? (dy / Math.max(ms, 1)) * 1000;
   const sideways = Math.abs(dx) > Math.abs(dy) * 1.4;
   if (sideways && (Math.abs(dx) >= SWITCH_THRESHOLD || (Math.abs(dx) >= 24 && Math.abs(vx) > 650))) return dx > 0 ? "prev" : "next";
-  if (up < 40) return null;
-  if (up > height * 0.4 || (-vy > 900 && up > 80)) return "home";
-  if (up >= SWITCHER_MIN_UP) return "switcher";
-  return null;
+  if (up < SWITCHER_MIN_UP) return null;
+  if (up > height * 0.4) return "home";
+  if (-vy > FLICK_HOME_VY && up > 72) return "home";
+  return "switcher";
 }
 
 /**
@@ -34,6 +38,10 @@ export function gestureBarAction(dx: number, dy: number, ms: number, opts: { vx?
  * dragged (the window follows the finger). 0/0 = at rest.
  */
 export const barDrag = { x: motionValue(0), y: motionValue(0) };
+// Step 2.10: motion stops a value's animation once nothing listens to it. When the switcher opens the
+// app stops listening mid-settle, and the spring froze a pixel or two short: the app came back shifted
+// sideways. A permanent observer keeps the settle running until it really is back at 0.
+for (const v of [barDrag.x, barDrag.y]) v.on("change", () => {});
 
 /** How small the app gets while dragged up by `up` px on a screen `height` px tall. */
 export function dragScale(up: number, height: number): number {
