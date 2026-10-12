@@ -68,7 +68,9 @@ async function nav(page: Page, section: "feed" | "chats" | "people" | "history" 
     }
     await page.getByTestId("vibex-menu").click();
   }
-  await page.getByTestId(section === "me" ? "vibex-me" : `vibex-nav-${section}`).click();
+  // Step 2.9: «Закладки» is the second tab of «История».
+  await page.getByTestId(section === "me" ? "vibex-me" : section === "bookmarks" ? "vibex-nav-history" : `vibex-nav-${section}`).click();
+  if (section === "bookmarks") await page.getByTestId("history-tab-bookmarks").click();
 }
 
 test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a chat; A replies with a file; deleted post becomes unavailable", async ({ page, browser }) => {
@@ -305,10 +307,10 @@ test("vibex: the VOIDEX session is the identity (no Vibex sign-in); comments bot
   expect(fromB.map((c: { text: string }) => c.text)).toEqual(["Отличный пост!", "Спасибо!"]);
   await page.getByTestId("comments-back").click();
 
-  // Profile: email, posts tab.
+  // Profile: email; Публикации is the first, open tab (Step 2.9).
   await nav(page, "me");
   await expect(page.getByTestId("profile-email")).toHaveText(a.address);
-  await expect(page.getByTestId("profile-tab-posts")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("profile-tab-media")).toHaveAttribute("aria-selected", "true");
 
   void browser;
 });

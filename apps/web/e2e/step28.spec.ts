@@ -270,14 +270,15 @@ test("Vibex profile per the reference; post cards unchanged", async ({ page }) =
   const edit = (await page.getByTestId("profile-edit").boundingBox())!;
   const more = (await page.getByTestId("profile-more").boundingBox())!;
   expect(edit.x + edit.width).toBeLessThanOrEqual(more.x);
-  // Tabs: Posts active (violet), then Reposts / Photo and video.
+  // Tabs (Step 2.9): Публикации first and active (violet), then Посты / Репосты.
+  await expect(page.getByTestId("profile-tab-media")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("profile-tab-media")).toHaveCSS("color", "rgb(108, 92, 255)");
+  await expect(page.getByTestId("profile-media")).toBeVisible();
+  await page.getByTestId("profile-tab-posts").click();
   await expect(page.getByTestId("profile-tab-posts")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("profile-tab-posts")).toHaveCSS("color", "rgb(108, 92, 255)");
   await expect(page.getByTestId("profile-composer")).toBeVisible();
   // The post below is the same post card as in the feed.
   await expect(page.getByTestId("post-card").first()).toContainText("hello");
-  await page.getByTestId("profile-tab-media").click();
-  await expect(page.getByTestId("profile-media")).toBeVisible();
   await noHorizontalOverflow(page);
   if (isMobile(page)) {
     await expect(page.getByText("Профиль", { exact: true })).toBeVisible();
