@@ -141,7 +141,9 @@ test("«Вид приложений»: one look for every app window, saved with
   await launch(page, "settings");
   await section(page, "personalization");
   await expect(page.getByTestId("app-look").last().getByRole("radio")).toHaveCount(4);
-  const bg = (id: AppId) => page.locator(`[data-testid="window-${id}"]`).evaluate((el) => getComputedStyle(el).backgroundColor);
+  // The element that carries the look: the window itself on PC; on phones (Step 2.9) the inner layer that follows the gesture bar.
+  const bg = (id: AppId) =>
+    page.locator(`[data-testid="window-${id}"]`).evaluate((el) => getComputedStyle(el.classList.contains("vx-app") ? el : el.querySelector(".vx-app")!).backgroundColor);
   await page.getByTestId("app-look-notes").last().click();
   await expect(page.locator("html")).toHaveAttribute("data-app-look", "notes");
   await expect.poll(() => bg("settings")).toBe("rgb(236, 236, 237)");
