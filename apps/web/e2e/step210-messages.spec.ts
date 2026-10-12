@@ -32,16 +32,26 @@ async function setup(page: Page, browser: Browser) {
 const msg = (page: Page, text: string) => page.getByTestId("message").filter({ hasText: text });
 
 async function openMenu(page: Page, m: Locator) {
-  if (isMobile(page)) {
-    const box = (await m.locator("p").first().boundingBox())!;
-    const cdp = await page.context().newCDPSession(page);
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + 10, y: box.y + 5 }] });
-    await page.waitForTimeout(650);
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  } else {
-    await m.locator("p").first().click({ button: "right" });
+  const menu = page.getByTestId("message-menu");
+  // The list may still be re-rendering after a change (a slow runner): press where the message is now, and
+  // press again if the first hold landed while it moved.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await expect(m).toBeVisible();
+    await page.waitForTimeout(300);
+    if (isMobile(page)) {
+      const box = (await m.locator("p").first().boundingBox())!;
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + 10, y: box.y + 5 }] });
+      await page.waitForTimeout(800);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } else {
+      await m.locator("p").first().click({ button: "right" });
+    }
+    if (await menu.isVisible().catch(() => false)) break;
+    await menu.waitFor({ state: "visible", timeout: 2500 }).catch(() => undefined);
+    if (await menu.isVisible()) break;
   }
-  await expect(page.getByTestId("message-menu")).toBeVisible();
+  await expect(menu).toBeVisible();
 }
 
 test("menu: the message stays bright over the dimmed chat; own vs other's actions; delete for me / for everyone in place", async ({ page, browser }) => {

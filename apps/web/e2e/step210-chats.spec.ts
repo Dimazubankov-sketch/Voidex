@@ -118,10 +118,10 @@ test("chat cards: separate rounded cards with gaps, a background of their own, n
   // Every app look (the account's «Вид приложений»): the card always differs from what it lies on.
   for (const lookName of ["media", "notes", "mail", "dark"]) {
     await page.evaluate((v) => document.documentElement.setAttribute("data-app-look", v), lookName);
-    await page.waitForTimeout(450); // the card's colour transition
-    const l = await look();
-    expect(l[0]!.card, lookName).not.toBe(l[0]!.app);
-    if (lookName === "dark") expect(["rgb(29, 29, 39)", "rgb(37, 37, 48)"]).toContain(l[0]!.card);
+    // The card's colour has a transition: wait until it has settled (a slow runner takes longer).
+    if (lookName === "dark") await expect.poll(async () => (await look())[0]!.card, { timeout: 5000 }).toMatch(/^rgb\((29, 29, 39|37, 37, 48)\)$/);
+    else await page.waitForTimeout(450);
+    await expect.poll(async () => { const l = await look(); return l[0]!.card !== l[0]!.app; }, { timeout: 5000 }).toBe(true);
   }
   await bp.context().close();
   await cp.context().close();
