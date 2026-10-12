@@ -222,7 +222,8 @@ test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regu
   await nav(page, "chats");
   expect(await order()).toEqual([chats[2], chats[0], chats[1]]);
 
-  // A regular chat is not draggable: press-and-hold opens its menu instead, nothing moves.
+  // A regular chat is not draggable: press-and-hold opens its preview with actions (Step 2.9; PC: right click menu), nothing moves.
+  const menu = page.getByTestId(isMobile(page) ? "chat-preview" : "chat-context-menu");
   const regular = page.locator('[data-testid=chat-row][data-pinned="false"]');
   await expect(regular).toHaveCount(1);
   const openMenu = async () => {
@@ -235,14 +236,14 @@ test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regu
     } else {
       await regular.click({ button: "right" });
     }
-    await expect(page.getByTestId("chat-menu")).toBeVisible();
+    await expect(menu).toBeVisible();
   };
   await openMenu();
   // The chat list can re-render under the open menu (live updates); pin again only if it did not take.
   await expect(async () => {
     if ((await regular.count()) === 0) return; // pinned
-    if (!(await page.getByTestId("chat-menu").isVisible())) await openMenu();
-    await page.getByTestId("menu-pin").click({ timeout: 4000 });
+    if (!(await menu.isVisible())) await openMenu();
+    await menu.getByTestId("chat-action-pin").click({ timeout: 4000 });
     await expect(regular).toHaveCount(0, { timeout: 3000 });
   }).toPass({ timeout: 30_000 });
   // Pinning puts it on top of the pinned group.
