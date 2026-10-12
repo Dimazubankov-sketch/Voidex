@@ -30,13 +30,18 @@ export async function completeSecuritySetup(page: Page, code = PASSCODE) {
   await page.getByTestId("face-setup-later").click();
   await expect(page.getByTestId("security-setup")).toHaveCount(0);
 }
-let seq = 0;
+// A random start: Playwright restarts its worker after a failed test, and a counter starting at 0 again could
+// then repeat a phone number used earlier in the same run (the sign-up is refused as a duplicate).
+let seq = Math.floor(Math.random() * 100_000);
 export function uniq(prefix = "e") {
   seq += 1;
   return `${prefix}${Date.now().toString(36)}${seq}`;
 }
+/** Real Russian mobile operator codes (the server validates the number). */
+const MOBILE_CODES = ["903", "905", "906", "909", "910", "915", "916", "917", "919", "925", "926", "977"];
 export function uniquePhoneDigits() {
-  return "916" + String(Date.now() + seq++ * 7919).slice(-7);
+  const code = MOBILE_CODES[Math.floor(Math.random() * MOBILE_CODES.length)]!;
+  return code + String(Date.now() + seq++ * 7919).slice(-7);
 }
 
 /** Clicks the big → button once any slide transition has finished. */
