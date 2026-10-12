@@ -1,6 +1,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { animate } from "motion/react";
 import { LEFT_EDGE_PX, inTopEdge } from "@/os/metrics";
+import { ownedByChild } from "@/os/gesture-priority";
 import type { MotionValue } from "motion/react";
 
 const ENGAGE_PX = 12;
@@ -33,7 +34,7 @@ export function useEdgeSwipe(
     const down = (e: PointerEvent) => {
       if (!o.current.enabled || e.button !== 0 || inTopEdge(e.clientY)) return;
       // Step 2.9: players (voice waveform, circle ring, carousels) own the drags that start on them.
-      if ((e.target as HTMLElement | null)?.closest?.("[data-gesture-owner]")) return;
+      if (ownedByChild(e.target)) return;
       const left = el.getBoundingClientRect().left;
       if (e.clientX - left > LEFT_EDGE_PX) return;
       active = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), engaged: false };

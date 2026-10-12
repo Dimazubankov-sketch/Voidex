@@ -1316,6 +1316,23 @@ export const en = {
   "vibex.record.slideCancel": "Slide left to cancel",
   "vibex.record.slideLock": "up to lock",
   "vibex.record.tooShort": "Hold the button to record",
+  "vibex.msg.copy": "Copy",
+  "vibex.msg.copied": "Copied",
+  "vibex.msg.edit": "Edit",
+  "vibex.msg.editing": "Editing",
+  "vibex.msg.edited": "edited",
+  "vibex.msg.pin": "Pin",
+  "vibex.msg.unpin": "Unpin",
+  "vibex.msg.pinned": "Pinned message",
+  "vibex.msg.forward": "Forward",
+  "vibex.msg.forwardTo": "Forward to",
+  "vibex.msg.forwardedDone": "Forwarded",
+  "vibex.msg.forwardedFrom": "Forwarded from {name}",
+  "vibex.msg.select": "Select",
+  "vibex.msg.selected": "Selected: {n}",
+  "vibex.msg.selectMessage": "Select message",
+  "vibex.msg.menu": "Message actions",
+  "vibex.msg.swipeReply": "Swipe left to reply",
 } as const;
 
 export type MessageKey = keyof typeof en;

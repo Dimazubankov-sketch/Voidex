@@ -162,12 +162,13 @@ test("Vibex: delete my message (others can't), placeholder for both; action row 
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + 10, y: box.y + 5 }] });
     await page.waitForTimeout(600);
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await page.getByTestId("message-actions").getByTestId("menu-delete").click();
+    // Step 2.10: the long-press menu; «Удалить» turns into «у себя / у всех» in place.
+    await page.getByTestId("message-menu").getByTestId("msg-action-delete").click();
   } else {
     await mine.hover();
     await mine.getByTestId("message-delete").click();
   }
-  await page.getByRole("button", { name: "Удалить" }).last().click();
+  await page.getByTestId("msg-action-delete-all").click();
   // Step 2.8: the message disappears completely, no placeholder.
   await expect(mine).toHaveCount(0);
   await expect(page.getByTestId("messages")).not.toContainText("Секретное сообщение");

@@ -81,6 +81,16 @@ function handle(event: ServerEvent) {
       void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
       break;
+    case "vibex.message.updated":
+      // Step 2.10: an edited message / a new pinned message.
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
+      break;
+    case "vibex.activity":
+      // Step 2.10: the Vibex activity tab (badge at once, the list on its next look).
+      queryClient.setQueryData(["vibex", "activity", "count"], { unread: event.unread });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "activity"], exact: true });
+      break;
     case "notes.document.updated":
     case "notes.access.revoked":
     case "notes.resource.deleted":

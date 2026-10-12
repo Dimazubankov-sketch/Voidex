@@ -26,6 +26,7 @@ import { ExpandingSearch } from "@/ui/expanding-search";
 import { MePage, PersonPage } from "./profile";
 import { VibexSettingsScreen } from "./settings";
 import { useEdgeSwipe } from "@/ui/edge-swipe";
+import { mayStart } from "@/os/gesture-priority";
 import { ShareSheet } from "./share-sheet";
 import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
 import { PushDrawer } from "@/ui/push-drawer";
@@ -439,7 +440,8 @@ function SlidePage({ children, onBack, z }: { children: ReactNode; onBack: () =>
       dragListener={false}
       dragControls={controls}
       onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest("[data-gesture-owner]")) return;
+        // Step 2.10: one priority for every gesture (os/gesture-priority): players and seeks first.
+        if (!mayStart("chat-swipe-back", e.target)) return;
         controls.start(e);
       }}
       dragConstraints={{ left: 0, right: 0 }}

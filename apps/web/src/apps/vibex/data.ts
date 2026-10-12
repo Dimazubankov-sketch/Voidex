@@ -24,6 +24,8 @@ import {
   type VibexStoryDto,
   type VibexStoryGroupDto,
   type VibexStoryViewerDto,
+  type VibexActivityPageDto,
+  type VibexSearchDto,
 } from "@voidex/shared";
 import { api, qs } from "@/lib/api";
 import { applyMe } from "@/lib/account";
@@ -65,6 +67,11 @@ export const vk = {
   storyArchive: ["vibex", "stories", "archive"] as const,
   storyViewers: (id: string) => ["vibex", "stories", "viewers", id] as const,
   chatSearch: (q: string) => ["vibex", "chat-search", q] as const,
+  /** Step 2.10 */
+  activity: ["vibex", "activity"] as const,
+  activityCount: ["vibex", "activity", "count"] as const,
+  search: (q: string) => ["vibex", "search", q] as const,
+  explore: ["vibex", "explore"] as const,
 };
 
 // ------------------------------------------------------- me and settings
@@ -613,5 +620,86 @@ export function useDeleteChat() {
       queryClient.removeQueries({ queryKey: vk.messages(v.id) });
       void queryClient.invalidateQueries({ queryKey: vk.chats });
     },
+  });
+}
+
+// ------------------------------------------------- Step 2.10 message actions
+
+function patchMessages(chatId: string, fn: (items: VibexMessageDto[]) => VibexMessageDto[]) {
+  queryClient.setQueryData<MessagesData>(vk.messages(chatId), (d) => (d ? { ...d, pages: d.pages.map((p) => ({ ...p, items: fn(p.items) })) } : d));
+}
+
+/** The sender edits a text message (shown at once, then confirmed by the server). */
+export function useEditMessage(chatId: string) {
+  return useMutation({
+    mutationFn: ({ id, text }: { id: string; text: string }) => api.patch<VibexMessageDto>(`/api/vibex/messages/${id}`, { text }),
+    onSuccess: (m) => {
+      patchMessages(chatId, (items) => items.map((x) => (x.id === m.id ? { ...x, text: m.text, editedAt: m.editedAt } : x)));
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
+}
+
+/** Several messages at once: "me" (from my history) or "all" (my own, for everyone). */
+export function useDeleteMessages(chatId: string) {
+  return useMutation({
+    mutationFn: ({ ids, scope }: { ids: string[]; scope: "me" | "all" }) => api.post<{ ok: true; deleted: number }>("/api/vibex/messages/delete", { ids, scope }),
+    onSuccess: (_r, { ids }) => {
+      const gone = new Set(ids);
+      patchMessages(chatId, (items) => items.filter((m) => !gone.has(m.id)).map((m) => (m.replyTo && gone.has(m.replyTo.id) ? { ...m, replyTo: null } : m)));
+      void queryClient.invalidateQueries({ queryKey: vk.messages(chatId) });
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
+}
+
+export const forwardMessages = (messageIds: string[], conversationIds: string[]) =>
+  api.post<{ ok: true; sent: number }>("/api/vibex/messages/forward", { messageIds, conversationIds }).then((r) => {
+    void queryClient.invalidateQueries({ queryKey: vk.chats });
+    for (const id of conversationIds) void queryClient.invalidateQueries({ queryKey: vk.messages(id) });
+    return r;
+  });
+
+export function usePinMessage(chatId: string) {
+  return useMutation({
+    mutationFn: (messageId: string | null) => api.put<VibexChatDto>(`/api/vibex/chats/${chatId}/pin`, { messageId }),
+    onSuccess: (chat) => {
+      queryClient.setQueryData(vk.chat(chatId), chat);
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
+}
+
+// ------------------------------------------------- Step 2.10 activity, search
+
+export function useActivity(enabled = true) {
+  return useInfiniteQuery({
+    queryKey: vk.activity,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexActivityPageDto>(`/api/vibex/activity${qs({ before: pageParam })}`),
+    getNextPageParam: (last) => last.next,
+    enabled,
+  });
+}
+
+/** Unread activity (the tab's badge); kept live by the "vibex.activity" event, never polled. */
+export function useActivityCount() {
+  return useQuery({ queryKey: vk.activityCount, queryFn: () => api.get<{ unread: number }>("/api/vibex/activity/count"), staleTime: Infinity });
+}
+
+export const readActivity = () =>
+  api.post<{ ok: true; unread: number }>("/api/vibex/activity/read").then(() => queryClient.setQueryData(vk.activityCount, { unread: 0 }));
+
+export function useVibexSearch(q: string) {
+  return useQuery({ queryKey: vk.search(q), queryFn: () => api.get<VibexSearchDto>(`/api/vibex/search${qs({ q })}`), enabled: q.trim().length > 0, staleTime: 15_000 });
+}
+
+export function useExplore() {
+  return useInfiniteQuery({
+    queryKey: vk.explore,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexPage<VibexPostDto>>(`/api/vibex/explore${qs({ before: pageParam, limit: 30 })}`),
+    getNextPageParam: (last) => last.next,
+    staleTime: 30_000,
   });
 }

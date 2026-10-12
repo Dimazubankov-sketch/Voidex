@@ -14,6 +14,7 @@ import {
   RiPushpin2Fill,
   RiSendPlaneFill,
   RiShareForwardLine,
+  RiPencilLine,
   RiPhoneLine,
   RiReplyLine,
   RiVidiconLine,
@@ -28,10 +29,11 @@ import { ATTACHMENT_ACCEPT } from "@/apps/mail/attachments";
 import { NotesFileCard } from "@/apps/notes/card";
 import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
-import { ConfirmDialog, MenuList, Sheet, toast } from "@/ui/overlays";
-import { checkVibexFile, filesApi, markRead, useChat, useChats, useDeleteMessage, useMessages, useSendMessage, useSetPins } from "./data";
+import { toast } from "@/ui/overlays";
+import { checkVibexFile, filesApi, markRead, useChat, useChats, useEditMessage, useMessages, useSendMessage, useSetPins } from "./data";
 import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
 import { VoiceBubble } from "./media-bubbles";
+import { ForwardSheet, MessageMenu, PinnedBar, SelectDot, SelectionBar, SwipeReplyIcon, useSwipeReply, type MessageMenuState } from "./message-actions";
 import { CircleBubble } from "./circle-player";
 import { type RecordKind, type Recording } from "./recorder";
 import { RecordButton } from "./record-button";
@@ -495,14 +497,26 @@ function useNameOf(chat: VibexChatDto): NameOf {
   );
 }
 
+/** Step 2.10: what a message row asks its chat for (actions, multi-select). */
+interface BubbleActions {
+  onReply: (m: VibexMessageDto) => void;
+  /** Long press / right click (or the delete button, straight on the delete choice). */
+  onMenu: (m: VibexMessageDto, el: HTMLElement, deleting?: boolean) => void;
+  /** Multi-select is on: a tap selects instead. */
+  selecting: boolean;
+  selected: boolean;
+  onToggle: (m: VibexMessageDto) => void;
+  /** This message's menu is open: it stays bright above the dimmed chat. */
+  lifted: boolean;
+}
+
 function Bubble({
   msg,
   peerReadAt,
   tail,
   nameOf,
   author,
-  onReply,
-  onDelete,
+  actions,
 }: {
   msg: VibexMessageDto;
   peerReadAt: string | null;
@@ -510,30 +524,38 @@ function Bubble({
   nameOf: NameOf;
   /** Groups: the sender's name above the first message of a run. */
   author?: string | null;
-  onReply: (m: VibexMessageDto) => void;
-  /** Step 2.5: delete my own message (asks first). */
-  onDelete: (m: VibexMessageDto) => void;
+  actions: BubbleActions;
 }) {
   const t = useT();
   const lang = useLanguage();
   const [viewer, setViewer] = useState<number | null>(null);
-  const [actions, setActions] = useState(false);
+  const row = useRef<HTMLDivElement>(null);
+  const bubble = useRef<HTMLDivElement>(null);
   const images = msg.files.filter((f) => f.kind === "image" || (msg.kind === "text" && f.kind === "video"));
   const files = msg.files.filter((f) => (f.kind === "file" || f.kind === "audio") && msg.kind === "text");
   const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(msg.createdAt));
   const mine = msg.mine;
-  // Phones: press and hold a message for its actions (reply, delete mine); a mouse uses the buttons.
-  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && setActions(true), ms: 450 }).handlers;
+  const { selecting, selected, lifted } = actions;
+  const openMenu = (deleting?: boolean) => actions.onMenu(msg, bubble.current ?? row.current!, deleting);
+  // Phones: press and hold a message for its actions; a mouse uses the right click (and the hover buttons).
+  const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && !selecting && openMenu(), ms: 450 }).handlers;
+  // Step 2.10: swipe left to reply (players keep their own drags).
+  const swipe = useSwipeReply(() => actions.onReply(msg), !selecting);
   const meta = (
     <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mine ? "text-white/75" : "text-text-tertiary")}>
+      {msg.editedAt && (
+        <span className="mr-0.5" data-testid="message-edited">
+          {t("vibex.msg.edited")}
+        </span>
+      )}
       {time}
       {mine && <Ticks msg={msg} peerReadAt={peerReadAt} />}
     </span>
   );
-  const replyButton = (
+  const replyButton = !selecting && (
     <button
       type="button"
-      onClick={() => onReply(msg)}
+      onClick={() => actions.onReply(msg)}
       aria-label={t("vibex.chat.reply")}
       title={t("vibex.chat.reply")}
       className="flex size-8 shrink-0 items-center justify-center self-center rounded-full text-text-tertiary opacity-0 transition hover:bg-surface-hover hover:text-text focus-visible:opacity-100 group-hover:opacity-100"
@@ -542,10 +564,10 @@ function Bubble({
       <RiReplyLine className="size-4" />
     </button>
   );
-  const deleteButton = mine && (
+  const deleteButton = mine && !selecting && (
     <button
       type="button"
-      onClick={() => onDelete(msg)}
+      onClick={() => openMenu(true)}
       aria-label={t("vibex.chat.delete")}
       title={t("vibex.chat.delete")}
       className="flex size-8 shrink-0 items-center justify-center self-center rounded-full text-text-tertiary opacity-0 transition hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
@@ -554,39 +576,24 @@ function Bubble({
       <RiDeleteBinLine className="size-4" />
     </button>
   );
-  const actionSheet = (
-    <Sheet open={actions} onClose={() => setActions(false)} testId="message-actions">
-      <MenuList
-        onDone={() => setActions(false)}
-        items={[
-          { id: "reply", label: t("vibex.chat.reply"), icon: <RiReplyLine className="size-5" />, onSelect: () => onReply(msg) },
-          ...(mine ? [{ id: "delete", label: t("vibex.chat.delete"), icon: <RiDeleteBinLine className="size-5" />, danger: true, onSelect: () => onDelete(msg) }] : []),
-        ]}
-      />
-    </Sheet>
+  const forwarded = msg.forwardedFrom && (
+    <span className={cx("flex items-center gap-1 px-2.5 pt-1 text-[12.5px] font-medium", mine ? "text-white/85" : "text-primary")} data-testid="message-forwarded">
+      <RiShareForwardLine className="size-3.5 shrink-0" />
+      <span className="truncate">{t("vibex.msg.forwardedFrom", { name: msg.forwardedFrom.name })}</span>
+    </span>
   );
 
-  if (msg.kind === "circle" && msg.files[0]) {
-    return (
-      <div className={cx("group flex w-full items-end gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind="circle" {...hold}>
-        {deleteButton}
-        {mine && replyButton}
-        <div className="flex flex-col items-end gap-1">
-          {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} nameOf={nameOf} />}
-          <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} />
-          <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
-        </div>
-        {!mine && replyButton}
-        {actionSheet}
+  const body =
+    msg.kind === "circle" && msg.files[0] ? (
+      <div ref={bubble} className="flex flex-col items-end gap-1">
+        {forwarded}
+        {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} nameOf={nameOf} />}
+        <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} />
+        <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
       </div>
-    );
-  }
-
-  return (
-    <div className={cx("group flex w-full items-center gap-1", mine ? "justify-end" : "justify-start")} data-testid="message" data-mine={mine} data-kind={msg.kind} {...hold}>
-      {deleteButton}
-      {mine && replyButton}
+    ) : (
       <div
+        ref={bubble}
         className={cx(
           "flex max-w-[min(78%,520px)] flex-col gap-1.5 overflow-hidden px-1 py-1",
           mine ? "bg-primary text-white" : "bg-surface text-text shadow-tile",
@@ -599,6 +606,7 @@ function Bubble({
             {author}
           </span>
         )}
+        {forwarded}
         {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
         {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
         {images.length > 0 && (
@@ -630,16 +638,63 @@ function Bubble({
         )}
         <div className="flex items-end gap-2 px-2.5 pb-1">
           {msg.text && (
-            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words pt-0.5 text-[15px] leading-[1.4]" data-selectable>
+            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words pt-0.5 text-[15px] leading-[1.4]" data-selectable={!selecting || undefined}>
               {msg.text}
             </p>
           )}
           {meta}
         </div>
       </div>
-      {!mine && replyButton}
+    );
+
+  return (
+    <div
+      ref={row}
+      className={cx("group relative flex w-full items-center gap-1", lifted && "z-[31]", selecting && "cursor-pointer rounded-2xl", selected && "bg-primary/[0.08]")}
+      data-testid="message"
+      data-message-id={msg.id}
+      data-mine={mine}
+      data-kind={msg.kind === "circle" && msg.files[0] ? "circle" : msg.kind}
+      data-selected={selected || undefined}
+      onContextMenu={(e) => {
+        if (selecting) return;
+        e.preventDefault();
+        openMenu();
+      }}
+      // Multi-select: a tap anywhere on the row selects it (nothing inside reacts).
+      onClickCapture={(e) => {
+        if (!selecting) return;
+        e.preventDefault();
+        e.stopPropagation();
+        actions.onToggle(msg);
+      }}
+      {...hold}
+      onPointerDown={(e) => {
+        hold.onPointerDown(e);
+        swipe.handlers.onPointerDown(e);
+      }}
+      onPointerMove={(e) => {
+        hold.onPointerMove(e);
+        swipe.handlers.onPointerMove(e);
+      }}
+      onPointerUp={(e) => {
+        hold.onPointerUp();
+        swipe.handlers.onPointerUp(e);
+      }}
+      onPointerCancel={() => {
+        hold.onPointerCancel();
+        swipe.handlers.onPointerCancel();
+      }}
+    >
+      {selecting && <SelectDot on={selected} />}
+      <motion.div className={cx("flex min-w-0 flex-1 items-center gap-1", mine ? "justify-end" : "justify-start", selecting && "pointer-events-none")} style={{ x: swipe.x }}>
+        {deleteButton}
+        {mine && replyButton}
+        {body}
+        {!mine && replyButton}
+      </motion.div>
+      <SwipeReplyIcon progress={swipe.icon} />
       <Lightbox files={images} index={viewer} onIndex={setViewer} />
-      {actionSheet}
     </div>
   );
 }
@@ -650,18 +705,31 @@ function Bubble({
  * the other person's receipts stay as they are).
  */
 export function ChatPreviewMessages({ chat }: { chat: VibexChatDto }) {
-  return <Messages chat={chat} onReply={() => undefined} preview />;
+  return <Messages chat={chat} preview />;
 }
 
-function Messages({ chat, onReply, preview = false }: { chat: VibexChatDto; onReply: (m: VibexMessageDto) => void; preview?: boolean }) {
+/** Step 2.10: what the conversation hands its message list (actions, multi-select, the open menu). */
+interface ListActions {
+  onReply: (m: VibexMessageDto) => void;
+  onMenu: (m: VibexMessageDto, el: HTMLElement, deleting?: boolean) => void;
+  selection: Set<string> | null;
+  onToggle: (m: VibexMessageDto) => void;
+  menuId: string | null;
+  /** The loaded messages (for the selection bar). */
+  onItems?: (items: VibexMessageDto[]) => void;
+}
+
+const NO_ACTIONS: ListActions = { onReply: () => undefined, onMenu: () => undefined, selection: null, onToggle: () => undefined, menuId: null };
+
+function Messages({ chat, actions = NO_ACTIONS, preview = false }: { chat: VibexChatDto; actions?: ListActions; preview?: boolean }) {
   const t = useT();
   const lang = useLanguage();
   const q = useMessages(chat.id);
   const items = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
   const top = useRef<HTMLDivElement>(null);
   const nameOf = useNameOf(chat);
-  const del = useDeleteMessage(chat.id);
-  const [deleting, setDeleting] = useState<VibexMessageDto | null>(null);
+  const { onItems } = actions;
+  useEffect(() => onItems?.(items), [items, onItems]);
 
   // Load older messages when the top comes into view.
   useEffect(() => {
@@ -696,7 +764,7 @@ function Messages({ chat, onReply, preview = false }: { chat: VibexChatDto; onRe
   // Rendered bottom-up (column-reverse keeps the newest at the bottom without scroll math).
   return (
     // Step 2.10: the preview scrolls too (its own wrapper keeps every message control inert, see PreviewScroller).
-    <div className="scroll-area flex flex-1 flex-col-reverse gap-1 px-3 py-3 sm:px-5" data-testid={preview ? "preview-messages" : "messages"}>
+    <div className="scroll-area flex flex-1 flex-col-reverse gap-1 overflow-x-hidden px-3 py-3 sm:px-5" data-testid={preview ? "preview-messages" : "messages"}>
       {items.map((m, i) => {
         const older = items[i + 1];
         const newer = items[i - 1];
@@ -715,8 +783,14 @@ function Messages({ chat, onReply, preview = false }: { chat: VibexChatDto; onRe
               tail={tail}
               nameOf={nameOf}
               author={chat.group && !m.mine && (!older || older.senderId !== m.senderId || dayBreak) ? nameOf(m.senderId) : null}
-              onReply={onReply}
-              onDelete={setDeleting}
+              actions={{
+                onReply: actions.onReply,
+                onMenu: actions.onMenu,
+                selecting: !!actions.selection,
+                selected: !!actions.selection?.has(m.id),
+                onToggle: actions.onToggle,
+                lifted: actions.menuId === m.id,
+              }}
             />
           </div>
         );
@@ -724,26 +798,28 @@ function Messages({ chat, onReply, preview = false }: { chat: VibexChatDto; onRe
       <div ref={top} className="flex justify-center py-2">
         {q.isFetchingNextPage && <Spinner />}
       </div>
-      <ConfirmDialog
-        open={!!deleting}
-        onClose={() => setDeleting(null)}
-        onConfirm={() => {
-          const m = deleting;
-          setDeleting(null);
-          if (m) del.mutate(m.id, { onError: (e) => toast({ title: errorMessage(t, e), tone: "danger" }) });
-        }}
-        title={t("vibex.chat.deleteTitle")}
-        message={t("vibex.chat.deleteBody")}
-        confirmLabel={t("vibex.chat.delete")}
-        danger
-      />
     </div>
   );
 }
 
 type Pending = { key: string; name: string };
 
-function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: string; replyTo: VibexMessageDto | null; onClearReply: () => void; nameOf: NameOf }) {
+function MessageComposer({
+  chatId,
+  replyTo,
+  onClearReply,
+  nameOf,
+  editing,
+  onEditDone,
+}: {
+  chatId: string;
+  replyTo: VibexMessageDto | null;
+  onClearReply: () => void;
+  nameOf: NameOf;
+  /** Step 2.10: my text message being edited (the field holds its text; send saves it). */
+  editing: VibexMessageDto | null;
+  onEditDone: () => void;
+}) {
   const t = useT();
   const ff = useFormFactor();
   const me = useSession((s) => s.user)!;
@@ -756,6 +832,21 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
   const [pending, setPending] = useState<Pending[]>([]);
   const input = useRef<HTMLInputElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const edit = useEditMessage(chatId);
+  const draft = useRef("");
+  // Step 2.10: editing puts the message's text in the field (and gives the draft back afterwards).
+  useEffect(() => {
+    if (editing) {
+      draft.current = text;
+      setText(editing.text);
+      window.setTimeout(() => area.current?.focus(), 0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.id]);
+  const stopEditing = (restore = true) => {
+    onEditDone();
+    setText(restore ? draft.current : "");
+  };
 
   useLayoutEffect(() => {
     const el = area.current;
@@ -788,6 +879,18 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
 
   const canSend = (text.trim().length > 0 || files.length > 0) && !pending.length && !send.isPending;
   const submit = async () => {
+    if (editing) {
+      const next = text.trim();
+      if (!next) return;
+      if (next === editing.text) return stopEditing();
+      try {
+        await edit.mutateAsync({ id: editing.id, text: next });
+        stopEditing();
+      } catch (e) {
+        toast({ title: errorMessage(t, e), tone: "danger" });
+      }
+      return;
+    }
     if (!canSend) return;
     const body = { text, fileIds: files.map((f) => f.id), ...(replyTo ? { replyToId: replyTo.id } : {}) };
     setText("");
@@ -846,7 +949,19 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           </motion.div>
         )}
       </AnimatePresence>
-      {replyTo && (
+      {editing && (
+        <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface px-3 py-1.5 shadow-tile" data-testid="composer-edit">
+          <RiPencilLine className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 text-[13px]">
+            <span className="block font-semibold text-primary">{t("vibex.msg.editing")}</span>
+            <span className="line-clamp-1 text-text-secondary">{editing.text}</span>
+          </span>
+          <button type="button" onClick={() => stopEditing()} aria-label={t("common.cancel")} className="flex size-7 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover" data-testid="composer-edit-cancel">
+            <RiCloseLine className="size-4" />
+          </button>
+        </div>
+      )}
+      {replyTo && !editing && (
         <div className="mb-2 flex items-center gap-2 rounded-2xl bg-surface px-3 py-1.5 shadow-tile" data-testid="composer-reply">
           <RiReplyLine className="size-4 shrink-0 text-primary" />
           <span className="min-w-0 flex-1 text-[13px]">
@@ -880,7 +995,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           onPick={(picked) => void add(picked)}
           max={Math.max(0, VIBEX_FILES_MAX - files.length - pending.length)}
         />
-        <IconButton label={t("vibex.chat.attach")} onClick={() => setChooser(true)} disabled={files.length + pending.length >= VIBEX_FILES_MAX} data-testid="chat-attach">
+        <IconButton label={t("vibex.chat.attach")} onClick={() => setChooser(true)} disabled={!!editing || files.length + pending.length >= VIBEX_FILES_MAX} data-testid="chat-attach">
           <RiAttachment2 className="size-5" />
         </IconButton>
         <textarea
@@ -890,6 +1005,7 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           maxLength={VIBEX_MESSAGE_MAX}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
+            if (e.key === "Escape" && editing) stopEditing();
             if (e.key === "Enter" && !e.shiftKey && ff === "desktop" && !e.nativeEvent.isComposing) {
               e.preventDefault();
               void submit();
@@ -899,7 +1015,19 @@ function MessageComposer({ chatId, replyTo, onClearReply, nameOf }: { chatId: st
           className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.35] outline-none placeholder:text-text-tertiary"
           data-testid="chat-input"
         />
-        {empty ? (
+        {editing ? (
+          <motion.button
+            type="button"
+            onClick={() => void submit()}
+            disabled={!text.trim() || edit.isPending}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
+            whileTap={{ scale: 0.9 }}
+            aria-label={t("common.save")}
+            data-testid="chat-edit-save"
+          >
+            {edit.isPending ? <Spinner size={16} /> : <RiCheckLine className="size-[18px]" />}
+          </motion.button>
+        ) : empty ? (
           <RecordButton mode={recMode} onMode={setRecMode} onRecorded={sendRecording} barHost={row} />
         ) : (
           <motion.button
@@ -963,6 +1091,41 @@ function ConversationView({
 }) {
   const t = useT();
   const nameOf = useNameOf(c);
+  // Step 2.10: message actions, multi-select, editing, forwarding.
+  const [menu, setMenu] = useState<MessageMenuState | null>(null);
+  const [selection, setSelection] = useState<Set<string> | null>(null);
+  const [editing, setEditing] = useState<VibexMessageDto | null>(null);
+  const [forwarding, setForwarding] = useState<string[] | null>(null);
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  const [items, setItems] = useState<VibexMessageDto[]>([]);
+  const toggle = useCallback(
+    (m: VibexMessageDto) =>
+      setSelection((sel) => {
+        const next = new Set(sel ?? []);
+        if (next.has(m.id)) next.delete(m.id);
+        else next.add(m.id);
+        return next;
+      }),
+    [],
+  );
+  const listActions: ListActions = {
+    onReply: (m) => {
+      setEditing(null);
+      setReplyTo(m);
+    },
+    onMenu: (m, el, deleting) => setMenu({ msg: m, anchor: el.getBoundingClientRect(), deleting }),
+    selection,
+    onToggle: toggle,
+    menuId: menu?.msg.id ?? null,
+    onItems: setItems,
+  };
+  const jump = (id: string) => {
+    const el = host?.querySelector<HTMLElement>(`[data-message-id="${id}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.animate([{ backgroundColor: "rgba(127,114,255,0.18)" }, { backgroundColor: "transparent" }], { duration: 1200 });
+  };
+  const selected = selection ? items.filter((m) => selection.has(m.id)) : [];
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="conversation" data-chat-id={chatId}>
       <WindowHeader className="border-b px-2 sm:px-3">
@@ -997,10 +1160,34 @@ function ConversationView({
           </>
         )}
       </WindowHeader>
-      <div className="flex min-h-0 flex-1 flex-col bg-surface-secondary/50">
-        <Messages chat={c} onReply={setReplyTo} />
-        <MessageComposer chatId={chatId} key={chatId} replyTo={replyTo} onClearReply={() => setReplyTo(null)} nameOf={nameOf} />
+      <PinnedBar chat={c} onJump={jump} />
+      <div ref={setHost} className="relative flex min-h-0 flex-1 flex-col bg-surface-secondary/50">
+        <Messages chat={c} actions={listActions} />
+        {selection ? (
+          <SelectionBar chat={c} selected={selected} onClose={() => setSelection(null)} onForward={(ids) => setForwarding(ids)} />
+        ) : (
+          <MessageComposer
+            chatId={chatId}
+            key={chatId}
+            replyTo={replyTo}
+            onClearReply={() => setReplyTo(null)}
+            nameOf={nameOf}
+            editing={editing}
+            onEditDone={() => setEditing(null)}
+          />
+        )}
+        <MessageMenu
+          chat={c}
+          state={menu}
+          host={host}
+          onClose={() => setMenu(null)}
+          onReply={(m) => (setEditing(null), setReplyTo(m))}
+          onEdit={(m) => (setReplyTo(null), setEditing(m))}
+          onSelect={(m) => setSelection(new Set([m.id]))}
+          onForward={setForwarding}
+        />
       </div>
+      <ForwardSheet ids={forwarding} onClose={() => setForwarding(null)} onDone={() => setSelection(null)} />
       {c.peer && <CallSheet kind={call} peer={c.peer} onClose={() => setCall(null)} />}
       {c.group && <GroupInfoSheet key={c.group.title + c.group.avatarFileId} chat={c} open={info} onClose={() => setInfo(false)} />}
     </div>
