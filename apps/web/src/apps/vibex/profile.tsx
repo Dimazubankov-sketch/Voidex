@@ -180,16 +180,17 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
               </span>
             )}
           </span>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 pb-0.5">
+          {/* My own profile: edit + "…" always stay on one line (the label shortens on a narrow phone). */}
+          <div className={cx("flex min-w-0 items-center justify-end gap-2 pb-0.5", profile.me ? "flex-nowrap" : "flex-wrap")}>
             {profile.me ? (
               <button
                 type="button"
                 onClick={onEdit}
-                className="flex h-11 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#9a86ff,#7a62f5)] px-5 text-[15px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(108,92,255,0.7)] transition hover:brightness-105"
+                className="flex h-11 min-w-0 items-center gap-2 rounded-full bg-[linear-gradient(135deg,#9a86ff,#7a62f5)] px-4 text-[15px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(108,92,255,0.7)] transition hover:brightness-105 sm:px-5"
                 data-testid="profile-edit"
               >
-                <RiEditLine className="size-[18px]" />
-                {t("vibex.profile.edit")}
+                <RiEditLine className="size-[18px] shrink-0" />
+                <span className="truncate">{t("vibex.profile.edit")}</span>
               </button>
             ) : (
               <>
