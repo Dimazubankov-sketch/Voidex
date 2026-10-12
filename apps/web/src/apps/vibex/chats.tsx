@@ -90,7 +90,7 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
   return (
     <>
       <ChatAvatar chat={chat} size={54} />
-      <span className="min-w-0 flex-1 self-stretch border-b border-border/60 py-2 pr-1 group-last:border-transparent">
+      <span className="min-w-0 flex-1 self-stretch py-2.5 pr-3">
         <span className="flex items-center gap-1.5">
           <span className={cx("min-w-0 truncate text-[15.5px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
           {chat.muted && <RiNotificationOffLine className="size-3.5 shrink-0 text-text-tertiary" aria-label={t("vibex.chats.muted")} data-testid="chat-muted" />}
@@ -122,8 +122,12 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
 /** With a mouse, the row's [...] button takes the place of the time and the counter on hover. */
 const HOVER_HIDE = "transition-opacity [@media(hover:hover)]:group-hover:opacity-0";
 
+/** Step 2.10: every chat is its own card (--chat-card: grey on a white app, white on a grey one, dark in the dark look). */
 function rowClass(active: boolean) {
-  return cx("flex w-full items-center gap-3 rounded-[18px] pl-2.5 text-left transition-colors", active ? "bg-primary-soft" : "hover:bg-surface-hover");
+  return cx(
+    "vx-chat-card flex w-full items-center gap-3 rounded-[20px] pl-2.5 text-left transition-colors",
+    active ? "!bg-primary-soft" : "[@media(hover:hover)]:hover:brightness-[0.98]",
+  );
 }
 
 /** Step 2.9: what a chat row asks its list for — the preview (phones: long press) and the actions menu (PC: right click / [...]). */
@@ -400,11 +404,11 @@ export function ChatList({ actions, order }: { actions: Omit<ChatRowActions, "pi
     );
 
   return (
-    <div className="flex flex-col px-1.5 pb-2" data-testid="chat-list" data-order={order}>
+    <div className="flex flex-col gap-1.5 px-2.5 pb-2" data-testid="chat-list" data-order={order}>
       {pinnedIds.length > 0 && (
         <section data-testid="chat-section" data-key="pinned">
           {header("pinned")}
-          <Reorder.Group axis="y" values={pinnedIds} onReorder={setLocalOrder} className="flex flex-col" data-testid="pinned-chats">
+          <Reorder.Group axis="y" values={pinnedIds} onReorder={setLocalOrder} className="flex flex-col gap-1.5" data-testid="pinned-chats">
             {pinnedIds.map((id) => {
               const c = byId.get(id);
               return c ? (
@@ -432,7 +436,7 @@ export function ChatList({ actions, order }: { actions: Omit<ChatRowActions, "pi
       )}
       <motion.div className="flex flex-col" animate={{ opacity: dragging ? 0.45 : 1 }} transition={{ duration: 0.22 }}>
         {sections.map((sec) => (
-          <section key={sec.key} data-testid="chat-section" data-key={sec.key}>
+          <section key={sec.key} className="flex flex-col gap-1.5" data-testid="chat-section" data-key={sec.key}>
             {header(sec.key)}
             {sec.items.map((c) => (
               <ChatRow key={c.id} chat={c} actions={rowActions} />
@@ -691,7 +695,8 @@ function Messages({ chat, onReply, preview = false }: { chat: VibexChatDto; onRe
   }
   // Rendered bottom-up (column-reverse keeps the newest at the bottom without scroll math).
   return (
-    <div className={cx("scroll-area flex flex-1 flex-col-reverse gap-1 px-3 py-3 sm:px-5", preview && "pointer-events-none")} data-testid={preview ? "preview-messages" : "messages"}>
+    // Step 2.10: the preview scrolls too (its own wrapper keeps every message control inert, see PreviewScroller).
+    <div className="scroll-area flex flex-1 flex-col-reverse gap-1 px-3 py-3 sm:px-5" data-testid={preview ? "preview-messages" : "messages"}>
       {items.map((m, i) => {
         const older = items[i + 1];
         const newer = items[i - 1];

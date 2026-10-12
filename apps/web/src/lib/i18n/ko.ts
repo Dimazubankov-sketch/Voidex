@@ -773,7 +773,7 @@ export const ko: Record<MessageKey, string> = {
   "vibex.group.new": "새 그룹",
   "vibex.group.write": "메시지 보내기",
   "vibex.group.create": "채팅 시작",
-  "vibex.group.pickHint": "한 명을 고르면 개인 채팅, 여러 명이면 그룹이 됩니다.",
+  "vibex.group.pickHint": "그룹 멤버를 선택하세요. 개인 채팅은 검색이나 프로필에서 시작할 수 있습니다.",
   "vibex.group.picture": "그룹 사진",
   "vibex.group.pictureHint": "선택 사항: JPEG, PNG 또는 WebP",
   "vibex.group.titlePlaceholder": "그룹 이름",

@@ -252,3 +252,33 @@ export async function replaceValue(field: Locator, current: string, next: string
   await field.fill(next);
   await expect(field).toHaveValue(next);
 }
+
+/** Authenticated API call from the page's own session (refresh → access token). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function apiAs(page: Page, method: string, url: string, body?: unknown): Promise<{ status: number; body: any }> {
+  return page.evaluate(
+    async ({ method, url, body }) => {
+      const r = await fetch("/api/auth/refresh", { method: "POST", headers: { "X-Voidex-Client": "web", "Content-Type": "application/json" }, body: "{}" });
+      const { accessToken } = await r.json();
+      const headers: Record<string, string> = { "X-Voidex-Client": "web", Authorization: `Bearer ${accessToken}` };
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      const res = await fetch(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    },
+    { method, url, body },
+  );
+}
+
+/** Vibex «Чаты» pulled down a bit (phones: a short drag at the top; PC: a wheel up): the search comes out. */
+export async function pullChats(page: Page) {
+  const list = (await page.getByTestId("chats-scroll").boundingBox())!;
+  if ((page.viewportSize()?.width ?? 1000) < 700) {
+    await page.mouse.move(list.x + list.width / 2, list.y + 40);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(list.x + list.width / 2, list.y + 40 + i * 12);
+    await page.mouse.up();
+  } else {
+    await page.mouse.move(list.x + list.width / 2, list.y + 80);
+    await page.mouse.wheel(0, -120);
+  }
+}

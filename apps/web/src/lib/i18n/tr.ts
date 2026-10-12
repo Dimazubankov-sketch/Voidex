@@ -773,7 +773,7 @@ export const tr: Record<MessageKey, string> = {
   "vibex.group.new": "Yeni grup",
   "vibex.group.write": "Yaz",
   "vibex.group.create": "Sohbeti başlat",
-  "vibex.group.pickHint": "Özel sohbet için bir kişi, grup için birkaç kişi seçin.",
+  "vibex.group.pickHint": "Grup üyelerini seçin. Özel sohbet arama veya profilden başlatılır.",
   "vibex.group.picture": "Grup resmi",
   "vibex.group.pictureHint": "İsteğe bağlı: JPEG, PNG veya WebP",
   "vibex.group.titlePlaceholder": "Grup adı",

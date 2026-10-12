@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { PASSCODE, openApp, openWallpapersTab, settingsRoot, reloadUnlocked, signUpViaApi, uniq, uniquePhoneDigits, unlock } from "./helpers";
+import { PASSCODE, openApp, openWallpapersTab, settingsRoot, reloadUnlocked, signUpViaApi, uniq, uniquePhoneDigits, unlock, pullChats } from "./helpers";
 
 /**
  * Step 2.4 — lock screen, code-password, Face ID (WebAuthn), step-up,
@@ -247,13 +247,19 @@ test("Vibex: the pencil starts a group (people, name) and a direct chat as befor
   const g = chats.find((x: { kind: string }) => x.kind === "group");
   await request.post(`/api/vibex/chats/${g.id}/messages`, { headers: { authorization: `Bearer ${b.token}`, "x-voidex-client": "web", "content-type": "application/json" }, data: JSON.stringify({ text: "Борис на связи" }) });
   await expect(page.getByTestId("message-author").last()).toHaveText("Борис Группов");
-  // One person → a direct chat, as before.
+  // Step 2.10: the pencil always makes a group (one person too); a private chat starts from the chat search.
   if (isMobile(page)) await page.getByTestId("chat-back").click();
   await page.getByTestId("vibex-new-chat").click();
   await page.getByTestId("new-chat-search").fill(c.username);
   await page.getByTestId("new-chat-contact").first().click();
-  await expect(page.getByTestId("new-chat-next")).toHaveText("Написать");
+  await expect(page.getByTestId("new-chat-next")).toHaveText("Далее");
   await page.getByTestId("new-chat-next").click();
+  await expect(page.getByTestId("new-group-title")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("new-chat")).toHaveCount(0);
+  await pullChats(page);
+  await page.getByTestId("chat-search").fill(c.username);
+  await page.getByTestId("chat-search-person").first().click();
   await expect(page.getByTestId("chat-call-audio")).toBeVisible();
 });
 

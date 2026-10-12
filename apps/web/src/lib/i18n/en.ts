@@ -804,7 +804,7 @@ export const en = {
   "vibex.group.new": "New group",
   "vibex.group.write": "Write",
   "vibex.group.create": "Start the chat",
-  "vibex.group.pickHint": "Choose one person for a private chat or several for a group.",
+  "vibex.group.pickHint": "Choose the group members. A private chat starts from search or a profile.",
   "vibex.group.picture": "Group picture",
   "vibex.group.pictureHint": "Optional: JPEG, PNG or WebP",
   "vibex.group.titlePlaceholder": "Group name",

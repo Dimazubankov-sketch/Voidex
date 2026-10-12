@@ -653,6 +653,13 @@ img[data-system-asset] { pointer-events: none; }
  * once. With the dark theme of the system the apps are always dark.
  */
 .vx-app { --app-bg: var(--surface); background: var(--app-bg); }
+/* Step 2.10: chat cards in «Чаты» stand out from the app background without a border. */
+.vx-app { --chat-card: #f2f2f5; }
+.vx-chat-card { background: var(--chat-card); }
+:root[data-app-look="media"]:not([data-theme="dark"]) .vx-app,
+:root[data-app-look="notes"]:not([data-theme="dark"]) .vx-app { --chat-card: #ffffff; }
+:root[data-app-look="dark"] .vx-app,
+:root[data-theme="dark"] .vx-app { --chat-card: #1d1d27; }
 .vx-app-bg { background: var(--app-bg); }
 .vx-app .vx-settings-bg,
 .vx-app .vx-settings-nav { background: var(--app-bg); }

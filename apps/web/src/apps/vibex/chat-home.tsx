@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
-  RiArrowRightSLine,
   RiCheckLine,
   RiDeleteBinLine,
   RiEyeLine,
@@ -59,7 +58,8 @@ const ORDER_LABEL: Record<VibexChatOrder, MessageKey> = {
  *   pull more   the stories row opens: «Моя история» with + first, then
  *               everyone's, swiped sideways
  * Scrolling the list folds them back (the search stays while it has text).
- * PC: the search is always there and the stories row starts open.
+ * Step 2.10: PC works the same way (wheel up at the top opens a level, wheel
+ * down / scrolling folds it back); everything starts folded.
  */
 export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode }) {
   const t = useT();
@@ -69,7 +69,7 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
   const stories = useStories();
   const groups = stories.data ?? [];
   const order: VibexChatOrder = useVibexMe().data?.settings.chats?.order ?? "chats-first";
-  const [level, setLevel] = useState(pc ? 2 : 0);
+  const [level, setLevel] = useState(0);
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -78,7 +78,13 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
   const [preview, setPreview] = useState<VibexChatDto | null>(null);
   const [menu, setMenu] = useState<{ chat: VibexChatDto; x: number; y: number } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const shown = Math.max(level, query || focused ? 1 : 0, pc ? 1 : 0);
+  const shown = Math.max(level, query || focused ? 1 : 0);
+  const wheelAt = useRef(0);
+  /** The list is too short to scroll: a scroll up can't fold the parts, so a move up does. */
+  const cantScroll = () => {
+    const el = scroller.current;
+    return !el || el.scrollHeight - el.clientHeight < 8;
+  };
 
   // Pull-down at the top of the list (touch and mouse); a wheel up at the top does the same on PC.
   const pull = useRef<{ y: number; id: number } | null>(null);
@@ -92,16 +98,23 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
     if (!p || p.id !== e.pointerId) return;
     const dy = e.clientY - p.y;
     if (dy < 0) {
-      pull.current = null;
       setPulling(0);
+      if (dy > -24) return;
+      pull.current = null;
+      // Step 2.10: pushing up folds what is open (when the list itself has nowhere to scroll).
+      if (level > 0 && !query && !focused && cantScroll()) {
+        setLevel((l) => Math.max(0, l - 1));
+        swallowClick();
+      }
       return;
     }
     setPulling(Math.min(140, dy));
   };
   const onUp = () => {
     if (pull.current) {
+      // Step 2.10: a long pull opens everything; a short one goes one level further (search, then the stories).
       if (pulling >= PULL_STORIES) setLevel(2);
-      else if (pulling >= PULL_SEARCH) setLevel((l) => Math.max(l, 1));
+      else if (pulling >= PULL_SEARCH) setLevel((l) => Math.min(2, l + 1));
       // A pull is not a tap: the row under the finger must not open.
       if (pulling > 10) swallowClick();
     }
@@ -110,8 +123,8 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
   };
   const onScroll = () => {
     const top = scroller.current?.scrollTop ?? 0;
-    if (top > 24 && level === 2 && !pc) setLevel(1);
-    if (top > 64 && level >= 1 && !query && !focused && !pc) setLevel(0);
+    if (top > 24 && level === 2) setLevel(1);
+    if (top > 64 && level >= 1 && !query && !focused) setLevel(0);
   };
 
   const actions = {
@@ -132,7 +145,16 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
         onPointerCancel={onUp}
         onScroll={onScroll}
         onWheel={(e) => {
-          if ((scroller.current?.scrollTop ?? 0) <= 0 && e.deltaY < -20) setLevel((l) => Math.min(2, l + 1));
+          // One level per wheel gesture (a wheel sends a stream of events).
+          const now = performance.now();
+          if (now - wheelAt.current < 380 || Math.abs(e.deltaY) < 20) return;
+          if ((scroller.current?.scrollTop ?? 0) <= 0 && e.deltaY < 0) {
+            wheelAt.current = now;
+            setLevel((l) => Math.min(2, l + 1));
+          } else if (e.deltaY > 0 && level > 0 && !query && !focused && cantScroll()) {
+            wheelAt.current = now;
+            setLevel((l) => Math.max(0, l - 1));
+          }
         }}
         data-testid="chats-scroll"
       >
@@ -362,7 +384,6 @@ function Highlight({ text, q }: { text: string; q: string }) {
  */
 function ChatActions({ chat, onDone, onPreview, inPreview }: { chat: VibexChatDto; onDone: () => void; onPreview?: () => void; inPreview?: boolean }) {
   const t = useT();
-  const openChat = useVibex((s) => s.openChat);
   const push = useVibex((s) => s.push);
   const mute = useMuteChat();
   const del = useDeleteChat();
@@ -389,9 +410,8 @@ function ChatActions({ chat, onDone, onPreview, inPreview }: { chat: VibexChatDt
   );
   return (
     <div className="flex flex-col p-1.5" role="menu" aria-label={chatTitle(chat)} data-testid="chat-actions">
-      {inPreview
-        ? item("open", <RiArrowRightSLine className="size-5" />, t("vibex.chats.open"), () => (onDone(), openChat(chat.id)))
-        : onPreview && item("preview", <RiEyeLine className="size-5" />, t("vibex.chats.preview"), () => (onDone(), onPreview()))}
+      {/* Step 2.10: no «Открыть» in the preview (a tap on a message opens the chat). */}
+      {!inPreview && onPreview && item("preview", <RiEyeLine className="size-5" />, t("vibex.chats.preview"), () => (onDone(), onPreview()))}
       {item(
         "mute",
         chat.muted ? <RiNotification3Line className="size-5" /> : <RiNotificationOffLine className="size-5" />,
@@ -462,8 +482,43 @@ function ChatContextMenu({ menu, onClose, onPreview }: { menu: { chat: VibexChat
  * the list, with the actions beside them. Looking does not read: no read
  * marker moves, no receipt is sent, the unread badge stays. Tap outside closes.
  */
+/**
+ * Step 2.10: the preview's messages scroll freely (nothing is marked read, see
+ * ChatPreviewMessages). Nothing inside reacts to a touch on its own: a tap on
+ * a message or a control closes the preview and opens the real chat; players,
+ * holds and seeks never start here.
+ */
+function PreviewScroller({ children, onOpen }: { children: ReactNode; onOpen: () => void }) {
+  const down = useRef<{ x: number; y: number; t: number } | null>(null);
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      // Stopping the event on the way down keeps the messages' own handlers out; native scrolling still works.
+      onPointerDownCapture={(e) => {
+        down.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+        e.stopPropagation();
+      }}
+      onPointerUpCapture={(e) => e.stopPropagation()}
+      onContextMenuCapture={(e) => (e.preventDefault(), e.stopPropagation())}
+      onClickCapture={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const d = down.current;
+        down.current = null;
+        if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 10) return;
+        const hit = (e.target as HTMLElement).closest('[data-testid="message"], button, a, [role="button"], video, audio, img, [data-gesture-owner]');
+        if (hit) onOpen();
+      }}
+      data-testid="chat-preview-messages"
+    >
+      {children}
+    </div>
+  );
+}
+
 function ChatPreview({ chat, onClose }: { chat: VibexChatDto | null; onClose: () => void }) {
   const t = useT();
+  const openChat = useVibex((s) => s.openChat);
   const ff = useFormFactor();
   const live = useChats().data?.find((c) => c.id === chat?.id) ?? chat;
   const me = useSession((s) => s.user);
@@ -504,7 +559,9 @@ function ChatPreview({ chat, onClose }: { chat: VibexChatDto | null; onClose: ()
                   <span className="block truncate text-[12.5px] text-text-tertiary">{live.group ? t("vibex.group.members", { n: live.group.members.length }) : live.peer?.address}</span>
                 </span>
               </div>
-              <ChatPreviewMessages chat={live} />
+              <PreviewScroller onOpen={() => (onClose(), openChat(live.id))}>
+                <ChatPreviewMessages chat={live} />
+              </PreviewScroller>
             </div>
             <div className={cx("shrink-0 rounded-[22px] bg-surface shadow-window", ff === "desktop" ? "w-[248px]" : "w-full")}>
               <ChatActions chat={live} onDone={onClose} inPreview />

@@ -773,7 +773,7 @@ export const ja: Record<MessageKey, string> = {
   "vibex.group.new": "新しいグループ",
   "vibex.group.write": "メッセージ",
   "vibex.group.create": "チャットを開始",
-  "vibex.group.pickHint": "1人を選ぶと個人チャット、複数人でグループになります。",
+  "vibex.group.pickHint": "グループのメンバーを選んでください。個人チャットは検索やプロフィールから始められます。",
   "vibex.group.picture": "グループの画像",
   "vibex.group.pictureHint": "任意：JPEG、PNG、WebP",
   "vibex.group.titlePlaceholder": "グループ名",

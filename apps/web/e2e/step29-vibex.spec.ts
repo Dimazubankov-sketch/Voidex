@@ -94,6 +94,11 @@ test("«Чаты»: named Chats everywhere; sections Pinned / Chats / Groups and
     await page.mouse.down();
     for (let i = 1; i <= 6; i++) await page.mouse.move(list.x + list.width / 2, list.y + 40 + i * 12);
     await page.mouse.up();
+  } else {
+    // Step 2.10: PC starts folded too; a wheel up at the top opens the search.
+    const list = (await page.getByTestId("chats-scroll").boundingBox())!;
+    await page.mouse.move(list.x + list.width / 2, list.y + 80);
+    await page.mouse.wheel(0, -120);
   }
   await expect(page.getByTestId("chat-search")).toBeVisible();
   await page.getByTestId("chat-filter").click();
@@ -236,10 +241,9 @@ test("stories: collapsed avatars in the header, pull down for search then storie
   await launchVibex(page);
   await toChats(page);
   await expect(page.getByTestId("stories-stack")).toBeVisible();
-  if (isMobile(page)) {
-    await expect(page.getByTestId("stories-strip")).toHaveCount(0);
-    await page.getByTestId("stories-stack").click();
-  }
+  // Step 2.10: folded by default on PC too.
+  await expect(page.getByTestId("stories-strip")).toHaveCount(0);
+  await page.getByTestId("stories-stack").click();
   await expect(page.getByTestId("stories-strip")).toBeVisible();
   await expect(page.getByTestId("story-mine")).toBeVisible();
   await shot(page, `stories-strip-${isMobile(page) ? "phone" : "pc"}`);

@@ -773,7 +773,7 @@ export const es: Record<MessageKey, string> = {
   "vibex.group.new": "Nuevo grupo",
   "vibex.group.write": "Escribir",
   "vibex.group.create": "Iniciar chat",
-  "vibex.group.pickHint": "Elige una persona para un chat privado o varias para un grupo.",
+  "vibex.group.pickHint": "Elige a los miembros del grupo. Un chat privado se inicia desde la búsqueda o un perfil.",
   "vibex.group.picture": "Imagen del grupo",
   "vibex.group.pictureHint": "Opcional: JPEG, PNG o WebP",
   "vibex.group.titlePlaceholder": "Nombre del grupo",

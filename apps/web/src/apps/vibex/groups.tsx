@@ -10,7 +10,7 @@ import { useT } from "@/lib/i18n";
 import { queryClient } from "@/lib/query";
 import { Button, Spinner } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
-import { filesApi, openDirect, useChats, useFileUrl, usePeople, vk } from "./data";
+import { filesApi, useChats, useFileUrl, usePeople, vk } from "./data";
 import { useVibex } from "./store";
 import { VoidexSearchField } from "@/ui/search-field";
 
@@ -52,8 +52,8 @@ export function NewChatFab({ className, style }: { className?: string; style?: R
         className={cx("absolute z-10 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-float", className)}
         style={style}
         whileTap={{ scale: 0.94 }}
-        aria-label={t("vibex.chats.new")}
-        title={t("vibex.chats.new")}
+        aria-label={t("vibex.group.new")}
+        title={t("vibex.group.new")}
         data-testid="vibex-new-chat"
       >
         <RiPencilLine className="size-6" />
@@ -64,8 +64,9 @@ export function NewChatFab({ className, style }: { className?: string; style?: R
 }
 
 /**
- * New conversation: pick people (one → a direct chat, as before; two or more →
- * a group), then the group's name and an optional picture.
+ * New group (the pencil in «Чаты»): pick the members (search), then the
+ * group's name and an optional picture. Step 2.10: one person makes a group
+ * too; a private chat starts from search, a profile or a shared post.
  */
 export function NewChatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
@@ -106,24 +107,8 @@ export function NewChatSheet({ open, onClose }: { open: boolean; onClose: () => 
   const toggle = (p: VibexPersonDto) =>
     setPicked((x) => (x.some((y) => y.id === p.id) ? x.filter((y) => y.id !== p.id) : x.length >= VIBEX_GROUP_MEMBERS_MAX ? x : [...x, p]));
 
-  const next = async () => {
-    if (picked.length === 1) {
-      setBusy(true);
-      try {
-        const chat = await openDirect(picked[0]!.id);
-        queryClient.setQueryData(vk.chat(chat.id), chat);
-        void queryClient.invalidateQueries({ queryKey: vk.chats });
-        openChat(chat.id);
-        close(true);
-      } catch (e) {
-        toast({ title: errorMessage(t, e), tone: "danger" });
-      } finally {
-        setBusy(false);
-      }
-      return;
-    }
-    setStep("group");
-  };
+  // Step 2.10: the pencil makes a group (a private chat starts from search or a profile).
+  const next = () => setStep("group");
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
@@ -159,13 +144,13 @@ export function NewChatSheet({ open, onClose }: { open: boolean; onClose: () => 
     <Sheet
       open={open}
       onClose={() => close()}
-      title={step === "people" ? t("vibex.chats.new") : t("vibex.group.new")}
+      title={t("vibex.group.new")}
       width={520}
       testId="new-chat"
       footer={
         step === "people" ? (
-          <Button onClick={() => void next()} disabled={!picked.length} loading={busy} data-testid="new-chat-next">
-            {picked.length === 1 ? t("vibex.group.write") : t("common.next")}
+          <Button onClick={next} disabled={!picked.length} data-testid="new-chat-next">
+            {t("common.next")}
           </Button>
         ) : (
           <>

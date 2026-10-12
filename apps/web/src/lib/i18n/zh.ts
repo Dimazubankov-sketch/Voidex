@@ -773,7 +773,7 @@ export const zh: Record<MessageKey, string> = {
   "vibex.group.new": "新群组",
   "vibex.group.write": "发消息",
   "vibex.group.create": "开始聊天",
-  "vibex.group.pickHint": "选择一人进行私聊，或选择多人创建群组。",
+  "vibex.group.pickHint": "选择群组成员。私聊可从搜索或个人资料开始。",
   "vibex.group.picture": "群组头像",
   "vibex.group.pictureHint": "可选：JPEG、PNG 或 WebP",
   "vibex.group.titlePlaceholder": "群组名称",

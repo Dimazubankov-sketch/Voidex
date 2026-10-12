@@ -193,7 +193,8 @@ function DesktopVibex() {
 
       {section === "chats" && !page ? (
         <div className="flex min-w-0 flex-1">
-          <section className="relative flex shrink-0 flex-col border-r bg-surface" style={{ width: listWidth }} data-testid="vibex-chat-column">
+          {/* Step 2.10: the column is a plain surface, so the chat cards take the secondary tone on it. */}
+          <section className="relative flex shrink-0 flex-col border-r bg-surface [--chat-card:var(--surface-secondary)]" style={{ width: listWidth }} data-testid="vibex-chat-column">
             <ChatsPane
               header={(stories) => (
                 <WindowHeader menu={false}>

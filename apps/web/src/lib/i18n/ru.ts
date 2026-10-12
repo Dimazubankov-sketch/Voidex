@@ -788,7 +788,7 @@ export const ru: Record<MessageKey, string> = {
   "vibex.group.new": "Новая группа",
   "vibex.group.write": "Написать",
   "vibex.group.create": "Начать чат",
-  "vibex.group.pickHint": "Выберите одного человека для личного чата или нескольких для группы.",
+  "vibex.group.pickHint": "Выберите участников группы. Личный чат можно начать из поиска или профиля.",
   "vibex.group.picture": "Изображение группы",
   "vibex.group.pictureHint": "Необязательно: JPEG, PNG или WebP",
   "vibex.group.titlePlaceholder": "Название группы",
