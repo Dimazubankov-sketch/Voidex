@@ -1302,4 +1302,8 @@ export const zh: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "选择消息",
   "vibex.msg.menu": "消息操作",
   "vibex.msg.swipeReply": "向左滑动回复",
+  "vibex.circle.pause": "暂停录制",
+  "vibex.circle.resume": "继续录制",
+  "vibex.circle.paused": "已暂停",
+  "vibex.circle.zoom": "缩放",
 };

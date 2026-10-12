@@ -207,7 +207,8 @@ export async function recordCircle(page: Page, ms = 1500) {
   await btn.click();
   await expect(page.getByTestId("circle-recorder")).toHaveAttribute("data-state", "locked");
   await page.waitForTimeout(ms);
-  await page.getByTestId("circle-send").click();
+  // Step 2.10: the composer stays; its button on the right sends (Cancel is in its middle).
+  await btn.click();
 }
 
 /**

@@ -389,7 +389,7 @@ test("phone: one button — tap switches mic ↔ circle; hold records; slide lef
   await expect(page.getByTestId("circle-recorder")).toHaveAttribute("data-state", "locked");
   await shot(page, "circle-locked");
   await page.waitForTimeout(1200);
-  await page.getByTestId("circle-send").click();
+  await btn.click();
   await expect(page.getByTestId("circle-message")).toHaveCount(1);
   await other.context().close();
 });

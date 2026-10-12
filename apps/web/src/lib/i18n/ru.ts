@@ -1317,4 +1317,8 @@ export const ru: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "Выбрать сообщение",
   "vibex.msg.menu": "Действия с сообщением",
   "vibex.msg.swipeReply": "Смахните влево, чтобы ответить",
+  "vibex.circle.pause": "Пауза",
+  "vibex.circle.resume": "Продолжить запись",
+  "vibex.circle.paused": "На паузе",
+  "vibex.circle.zoom": "Масштаб",
 };

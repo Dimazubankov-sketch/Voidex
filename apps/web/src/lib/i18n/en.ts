@@ -1333,6 +1333,10 @@ export const en = {
   "vibex.msg.selectMessage": "Select message",
   "vibex.msg.menu": "Message actions",
   "vibex.msg.swipeReply": "Swipe left to reply",
+  "vibex.circle.pause": "Pause recording",
+  "vibex.circle.resume": "Continue recording",
+  "vibex.circle.paused": "Paused",
+  "vibex.circle.zoom": "Zoom",
 } as const;
 
 export type MessageKey = keyof typeof en;

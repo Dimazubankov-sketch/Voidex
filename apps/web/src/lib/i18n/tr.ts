@@ -1302,4 +1302,8 @@ export const tr: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "Mesajı seç",
   "vibex.msg.menu": "Mesaj işlemleri",
   "vibex.msg.swipeReply": "Yanıtlamak için sola kaydırın",
+  "vibex.circle.pause": "Kaydı duraklat",
+  "vibex.circle.resume": "Kayda devam et",
+  "vibex.circle.paused": "Duraklatıldı",
+  "vibex.circle.zoom": "Yakınlaştırma",
 };

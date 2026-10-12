@@ -1302,4 +1302,8 @@ export const de: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "Nachricht auswählen",
   "vibex.msg.menu": "Nachrichtenaktionen",
   "vibex.msg.swipeReply": "Nach links wischen zum Antworten",
+  "vibex.circle.pause": "Aufnahme pausieren",
+  "vibex.circle.resume": "Aufnahme fortsetzen",
+  "vibex.circle.paused": "Pausiert",
+  "vibex.circle.zoom": "Zoom",
 };

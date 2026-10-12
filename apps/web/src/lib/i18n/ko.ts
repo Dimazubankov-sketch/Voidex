@@ -1302,4 +1302,8 @@ export const ko: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "메시지 선택",
   "vibex.msg.menu": "메시지 작업",
   "vibex.msg.swipeReply": "왼쪽으로 밀어 답장",
+  "vibex.circle.pause": "녹화 일시정지",
+  "vibex.circle.resume": "녹화 계속",
+  "vibex.circle.paused": "일시정지됨",
+  "vibex.circle.zoom": "확대/축소",
 };

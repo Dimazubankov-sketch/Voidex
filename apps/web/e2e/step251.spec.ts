@@ -91,17 +91,13 @@ test("Vibex: a recorded voice message plays, pauses, seeks and shows its duratio
   // Tap on the video: pause; again: play.
   await big.click();
   await expect(expanded).not.toHaveAttribute("data-playing", "true");
-  // Let it end, then a tap replays from the start.
+  // Step 2.10: at the end it closes by itself (back to the small looping circle).
   await big.evaluate((v: HTMLVideoElement) => {
     v.currentTime = Math.max(0, v.duration - 0.2);
     return v.play();
   });
-  await expect(expanded).not.toHaveAttribute("data-playing", "true", { timeout: 5000 });
-  await big.click();
-  await expect(expanded).toHaveAttribute("data-playing", "true");
-  await expect.poll(() => big.evaluate((v: HTMLVideoElement) => v.currentTime)).toBeLessThan(1.5);
-  await page.getByTestId("circle-collapse").click();
-  await expect(expanded).toHaveCount(0);
+  await expect(expanded).toHaveCount(0, { timeout: 5000 });
+  await expect(circle).toBeVisible();
   await other.context().close();
 });
 

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { RiArrowLeftSLine, RiArrowUpSLine, RiCameraSwitchLine, RiDeleteBinLine, RiLock2Line, RiLockUnlockLine, RiMicLine, RiSendPlaneFill } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowUpSLine, RiCameraSwitchLine, RiDeleteBinLine, RiLock2Line, RiLockUnlockLine, RiMicLine, RiPauseFill, RiRecordCircleFill, RiSendPlaneFill } from "@remixicon/react";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
-import { CircleMessageGlyph } from "./media-bubbles";
+import { VideoMessageGlyph } from "./media-bubbles";
 import { formatDuration, recordingSupported, useRecorder, type RecordKind, type Recording } from "./recorder";
 
 /**
@@ -257,14 +257,23 @@ export function RecordButton({
         ) : mode === "voice" ? (
           <RiMicLine className="size-[19px]" />
         ) : (
-          <CircleMessageGlyph className="size-[21px]" />
+          <VideoMessageGlyph className="size-[22px]" />
         )}
       </motion.button>
       {/* The bar over the composer row (for circles the overlay shows the same). */}
       {active &&
         barHost &&
         createPortal(
-          <RecordingBar elapsed={rec.elapsed} levels={mode === "voice" ? voice.levels.current : []} state={state} dragX={drag.x} onCancel={cancel} reduced={!!reduced} />,
+          <RecordingBar
+            kind={mode}
+            elapsed={rec.elapsed}
+            paused={rec.state === "paused"}
+            levels={mode === "voice" ? voice.levels.current : []}
+            state={state}
+            dragX={drag.x}
+            onCancel={cancel}
+            reduced={!!reduced}
+          />,
           barHost,
         )}
       {mode === "circle" && active && (
@@ -273,11 +282,16 @@ export function RecordButton({
           elapsed={circle.elapsed}
           max={circle.max}
           state={state}
+          paused={circle.state === "paused"}
           dragX={drag.x}
           facing={circle.facing}
           onFlip={circle.canFlip ? () => void circle.flip() : undefined}
-          onCancel={cancel}
-          onSend={() => void send()}
+          onPause={circle.pause}
+          onResume={circle.resume}
+          zoom={circle.zoom}
+          zoomRange={circle.zoomRange}
+          onZoom={(z) => void circle.setZoom(z)}
+          barHost={barHost}
           desktop={ff === "desktop"}
         />
       )}
@@ -285,13 +299,52 @@ export function RecordButton({
   );
 }
 
-/** The composer row while recording: level, time, "‹ slide to cancel" (or Cancel when locked). */
-function RecordingBar({ elapsed, levels, state, dragX, onCancel, reduced }: { elapsed: number; levels: number[]; state: RecState; dragX: number; onCancel: () => void; reduced: boolean }) {
+/**
+ * The composer row while recording: level, time, "‹ slide to cancel" (or
+ * Cancel when locked). Step 2.10: for a video circle the composer stays in
+ * its place and, once locked, shows «Отмена» in its middle (the button on
+ * the right sends).
+ */
+function RecordingBar({
+  kind,
+  elapsed,
+  paused,
+  levels,
+  state,
+  dragX,
+  onCancel,
+  reduced,
+}: {
+  kind: RecordKind;
+  elapsed: number;
+  paused: boolean;
+  levels: number[];
+  state: RecState;
+  dragX: number;
+  onCancel: () => void;
+  reduced: boolean;
+}) {
   const t = useT();
   const locked = state === "locked";
   const bars = levels.slice(-32);
+  if (kind === "circle" && locked) {
+    return (
+      <div className="vx-glass-strong absolute inset-0 z-10 flex items-center gap-2 rounded-[26px] py-1.5 pl-3 pr-14" data-testid="voice-recording" data-state={state} data-kind="circle">
+        <span className={cx("size-2.5 shrink-0 rounded-full", paused ? "bg-text-tertiary" : "animate-pulse bg-danger")} aria-hidden />
+        <span className="w-12 shrink-0 text-[14px] tabular-nums text-text" data-testid="voice-elapsed">
+          {formatDuration(elapsed)}
+        </span>
+        <span className="flex min-w-0 flex-1 justify-center">
+          <button type="button" onClick={onCancel} className="h-10 rounded-full px-4 text-[15px] font-semibold text-primary hover:bg-surface-hover" data-testid="circle-cancel">
+            {t("common.cancel")}
+          </button>
+        </span>
+        <span className="w-12 shrink-0" aria-hidden />
+      </div>
+    );
+  }
   return (
-    <div className={cx("vx-glass-strong absolute inset-0 z-10 flex items-center gap-2 rounded-[26px] py-1.5 pl-2 pr-14", !locked && "pointer-events-none")} data-testid="voice-recording" data-state={state}>
+    <div className={cx("vx-glass-strong absolute inset-0 z-10 flex items-center gap-2 rounded-[26px] py-1.5 pl-2 pr-14", !locked && "pointer-events-none")} data-testid="voice-recording" data-state={state} data-kind={kind}>
       {locked && (
         <button type="button" onClick={onCancel} aria-label={t("vibex.voice.cancel")} className="pointer-events-auto flex size-10 shrink-0 items-center justify-center rounded-full text-danger hover:bg-danger-soft" data-testid="voice-cancel">
           <RiDeleteBinLine className="size-5" />
@@ -320,28 +373,43 @@ function RecordingBar({ elapsed, levels, state, dragX, onCancel, reduced }: { el
   );
 }
 
-/** Video circle while recording: the round camera, time, hints; locked: Cancel, Send, switch camera. */
+/**
+ * Video circle while recording: the round camera over the chat (the
+ * composer below stays visible), the time ring and hints. Locked (hands
+ * free): pause / go on, switch camera (the recording goes on), the camera's
+ * zoom when it has one. Cancel and Send are in the composer.
+ */
 function CircleCapture({
   stream,
   elapsed,
   max,
   state,
+  paused,
   dragX,
   facing,
   onFlip,
-  onCancel,
-  onSend,
+  onPause,
+  onResume,
+  zoom,
+  zoomRange,
+  onZoom,
+  barHost,
   desktop,
 }: {
   stream: MediaStream | null;
   elapsed: number;
   max: number;
   state: RecState;
+  paused: boolean;
   dragX: number;
   facing: "user" | "environment";
   onFlip?: () => void;
-  onCancel: () => void;
-  onSend: () => void;
+  onPause: () => void;
+  onResume: () => void;
+  zoom: number;
+  zoomRange: { min: number; max: number; step: number } | null;
+  onZoom: (z: number) => void;
+  barHost: HTMLElement | null;
   desktop: boolean;
 }) {
   const t = useT();
@@ -349,21 +417,31 @@ function CircleCapture({
   useEffect(() => {
     if (video.current && stream) video.current.srcObject = stream;
   }, [stream]);
+  // The chat's area above the composer (the composer itself stays usable).
+  const [area, setArea] = useState(() => areaAbove(barHost));
+  useEffect(() => {
+    const update = () => setArea(areaAbove(barHost));
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [barHost]);
   const locked = state === "locked";
-  const size = Math.min(window.innerWidth * 0.78, 340);
+  const size = Math.max(160, Math.min(area.width * 0.78, area.height - 150, 340));
   const r = size / 2 + 6;
   const c = 2 * Math.PI * r;
   return createPortal(
     <motion.div
-      className={cx("fixed inset-0 z-[280] flex flex-col items-center justify-center gap-6 bg-[rgba(12,12,20,0.78)] backdrop-blur-md", !locked && "pointer-events-none")}
+      className={cx("fixed z-[280] flex flex-col items-center justify-center gap-5 bg-[rgba(12,12,20,0.72)] backdrop-blur-md", !locked && "pointer-events-none")}
+      style={{ left: area.left, top: area.top, width: area.width, height: area.height }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       role="dialog"
-      aria-modal="true"
       aria-label={t("vibex.circle.recording")}
       data-testid="circle-recorder"
       data-state={state}
+      data-paused={paused || undefined}
+      data-facing={facing}
     >
       <div className="relative" style={{ width: size + 16, height: size + 16 }}>
         <svg className="absolute inset-0 -rotate-90" width={size + 16} height={size + 16} aria-hidden>
@@ -372,24 +450,52 @@ function CircleCapture({
         </svg>
         <video ref={video} autoPlay muted playsInline className={cx("absolute left-2 top-2 rounded-full bg-black object-cover", facing === "user" && "[transform:scaleX(-1)]")} style={{ width: size, height: size }} />
         {!stream && <Spinner className="absolute inset-0 m-auto text-white" />}
+        {paused && (
+          <span className="absolute inset-0 m-auto flex h-9 w-fit items-center rounded-full bg-black/55 px-4 text-[14px] font-medium text-white" data-testid="circle-paused-label">
+            {t("vibex.circle.paused")}
+          </span>
+        )}
       </div>
-      <span className="flex items-center gap-2 text-[15px] tabular-nums text-white">
-        <span className="size-2.5 animate-pulse rounded-full bg-danger" aria-hidden />
+      <span className="flex items-center gap-2 text-[15px] tabular-nums text-white" data-testid="circle-elapsed">
+        <span className={cx("size-2.5 rounded-full", paused ? "bg-white/50" : "animate-pulse bg-danger")} aria-hidden />
         {formatDuration(elapsed)} / {formatDuration(max)}
       </span>
       {locked ? (
-        <div className="flex items-center gap-5">
-          <button type="button" onClick={onCancel} className="h-12 rounded-full bg-white/12 px-5 text-[15px] font-medium text-white hover:bg-white/20" data-testid="circle-cancel">
-            {t("common.cancel")}
-          </button>
-          {onFlip && (
-            <button type="button" onClick={onFlip} aria-label={t("vibex.circle.flip")} title={t("vibex.circle.flip")} className="flex size-12 items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20" data-testid="circle-flip">
-              <RiCameraSwitchLine className="size-6" />
-            </button>
+        <div className="flex flex-col items-center gap-4">
+          {zoomRange && (
+            <label className="flex w-[220px] items-center gap-3 text-[13px] tabular-nums text-white">
+              <span className="sr-only">{t("vibex.circle.zoom")}</span>
+              <input
+                type="range"
+                min={zoomRange.min}
+                max={zoomRange.max}
+                step={zoomRange.step}
+                value={zoom}
+                onChange={(e) => onZoom(Number(e.target.value))}
+                className="h-1 flex-1 accent-[#8b7bff]"
+                aria-label={t("vibex.circle.zoom")}
+                data-testid="circle-zoom"
+              />
+              <span className="w-10 text-right">{zoom.toFixed(1)}×</span>
+            </label>
           )}
-          <button type="button" onClick={onSend} aria-label={t("vibex.chat.send")} className="flex size-14 items-center justify-center rounded-full bg-primary text-white" data-testid="circle-send">
-            <RiSendPlaneFill className="size-6" />
-          </button>
+          <div className="flex items-center gap-5">
+            <button
+              type="button"
+              onClick={paused ? onResume : onPause}
+              aria-label={t(paused ? "vibex.circle.resume" : "vibex.circle.pause")}
+              title={t(paused ? "vibex.circle.resume" : "vibex.circle.pause")}
+              className="flex size-12 items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20"
+              data-testid={paused ? "circle-resume" : "circle-pause"}
+            >
+              {paused ? <RiRecordCircleFill className="size-6 text-danger" /> : <RiPauseFill className="size-6" />}
+            </button>
+            {onFlip && (
+              <button type="button" onClick={onFlip} aria-label={t("vibex.circle.flip")} title={t("vibex.circle.flip")} className="flex size-12 items-center justify-center rounded-full bg-white/12 text-white hover:bg-white/20" data-testid="circle-flip">
+                <RiCameraSwitchLine className="size-6" />
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <span className={cx("flex items-center gap-1 text-[14px]", state === "cancel-zone" ? "text-danger" : "text-white/80")} style={{ transform: `translateX(${dragX * 0.6}px)` }}>
@@ -403,4 +509,12 @@ function CircleCapture({
     </motion.div>,
     document.body,
   );
+}
+
+/** The part of the chat above the composer (the whole window without one). */
+function areaAbove(bar: HTMLElement | null) {
+  const chat = bar?.closest<HTMLElement>('[data-testid="conversation"]')?.getBoundingClientRect();
+  const row = bar?.getBoundingClientRect();
+  if (!chat || !row) return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  return { left: chat.left, top: chat.top, width: chat.width, height: Math.max(220, row.top - 8 - chat.top) };
 }

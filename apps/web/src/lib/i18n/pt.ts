@@ -1302,4 +1302,8 @@ export const pt: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "Selecionar mensagem",
   "vibex.msg.menu": "Ações da mensagem",
   "vibex.msg.swipeReply": "Deslize para a esquerda para responder",
+  "vibex.circle.pause": "Pausar gravação",
+  "vibex.circle.resume": "Continuar gravação",
+  "vibex.circle.paused": "Em pausa",
+  "vibex.circle.zoom": "Zoom",
 };

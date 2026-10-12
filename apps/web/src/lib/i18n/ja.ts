@@ -1302,4 +1302,8 @@ export const ja: Record<MessageKey, string> = {
   "vibex.msg.selectMessage": "メッセージを選択",
   "vibex.msg.menu": "メッセージの操作",
   "vibex.msg.swipeReply": "左にスワイプして返信",
+  "vibex.circle.pause": "録画を一時停止",
+  "vibex.circle.resume": "録画を再開",
+  "vibex.circle.paused": "一時停止中",
+  "vibex.circle.zoom": "ズーム",
 };
