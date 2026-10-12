@@ -262,7 +262,9 @@ test("vibex: the VOIDEX session is the identity (no Vibex sign-in); comments bot
   // Sidebar: dense sections, Vibex's own settings; no account switch / sign-out, no Plus / analytics.
   if (isMobile(page)) await page.getByTestId("vibex-menu").click();
   const sidebar = page.getByTestId("vibex-sidebar");
-  for (const id of ["vibex-nav-feed", "vibex-nav-me", "vibex-nav-chats", "vibex-nav-people", "vibex-nav-bookmarks", "vibex-nav-history", "vibex-nav-settings", "vibex-me"]) await expect(sidebar.getByTestId(id)).toBeVisible();
+  for (const id of ["vibex-nav-feed", "vibex-nav-me", "vibex-nav-chats", "vibex-nav-people", "vibex-nav-history", "vibex-nav-settings", "vibex-me"]) await expect(sidebar.getByTestId(id)).toBeVisible();
+  // Step 2.9: «Закладки» lives inside «История», not as its own item.
+  await expect(sidebar.getByTestId("vibex-nav-bookmarks")).toHaveCount(0);
   await expect(sidebar.getByTestId("vibex-switch-account")).toHaveCount(0);
   await expect(sidebar.getByTestId("vibex-sign-out")).toHaveCount(0);
   await expect(sidebar).not.toContainText(/Plus|Premium|Аналитика|Монетизация|Тёмная|Поддержка/);
