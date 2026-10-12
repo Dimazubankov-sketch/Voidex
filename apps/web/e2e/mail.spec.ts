@@ -58,9 +58,11 @@ test("internal mail: compose with autosave, deliver in real time, reply, archive
 
   // Search.
   if (mobile) await page.getByLabel("Поиск в почте").click();
-  await page.getByTestId("mail-search").fill("квартал");
+  // Step 2.10: on phones the search is the round button that grows into the field (as in the Vibex feed).
+  const search = page.getByTestId(mobile ? "mail-search-bar-input" : "mail-search");
+  await search.fill("квартал");
   await expect(page.getByTestId("thread-row")).toHaveCount(1);
-  await page.getByTestId("mail-search").fill("нет-такого-письма");
+  await search.fill("нет-такого-письма");
   await expect(page.getByText("Ничего не найдено")).toBeVisible();
   void alice;
 });

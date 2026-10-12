@@ -1,13 +1,15 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { animate } from "motion/react";
 import { LEFT_EDGE_PX, inTopEdge } from "@/os/metrics";
-import { DRAWER_WIDTH, drawerProgress } from "./sidebar";
+import type { MotionValue } from "motion/react";
 
 const ENGAGE_PX = 12;
 
 /**
- * Phones: a swipe from the LEFT EDGE of the app opens the Vibex side menu,
- * following the finger (the drawer closes with a swipe to the left).
+ * Phones: a swipe from the LEFT EDGE of the app opens its side drawer
+ * (PushDrawer), following the finger; the drawer closes with a swipe to the
+ * left. Step 2.10: shared by Vibex and Mail. Past ~35 % of the drawer (or a
+ * quick flick) it opens; a small move puts it back.
  *
  * Priority (see os/notifications/gesture.ts): a touch from the top edge is the
  * Notification Center's; only touches starting within LEFT_EDGE_PX of the
@@ -16,7 +18,10 @@ const ENGAGE_PX = 12;
  * from the edge) and the browser's own back gesture (which starts outside the
  * page, at the screen edge on iOS) are left alone.
  */
-export function useEdgeSwipe(root: RefObject<HTMLElement | null>, opts: { enabled: boolean; onOpen: () => void }) {
+export function useEdgeSwipe(
+  root: RefObject<HTMLElement | null>,
+  opts: { enabled: boolean; onOpen: () => void; progress: MotionValue<number>; width: number },
+) {
   const o = useRef(opts);
   o.current = opts;
   useEffect(() => {
@@ -45,7 +50,9 @@ export function useEdgeSwipe(root: RefObject<HTMLElement | null>, opts: { enable
         if (dx < ENGAGE_PX || dx < Math.abs(dy) * 1.3) return;
         active.engaged = true;
       }
-      drawerProgress.set(Math.max(0, Math.min(1, dx / DRAWER_WIDTH)));
+      const p = o.current.progress;
+      // The drawer is never wider than 84 % of the app (see PushDrawer).
+      p.set(Math.max(0, Math.min(1, dx / Math.min(o.current.width, el.clientWidth * 0.84))));
     };
     const up = (e: PointerEvent) => {
       if (!active || e.pointerId !== active.id) return;
@@ -55,8 +62,8 @@ export function useEdgeSwipe(root: RefObject<HTMLElement | null>, opts: { enable
       swallow = true;
       window.setTimeout(() => (swallow = false), 350);
       const v = (e.clientX - a.x) / Math.max(1, performance.now() - a.t);
-      if (drawerProgress.get() > 0.35 || v > 0.6) o.current.onOpen();
-      else void animate(drawerProgress, 0, { duration: 0.2 });
+      if (o.current.progress.get() > 0.35 || v > 0.6) o.current.onOpen();
+      else void animate(o.current.progress, 0, { duration: 0.2 });
     };
     const touchMove = (e: TouchEvent) => {
       if (active?.engaged && e.cancelable) e.preventDefault();

@@ -22,10 +22,10 @@ import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
 import { HistoryScreen, PeopleResults, PeopleSection, PostPage } from "./people";
-import { ExpandingSearch } from "./expanding-search";
+import { ExpandingSearch } from "@/ui/expanding-search";
 import { MePage, PersonPage } from "./profile";
 import { VibexSettingsScreen } from "./settings";
-import { useEdgeSwipe } from "./edge-swipe";
+import { useEdgeSwipe } from "@/ui/edge-swipe";
 import { ShareSheet } from "./share-sheet";
 import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
 import { PushDrawer } from "@/ui/push-drawer";
@@ -109,7 +109,7 @@ function FeedSearch() {
   const open = useVibex((s) => s.feedSearch);
   const q = useVibex((s) => s.feedQuery);
   const set = useVibex((s) => s.setFeedSearch);
-  return <ExpandingSearch open={open} value={q} onOpen={() => set(true)} onChange={(v) => set(true, v)} onClose={() => set(false)} placeholder={t("vibex.people.search")} />;
+  return <ExpandingSearch open={open} value={q} onOpen={() => set(true)} onChange={(v) => set(true, v)} onClose={() => set(false)} placeholder={t("vibex.people.search")} openLabel={t("vibex.nav.search")} closeLabel={t("vibex.search.close")} />;
 }
 
 function SectionBody({ section }: { section: VibexSection }) {
@@ -259,7 +259,7 @@ function MobileVibex() {
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
   const root = useRef<HTMLDivElement>(null);
   // Swipe from the left edge opens the side menu (only on the main screens, not over a chat / page).
-  useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true) });
+  useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true), progress: drawerProgress, width: DRAWER_WIDTH });
 
   // Step 2.9: a new post is the floating "+" (feed and profile), like the pencil in «Чаты».
   const tabs = [
@@ -296,23 +296,30 @@ function MobileVibex() {
           </button>
         </WindowHeader>
       ) : section === "chats" ? null : (
-        <WindowHeader className="border-b bg-surface">
-          <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
+        // Step 2.10: the title is centred on the whole header (not in the space left between the buttons).
+        <WindowHeader className="relative border-b bg-surface">
+          <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="relative z-[1] shrink-0 rounded-full" data-testid="vibex-menu">
             <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
           </button>
+          <span
+            className={cx(
+              "pointer-events-none absolute left-1/2 top-1/2 max-w-[calc(100%-128px)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[17px] font-bold transition-opacity",
+              section === "feed" && feedSearch && "opacity-0",
+            )}
+            data-testid="vibex-header-title"
+          >
+            {t(SECTION_TITLE[section])}
+          </span>
           {section === "feed" ? (
             // Step 2.9: the search button grows into the field over the title, in place.
             <span className="relative flex h-10 min-w-0 flex-1 items-center">
-              <span className={cx("flex-1 truncate pl-10 text-center text-[17px] font-bold transition-opacity", feedSearch && "opacity-0")}>{t(SECTION_TITLE[section])}</span>
               <FeedSearch />
             </span>
-          ) : (
-            <>
-              <span className="flex-1 truncate text-center text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
-              <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search">
-                <RiSearchLine className="size-5" />
-              </IconButton>
-            </>
+          ) : section === "history" || section === "bookmarks" ? null : (
+            // Step 2.10: «История» has no search button.
+            <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search" className="relative z-[1] ml-auto">
+              <RiSearchLine className="size-5" />
+            </IconButton>
           )}
         </WindowHeader>
       )}

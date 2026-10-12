@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { RiArrowLeftSLine, RiCloseLine, RiMenuLine, RiPencilLine, RiSearchLine } from "@remixicon/react";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion, useMotionValue } from "motion/react";
+import { RiArrowLeftSLine, RiCloseLine, RiMenuLine, RiPencilLine } from "@remixicon/react";
 import { cx } from "@/lib/cx";
 import { PushDrawer } from "@/ui/push-drawer";
+import { useEdgeSwipe } from "@/ui/edge-swipe";
+import { ExpandingSearch } from "@/ui/expanding-search";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
@@ -155,8 +157,25 @@ function MobileMail() {
   const setDrawer = useMail((s) => s.setDrawer);
   const compose = useMail((s) => s.compose);
   const query = useMail((s) => s.query);
+  const setQuery = useMail((s) => s.setQuery);
   const [searching, setSearching] = useState(!!query);
+  const [text, setText] = useState(query);
   const me = useSession((s) => s.user)!;
+  // Step 2.10: the search is the round button that grows into the field in place (the Vibex feed's one).
+  useEffect(() => {
+    const id = window.setTimeout(() => text.trim() !== query && setQuery(text.trim()), 300);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
+  const closeSearch = () => {
+    setText("");
+    setQuery("");
+    setSearching(false);
+  };
+  // Step 2.10: a swipe from the left edge pulls the folders drawer out with the finger (as in Vibex).
+  const root = useRef<HTMLDivElement>(null);
+  const drawerProgress = useMotionValue(0);
+  useEdgeSwipe(root, { enabled: !drawer && !threadId, onOpen: () => setDrawer(true), progress: drawerProgress, width: 300 });
 
   // Step 2.9: the system side drawer (the folders lie under the screen, which slides right over them; no dimming).
   const folders = (
@@ -178,28 +197,28 @@ function MobileMail() {
   );
 
   return (
-    <PushDrawer open={drawer} onClose={() => setDrawer(false)} menu={folders} width={300} testId="mail-drawer-root">
+    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    <PushDrawer open={drawer} onClose={() => setDrawer(false)} menu={folders} width={300} progress={drawerProgress} testId="mail-drawer-root">
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       <WindowHeader>
-        {searching ? (
-          <>
-            <MailSearch autoFocus />
-            <IconButton label={t("common.close")} onClick={() => setSearching(false)}>
-              <RiCloseLine className="size-5" />
-            </IconButton>
-          </>
-        ) : (
-          <>
-            <IconButton label={t("mail.folders")} onClick={() => setDrawer(true)} data-testid="mail-drawer">
-              <RiMenuLine className="size-5" />
-            </IconButton>
+        <IconButton label={t("mail.folders")} onClick={() => setDrawer(true)} data-testid="mail-drawer">
+          <RiMenuLine className="size-5" />
+        </IconButton>
+        <span className="relative flex h-10 min-w-0 flex-1 items-center">
+          <span className={cx("min-w-0 truncate transition-opacity", searching && "opacity-0")}>
             <FolderTitle />
-            <span className="flex-1" />
-            <IconButton label={t("mail.search")} onClick={() => setSearching(true)}>
-              <RiSearchLine className="size-5" />
-            </IconButton>
-          </>
-        )}
+          </span>
+          <ExpandingSearch
+            open={searching}
+            value={text}
+            onOpen={() => setSearching(true)}
+            onChange={setText}
+            onClose={closeSearch}
+            placeholder={t("mail.search")}
+            openLabel={t("mail.search")}
+            testId="mail-search-bar"
+          />
+        </span>
       </WindowHeader>
       <SelectionBar />
       <div className="scroll-area flex-1 pb-24">
@@ -247,5 +266,6 @@ function MobileMail() {
       </AnimatePresence>
     </div>
     </PushDrawer>
+    </div>
   );
 }

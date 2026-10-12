@@ -8,6 +8,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 /**
  * Step 2.9 — the feed's search (shaped like the Media / Files search).
+ * Step 2.10: shared by every header that has one (Vibex feed, Mail).
  *
  * At rest a round outlined magnifier button at the right of the header. A
  * tap grows it, in its own place, into a search field over the header's free
@@ -21,6 +22,8 @@ export function ExpandingSearch({
   onChange,
   onClose,
   placeholder,
+  openLabel,
+  closeLabel,
   testId = "vibex-feed-search",
 }: {
   open: boolean;
@@ -29,10 +32,14 @@ export function ExpandingSearch({
   onChange: (v: string) => void;
   onClose: () => void;
   placeholder: string;
+  openLabel?: string;
+  closeLabel?: string;
   testId?: string;
 }) {
   const t = useT();
   const reduced = useReducedMotion();
+  const openText = openLabel ?? t("common.search");
+  const closeText = closeLabel ?? t("common.close");
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (open) window.setTimeout(() => input.current?.focus(), reduced ? 0 : 180);
@@ -71,8 +78,8 @@ export function ExpandingSearch({
                 e.stopPropagation();
                 onClose();
               }}
-              aria-label={t("vibex.search.close")}
-              title={t("vibex.search.close")}
+              aria-label={closeText}
+              title={closeText}
               className="mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary hover:bg-surface-hover"
               data-testid={`${testId}-close`}
             >
@@ -80,7 +87,7 @@ export function ExpandingSearch({
             </button>
           </>
         ) : (
-          <button type="button" className="flex size-10 shrink-0 items-center justify-center text-text" aria-label={t("vibex.nav.search")} title={t("vibex.nav.search")} data-testid={`${testId}-open`}>
+          <button type="button" className="flex size-10 shrink-0 items-center justify-center text-text" aria-label={openText} title={openText} data-testid={`${testId}-open`}>
             <RiSearchLine className="size-[20px]" />
           </button>
         )}
