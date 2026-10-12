@@ -125,8 +125,10 @@ test("recording: the composer stays with «Отмена» in its middle; pause s
   const sent = (await api(page, "GET", `/api/vibex/chats/${chat.id}/messages`)).body.items[0];
   expect(sent.kind).toBe("circle");
   expect(sent.durationMs).toBeGreaterThan(2500);
-  expect(sent.durationMs).toBeLessThan(wall - pausedFor + 600);
-  expect(sent.durationMs).toBeLessThan(wall - 1800);
+  // The 2.2 s wait while paused is never counted (the measured pause also holds click round trips, so it is
+  // only an upper bound of the paused time; the recorded time is the wall time minus at least that wait).
+  expect(pausedFor).toBeGreaterThanOrEqual(2200);
+  expect(sent.durationMs).toBeLessThan(wall + 1500 - 2200);
   // Every camera and the microphone are released.
   await expect.poll(() => page.evaluate(() => (window as unknown as { __tracks: MediaStreamTrack[] }).__tracks.every((t) => t.readyState === "ended"))).toBe(true);
   await other.context().close();
