@@ -10,6 +10,10 @@ import {
   VibexPeopleQuerySchema,
   VibexPinsSchema,
   VibexSendMessageSchema,
+  VibexEditMessageSchema,
+  VibexDeleteMessagesSchema,
+  VibexForwardSchema,
+  VibexPinMessageSchema,
   VibexShareSchema,
   VibexCommentSchema,
   VibexEditPostSchema,
@@ -158,6 +162,30 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
 
   /** Step 2.5: the sender deletes their message for everyone. */
   app.delete("/messages/:id", limit(120), async (req) => vibex.deleteMessage(req.auth!.userId, parse(idParam, req.params).id));
+  // Step 2.10: edit, delete several (for me / for everyone), forward, pin.
+  app.patch("/messages/:id", limit(120), async (req) => vibex.editMessage(req.auth!.userId, parse(idParam, req.params).id, parse(VibexEditMessageSchema, req.body).text));
+  app.post("/messages/delete", limit(60), async (req) => {
+    const body = parse(VibexDeleteMessagesSchema, req.body);
+    return vibex.deleteMessages(req.auth!.userId, body.ids, body.scope);
+  });
+  app.post("/messages/forward", limit(30), async (req) => {
+    const body = parse(VibexForwardSchema, req.body);
+    return vibex.forward(req.auth!.userId, body.messageIds, body.conversationIds);
+  });
+  app.put("/chats/:id/pin", limit(60), async (req) => vibex.pinMessage(req.auth!.userId, parse(idParam, req.params).id, parse(VibexPinMessageSchema, req.body).messageId));
+
+  // Step 2.10: the activity tab (read on the server) and the Search tab.
+  app.get("/activity", async (req) => {
+    const q = parse(VibexCursorQuerySchema, req.query);
+    return vibex.activity(req.auth!.userId, q.before, q.limit);
+  });
+  app.get("/activity/count", async (req) => vibex.activityCount(req.auth!.userId));
+  app.post("/activity/read", limit(120), async (req) => vibex.readActivity(req.auth!.userId));
+  app.get("/search", limit(240), async (req) => vibex.search(req.auth!.userId, parse(VibexPeopleQuerySchema, req.query).q));
+  app.get("/explore", async (req) => {
+    const q = parse(VibexCursorQuerySchema, req.query);
+    return vibex.explore(req.auth!.userId, q.before, q.limit);
+  });
 
   app.post("/chats/:id/read", async (req) => vibex.read(req.auth!.userId, parse(idParam, req.params).id));
 

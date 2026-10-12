@@ -93,6 +93,10 @@ export interface VibexMessageDto {
   createdAt: string;
   /** Step 2.6: a Voidex Notes file card (opening it checks access in Notes). */
   notesCard?: NotesCardDto | null;
+  /** Step 2.10: the sender changed the text (when). */
+  editedAt?: string | null;
+  /** Step 2.10: a forwarded copy: who wrote the original. */
+  forwardedFrom?: { id: string; name: string } | null;
 }
 
 /** Step 2.4: a group chat (several people, a name, an optional picture). */
@@ -124,6 +128,10 @@ export interface VibexChatDto {
   muted?: boolean;
   /** Step 2.9: I may delete it for everyone (direct chats: either person; groups: the owner). */
   canDeleteForAll?: boolean;
+  /** Step 2.10: the message pinned at the top of the chat. */
+  pinnedMessage?: { id: string; senderId: string; text: string; kind: VibexMessageKind } | null;
+  /** Step 2.10: I may pin a message (direct chats: either person; groups: the owner). */
+  canPin?: boolean;
 }
 
 export interface VibexHistoryItemDto {
@@ -433,4 +441,59 @@ export function chatSections<T extends Pick<VibexChatDto, "kind" | "pinnedPositi
 export function wrapIndex(i: number, n: number): number {
   if (n <= 0) return 0;
   return ((i % n) + n) % n;
+}
+
+// ------------------------------------------------------------------ Step 2.10
+
+/** Step 2.10: the sender edits a text message. */
+export const VibexEditMessageSchema = z.object({ text: z.string().trim().min(1).max(VIBEX_MESSAGE_MAX) });
+
+/** Step 2.10: delete several messages: "me" (any message, from my history) or "all" (my own only). */
+export const VibexDeleteMessagesSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+  scope: z.enum(["me", "all"]),
+});
+
+/** Step 2.10: forward messages (in their order) to one or more chats. */
+export const VibexForwardSchema = z.object({
+  messageIds: z.array(z.string().uuid()).min(1).max(100),
+  conversationIds: z.array(z.string().uuid()).min(1).max(20),
+});
+
+/** Step 2.10: pin a message at the top of the chat (null: unpin). */
+export const VibexPinMessageSchema = z.object({ messageId: z.string().uuid().nullable() });
+
+/** Step 2.10: what the Vibex activity tab shows. */
+export const VIBEX_ACTIVITY_TYPES = ["follow", "like", "repost", "comment", "reply", "group", "post", "story"] as const;
+export type VibexActivityType = (typeof VIBEX_ACTIVITY_TYPES)[number];
+
+export interface VibexActivityDto {
+  id: string;
+  type: VibexActivityType;
+  /** Who did it. */
+  actor: VibexPersonDto;
+  createdAt: string;
+  read: boolean;
+  /** I follow the actor (the «Подписаться» button hides). */
+  following: boolean;
+  postId: string | null;
+  /** The post's first picture / video (thumbnail), its text otherwise. */
+  postMedia: { fileId: string; kind: "image" | "video" } | null;
+  postText: string;
+  chatId: string | null;
+  chatTitle: string | null;
+  storyId: string | null;
+  commentId: string | null;
+}
+
+export interface VibexActivityPageDto {
+  items: VibexActivityDto[];
+  next: string | null;
+  unread: number;
+}
+
+/** Step 2.10: the Search tab (people first: exact address, then names; then posts). */
+export interface VibexSearchDto {
+  people: VibexPersonDto[];
+  posts: VibexPostDto[];
 }

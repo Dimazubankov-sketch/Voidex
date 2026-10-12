@@ -466,6 +466,8 @@ export const vibexConversations = pgTable(
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     lastMessageAt: ts("last_message_at").notNull().defaultNow(),
+    /** Step 2.10: the message pinned at the top of the chat (for everyone in it). */
+    pinnedMessageId: uuid("pinned_message_id").references((): AnyPgColumn => vibexMessages.id, { onDelete: "set null" }),
   },
   (t) => [uniqueIndex("vibex_conversations_direct_uq").on(t.directKey)],
 );
@@ -548,8 +550,27 @@ export const vibexMessages = pgTable(
     deletedAt: ts("deleted_at"),
     /** Step 2.6: a Voidex Notes share card (link to a note / presentation / project). */
     notesCard: jsonb("notes_card").$type<NotesCardDto>(),
+    /** Step 2.10: the sender changed the text (when). */
+    editedAt: ts("edited_at"),
+    /** Step 2.10: a forwarded copy: who wrote the original. */
+    forwardedFromId: uuid("forwarded_from_id").references(() => users.id, { onDelete: "set null" }),
   },
   (t) => [index("vibex_messages_conversation_idx").on(t.conversationId, t.createdAt)],
+);
+
+/** Step 2.10: a message deleted "for me" (the others keep it). */
+export const vibexMessageHides = pgTable(
+  "vibex_message_hides",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => vibexMessages.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ name: "vibex_message_hides_pk", columns: [t.messageId, t.userId] }), index("vibex_message_hides_user_idx").on(t.userId)],
 );
 
 /** Files of chat messages and pictures of posts; the bytes live in `blobs`. */
@@ -911,4 +932,31 @@ export const notifications = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
+);
+
+/**
+ * Step 2.10: the Vibex activity tab («Уведомления» in Vibex, apart from the
+ * system Notification Center): new followers, likes, reposts, comments,
+ * being added to a group, a followed person's new post or story. Read per
+ * person on the server.
+ */
+export const vibexActivity = pgTable(
+  "vibex_activity",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    actorId: uuid("actor_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type", { enum: ["follow", "like", "repost", "comment", "reply", "group", "post", "story"] }).notNull(),
+    postId: uuid("post_id").references(() => vibexPosts.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").references(() => vibexConversations.id, { onDelete: "cascade" }),
+    storyId: uuid("story_id").references(() => vibexStories.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id"),
+    createdAt: createdAt(),
+    readAt: ts("read_at"),
+  },
+  (t) => [index("vibex_activity_user_idx").on(t.userId, t.createdAt)],
 );

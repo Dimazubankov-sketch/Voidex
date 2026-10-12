@@ -251,6 +251,10 @@ export type ServerEvent =
   | { type: "vibex.feed"; postId?: string }
   /** Step 2.5 Vibex: a chat message was deleted by its sender (the chat shows a placeholder). */
   | { type: "vibex.message.deleted"; conversationId: string; messageId: string }
+  /** Step 2.10 Vibex: a message was edited (or its chat's pinned message changed). */
+  | { type: "vibex.message.updated"; conversationId: string; messageId: string }
+  /** Step 2.10 Vibex: the activity tab changed (new item or read elsewhere). */
+  | { type: "vibex.activity"; unread: number }
   /** Step 2.6 Notes: a document was saved (by me on another device, or by a co-editor). */
   | { type: "notes.document.updated"; documentId: string; projectId: string; revision: number; byUserId: string; byName: string }
   /** Step 2.6 Notes: the owner removed my access — close the document / project now. */
