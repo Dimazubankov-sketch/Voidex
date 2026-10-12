@@ -74,6 +74,9 @@ async function gestureBar(page: Page, dx: number, dy: number) {
   await page.mouse.up();
 }
 
+/** Step 2.9: an upward drag past 40% of the screen height goes home at any speed (shorter / slower is the switcher). */
+const homeUp = (page: Page) => -Math.round((page.viewportSize()?.height ?? 844) * 0.55);
+
 async function frontApp(page: Page) {
   return page.locator('section[data-state="open"]').getAttribute("data-testid");
 }
@@ -104,7 +107,7 @@ test("Files: preinstalled; its structure; an honest cloud state (no quota); a .t
   expect(up.status).toBe(201);
   const chats = (await api(other, "GET", "/api/vibex/chats")).body;
   expect((await api(other, "POST", `/api/vibex/chats/${chats[0].id}/messages`, { text: "Держи", fileIds: [up.body.id] })).status).toBe(201);
-  if (isMobile(page)) await gestureBar(page, 0, -260);
+  if (isMobile(page)) await gestureBar(page, 0, homeUp(page));
   await openChat(page);
   await page.getByTestId("vibex-file-open-files").last().click();
   await expect(page.locator('[data-testid="window-files"][data-state="open"]')).toBeVisible();
@@ -255,7 +258,7 @@ test("phone: the gesture bar switches between three open apps sideways; no syste
     await openApp(page, id);
     await expect(page.locator('section[data-state="open"] [data-testid="window-menu"]')).toHaveCount(0);
     if (id !== "settings") {
-      await gestureBar(page, 0, -260);
+      await gestureBar(page, 0, homeUp(page));
       await expect(page.locator('section[data-state="open"]')).toHaveCount(0);
     }
   }
@@ -272,7 +275,7 @@ test("phone: the gesture bar switches between three open apps sideways; no syste
   await gestureBar(page, -160, 0);
   await expect.poll(() => frontApp(page)).toBe("window-files");
   // Up still goes home; no browser history was written.
-  await gestureBar(page, 0, -260);
+  await gestureBar(page, 0, homeUp(page));
   await expect(page.locator('section[data-state="open"]')).toHaveCount(0);
   expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(2);
 });
