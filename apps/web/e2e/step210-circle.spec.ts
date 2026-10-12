@@ -84,6 +84,7 @@ test("recording: the composer stays with «Отмена» in its middle; pause s
   await fakeDevices(page);
   const { other, chat } = await openChat(page, browser);
   const btn = await startLockedCircle(page);
+  const startedAt = Date.now();
   const rec = page.getByTestId("circle-recorder");
   // The camera covers the chat only above the composer; the composer shows «Отмена» in its middle.
   const row = (await page.getByTestId("composer-row").boundingBox())!;
@@ -95,12 +96,14 @@ test("recording: the composer stays with «Отмена» in its middle; pause s
 
   // Pause: the time stands still, then goes on from there.
   await page.waitForTimeout(1300);
+  const pausedAt = Date.now();
   await page.getByTestId("circle-pause").click();
   await expect(rec).toHaveAttribute("data-paused", "true");
   const atPause = secs(await page.getByTestId("voice-elapsed").innerText());
   await page.waitForTimeout(2200);
   expect(secs(await page.getByTestId("voice-elapsed").innerText())).toBe(atPause);
   await page.getByTestId("circle-resume").click();
+  const pausedFor = Date.now() - pausedAt;
   await expect(rec).not.toHaveAttribute("data-paused", "true");
 
   // Switch camera: the same recording goes on (the time is not reset).
@@ -115,13 +118,15 @@ test("recording: the composer stays with «Отмена» in its middle; pause s
   // No zoom on this camera: no control.
   await expect(page.getByTestId("circle-zoom")).toHaveCount(0);
 
-  // Send: one circle, its length without the pause (≈ 3.3 s recorded of ≈ 5.5 s).
+  // Send: one circle; its length leaves the pause out (wall time minus the pause, give or take the clicks).
+  const wall = Date.now() - startedAt;
   await btn.click();
   await expect(page.getByTestId("circle-message")).toHaveCount(1);
   const sent = (await api(page, "GET", `/api/vibex/chats/${chat.id}/messages`)).body.items[0];
   expect(sent.kind).toBe("circle");
   expect(sent.durationMs).toBeGreaterThan(2500);
-  expect(sent.durationMs).toBeLessThan(4800);
+  expect(sent.durationMs).toBeLessThan(wall - pausedFor + 600);
+  expect(sent.durationMs).toBeLessThan(wall - 1800);
   // Every camera and the microphone are released.
   await expect.poll(() => page.evaluate(() => (window as unknown as { __tracks: MediaStreamTrack[] }).__tracks.every((t) => t.readyState === "ended"))).toBe(true);
   await other.context().close();

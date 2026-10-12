@@ -307,7 +307,11 @@ function HomeIndicator() {
         // The switcher card shows exactly this screen.
         if (fg) captureWindow(fg);
         start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId, axis: null, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
-        e.currentTarget.setPointerCapture(e.pointerId);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          /* a synthetic pointer (tests, assistive tech): nothing to capture */
+        }
       }}
       onPointerMove={(e) => {
         const s0 = start.current;

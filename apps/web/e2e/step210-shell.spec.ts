@@ -94,8 +94,18 @@ test("gesture bar: a short smooth swipe glides into the switcher; a quick flick 
   await expect(page.locator('[data-testid="window-notes"][data-state="open"]')).toBeVisible();
   await page.waitForTimeout(450);
   // A quick flick, still well short of the "dragged high" line (40 % of the screen): home.
-  await drag(page, 0, -230, 2, 0);
-  await page.mouse.up();
+  // Dispatched in one go inside the page: real mouse round trips on a slow runner are too slow for a flick.
+  await page.locator('section[data-state="open"] [data-testid="home-indicator"]').evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const x = r.x + r.width / 2;
+    const y = r.y + r.height / 2;
+    const ev = (type: string, dy: number) =>
+      new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, pointerType: "touch", isPrimary: true, button: 0, buttons: type === "pointerup" ? 0 : 1, clientX: x, clientY: y + dy });
+    el.dispatchEvent(ev("pointerdown", 0));
+    el.dispatchEvent(ev("pointermove", -110));
+    el.dispatchEvent(ev("pointermove", -230));
+    el.dispatchEvent(ev("pointerup", -230));
+  });
   await expect(page.locator('section[data-state="open"]')).toHaveCount(0);
   await expect(page.getByTestId("app-switcher")).toHaveCount(0);
 });
