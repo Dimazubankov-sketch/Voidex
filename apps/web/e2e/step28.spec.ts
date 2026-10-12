@@ -156,7 +156,9 @@ test("«Вид приложений»: one look for every app window, saved with
   if (isMobile(page)) await phoneHome(page);
   await launch(page, "calculator");
   await expect.poll(() => bg("calculator")).toBe("rgb(18, 18, 24)");
-  const text = await page.locator('[data-testid="window-calculator"]').evaluate((el) => getComputedStyle(el).getPropertyValue("--text").trim());
+  const text = await page
+    .locator('[data-testid="window-calculator"]')
+    .evaluate((el) => getComputedStyle(el.classList.contains("vx-app") ? el : el.querySelector(".vx-app")!).getPropertyValue("--text").trim());
   expect(text).toBe("#ededf3");
 });
 

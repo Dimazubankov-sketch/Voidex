@@ -152,6 +152,7 @@ test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a ch
 
   // A deletes the post: B's repost and bookmark now say "post unavailable".
   await nav(page, "me");
+  await page.getByTestId("profile-tab-posts").click(); // Step 2.9: the profile opens on Публикации
   const mine = page.locator(`[data-testid=post-card][data-post-id="${postId}"]`);
   await mine.getByTestId("post-menu").click();
   await page.getByTestId("menu-delete-post").click();
