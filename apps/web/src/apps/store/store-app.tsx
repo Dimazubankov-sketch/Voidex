@@ -84,7 +84,10 @@ export function StoreApp() {
   const push = (p: Page) => setStack((s) => [...s, p]);
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => scroller.current?.scrollTo({ top: 0 }), [stack.length, page.kind]);
+  // Braces: newer browsers return a Promise from scrollTo, and an effect may only return a clean-up.
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: 0 });
+  }, [stack.length, page.kind]);
 
   // Search: typing shows history and matching apps; Enter shows the results; X goes back to the catalog.
   const [q, setQ] = useState("");
