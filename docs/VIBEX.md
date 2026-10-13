@@ -431,3 +431,21 @@ Long press (phones) or right click (PC) opens the actions. The chat dims and the
   - Undoing a like, follow or repost removes its item.
   - This tab is separate from the system Notification Center.
 - **Migration** `0011_vibex_message_actions_activity` is additive only.
+
+## Step 2.11
+- Stories: a tap pauses / plays (edges step back / forward), only X closes; deleting asks
+  above the viewer; my story shows views and reactions with the viewers; someone else's
+  story has «Ответить...» (a direct message that refers to the story,
+  `POST /api/vibex/stories/:id/reply`) and quick reactions (one per person, replaceable,
+  `POST /api/vibex/stories/:id/react`). Rings on avatars only for unseen stories.
+- One header on every tab (60 px, title 19 px, no border); search only on Главная and
+  Профиль, opening the Search tab. Search: empty = the explore grid, typing = people
+  with their follow state.
+- «Обновление...» in the header only on a real connection problem (offline, the event
+  stream lost, requests retried), after 1.5 s; the stream reconnects at once when the
+  network comes back and drops itself after 45 s of silence.
+- Photos and videos as a Telegram-like mosaic; attachments upload with real progress and
+  can be cancelled (`X-Upload-Key` + `DELETE /api/vibex/files/uploads/:key`: nothing is
+  left on the server).
+- Video circles: open and close in place (shared layout), a thin grey seek ring inside
+  the circle with a knob while dragged, two-finger zoom (never below 1x).

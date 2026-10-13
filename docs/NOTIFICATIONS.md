@@ -69,3 +69,12 @@ One rule decides who owns a touch (see `os/notifications/gesture.ts`):
 Edge gestures engage only after a clear move in their direction (12 px and
 dominant axis), then block page scrolling for that touch and swallow the
 following click; pointer cancel resets them.
+
+## Step 2.11: system pop-ups
+`os/notifications/popups.tsx` shows a pop-up for each new notification
+(`notification.new`), so pop-ups and the Notification Center share one source. Phone:
+a banner from the top (swipe up or sideways to dismiss); PC: a card at the bottom right
+with an X. One at a time on phones (a queue), up to three on a PC. A tap marks it read
+and opens its target (Vibex chat / post / person, a Mail thread, Settings for system
+notices). The chime plays at most once every 1.5 s and only with sound on; an app's
+notifications turned off in Settings → Apps: no pop-up.
