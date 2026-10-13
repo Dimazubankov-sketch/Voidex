@@ -4,6 +4,7 @@ import {
   VIBEX_MEDIA_MAX_BYTES,
   VIBEX_POST_IMAGE_TYPES,
   VIBEX_POST_VIDEO_TYPES,
+  ErrorCode,
   attachmentMimeType,
   type MeDto,
   type VibexMediaItemDto,
@@ -27,7 +28,7 @@ import {
   type VibexActivityPageDto,
   type VibexSearchDto,
 } from "@voidex/shared";
-import { api, qs } from "@/lib/api";
+import { ApiError, accessToken, api, qs } from "@/lib/api";
 import { applyMe } from "@/lib/account";
 import { queryClient } from "@/lib/query";
 
@@ -320,6 +321,78 @@ export const filesApi = {
   discard: (id: string) => api.delete(`/api/vibex/files/${id}`),
   blob: (id: string) => api.get<Blob>(`/api/vibex/files/${id}`),
 };
+
+/** Step 2.11: an upload in flight was cancelled (not an error to show). */
+export class UploadCancelled extends Error {
+  constructor() {
+    super("cancelled");
+  }
+}
+
+/**
+ * Step 2.11: an upload with real progress (bytes sent) that an AbortSignal
+ * cancels. Nothing is left on the server: the request is dropped and the
+ * upload's key is cancelled on the server (refused if it has not arrived,
+ * deleted if it was stored); a late answer is discarded too. (Files never
+ * sent in a message are also swept by the server after a while.)
+ */
+export async function uploadWithProgress(file: File, purpose: VibexUploadPurpose, opts: { signal?: AbortSignal; onProgress?: (p: number) => void } = {}): Promise<VibexFileDto> {
+  if (opts.signal?.aborted) throw new UploadCancelled();
+  const token = await accessToken();
+  return new Promise<VibexFileDto>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    // The upload's own key: a cancel reaches the server however far the upload got.
+    const key = crypto.randomUUID().replace(/-/g, "");
+    let cancelled = false;
+    const onAbort = () => {
+      cancelled = true;
+      xhr.abort();
+      // Not stored yet: the server refuses it when it arrives. Stored already: the server deletes it.
+      void api.delete(`/api/vibex/files/uploads/${key}`).catch(() => undefined);
+    };
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const done = () => opts.signal?.removeEventListener("abort", onAbort);
+    xhr.open("POST", `/api/vibex/files${qs({ purpose })}`);
+    xhr.setRequestHeader("X-Voidex-Client", "web");
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
+    xhr.setRequestHeader("X-Upload-Key", key);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) opts.onProgress?.(Math.min(1, e.loaded / e.total));
+    };
+    xhr.upload.onload = () => opts.onProgress?.(1);
+    xhr.onabort = () => {
+      done();
+      reject(new UploadCancelled());
+    };
+    xhr.onerror = () => {
+      done();
+      reject(cancelled ? new UploadCancelled() : new ApiError(0, "network", "Network error"));
+    };
+    xhr.onload = () => {
+      done();
+      let body: unknown = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        /* not JSON */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const dto = body as VibexFileDto;
+        if (cancelled) {
+          void filesApi.discard(dto.id).catch(() => undefined);
+          return reject(new UploadCancelled());
+        }
+        return resolve(dto);
+      }
+      if (cancelled) return reject(new UploadCancelled());
+      const e = (body as { error?: { code?: ErrorCode; message?: string; fields?: Record<string, string>; details?: Record<string, unknown> } } | null)?.error;
+      reject(new ApiError(xhr.status, e?.code ?? ErrorCode.Internal, e?.message ?? xhr.statusText, e?.fields, e?.details));
+    };
+    xhr.send(file);
+  });
+}
 
 /** Client-side check (the server re-validates everything). Returns an error code or null. */
 export function checkVibexFile(file: File, purpose: "message" | "post" | "postfile" | "story"): "attachment_type_not_allowed" | "attachment_too_large" | null {

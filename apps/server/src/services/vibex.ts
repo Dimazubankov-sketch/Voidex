@@ -466,7 +466,44 @@ export class VibexService {
   // ------------------------------------------------------------------- files
 
   /** Upload before sending: a chat file or a post picture, visible only to its owner until sent. */
-  async upload(ownerId: string, purpose: VibexUploadPurpose, input: { filename: string; data: Buffer }): Promise<VibexFileDto> {
+  /**
+   * Step 2.11: uploads the client may still cancel, by a key of its own
+   * (X-Upload-Key). A cancel that arrives before the upload is processed
+   * marks the key: that upload is then refused; one that arrives after
+   * deletes the file. Kept 10 minutes (files never sent are swept anyway).
+   */
+  private readonly uploadKeys = new Map<string, { fileId: string | null; cancelled: boolean; at: number }>();
+  private keyOf(ownerId: string, key: string) {
+    const now = Date.now();
+    for (const [k, v] of this.uploadKeys) if (now - v.at > 10 * 60_000) this.uploadKeys.delete(k);
+    return `${ownerId}:${key}`;
+  }
+
+  /** Step 2.11: the client cancelled the upload with this key (before or after it reached the server). */
+  async cancelUpload(ownerId: string, key: string) {
+    const k = this.keyOf(ownerId, key);
+    const entry = this.uploadKeys.get(k);
+    this.uploadKeys.set(k, { fileId: null, cancelled: true, at: Date.now() });
+    if (entry?.fileId) await this.discardUpload(ownerId, entry.fileId).catch(() => undefined);
+    return { ok: true };
+  }
+
+  async upload(ownerId: string, purpose: VibexUploadPurpose, input: { filename: string; data: Buffer; uploadKey?: string }): Promise<VibexFileDto> {
+    const cancelled = () => !!input.uploadKey && !!this.uploadKeys.get(this.keyOf(ownerId, input.uploadKey))?.cancelled;
+    if (cancelled()) throw fail(ErrorCode.ValidationFailed, "The upload was cancelled.", { status: 409 });
+    const dto = await this.store(ownerId, purpose, input);
+    if (input.uploadKey) {
+      if (cancelled()) {
+        // Cancelled while it was being stored: nothing stays.
+        await this.discardUpload(ownerId, dto.id).catch(() => undefined);
+        throw fail(ErrorCode.ValidationFailed, "The upload was cancelled.", { status: 409 });
+      }
+      this.uploadKeys.set(this.keyOf(ownerId, input.uploadKey), { fileId: dto.id, cancelled: false, at: Date.now() });
+    }
+    return dto;
+  }
+
+  private async store(ownerId: string, purpose: VibexUploadPurpose, input: { filename: string; data: Buffer }): Promise<VibexFileDto> {
     const filename = sanitizeFilename(input.filename);
     const mimeType = attachmentMimeType(filename);
     const rule = UPLOAD_RULES[purpose];

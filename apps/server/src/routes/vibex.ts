@@ -37,6 +37,8 @@ import { parse } from "../http.js";
 import { fail } from "../lib/errors.js";
 import { sniffImage } from "../lib/file-types.js";
 
+const UPLOAD_KEY = /^[A-Za-z0-9_-]{16,64}$/;
+const uploadKeyParam = z.object({ key: z.string().regex(UPLOAD_KEY) });
 const idParam = z.object({ id: z.string().uuid() });
 const purposeQuery = z.object({ purpose: VibexUploadPurposeSchema.default("message") });
 
@@ -202,9 +204,14 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
       throw fail(ErrorCode.ValidationFailed, "Invalid file name.");
     }
     if (!filename.trim()) throw fail(ErrorCode.ValidationFailed, "The file needs a name.");
+    // Step 2.11: the client's own key for this upload, so it can be cancelled at any moment.
+    const key = req.headers["x-upload-key"];
+    const uploadKey = typeof key === "string" && UPLOAD_KEY.test(key) ? key : undefined;
     reply.status(201);
-    return vibex.upload(req.auth!.userId, purpose, { filename, data: req.body });
+    return vibex.upload(req.auth!.userId, purpose, { filename, data: req.body, uploadKey });
   });
+
+  app.delete("/files/uploads/:key", limit(120), async (req) => vibex.cancelUpload(req.auth!.userId, parse(uploadKeyParam, req.params).key));
 
   app.delete("/files/:id", async (req) => vibex.discardUpload(req.auth!.userId, parse(idParam, req.params).id));
 

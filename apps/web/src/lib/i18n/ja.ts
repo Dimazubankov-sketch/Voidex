@@ -1341,4 +1341,6 @@ export const ja: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "ピン留め",
   "net.updating": "更新中...",
   "vibex.search.followingShort": "フォロー中",
+  "vibex.upload.cancel": "アップロードを中止",
+  "vibex.upload.loading": "アップロード中",
 };

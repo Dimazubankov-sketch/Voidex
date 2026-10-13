@@ -447,7 +447,8 @@ test("video circles: loop muted on screen; tap opens them larger with sound; rin
   // Seek on the ring: a press at "3 o'clock" is about a quarter of the way.
   await big.evaluate((v: HTMLVideoElement) => v.pause());
   const ring = (await page.getByTestId("circle-ring").boundingBox())!;
-  const r = ring.width / 2 - 22 + 10 + 4;
+  // Step 2.11: the ring lies inside the circle's edge (7 px in).
+  const r = ring.width / 2 - 22 - 7;
   await page.mouse.click(ring.x + ring.width / 2 + r, ring.y + ring.height / 2);
   await expect.poll(() => big.evaluate((v: HTMLVideoElement) => v.currentTime / v.duration)).toBeGreaterThan(0.12);
   expect(await big.evaluate((v: HTMLVideoElement) => v.currentTime / v.duration)).toBeLessThan(0.45);

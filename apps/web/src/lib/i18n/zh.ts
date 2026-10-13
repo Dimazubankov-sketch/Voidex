@@ -1341,4 +1341,6 @@ export const zh: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "已置顶",
   "net.updating": "正在更新...",
   "vibex.search.followingShort": "已关注",
+  "vibex.upload.cancel": "取消上传",
+  "vibex.upload.loading": "上传中",
 };

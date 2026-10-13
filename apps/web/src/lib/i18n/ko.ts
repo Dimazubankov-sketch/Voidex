@@ -1341,4 +1341,6 @@ export const ko: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "고정됨",
   "net.updating": "업데이트 중...",
   "vibex.search.followingShort": "팔로잉",
+  "vibex.upload.cancel": "업로드 취소",
+  "vibex.upload.loading": "업로드 중",
 };

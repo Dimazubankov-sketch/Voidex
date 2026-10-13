@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
 import { VideoMessageGlyph } from "./media-bubbles";
+import { usePinch } from "./pinch";
 import { formatDuration, recordingSupported, useRecorder, type RecordKind, type Recording } from "./recorder";
 
 /**
@@ -426,6 +427,16 @@ function CircleCapture({
     return () => window.removeEventListener("resize", update);
   }, [barHost]);
   const locked = state === "locked";
+  // Step 2.11: phones zoom with two fingers on the circle (the camera's own zoom; the circle keeps its size,
+  // the page never zooms). The slider stays only on computers (no pinch with a mouse).
+  const face = useRef<HTMLDivElement>(null);
+  const zoomNow = useRef(zoom);
+  zoomNow.current = zoom;
+  usePinch(face, {
+    enabled: locked && !!zoomRange && !desktop,
+    begin: () => zoomNow.current,
+    change: (z) => zoomRange && onZoom(Math.max(zoomRange.min, Math.min(zoomRange.max, z))),
+  });
   const size = Math.max(160, Math.min(area.width * 0.78, area.height - 150, 340));
   const r = size / 2 + 6;
   const c = 2 * Math.PI * r;
@@ -443,13 +454,18 @@ function CircleCapture({
       data-paused={paused || undefined}
       data-facing={facing}
     >
-      <div className="relative" style={{ width: size + 16, height: size + 16 }}>
+      <div ref={face} className={cx("relative", locked && "pointer-events-auto touch-none")} style={{ width: size + 16, height: size + 16 }} data-testid="circle-capture-face">
         <svg className="absolute inset-0 -rotate-90" width={size + 16} height={size + 16} aria-hidden>
           <circle cx={(size + 16) / 2} cy={(size + 16) / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="4" />
           <circle cx={(size + 16) / 2} cy={(size + 16) / 2} r={r} fill="none" stroke="#8b7bff" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, elapsed / max))} />
         </svg>
         <video ref={video} autoPlay muted playsInline className={cx("absolute left-2 top-2 rounded-full bg-black object-cover", facing === "user" && "[transform:scaleX(-1)]")} style={{ width: size, height: size }} />
         {!stream && <Spinner className="absolute inset-0 m-auto text-white" />}
+        {zoomRange && !desktop && zoom > zoomRange.min + 0.05 && (
+          <span className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-0.5 text-[12.5px] font-semibold tabular-nums text-white" data-testid="circle-zoom-level">
+            {zoom.toFixed(1)}×
+          </span>
+        )}
         {paused && (
           <span className="absolute inset-0 m-auto flex h-9 w-fit items-center rounded-full bg-black/55 px-4 text-[14px] font-medium text-white" data-testid="circle-paused-label">
             {t("vibex.circle.paused")}
@@ -462,7 +478,7 @@ function CircleCapture({
       </span>
       {locked ? (
         <div className="flex flex-col items-center gap-4">
-          {zoomRange && (
+          {zoomRange && desktop && (
             <label className="flex w-[220px] items-center gap-3 text-[13px] tabular-nums text-white">
               <span className="sr-only">{t("vibex.circle.zoom")}</span>
               <input

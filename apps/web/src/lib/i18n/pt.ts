@@ -1341,4 +1341,6 @@ export const pt: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "Fixado",
   "net.updating": "Atualizando...",
   "vibex.search.followingShort": "Seguindo",
+  "vibex.upload.cancel": "Cancelar envio",
+  "vibex.upload.loading": "Enviando",
 };

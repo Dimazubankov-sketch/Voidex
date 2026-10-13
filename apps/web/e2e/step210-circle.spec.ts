@@ -139,12 +139,38 @@ test("cancel from the composer sends nothing and releases the camera; zoom never
   const { other, chat } = await openChat(page, browser);
   await startLockedCircle(page);
   const zoom = page.getByTestId("circle-zoom");
-  await expect(zoom).toBeVisible();
-  // The camera reports 0.5x–3x: the control starts at 1x and never goes lower.
-  await expect(zoom).toHaveAttribute("min", "1");
-  await expect(zoom).toHaveAttribute("max", "3");
-  await zoom.fill("2");
-  await expect.poll(() => page.evaluate(() => (window as unknown as { __zoom: number[] }).__zoom.at(-1))).toBe(2);
+  const lastZoom = () => page.evaluate(() => (window as unknown as { __zoom: number[] }).__zoom.at(-1) ?? 1);
+  if (isMobile(page)) {
+    // Step 2.11: phones pinch with two fingers on the circle (no slider); the camera reports 0.5x–3x, never below 1x.
+    await expect(zoom).toHaveCount(0);
+    const face = (await page.getByTestId("circle-capture-face").boundingBox())!;
+    const cx = face.x + face.width / 2;
+    const cy = face.y + face.height / 2;
+    const cdp = await page.context().newCDPSession(page);
+    const pts = (d: number) => [
+      { x: cx - d, y: cy, id: 1 },
+      { x: cx + d, y: cy, id: 2 },
+    ];
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(30) });
+    for (let d = 35; d <= 75; d += 5) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(d) });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(lastZoom).toBeGreaterThan(1.8);
+    await expect(page.getByTestId("circle-zoom-level")).toBeVisible();
+    // Pinch in, far: it stops at 1x.
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(80) });
+    for (let d = 70; d >= 10; d -= 10) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(d) });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(lastZoom).toBe(1);
+    // The page itself never zoomed.
+    expect(await page.evaluate(() => window.visualViewport?.scale ?? 1)).toBe(1);
+  } else {
+    await expect(zoom).toBeVisible();
+    // The camera reports 0.5x–3x: the control starts at 1x and never goes lower.
+    await expect(zoom).toHaveAttribute("min", "1");
+    await expect(zoom).toHaveAttribute("max", "3");
+    await zoom.fill("2");
+    await expect.poll(lastZoom).toBe(2);
+  }
   await page.getByTestId("circle-cancel").click();
   await expect(page.getByTestId("circle-recorder")).toHaveCount(0);
   await expect(page.getByTestId("chat-record")).toHaveAttribute("data-state", "idle");

@@ -193,3 +193,23 @@ describe("Step 2.11: search shows who I follow", () => {
     expect(r.following).not.toContain(y.id);
   });
 });
+
+describe("Step 2.11: cancelling an upload leaves nothing", () => {
+  const put = (u: U, key: string) =>
+    u.d.post("/api/vibex/files?purpose=message", PNG, { headers: { "content-type": "application/octet-stream", "x-file-name": "c.png", "x-upload-key": key } });
+  it("a cancel after the upload deletes the file; one before it makes the upload refused", async () => {
+    const a = await user("Хлоя");
+    const after = await put(a, "k".repeat(20) + "after");
+    expect(after.status).toBe(201);
+    expect((await a.d.delete(`/api/vibex/files/uploads/${"k".repeat(20)}after`)).status).toBe(200);
+    expect((await a.d.get(`/api/vibex/files/${after.body.id}`)).status).toBe(404);
+    expect((await a.d.delete(`/api/vibex/files/uploads/${"b".repeat(20)}`)).status).toBe(200);
+    expect((await put(a, "b".repeat(20))).status).toBe(409);
+    // Someone else's key is theirs only.
+    const b = await user("Цезарь");
+    const mine = await put(a, "s".repeat(24));
+    expect((await b.d.delete(`/api/vibex/files/uploads/${"s".repeat(24)}`)).status).toBe(200);
+    expect((await a.d.get(`/api/vibex/files/${mine.body.id}`)).status).toBe(200);
+    expect((await a.d.delete("/api/vibex/files/uploads/bad")).status).toBe(400);
+  });
+});

@@ -1341,4 +1341,6 @@ export const de: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "Angeheftet",
   "net.updating": "Aktualisierung...",
   "vibex.search.followingShort": "Gefolgt",
+  "vibex.upload.cancel": "Hochladen abbrechen",
+  "vibex.upload.loading": "Hochladen",
 };

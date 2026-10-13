@@ -1372,6 +1372,8 @@ export const en = {
   "vibex.chats.pinnedOne": "Pinned",
   "net.updating": "Updating...",
   "vibex.search.followingShort": "Following",
+  "vibex.upload.cancel": "Cancel upload",
+  "vibex.upload.loading": "Uploading",
 } as const;
 
 export type MessageKey = keyof typeof en;

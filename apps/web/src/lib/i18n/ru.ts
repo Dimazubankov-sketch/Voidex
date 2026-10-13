@@ -1356,4 +1356,6 @@ export const ru: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "Закреплён",
   "net.updating": "Обновление...",
   "vibex.search.followingShort": "Вы подписаны",
+  "vibex.upload.cancel": "Отменить загрузку",
+  "vibex.upload.loading": "Загрузка",
 };

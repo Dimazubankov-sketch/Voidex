@@ -1341,4 +1341,6 @@ export const tr: Record<MessageKey, string> = {
   "vibex.chats.pinnedOne": "Sabitlendi",
   "net.updating": "Güncelleniyor...",
   "vibex.search.followingShort": "Takip ediliyor",
+  "vibex.upload.cancel": "Yüklemeyi iptal et",
+  "vibex.upload.loading": "Yükleniyor",
 };

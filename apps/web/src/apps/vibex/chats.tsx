@@ -31,8 +31,8 @@ import { NotesFileCard } from "@/apps/notes/card";
 import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
-import { checkVibexFile, filesApi, markRead, useChat, useChats, useEditMessage, useFileUrl, useMessages, useSendMessage, useSetPins } from "./data";
-import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
+import { UploadCancelled, checkVibexFile, filesApi, markRead, uploadWithProgress, useChat, useChats, useEditMessage, useFileUrl, useMessages, useSendMessage, useSetPins } from "./data";
+import { FileChip, Lightbox } from "./media";
 import { VideoMessageGlyph, VoiceBubble } from "./media-bubbles";
 import { ForwardSheet, MessageMenu, PinnedBar, SelectDot, SelectionBar, SwipeReplyIcon, useSwipeReply, type MessageMenuState } from "./message-actions";
 import { CircleBubble } from "./circle-player";
@@ -44,6 +44,7 @@ import { NestedPost, UnavailablePost } from "./posts";
 import { markVisible, useVibex } from "./store";
 import { ChatAvatar, GroupAvatar, GroupInfoSheet, chatTitle } from "./groups";
 import { StoryHalo } from "./stories";
+import { MediaMosaic } from "./mosaic";
 import { AttachSourceSheet } from "@/os/share/attach-source";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -626,15 +627,8 @@ function Bubble({
         {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
         {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
         {images.length > 0 && (
-          <div className={cx("grid gap-1 overflow-hidden rounded-[18px]", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-            {images.map((f, i) =>
-              f.kind === "video" ? (
-                <VibexVideoTile key={f.id} file={f} onClick={() => setViewer(i)} className={cx(images.length === 1 ? "max-h-[320px] min-h-[140px] w-[260px] max-w-full" : "aspect-square w-[130px] max-w-full")} />
-              ) : (
-                <VibexImage key={f.id} file={f} onClick={() => setViewer(i)} className={cx(images.length === 1 ? "max-h-[320px] min-h-[140px] w-[260px] max-w-full" : "aspect-square w-[130px] max-w-full")} />
-              ),
-            )}
-          </div>
+          // Step 2.11: a Telegram-like mosaic (one outer radius, thin gaps, no empty cells).
+          <MediaMosaic items={images.map((f) => ({ key: f.id, kind: f.kind === "video" ? "video" : "image", file: f }))} onOpen={setViewer} />
         )}
         {files.map((f) => (
           <FileChip key={f.id} file={f} tone={mine ? "mine" : "default"} />
@@ -836,7 +830,11 @@ function Messages({ chat, actions = NO_ACTIONS, preview = false }: { chat: Vibex
   );
 }
 
-type Pending = { key: string; name: string };
+/**
+ * Step 2.11: an attachment in the composer: shown at once from the device
+ * (object URL), uploaded with real progress, cancellable (AbortController).
+ */
+type Attachment = { key: string; file: File; url: string | null; kind: "image" | "video" | "file"; progress: number; ctl: AbortController; dto: VibexFileDto | null };
 
 function MessageComposer({
   chatId,
@@ -862,8 +860,31 @@ function MessageComposer({
   const [recMode, setRecMode] = useState<RecordKind>("voice");
   const [row, setRow] = useState<HTMLDivElement | null>(null);
   const [text, setText] = useState("");
-  const [files, setFiles] = useState<VibexFileDto[]>([]);
-  const [pending, setPending] = useState<Pending[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const files = attachments.flatMap((a) => (a.dto ? [a.dto] : []));
+  const pending = attachments.filter((a) => !a.dto);
+  const live = useRef<Attachment[]>([]);
+  live.current = attachments;
+  // Leaving the chat: uploads stop, previews are freed, uploaded but unsent files are discarded (nothing left behind).
+  useEffect(
+    () => () => {
+      for (const a of live.current) {
+        a.ctl.abort();
+        if (a.url) URL.revokeObjectURL(a.url);
+        if (a.dto) void filesApi.discard(a.dto.id).catch(() => undefined);
+      }
+    },
+    [],
+  );
+  const patch = (key: string, p: Partial<Attachment>) => setAttachments((list) => list.map((a) => (a.key === key ? { ...a, ...p } : a)));
+  const removeAttachment = (key: string) => {
+    const a = live.current.find((x) => x.key === key);
+    if (!a) return;
+    a.ctl.abort();
+    if (a.url) URL.revokeObjectURL(a.url);
+    if (a.dto) void filesApi.discard(a.dto.id).catch(() => undefined);
+    setAttachments((list) => list.filter((x) => x.key !== key));
+  };
   const input = useRef<HTMLInputElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const edit = useEditMessage(chatId);
@@ -890,24 +911,28 @@ function MessageComposer({
   }, [text]);
 
   const [chooser, setChooser] = useState(false);
-  const add = async (list: FileList | File[] | null) => {
+  const add = (list: FileList | File[] | null) => {
     if (!list) return;
-    for (const file of [...list].slice(0, Math.max(0, VIBEX_FILES_MAX - files.length - pending.length))) {
+    for (const file of [...list].slice(0, Math.max(0, VIBEX_FILES_MAX - live.current.length))) {
       const bad = checkVibexFile(file, "message");
       if (bad) {
         toast({ title: t(`error.${bad}`), body: file.name, tone: "danger" });
         continue;
       }
-      const key = `${file.name}-${Math.random()}`;
-      setPending((p) => [...p, { key, name: file.name }]);
-      try {
-        const dto = await filesApi.upload(file, "message");
-        setFiles((f) => [...f, dto]);
-      } catch (e) {
-        toast({ title: errorMessage(t, e), body: file.name, tone: "danger" });
-      } finally {
-        setPending((p) => p.filter((x) => x.key !== key));
-      }
+      const mime = file.type || "";
+      const kind = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "file";
+      const a: Attachment = { key: `${file.name}-${Math.random()}`, file, url: kind === "file" ? null : URL.createObjectURL(file), kind, progress: 0, ctl: new AbortController(), dto: null };
+      live.current = [...live.current, a];
+      setAttachments((l) => [...l, a]);
+      void uploadWithProgress(file, "message", { signal: a.ctl.signal, onProgress: (p) => patch(a.key, { progress: p }) }).then(
+        (dto) => patch(a.key, { dto, progress: 1 }),
+        (e) => {
+          if (e instanceof UploadCancelled) return;
+          toast({ title: errorMessage(t, e), body: file.name, tone: "danger" });
+          if (a.url) URL.revokeObjectURL(a.url);
+          setAttachments((l) => l.filter((x) => x.key !== a.key));
+        },
+      );
     }
   };
 
@@ -927,8 +952,12 @@ function MessageComposer({
     }
     if (!canSend) return;
     const body = { text, fileIds: files.map((f) => f.id), ...(replyTo ? { replyToId: replyTo.id } : {}) };
+    const sent = live.current;
     setText("");
-    setFiles([]);
+    live.current = [];
+    setAttachments([]);
+    // The previews were only for the composer; the message loads its files from the server.
+    window.setTimeout(() => sent.forEach((a) => a.url && URL.revokeObjectURL(a.url)), 2000);
     onClearReply();
     try {
       await send.mutateAsync(body);
@@ -950,36 +979,50 @@ function MessageComposer({
   return (
     <div className="shrink-0 px-3 pb-2.5 pt-2 sm:px-4">
       <AnimatePresence initial={false}>
-        {(files.length > 0 || pending.length > 0) && (
-          <motion.div className="mb-2 flex flex-wrap gap-2" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} data-testid="composer-files">
-            {files.map((f) => (
-              <span key={f.id} className="relative">
-                {f.kind === "image" ? (
-                  <VibexImage file={f} className="size-16 rounded-2xl" />
-                ) : (
-                  <span className="flex h-16 max-w-[180px] items-center gap-2 rounded-2xl bg-surface px-3 text-[13px] shadow-tile">
-                    <RiFileLine className="size-5 shrink-0 text-text-tertiary" />
-                    <span className="truncate">{f.filename}</span>
+        {attachments.length > 0 && (
+          <motion.div className="mb-2 flex flex-col gap-2" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} data-testid="composer-files">
+            {attachments.some((a) => a.kind !== "file") && (
+              <MediaMosaic
+                testId="composer-mosaic"
+                className="w-[min(260px,100%)]"
+                items={attachments
+                  .filter((a) => a.kind !== "file")
+                  .map((a) => ({
+                    key: a.key,
+                    kind: a.kind === "video" ? "video" : "image",
+                    localUrl: a.url ?? undefined,
+                    label: a.file.name,
+                    progress: a.dto ? undefined : a.progress,
+                    onCancel: () => removeAttachment(a.key),
+                  }))}
+                onOpen={() => undefined}
+              />
+            )}
+            {attachments
+              .filter((a) => a.kind === "file")
+              .map((a) => (
+                <span key={a.key} className="relative flex h-14 max-w-[260px] items-center gap-2 overflow-hidden rounded-2xl bg-surface px-3 text-[13px] shadow-tile" data-testid="composer-file" data-uploading={!a.dto || undefined}>
+                  <RiFileLine className="size-5 shrink-0 text-text-tertiary" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{a.file.name}</span>
+                    {!a.dto && (
+                      <span className="block text-[11.5px] tabular-nums text-text-tertiary">
+                        {t("vibex.upload.loading")} {Math.round(a.progress * 100)}%
+                      </span>
+                    )}
                   </span>
-                )}
-                <button
-                  type="button"
-                  className="absolute -right-1.5 -top-1.5 flex size-6 items-center justify-center rounded-full bg-[rgba(20,20,30,0.7)] text-white"
-                  aria-label={t("common.remove")}
-                  onClick={() => {
-                    setFiles((x) => x.filter((y) => y.id !== f.id));
-                    void filesApi.discard(f.id).catch(() => undefined);
-                  }}
-                >
-                  <RiCloseLine className="size-4" />
-                </button>
-              </span>
-            ))}
-            {pending.map((p) => (
-              <span key={p.key} className="flex size-16 items-center justify-center rounded-2xl bg-surface text-text-tertiary shadow-tile" title={p.name}>
-                <Spinner />
-              </span>
-            ))}
+                  {!a.dto && <span className="absolute inset-x-0 bottom-0 h-[3px] bg-primary/80 transition-[width]" style={{ width: `${Math.round(a.progress * 100)}%` }} aria-hidden />}
+                  <button
+                    type="button"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover"
+                    aria-label={a.dto ? t("common.remove") : t("vibex.upload.cancel")}
+                    onClick={() => removeAttachment(a.key)}
+                    data-testid="composer-file-cancel"
+                  >
+                    <RiCloseLine className="size-4" />
+                  </button>
+                </span>
+              ))}
           </motion.div>
         )}
       </AnimatePresence>
