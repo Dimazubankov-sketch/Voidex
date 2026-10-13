@@ -1329,4 +1329,13 @@ export const ja: Record<MessageKey, string> = {
   "vibex.activity.message": "メッセージ",
   "vibex.activity.empty": "まだアクティビティはありません",
   "vibex.activity.emptyHint": "新しいフォロワー、いいね、シェア、返信がここに表示されます。",
+  "vibex.stories.reply": "返信...",
+  "vibex.stories.replySent": "{name}に返信しました",
+  "vibex.stories.send": "送信",
+  "vibex.stories.like": "いいね",
+  "vibex.stories.viewsLabel": "閲覧",
+  "vibex.stories.reactionsLabel": "リアクション",
+  "vibex.stories.replyTo": "ストーリーへの返信",
+  "vibex.stories.replyToYours": "あなたのストーリーに返信",
+  "vibex.stories.gone": "このストーリーは表示できません",
 };

@@ -20,6 +20,7 @@ const QUERY_ROOTS: Record<AppId, string[]> = {
   calculator: [],
   files: [],
   media: [],
+  store: ["store"],
 };
 
 const encoder = new TextEncoder();

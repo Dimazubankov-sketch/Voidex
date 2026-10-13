@@ -1329,4 +1329,13 @@ export const ko: Record<MessageKey, string> = {
   "vibex.activity.message": "메시지",
   "vibex.activity.empty": "아직 활동이 없습니다",
   "vibex.activity.emptyHint": "새 팔로워, 좋아요, 공유, 답글이 여기에 표시됩니다.",
+  "vibex.stories.reply": "답장...",
+  "vibex.stories.replySent": "{name}님에게 답장을 보냈습니다",
+  "vibex.stories.send": "보내기",
+  "vibex.stories.like": "좋아요",
+  "vibex.stories.viewsLabel": "조회",
+  "vibex.stories.reactionsLabel": "반응",
+  "vibex.stories.replyTo": "스토리에 답장",
+  "vibex.stories.replyToYours": "내 스토리에 답장",
+  "vibex.stories.gone": "더 이상 볼 수 없는 스토리입니다",
 };

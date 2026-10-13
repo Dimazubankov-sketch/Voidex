@@ -1360,6 +1360,15 @@ export const en = {
   "vibex.activity.message": "Message",
   "vibex.activity.empty": "No activity yet",
   "vibex.activity.emptyHint": "New followers, likes, reposts and replies will appear here.",
+  "vibex.stories.reply": "Reply...",
+  "vibex.stories.replySent": "Reply sent to {name}",
+  "vibex.stories.send": "Send",
+  "vibex.stories.like": "Like",
+  "vibex.stories.viewsLabel": "views",
+  "vibex.stories.reactionsLabel": "reactions",
+  "vibex.stories.replyTo": "Reply to a story",
+  "vibex.stories.replyToYours": "Replied to your story",
+  "vibex.stories.gone": "The story is no longer available",
 } as const;
 
 export type MessageKey = keyof typeof en;

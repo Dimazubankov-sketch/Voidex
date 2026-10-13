@@ -1329,4 +1329,13 @@ export const es: Record<MessageKey, string> = {
   "vibex.activity.message": "Mensaje",
   "vibex.activity.empty": "Aún no hay actividad",
   "vibex.activity.emptyHint": "Aquí aparecerán nuevos seguidores, me gusta, publicaciones compartidas y respuestas.",
+  "vibex.stories.reply": "Responder...",
+  "vibex.stories.replySent": "Respuesta enviada a {name}",
+  "vibex.stories.send": "Enviar",
+  "vibex.stories.like": "Me gusta",
+  "vibex.stories.viewsLabel": "vistas",
+  "vibex.stories.reactionsLabel": "reacciones",
+  "vibex.stories.replyTo": "Respuesta a una historia",
+  "vibex.stories.replyToYours": "Respondió a tu historia",
+  "vibex.stories.gone": "La historia ya no está disponible",
 };

@@ -140,6 +140,12 @@ export function MediaGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-media.png" className={className} optical={MEDIA_OPTICAL} />;
 }
 
+/** Appex Store (Step 2.11): the mark delivered with the Store, cut out of its tile without redrawing. */
+export const STORE_OPTICAL = 0.8;
+export function StoreGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-store.png" className={className} optical={STORE_OPTICAL} />;
+}
+
 /** Share of the tile the logo's content box fills — the same for every app. */
 export const GLYPH_BOX = "52%";
 

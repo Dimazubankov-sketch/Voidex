@@ -1329,4 +1329,13 @@ export const tr: Record<MessageKey, string> = {
   "vibex.activity.message": "Mesaj",
   "vibex.activity.empty": "Henüz etkinlik yok",
   "vibex.activity.emptyHint": "Yeni takipçiler, beğeniler, paylaşımlar ve yanıtlar burada görünür.",
+  "vibex.stories.reply": "Yanıtla...",
+  "vibex.stories.replySent": "{name} kişisine yanıt gönderildi",
+  "vibex.stories.send": "Gönder",
+  "vibex.stories.like": "Beğen",
+  "vibex.stories.viewsLabel": "görüntülenme",
+  "vibex.stories.reactionsLabel": "tepki",
+  "vibex.stories.replyTo": "Hikâyeye yanıt",
+  "vibex.stories.replyToYours": "Hikâyenize yanıt",
+  "vibex.stories.gone": "Hikâye artık mevcut değil",
 };

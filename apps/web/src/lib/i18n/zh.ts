@@ -1329,4 +1329,13 @@ export const zh: Record<MessageKey, string> = {
   "vibex.activity.message": "发消息",
   "vibex.activity.empty": "暂无动态",
   "vibex.activity.emptyHint": "新粉丝、点赞、分享和回复会显示在这里。",
+  "vibex.stories.reply": "回复...",
+  "vibex.stories.replySent": "已回复 {name}",
+  "vibex.stories.send": "发送",
+  "vibex.stories.like": "赞",
+  "vibex.stories.viewsLabel": "浏览",
+  "vibex.stories.reactionsLabel": "回应",
+  "vibex.stories.replyTo": "回复快拍",
+  "vibex.stories.replyToYours": "回复了你的快拍",
+  "vibex.stories.gone": "该快拍已不可用",
 };

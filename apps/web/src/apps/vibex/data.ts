@@ -585,7 +585,44 @@ export function markStoryViewed(story: VibexStoryDto) {
 
 export async function deleteStory(id: string) {
   await api.delete(`/api/vibex/stories/${id}`);
+  // The ring and the strip follow at once: the story leaves the cache before the refetch.
+  queryClient.setQueryData<VibexStoryGroupDto[]>(vk.stories, (groups) =>
+    groups
+      ?.map((g) => ({ ...g, stories: g.stories.filter((x) => x.id !== id) }))
+      .filter((g) => g.stories.length > 0),
+  );
   void queryClient.invalidateQueries({ queryKey: vk.stories });
+  void queryClient.invalidateQueries({ queryKey: vk.storyArchive });
+}
+
+/** Step 2.11: my reaction to someone's story (one, replaceable; null takes it back). */
+export async function reactToStory(story: VibexStoryDto, reaction: string | null) {
+  const set = (r: string | null) =>
+    queryClient.setQueryData<VibexStoryGroupDto[]>(vk.stories, (groups) =>
+      groups?.map((g) => ({ ...g, stories: g.stories.map((x) => (x.id === story.id ? { ...x, myReaction: r, seen: true } : x)) })),
+    );
+  const before = story.myReaction ?? null;
+  set(reaction);
+  try {
+    await api.post(`/api/vibex/stories/${story.id}/react`, { reaction });
+  } catch (e) {
+    set(before);
+    throw e;
+  }
+}
+
+/** Step 2.11: a reply to a story: a direct message to its author (the chat is created if needed). */
+export async function replyToStory(storyId: string, text: string) {
+  const r = await api.post<{ chatId: string; message: VibexMessageDto }>(`/api/vibex/stories/${storyId}/reply`, { text });
+  void queryClient.invalidateQueries({ queryKey: vk.chats });
+  void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", r.chatId] });
+  return r;
+}
+
+/** Step 2.11: the person's live stories (from the stories header), for the ring on their avatar. */
+export function useStoryGroup(personId: string | null | undefined): VibexStoryGroupDto | null {
+  const { data } = useStories(!!personId);
+  return (personId && data?.find((g) => g.person.id === personId)) || null;
 }
 
 /** Search in my chats: people / groups by name or @voidops address, and messages by text. */

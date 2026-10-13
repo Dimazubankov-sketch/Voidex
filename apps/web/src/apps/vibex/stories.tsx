@@ -9,12 +9,15 @@ import {
   RiCloseLine,
   RiDeleteBinLine,
   RiEyeLine,
+  RiHeart3Fill,
+  RiHeart3Line,
   RiPauseFill,
   RiPlayFill,
+  RiSendPlane2Fill,
   RiVolumeMuteLine,
   RiVolumeUpLine,
 } from "@remixicon/react";
-import { VIBEX_POST_IMAGE_TYPES, VIBEX_POST_VIDEO_TYPES, type VibexStoryDto, type VibexStoryGroupDto } from "@voidex/shared";
+import { VIBEX_MESSAGE_MAX, VIBEX_POST_IMAGE_TYPES, VIBEX_POST_VIDEO_TYPES, VIBEX_STORY_REACTIONS, type VibexStoryDto, type VibexStoryGroupDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -23,7 +26,7 @@ import { useSession } from "@/lib/session";
 import { Button, EmptyState, Spinner } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
 import { AttachSourceSheet } from "@/os/share/attach-source";
-import { checkVibexFile, deleteStory, markStoryViewed, publishStory, useFileUrl, useStoryArchive, useStoryViewers } from "./data";
+import { checkVibexFile, deleteStory, markStoryViewed, publishStory, reactToStory, replyToStory, useFileUrl, useStories, useStoryArchive, useStoryGroup, useStoryViewers } from "./data";
 
 /** A photo stays this long on screen; a video plays to its end. */
 const PHOTO_MS = 5000;
@@ -44,7 +47,7 @@ export function StoryRing({ group, size = 64, onClick, label, plus, onPlus, test
         aria-label={label ?? person.name}
         className={cx(
           "flex size-full items-center justify-center rounded-full p-[2.5px]",
-          group ? (unseen ? "bg-[conic-gradient(from_200deg,#8b7bff,#5b8cff,#c46bff,#8b7bff)]" : "bg-border") : "bg-transparent",
+          group ? (unseen ? STORY_GRADIENT : "bg-border") : "bg-transparent",
         )}
         data-unseen={unseen || undefined}
       >
@@ -67,6 +70,39 @@ export function StoryRing({ group, size = 64, onClick, label, plus, onPlus, test
   );
 }
 
+/** The violet ring of unseen stories (one look everywhere). */
+export const STORY_GRADIENT = "bg-[conic-gradient(from_200deg,#8b7bff,#5b8cff,#c46bff,#8b7bff)]";
+
+/**
+ * Step 2.11: the story ring on any avatar (chat list, profile): drawn outside
+ * the avatar, so it appears and goes away without moving anything. Only while
+ * the person has a live story I have not seen; once seen, no colored ring.
+ * `gap` is the color between the ring and the avatar (the surface it sits on).
+ */
+export function StoryHalo({ personId, children, gap = "ring-surface", onOpen, className }: { personId: string | null | undefined; children: React.ReactNode; gap?: string; onOpen?: () => void; className?: string }) {
+  const t = useT();
+  const g = useStoryGroup(personId);
+  const unseen = !!g && !g.seen && !g.mine;
+  const inner = (
+    <>
+      {unseen && <span className={cx("pointer-events-none absolute -inset-[3.5px] rounded-full", STORY_GRADIENT)} aria-hidden />}
+      <span className={cx("relative flex rounded-full", unseen && cx("ring-2", gap))}>{children}</span>
+    </>
+  );
+  if (unseen && onOpen) {
+    return (
+      <button type="button" onClick={onOpen} className={cx("relative inline-flex shrink-0 rounded-full", className)} aria-label={t("vibex.stories.of", { name: g!.person.name })} data-story-ring="unseen" data-testid="story-halo">
+        {inner}
+      </button>
+    );
+  }
+  return (
+    <span className={cx("relative inline-flex shrink-0 rounded-full", className)} data-story-ring={unseen ? "unseen" : undefined} data-testid={unseen ? "story-halo" : undefined}>
+      {inner}
+    </span>
+  );
+}
+
 /** Collapsed header: a few story avatars overlapping each other (people with stories, unseen first). */
 export function StackedStories({ groups, onClick }: { groups: VibexStoryGroupDto[]; onClick: () => void }) {
   const t = useT();
@@ -78,7 +114,7 @@ export function StackedStories({ groups, onClick }: { groups: VibexStoryGroupDto
       {shown.map((g, i) => (
         <span
           key={g.person.id}
-          className={cx("rounded-full p-[2px]", g.seen ? "bg-border" : "bg-[conic-gradient(from_200deg,#8b7bff,#5b8cff,#c46bff,#8b7bff)]")}
+          className={cx("rounded-full p-[2px]", g.seen ? "bg-border" : STORY_GRADIENT)}
           style={{ marginLeft: i ? -10 : 0, zIndex: 10 - i }}
         >
           <span className="block rounded-full bg-surface p-[1.5px]">
@@ -254,14 +290,19 @@ export function StoryComposer({ open, onClose }: { open: boolean; onClose: () =>
 
 // ------------------------------------------------------------------ viewer
 
+/** Share of the width at each side where a tap goes to the previous / next story (the middle pauses). */
+const EDGE = 0.22;
+
 /**
  * The story viewer: one person after another, their stories in order.
- *   tap right / left    next / previous story
- *   swipe left / right  next / previous person
- *   swipe down, X, Esc  close
- *   press and hold      pause (also Space)
+ *   tap in the middle     pause / play (Step 2.11: a tap never closes)
+ *   tap at the left/right previous / next story
+ *   swipe left / right    next / previous person
+ *   press and hold        pause while held
+ *   X, Esc                close (swipe down too)
  * Progress bars on top; photos stay 5 s, videos play to the end. Only the
- * story on screen is loaded and decoded.
+ * story on screen is loaded and decoded. My stories: who saw them (with
+ * their reactions), archive, delete. Someone else's: reply and react.
  */
 export function StoryViewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStoryGroupDto[]; startPerson: string | null; onClose: () => void; onArchive: () => void }) {
   return createPortal(
@@ -274,8 +315,9 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
   const t = useT();
   const lang = useLanguage();
   const reduced = useReducedMotion();
-  // The groups as they were when the viewer opened (marking "seen" must not reorder under the finger).
-  const [list] = useState(groups);
+  // The groups as they were when the viewer opened (marking "seen" must not reorder under the finger);
+  // a story I delete leaves this list at once.
+  const [list, setList] = useState(groups);
   const [gi, setGi] = useState(() => Math.max(0, list.findIndex((g) => g.person.id === startPerson)));
   const group = list[gi];
   const [si, setSi] = useState(() => {
@@ -284,13 +326,19 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
     return firstUnseen >= 0 ? firstUnseen : 0;
   });
   const story = group?.stories[si];
+  // The live copy of this story (my reaction, my views) from the stories cache.
+  const live = useStories().data?.flatMap((g) => g.stories).find((x) => x.id === story?.id);
   const [paused, setPaused] = useState(false);
+  const [held, setHeld] = useState(false);
+  const [typing, setTyping] = useState(false);
   const [muted, setMuted] = useState(true);
   const [progress, setProgress] = useState(0);
   const [viewers, setViewers] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const { data: src } = useFileUrl(story?.file.id ?? null);
+  // Anything on top of the story (or a finger holding it) stops its clock.
+  const stopped = paused || held || typing || viewers || deleting;
 
   const nextStory = useCallback(() => {
     if (!group) return;
@@ -305,24 +353,29 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
     else if (gi > 0) {
       setGi(gi - 1);
       setSi(0);
-    } else setProgress(0);
+    } else {
+      elapsed.current = 0;
+      setProgress(0);
+      if (video.current) video.current.currentTime = 0;
+    }
   };
   const nextPerson = () => (gi < list.length - 1 ? (setGi(gi + 1), setSi(0)) : onClose());
   const prevPerson = () => gi > 0 && (setGi(gi - 1), setSi(0));
 
-  // Seen as soon as it is on screen.
+  // Seen as soon as it is on screen; a new story starts playing.
   useEffect(() => {
     if (story) markStoryViewed(story);
     setProgress(0);
+    setPaused(false);
   }, [story?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Photos: a 5 s timer (requestAnimationFrame only while open and not paused). Videos: their own clock.
+  // Photos: a 5 s timer (requestAnimationFrame only while open and running). Videos: their own clock.
   const elapsed = useRef(0);
   useEffect(() => {
     elapsed.current = 0;
   }, [story?.id]);
   useEffect(() => {
-    if (!story || story.kind !== "photo" || paused || !src || viewers || deleting) return;
+    if (!story || story.kind !== "photo" || stopped || !src) return;
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
@@ -335,16 +388,19 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [story, paused, src, nextStory, viewers, deleting]);
+  }, [story, stopped, src, nextStory]);
   useEffect(() => {
     const v = video.current;
     if (!v) return;
-    if (paused || viewers || deleting) v.pause();
+    if (stopped) v.pause();
     else void v.play().catch(() => undefined);
-  }, [paused, src, viewers, deleting]);
+  }, [stopped, src]);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      // Typing a reply: the keys are the field's.
+      if ((e.target as HTMLElement | null)?.closest?.("input, textarea")) return;
+      if (deleting || viewers) return;
       if (e.key === "Escape") onClose();
       else if (e.key === "ArrowRight") nextStory();
       else if (e.key === "ArrowLeft") prevStory();
@@ -357,19 +413,23 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
     return () => window.removeEventListener("keydown", key, true);
   });
 
-  // Gestures: tap halves, hold to pause, swipe sideways (person) or down (close).
-  const g = useRef<{ x: number; y: number; t: number; held: boolean; timer: number } | null>(null);
+  // Gestures: tap (middle pauses, edges step), hold to pause, swipe sideways (person) or down (close).
+  const g = useRef<{ x: number; y: number; held: boolean; timer: number } | null>(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
   const down = (e: React.PointerEvent) => {
-    if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (e.button !== 0 || (e.target as HTMLElement).closest("button, input, textarea, [data-story-ui]")) return;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* the pointer is already gone */
+    }
     const timer = window.setTimeout(() => {
       if (g.current) {
         g.current.held = true;
-        setPaused(true);
+        setHeld(true);
       }
     }, HOLD_MS);
-    g.current = { x: e.clientX, y: e.clientY, t: performance.now(), held: false, timer };
+    g.current = { x: e.clientX, y: e.clientY, held: false, timer };
   };
   const move = (e: React.PointerEvent) => {
     const s = g.current;
@@ -385,25 +445,44 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
     setDrag({ x: 0, y: 0 });
     if (!s) return;
     window.clearTimeout(s.timer);
+    setHeld(false);
     const dx = e.clientX - s.x;
     const dy = e.clientY - s.y;
-    if (s.held) return setPaused(false);
+    if (s.held) return;
     if (dy > 110 && dy > Math.abs(dx)) return onClose();
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) return dx < 0 ? nextPerson() : prevPerson();
     if (Math.hypot(dx, dy) < 12) {
       const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      if (e.clientX - r.left < r.width / 3) prevStory();
-      else nextStory();
+      const at = (e.clientX - r.left) / r.width;
+      if (at < EDGE) prevStory();
+      else if (at > 1 - EDGE) nextStory();
+      else setPaused((p) => !p);
     }
   };
   const cancel = () => {
     if (g.current) window.clearTimeout(g.current.timer);
     g.current = null;
     setDrag({ x: 0, y: 0 });
-    setPaused(false);
+    setHeld(false);
+  };
+
+  const removeFromList = (id: string) => {
+    const left = list.map((x) => ({ ...x, stories: x.stories.filter((st) => st.id !== id) }));
+    const here = left[gi]!;
+    if (here.stories.length === 0) {
+      // That was this person's last story: on to the next person, or close.
+      const rest = left.filter((x) => x.stories.length > 0);
+      if (!rest.length || gi >= rest.length) return onClose();
+      setList(rest);
+      setSi(0);
+      return;
+    }
+    setList(left);
+    setSi(Math.min(si, here.stories.length - 1));
   };
 
   if (!group || !story) return null;
+  const shownPaused = paused && !held;
   return (
     <motion.div
       className="fixed inset-0 z-[270] flex items-center justify-center bg-black"
@@ -416,7 +495,7 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
       aria-label={t("vibex.stories.of", { name: group.person.name })}
       data-testid="story-viewer"
       data-story-id={story.id}
-      data-paused={paused || undefined}
+      data-paused={stopped || undefined}
     >
       <div
         className="relative flex h-full w-full max-w-[520px] touch-none select-none flex-col overflow-hidden sm:h-[min(92dvh,900px)] sm:rounded-[28px]"
@@ -425,6 +504,7 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
         onPointerMove={move}
         onPointerUp={up}
         onPointerCancel={cancel}
+        data-testid="story-stage"
       >
         {/* The story itself */}
         <div className="absolute inset-0 flex items-center justify-center bg-black">
@@ -451,6 +531,22 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
             <img src={src} alt="" className="size-full object-contain" draggable={false} data-testid="story-image" />
           )}
         </div>
+        {/* Paused: a quiet sign in the middle (taps go through it) */}
+        <AnimatePresence>
+          {shownPaused && (
+            <motion.span
+              className="pointer-events-none absolute left-1/2 top-1/2 z-10 -ml-9 -mt-9 flex size-[72px] items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.16 }}
+              aria-hidden
+              data-testid="story-paused"
+            >
+              <RiPlayFill className="size-9" />
+            </motion.span>
+          )}
+        </AnimatePresence>
         {/* Progress + who + controls */}
         <div className="relative z-10 bg-gradient-to-b from-black/55 to-transparent px-3 pb-6 pt-[max(var(--safe-top),10px)]">
           <div className="flex gap-1" aria-hidden>
@@ -471,25 +567,38 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
                 {muted ? <RiVolumeMuteLine className="size-5" /> : <RiVolumeUpLine className="size-5" />}
               </button>
             )}
-            <button type="button" onClick={() => setPaused((p) => !p)} aria-label={t(paused ? "vibex.stories.play" : "vibex.stories.pause")} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15" data-testid="story-pause">
-              {paused ? <RiPlayFill className="size-5" /> : <RiPauseFill className="size-5" />}
-            </button>
             <button type="button" onClick={onClose} aria-label={t("common.close")} className="flex size-10 items-center justify-center rounded-full hover:bg-white/15" data-testid="story-close">
               <RiCloseLine className="size-6" />
             </button>
           </div>
         </div>
-        {/* Screen-reader / keyboard navigation (taps do the same) */}
+        {/* Screen-reader / keyboard navigation (taps and Space do the same) */}
         <button type="button" onClick={prevStory} className="sr-only" aria-label={t("vibex.stories.previous")} data-testid="story-prev">
           <RiArrowLeftSLine />
+        </button>
+        <button type="button" onClick={() => setPaused((p) => !p)} className="sr-only" aria-label={t(paused ? "vibex.stories.play" : "vibex.stories.pause")} data-testid="story-toggle">
+          {paused ? <RiPlayFill /> : <RiPauseFill />}
         </button>
         <button type="button" onClick={nextStory} className="sr-only" aria-label={t("vibex.stories.next")} data-testid="story-next">
           <RiArrowRightSLine />
         </button>
-        {group.mine && (
-          <div className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-2 bg-gradient-to-t from-black/60 to-transparent px-4 pb-[max(var(--safe-bottom),14px)] pt-8 text-white">
-            <button type="button" onClick={() => setViewers(true)} className="flex h-10 items-center gap-1.5 rounded-full bg-white/15 px-3.5 text-[14px]" data-testid="story-views">
-              <RiEyeLine className="size-[18px]" /> {story.views}
+        {group.mine ? (
+          <div className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-2 bg-gradient-to-t from-black/60 to-transparent px-4 pb-[max(var(--safe-bottom),14px)] pt-8 text-white" data-story-ui>
+            <button
+              type="button"
+              onClick={() => setViewers(true)}
+              className="flex h-10 items-center gap-3 rounded-full bg-white/15 px-3.5 text-[14px]"
+              aria-label={t("vibex.stories.viewers")}
+              data-testid="story-views"
+            >
+              <span className="flex items-center gap-1.5">
+                <RiEyeLine className="size-[18px]" /> <span data-testid="story-views-count">{live?.views ?? story.views}</span>
+              </span>
+              {(live?.reactions ?? story.reactions ?? 0) > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <RiHeart3Fill className="size-[17px] text-[#ff4d6d]" /> <span data-testid="story-reactions-count">{live?.reactions ?? story.reactions}</span>
+                </span>
+              )}
             </button>
             <span className="flex-1" />
             <button type="button" onClick={onArchive} aria-label={t("vibex.stories.archive")} title={t("vibex.stories.archive")} className="flex size-10 items-center justify-center rounded-full bg-white/15" data-testid="story-open-archive">
@@ -499,44 +608,184 @@ function Viewer({ groups, startPerson, onClose, onArchive }: { groups: VibexStor
               <RiDeleteBinLine className="size-5" />
             </button>
           </div>
+        ) : (
+          <ReplyBar story={live ?? story} owner={group.person.firstName || group.person.name} onTyping={setTyping} />
         )}
       </div>
-      {group.mine && <ViewersSheet story={viewers ? story : null} onClose={() => setViewers(false)} />}
+      {group.mine && <ViewersSheet story={viewers ? (live ?? story) : null} onClose={() => setViewers(false)} />}
       <ConfirmDialog
         open={deleting}
+        top
         onClose={() => setDeleting(false)}
         onConfirm={() => {
           setDeleting(false);
-          void deleteStory(story.id)
-            .then(() => (group.stories.length > 1 ? nextStory() : onClose()))
+          const id = story.id;
+          void deleteStory(id)
+            .then(() => removeFromList(id))
             .catch((e) => toast({ title: errorMessage(t, e), tone: "danger" }));
         }}
         title={t("vibex.stories.deleteTitle")}
         message={t("vibex.stories.deleteBody")}
         confirmLabel={t("vibex.stories.delete")}
         danger
+        testId="story-delete-confirm"
       />
     </motion.div>
   );
 }
 
+/**
+ * Someone else's story: «Ответить...» (a direct message to its author that
+ * refers to the story) and a heart; focusing the field offers the quick
+ * reactions. The story waits while the field is in use.
+ */
+function ReplyBar({ story, owner, onTyping }: { story: VibexStoryDto; owner: string; onTyping: (v: boolean) => void }) {
+  const t = useT();
+  const [text, setText] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [sending, setSending] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  const mine = story.myReaction ?? null;
+  useEffect(() => onTyping(focused || text.length > 0), [focused, text, onTyping]);
+  useEffect(() => () => onTyping(false), [onTyping]);
+  useEffect(() => setText(""), [story.id]);
+  const react = (r: string) => {
+    const next = mine === r ? null : r;
+    void reactToStory(story, next).catch((e) => toast({ title: errorMessage(t, e), tone: "danger" }));
+  };
+  const send = async () => {
+    const body = text.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      await replyToStory(story.id, body);
+      setText("");
+      field.current?.blur();
+      toast({ title: t("vibex.stories.replySent", { name: owner }) });
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-3 pb-[max(var(--safe-bottom),12px)] pt-10 text-white" data-story-ui data-testid="story-reply-bar">
+      <AnimatePresence>
+        {focused && !text && (
+          <motion.div
+            className="mb-3 flex justify-center gap-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.16 }}
+            data-testid="story-reactions"
+          >
+            {VIBEX_STORY_REACTIONS.map((r) => (
+              <button
+                key={r}
+                type="button"
+                // Keep the field focused: the tap must reach the button, not blur first.
+                onPointerDown={(e) => e.preventDefault()}
+                onClick={() => react(r)}
+                className={cx("flex size-11 items-center justify-center rounded-full text-[24px] transition-transform active:scale-90", mine === r ? "bg-white/30" : "bg-white/10")}
+                aria-label={r}
+                aria-pressed={mine === r}
+                data-testid="story-reaction"
+                data-reaction={r}
+              >
+                {r}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send();
+        }}
+      >
+        <input
+          ref={field}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder={t("vibex.stories.reply")}
+          maxLength={VIBEX_MESSAGE_MAX}
+          enterKeyHint="send"
+          className="h-11 min-w-0 flex-1 rounded-full border border-white/45 bg-black/20 px-4 text-[16px] text-white outline-none placeholder:text-white/70 focus:border-white/80"
+          data-testid="story-reply"
+        />
+        {text.trim() ? (
+          <button
+            type="submit"
+            disabled={sending}
+            onPointerDown={(e) => e.preventDefault()}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-60"
+            aria-label={t("vibex.stories.send")}
+            data-testid="story-reply-send"
+          >
+            {sending ? <Spinner className="size-5 text-white" /> : <RiSendPlane2Fill className="size-5" />}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => react("❤️")}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full active:scale-90"
+            aria-label={t("vibex.stories.like")}
+            aria-pressed={!!mine}
+            data-testid="story-like"
+            data-reacted={mine ?? undefined}
+          >
+            {mine && mine !== "❤️" ? <span className="text-[24px]">{mine}</span> : mine ? <RiHeart3Fill className="size-7 text-[#ff4d6d]" /> : <RiHeart3Line className="size-7" />}
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
+/** Who saw my story: views and reactions on top, then each viewer (their reaction on the avatar), reactions first. */
 function ViewersSheet({ story, onClose }: { story: VibexStoryDto | null; onClose: () => void }) {
   const t = useT();
   const lang = useLanguage();
   const q = useStoryViewers(story?.id ?? null);
+  const rows = [...(q.data ?? [])].sort((a, b) => Number(!!b.reaction) - Number(!!a.reaction));
+  const reactions = rows.filter((v) => v.reaction).length;
   return (
-    <Sheet open={!!story} onClose={onClose} title={t("vibex.stories.viewers")} width={420} testId="story-viewers">
+    <Sheet open={!!story} onClose={onClose} title={t("vibex.stories.viewers")} width={420} top testId="story-viewers">
       {q.isPending ? (
         <Spinner />
-      ) : !q.data?.length ? (
+      ) : !rows.length ? (
         <EmptyState icon={<RiEyeLine className="size-7" />} title={t("vibex.stories.noViewers")} />
       ) : (
         <div className="flex flex-col">
-          {q.data.map((v) => (
-            <div key={v.person.id} className="flex items-center gap-3 py-2">
-              <Avatar name={v.person.name} userId={v.person.id} version={v.person.avatarVersion} size={40} />
-              <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{v.person.name}</span>
-              <span className="text-[12.5px] text-text-tertiary">{formatRelative(v.viewedAt, lang)}</span>
+          <div className="mb-2 flex items-center gap-4 text-[14px] text-text-secondary" data-testid="story-viewers-summary">
+            <span className="flex items-center gap-1.5" title={t("vibex.stories.viewsLabel")}>
+              <RiEyeLine className="size-[18px]" /> <b className="font-semibold text-text">{rows.length}</b> {t("vibex.stories.viewsLabel")}
+            </span>
+            <span className="flex items-center gap-1.5" title={t("vibex.stories.reactionsLabel")}>
+              <RiHeart3Fill className="size-[17px] text-[#ff4d6d]" /> <b className="font-semibold text-text">{reactions}</b> {t("vibex.stories.reactionsLabel")}
+            </span>
+          </div>
+          {rows.map((v) => (
+            <div key={v.person.id} className="flex items-center gap-3 py-2" data-testid="story-viewer-row" data-reaction={v.reaction ?? undefined}>
+              <span className="relative shrink-0">
+                <Avatar name={v.person.name} userId={v.person.id} version={v.person.avatarVersion} size={44} />
+                {v.reaction && (
+                  <span className="absolute -bottom-1 -right-1 flex size-[22px] items-center justify-center rounded-full bg-surface text-[13px] shadow-sm ring-2 ring-surface" aria-label={v.reaction}>
+                    {v.reaction}
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-medium">{v.person.name}</span>
+                {v.person.address && <span className="block truncate text-[12.5px] text-text-tertiary">{v.person.address}</span>}
+              </span>
+              <span className="shrink-0 text-[12.5px] text-text-tertiary">{formatRelative(v.reactedAt ?? v.viewedAt, lang)}</span>
             </div>
           ))}
         </div>

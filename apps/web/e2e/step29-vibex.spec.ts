@@ -251,7 +251,9 @@ test("stories: collapsed avatars in the header, pull down for search then storie
   const viewer = page.getByTestId("story-viewer");
   await expect(viewer).toBeVisible();
   await expect(viewer.getByTestId("story-image")).toBeVisible();
-  await page.getByTestId("story-pause").click();
+  // Step 2.11: a tap in the middle pauses (there is no pause button any more).
+  const stage = (await viewer.getByTestId("story-stage").boundingBox())!;
+  await page.mouse.click(stage.x + stage.width / 2, stage.y + stage.height / 2);
   await expect(viewer).toHaveAttribute("data-paused", "true");
   await shot(page, `story-viewer-${isMobile(page) ? "phone" : "pc"}`);
   await page.getByTestId("story-close").click();

@@ -1,6 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import type { AppId } from "@voidex/shared";
-import { CalculatorGlyph, FilesGlyph, MailGlyph, MediaGlyph, NotesGlyph, SettingsGlyph, VibexGlyph } from "@/brand/brand";
+import { CalculatorGlyph, FilesGlyph, MailGlyph, MediaGlyph, NotesGlyph, SettingsGlyph, StoreGlyph, VibexGlyph } from "@/brand/brand";
 
 /**
  * Client half of the App Registry: how each registered app is drawn and
@@ -48,4 +48,21 @@ export const CLIENT_APPS: Record<AppId, ClientApp> = {
     // The gallery loads with this chunk; its photo / video editors are split further.
     Component: lazy(() => import("@/apps/media/media-app").then((m) => ({ default: m.MediaWindowApp }))),
   },
+  store: {
+    Icon: StoreGlyph,
+    // Step 2.11: Appex Store; its screenshots load lazily as they scroll in.
+    Component: lazy(() => import("@/apps/store/store-app").then((m) => ({ default: m.StoreApp }))),
+  },
+};
+
+/** Step 2.11: loads an app's code (what "installing" it fetches); resolves once it is ready to open. */
+export const APP_LOADERS: Record<AppId, () => Promise<unknown>> = {
+  settings: () => import("@/apps/settings/settings-app"),
+  mail: () => import("@/apps/mail/mail-app"),
+  vibex: () => import("@/apps/vibex/vibex-app"),
+  calculator: () => import("@/apps/calculator/calculator-app"),
+  notes: () => import("@/apps/notes/notes-app"),
+  files: () => import("@/apps/files/files-app"),
+  media: () => import("@/apps/media/media-app"),
+  store: () => import("@/apps/store/store-app"),
 };

@@ -60,6 +60,7 @@ export function Sheet({
   width = 480,
   testId,
   centered = false,
+  top = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -70,6 +71,8 @@ export function Sheet({
   testId?: string;
   /** Phones too: a dialog in the middle of the visible area (above the keyboard), not a bottom sheet. */
   centered?: boolean;
+  /** Step 2.11: above full-screen viewers (stories, media), not under them. */
+  top?: boolean;
 }) {
   const ff = useFormFactor();
   const t = useT();
@@ -82,7 +85,7 @@ export function Sheet({
     <AnimatePresence>
       {open && (
         <div
-          className={cx("fixed inset-x-0 z-[200] flex justify-center", sheet ? "inset-y-0 items-end sm:items-center" : "items-center")}
+          className={cx("fixed inset-x-0 flex justify-center", top ? "z-[320]" : "z-[200]", sheet ? "inset-y-0 items-end sm:items-center" : "items-center")}
           style={
             vv
               ? { top: vv.top, height: vv.height, paddingTop: "max(var(--safe-top), 12px)", paddingBottom: "max(var(--safe-bottom), 12px)" }
@@ -209,6 +212,8 @@ export function ConfirmDialog({
   confirmLabel,
   danger,
   loading,
+  top,
+  testId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -218,10 +223,13 @@ export function ConfirmDialog({
   confirmLabel: string;
   danger?: boolean;
   loading?: boolean;
+  /** Step 2.11: shown above a full-screen viewer. */
+  top?: boolean;
+  testId?: string;
 }) {
   const t = useT();
   return (
-    <Sheet open={open} onClose={onClose} title={title} width={420}>
+    <Sheet open={open} onClose={onClose} title={title} width={420} top={top} testId={testId}>
       {message && <p className="text-[15px] text-text-secondary">{message}</p>}
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onClose}>

@@ -30,7 +30,7 @@ import { NotesFileCard } from "@/apps/notes/card";
 import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
-import { checkVibexFile, filesApi, markRead, useChat, useChats, useEditMessage, useMessages, useSendMessage, useSetPins } from "./data";
+import { checkVibexFile, filesApi, markRead, useChat, useChats, useEditMessage, useFileUrl, useMessages, useSendMessage, useSetPins } from "./data";
 import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
 import { VoiceBubble } from "./media-bubbles";
 import { ForwardSheet, MessageMenu, PinnedBar, SelectDot, SelectionBar, SwipeReplyIcon, useSwipeReply, type MessageMenuState } from "./message-actions";
@@ -42,6 +42,7 @@ import { useSession } from "@/lib/session";
 import { NestedPost, UnavailablePost } from "./posts";
 import { markVisible, useVibex } from "./store";
 import { ChatAvatar, GroupAvatar, GroupInfoSheet, chatTitle } from "./groups";
+import { StoryHalo } from "./stories";
 import { AttachSourceSheet } from "@/os/share/attach-source";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -91,7 +92,9 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
   const read = chat.lastMessage?.mine && chat.peerReadAt && chat.peerReadAt >= chat.lastMessage.createdAt;
   return (
     <>
-      <ChatAvatar chat={chat} size={54} />
+      <StoryHalo personId={chat.peer?.id} gap="ring-[var(--chat-card)]">
+        <ChatAvatar chat={chat} size={54} />
+      </StoryHalo>
       <span className="min-w-0 flex-1 self-stretch py-2.5 pr-3">
         <span className="flex items-center gap-1.5">
           <span className={cx("min-w-0 truncate text-[15.5px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
@@ -607,6 +610,7 @@ function Bubble({
           </span>
         )}
         {forwarded}
+        {msg.story && <StoryReplyRef story={msg.story} mine={mine} />}
         {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
         {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
         {images.length > 0 && (
@@ -695,6 +699,24 @@ function Bubble({
       </motion.div>
       <SwipeReplyIcon progress={swipe.icon} />
       <Lightbox files={images} index={viewer} onIndex={setViewer} />
+    </div>
+  );
+}
+
+/** Step 2.11: the story a message answers (its picture while it is there, a note once it is gone). */
+function StoryReplyRef({ story, mine }: { story: NonNullable<VibexMessageDto["story"]>; mine: boolean }) {
+  const t = useT();
+  const me = useSession((s) => s.user?.id);
+  const { data: src } = useFileUrl(story.file?.id ?? null);
+  return (
+    <div className={cx("flex items-center gap-2.5 px-2 pt-1", mine ? "text-white/85" : "text-text-secondary")} data-testid="message-story">
+      <span className={cx("relative h-[72px] w-[46px] shrink-0 overflow-hidden rounded-[10px]", mine ? "bg-white/20" : "bg-surface-secondary")}>
+        {src && (story.kind === "video" ? <video src={src} muted playsInline preload="metadata" className="size-full object-cover" /> : <img src={src} alt="" loading="lazy" draggable={false} className="size-full object-cover" />)}
+      </span>
+      <span className="min-w-0 text-[12.5px] leading-snug">
+        <span className="block font-medium">{t(story.ownerId === me ? "vibex.stories.replyToYours" : "vibex.stories.replyTo")}</span>
+        {!story.file && <span className="block opacity-80">{t("vibex.stories.gone")}</span>}
+      </span>
     </div>
   );
 }

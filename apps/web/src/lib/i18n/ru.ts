@@ -1344,4 +1344,13 @@ export const ru: Record<MessageKey, string> = {
   "vibex.activity.message": "Сообщение",
   "vibex.activity.empty": "Пока ничего нового",
   "vibex.activity.emptyHint": "Здесь появятся новые подписчики, отметки «Нравится», репосты и ответы.",
+  "vibex.stories.reply": "Ответить...",
+  "vibex.stories.replySent": "Ответ отправлен: {name}",
+  "vibex.stories.send": "Отправить",
+  "vibex.stories.like": "Нравится",
+  "vibex.stories.viewsLabel": "просмотры",
+  "vibex.stories.reactionsLabel": "реакции",
+  "vibex.stories.replyTo": "Ответ на историю",
+  "vibex.stories.replyToYours": "Ответ на вашу историю",
+  "vibex.stories.gone": "История больше недоступна",
 };
