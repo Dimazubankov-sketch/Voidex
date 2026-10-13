@@ -86,8 +86,9 @@ test("phone: a pull from the top edge opens the Notification Center (home and in
   await reloadUnlocked(page);
   await expect(page.getByTestId("app-mail")).toBeVisible();
 
-  // Normal pull-down on the icons → search (not notifications).
-  await drag(page, { x: 200, y: 420 }, { x: 200, y: 600 });
+  // Normal pull-down on the home screen (below the icons) → search (not notifications).
+  const below = await page.locator("[data-home-item]").evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().bottom)));
+  await drag(page, { x: 200, y: below + 30 }, { x: 200, y: below + 210 });
   await expect(page.getByTestId("home-search-overlay")).toBeVisible();
   await expect(page.getByTestId("notification-center")).toHaveCount(0);
   await page.getByTestId("home-search-cancel").click();

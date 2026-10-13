@@ -77,10 +77,12 @@ test("drawer: 10 rapid open / close, swipe-open → button-close → swipe-open,
   const mid = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 
   // 10 rapid toggles through the button and the catcher (no waiting for the animations).
+  // (Dispatched on the elements themselves: no coordinates, nothing in between can take the click.)
   for (let i = 0; i < 10; i++) {
-    await page.getByTestId("vibex-menu").click({ force: true });
+    await page.getByTestId("vibex-menu").dispatchEvent("click");
+    await expect(page.getByTestId("vibex-drawer-catcher")).toBeAttached();
     await page.waitForTimeout(60);
-    await page.getByTestId("vibex-drawer-catcher").click({ position: { x: 30, y: 300 }, force: true });
+    await page.getByTestId("vibex-drawer-catcher").dispatchEvent("click");
     await page.waitForTimeout(60);
   }
   await settledClosed();
