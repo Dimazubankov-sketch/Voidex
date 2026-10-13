@@ -105,7 +105,11 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
       [pose.y, to.y],
     ].flatMap(([mv, t]) => {
       const v = mv as typeof pose.x;
-      return Math.abs(v.get() - (t as number)) > 0.5 ? [animate(v, t as number, { ...GLIDE, restDelta: 0.01, onComplete: () => v.set(t as number) })] : [];
+      if (Math.abs(v.get() - (t as number)) > 0.5) return [animate(v, t as number, { ...GLIDE, restDelta: 0.01, onComplete: () => v.set(t as number) })];
+      // A sub-pixel rest left by the drag: put it exactly there (a fraction of a pixel still blurs the app).
+      v.stop();
+      v.set(t as number);
+      return [];
     });
     return () => runs.forEach((r) => r.stop());
     // eslint-disable-next-line react-hooks/exhaustive-deps

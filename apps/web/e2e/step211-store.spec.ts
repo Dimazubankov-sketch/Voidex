@@ -20,8 +20,21 @@ async function openStore(page: Page) {
   if (isMobile(page)) await page.getByTestId("app-store").click();
   else await page.getByTestId("dock-app-store").click();
   await expect(page.locator('[data-testid="window-store"][data-state="open"]')).toBeVisible();
-  await expect(page.getByTestId("store-home")).toBeVisible();
+  try {
+    await expect(page.getByTestId("store-home")).toBeVisible();
+  } catch (e) {
+    // What the window shows instead (a loading state, an error), and the page's errors: for CI logs.
+    const shown = await page.locator('[data-testid="window-store"]').innerText().catch(() => "");
+    throw new Error(`store-home missing; window: ${JSON.stringify(shown.slice(0, 600))}; page errors: ${JSON.stringify(pageErrors.get(page) ?? [])}`, { cause: e });
+  }
 }
+const pageErrors = new WeakMap<Page, string[]>();
+test.beforeEach(({ page }) => {
+  const list: string[] = [];
+  pageErrors.set(page, list);
+  page.on("pageerror", (e) => list.push(String(e.message).slice(0, 300)));
+  page.on("console", (m) => m.type() === "error" && list.push(m.text().slice(0, 300)));
+});
 async function toApp(page: Page, id: string) {
   await page.getByTestId("store-see-all").first().click();
   await page.locator(`[data-testid="store-row"][data-app="${id}"] [data-testid="store-row-open"]`).click();
