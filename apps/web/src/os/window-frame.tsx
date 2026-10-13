@@ -1,5 +1,5 @@
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
+import { Component, Suspense, useCallback, useLayoutEffect, useMemo, useRef, type ErrorInfo, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import { RiErrorWarningLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
@@ -8,7 +8,7 @@ import { Button, Spinner } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
 import { AppLockGate } from "./app-lock";
 import { WindowContext, type WindowApi } from "./window-context";
-import { barDrag, dragRadius, dragScale, gestureBarAction, rubberUp, slideHints } from "./gesture-bar";
+import { barDrag, dragPose, gestureBarAction, rubberUp, slideHints } from "./gesture-bar";
 import { useGesturePeek } from "./gesture-peek";
 import { captureWindow } from "./snapshots";
 import { foregroundId, useWM, type AppWindow, type Rect } from "./window-manager";
@@ -91,6 +91,26 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
     [win.id, win.appId, ff, focused, maximized, win.params, win.paramsVersion, startDrag],
   );
 
+  // Step 2.11: the phone window under the gesture bar (its own pose while dragged).
+  const phoneVisible = ff === "mobile" && fg && !minimized && !wm.switcherOpen;
+  const pose = useGesturePose(phoneVisible);
+  const hiddenTarget = mobileHiddenTarget(win, bounds, fg, wm.switcherOpen);
+  // A pose left by the finger must still end where the window goes (motion only animates the keys whose
+  // target changed, and x / y often stay 0): carry them there with the same glide.
+  useLayoutEffect(() => {
+    if (ff !== "mobile") return;
+    const to = phoneVisible ? { x: 0, y: 0 } : { x: hiddenTarget.x, y: hiddenTarget.y };
+    const runs = [
+      [pose.x, to.x],
+      [pose.y, to.y],
+    ].flatMap(([mv, t]) => {
+      const v = mv as typeof pose.x;
+      return Math.abs(v.get() - (t as number)) > 0.5 ? [animate(v, t as number, { ...GLIDE, restDelta: 0.01, onComplete: () => v.set(t as number) })] : [];
+    });
+    return () => runs.forEach((r) => r.stop());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phoneVisible]);
+
   const App = CLIENT_APPS[win.appId].Component;
   const content = (
     <WindowContext.Provider value={api}>
@@ -105,34 +125,20 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
   );
 
   if (ff === "mobile") {
-    const origin = win.origin;
     const slid = slideHints.get(win.id);
     const visible = fg && !minimized && !wm.switcherOpen;
-    // Step 2.9: where a hidden window rests — slid out sideways (a gesture-bar switch), faded in
-    // place under the switcher (the gesture already shrank it), or back into its icon.
-    const hiddenTarget =
-      slid !== undefined
-        ? { x: slid, y: 0, scale: 1, opacity: 1, borderRadius: 0 }
-        : wm.switcherOpen && fg
-          ? { x: 0, y: 0, scale: 0.62, opacity: 0, borderRadius: 34 }
-          : origin
-            ? {
-                x: origin.x + origin.w / 2 - bounds.w / 2,
-                y: origin.y + origin.h / 2 - bounds.h / 2,
-                scale: Math.max(0.12, origin.w / bounds.w),
-                opacity: 0,
-                borderRadius: 60,
-              }
-            : { x: 0, y: 40, scale: 0.9, opacity: 0, borderRadius: 30 };
     const enterFrom = visible ? slideHints.get(`enter:${win.id}`) : undefined;
+    // Step 2.11: leaving by the gesture bar (home / switcher) the card carries on from where the finger
+    // left it, with its speed (a spring on the same values), into its icon or its switcher place.
+    const released = !visible && releasedByGesture.has(win.id);
     return (
       <motion.section
         aria-label={win.appId}
         data-testid={`window-${win.appId}`}
         data-state={visible ? "open" : "hidden"}
         data-window-id={win.id}
-        className="absolute inset-0 flex flex-col"
-        style={{ zIndex: z, pointerEvents: visible ? "auto" : "none", visibility: undefined }}
+        className="absolute inset-0 flex flex-col overflow-hidden"
+        style={{ zIndex: z, pointerEvents: visible ? "auto" : "none", visibility: undefined, x: pose.x, y: pose.y, scale: pose.scale, borderRadius: pose.borderRadius }}
         initial={hiddenTarget}
         animate={
           visible
@@ -141,16 +147,24 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
               : { x: 0, y: 0, scale: 1, opacity: 1, borderRadius: 0 }
             : hiddenTarget
         }
-        transition={slid !== undefined && !visible ? { duration: 0 } : enterFrom !== undefined ? { duration: 0.34, ease: EASE } : { duration: 0.42, ease: EASE }}
+        transition={
+          slid !== undefined && !visible
+            ? GLIDE
+            : released
+              ? { default: GLIDE, opacity: { duration: 0.32, delay: 0.12, ease: EASE } }
+              : enterFrom !== undefined
+                ? GLIDE
+                : { duration: 0.42, ease: EASE }
+        }
         onAnimationComplete={() => {
           if (visible) {
             slideHints.delete(win.id);
             slideHints.delete(`enter:${win.id}`);
-          }
+          } else releasedByGesture.delete(win.id);
         }}
         aria-hidden={!visible}
       >
-        <DraggedApp active={visible}>
+        <DraggedApp>
           <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)]" data-window-content={win.id}>
             {content}
           </div>
@@ -205,52 +219,84 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
 }
 
 /**
- * Step 2.9: the foreground app under the finger. While the gesture bar is
- * dragged the whole app moves with it, shrinks and rounds its corners, and
- * its neighbours come in beside it (see GesturePeek); at rest it is a plain
- * full-screen app.
+ * Step 2.9: where a hidden phone window rests: slid out sideways (a
+ * gesture-bar switch), faded in place under the switcher (the gesture
+ * already shrank it), or back into its icon.
  */
-function DraggedApp({ active, children }: { active: boolean; children: ReactNode }) {
-  const height = useWM((s) => s.bounds.h);
-  // Step 2.10: each window has its own transform, always bound and back at 0 whenever it is not the one
-  // under the finger. (Unbinding the shared values used to leave the last transform on the element, so an
-  // app could come back shifted sideways or still scaled.)
+function mobileHiddenTarget(win: AppWindow, bounds: { w: number; h: number }, fg: boolean, switcherOpen: boolean) {
+  const slid = slideHints.get(win.id);
+  const origin = win.origin;
+  return slid !== undefined
+    ? { x: slid, y: 0, scale: 1, opacity: 1, borderRadius: 0 }
+    : switcherOpen && fg
+      ? { x: 0, y: 0, scale: 0.62, opacity: 0, borderRadius: 34 }
+      : origin
+        ? {
+            x: origin.x + origin.w / 2 - bounds.w / 2,
+            y: origin.y + origin.h / 2 - bounds.h / 2,
+            scale: Math.max(0.12, origin.w / bounds.w),
+            opacity: 0,
+            borderRadius: 60,
+          }
+        : { x: 0, y: 40, scale: 0.9, opacity: 0, borderRadius: 30 };
+}
+
+/**
+ * Step 2.9 / 2.11: the foreground app under the finger. While the gesture bar
+ * is dragged the window itself (its section) moves with it, shrinks and
+ * rounds its corners (see dragPose); its neighbours come in beside it (see
+ * GesturePeek). One transform only: whatever comes next (back in place, the
+ * switcher, home) continues from exactly that pose, with its speed.
+ */
+function useGesturePose(active: boolean) {
   const x = useMotionValue(0);
   const y = useMotionValue(0);
-  useEffect(() => {
-    if (!active) {
-      x.set(0);
-      y.set(0);
-      return;
-    }
-    x.set(barDrag.x.get());
-    y.set(barDrag.y.get());
-    const offX = barDrag.x.on("change", (v) => x.set(v));
-    const offY = barDrag.y.on("change", (v) => y.set(v));
+  const scale = useMotionValue(1);
+  const borderRadius = useMotionValue(0);
+  useLayoutEffect(() => {
+    if (!active) return;
+    const apply = () => {
+      const p = dragPose(barDrag.x.get(), barDrag.y.get(), useWM.getState().bounds.h);
+      x.set(p.x);
+      y.set(p.y);
+      scale.set(p.scale);
+      borderRadius.set(p.borderRadius);
+    };
+    const offX = barDrag.x.on("change", apply);
+    const offY = barDrag.y.on("change", apply);
     return () => {
       offX();
       offY();
-      x.set(0);
-      y.set(0);
     };
-  }, [active, x, y]);
-  const scale = useTransform(y, (v) => dragScale(-v, height));
-  const radius = useTransform(y, (v) => dragRadius(-v));
+  }, [active, x, y, scale, borderRadius]);
+  return { x, y, scale, borderRadius };
+}
+
+/** The app's own layer: never transformed (the window moves as a whole). */
+function DraggedApp({ children }: { children: ReactNode }) {
   return (
-    <motion.div
-      className="vx-app relative flex min-h-0 flex-1 flex-col overflow-hidden"
-      style={{ x, y, scale, borderRadius: radius, transformOrigin: "50% 100%" }}
-      data-dragged-app
-    >
+    <div className="vx-app relative flex min-h-0 flex-1 flex-col overflow-hidden" data-dragged-app>
       {children}
-    </motion.div>
+    </div>
   );
 }
 
+/** The space between neighbouring cards (as GesturePeek draws them). */
+const PEEK_GAP = 16;
+
+/** Step 2.11: windows that left by the gesture bar (they glide on from the release pose). */
+const releasedByGesture = new Set<string>();
+/** The glide after a release: a spring that keeps the finger's speed. */
+const GLIDE = { type: "spring", stiffness: 260, damping: 30, mass: 0.9 } as const;
+
 const SETTLE = { type: "spring", stiffness: 520, damping: 46 } as const;
 
-/** Sideways switch from the gesture bar: this app slides out, the other one slides in from the other side. */
-function slideTo(dir: -1 | 1, width: number) {
+/**
+ * Sideways switch from the gesture bar: this app slides out, the other one
+ * slides in from the other side. Step 2.11: both carry on from where the
+ * finger left them (the other one was already peeking beside it).
+ */
+function slideTo(dir: -1 | 1, width: number, dx = 0) {
   const s = useWM.getState();
   const from = s.focusedId;
   const list = Object.values(s.windows).sort((a, b) => a.openedAt - b.openedAt || a.id.localeCompare(b.id));
@@ -258,13 +304,19 @@ function slideTo(dir: -1 | 1, width: number) {
   const next = i < 0 ? undefined : list[i + dir];
   if (!from || !next) return false;
   // Right swipe (dir -1, the app before): this one leaves to the right, the other enters from the left.
-  const out = dir === -1 ? width : -width;
+  const out = dir === -1 ? width + PEEK_GAP : -(width + PEEK_GAP);
   slideHints.set(from, out);
   slideHints.delete(next.id);
-  slideHints.set(`enter:${next.id}`, -out);
-  barDrag.x.set(0);
-  barDrag.y.set(0);
-  return s.switchAdjacent(dir);
+  slideHints.set(`enter:${next.id}`, dx - out);
+  const ok = s.switchAdjacent(dir);
+  // Let go of the bar only once the windows no longer follow it (no jump back for a frame).
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      barDrag.x.set(0);
+      barDrag.y.set(0);
+    }),
+  );
+  return ok;
 }
 
 /**
@@ -348,11 +400,24 @@ function HomeIndicator() {
         const action = gestureBarAction(e.clientX - s0.x, e.clientY - s0.y, now - s0.at, { vx, vy, height: h });
         useGesturePeek.setState({ active: false });
         if (action === "prev" || action === "next") {
-          if (!slideTo(action === "prev" ? -1 : 1, w)) settle();
+          if (!slideTo(action === "prev" ? -1 : 1, w, e.clientX - s0.x)) settle();
           return;
         }
-        if (action === "home") goHome();
-        else if (action === "switcher") setSwitcher(true);
+        if (action === "home" || action === "switcher") {
+          // The window glides on from where the finger left it (see useGesturePose): the bar's drag is
+          // let go only once the window no longer follows it.
+          const fg = foregroundId(useWM.getState());
+          if (fg && !reduced) releasedByGesture.add(fg);
+          if (action === "home") goHome();
+          else setSwitcher(true);
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              barDrag.x.set(0);
+              barDrag.y.set(0);
+            }),
+          );
+          return;
+        }
         settle();
       }}
       onPointerCancel={reset}

@@ -43,15 +43,31 @@ export const barDrag = { x: motionValue(0), y: motionValue(0) };
 // sideways. A permanent observer keeps the settle running until it really is back at 0.
 for (const v of [barDrag.x, barDrag.y]) v.on("change", () => {});
 
-/** How small the app gets while dragged up by `up` px on a screen `height` px tall. */
+/**
+ * How small the app gets while dragged up by `up` px on a screen `height` px
+ * tall. Step 2.11 (the reference video): it shrinks quickly at first (about
+ * 0.63 at a fifth of the screen) and then more slowly, never below 0.42.
+ */
 export function dragScale(up: number, height: number): number {
   if (up <= 0) return 1;
-  return Math.max(0.5, 1 - (up / Math.max(height, 1)) * 0.9);
+  const k = up / Math.max(height * 0.18, 1);
+  return Math.max(0.42, 1 - 0.55 * (1 - Math.exp(-k)));
 }
 
-/** Corner radius of the dragged app (it turns into a card). */
+/** Corner radius of the dragged app (it turns into a card at once, like the phone's own corners). */
 export function dragRadius(up: number): number {
-  return Math.max(0, Math.min(34, up / 4));
+  if (up <= 0) return 0;
+  return Math.min(64, 26 + up * 0.5);
+}
+
+/**
+ * Step 2.11: the dragged app as one transform about its centre (the window
+ * itself moves; nothing inside it): the card shrinks towards the finger
+ * with its bottom edge following it. `x` / `y` are the bar's drag.
+ */
+export function dragPose(x: number, y: number, height: number) {
+  const s = dragScale(-y, height);
+  return { x, y: y + (height / 2) * (1 - s), scale: s, borderRadius: dragRadius(-y) };
 }
 
 /**

@@ -6,7 +6,7 @@ import { APP_REGISTRY } from "@voidex/shared";
 import { AppTile } from "@/brand/brand";
 import { useLanguage } from "@/lib/i18n";
 import { CLIENT_APPS } from "./app-registry";
-import { barDrag, dragScale } from "./gesture-bar";
+import { barDrag, dragRadius, dragScale } from "./gesture-bar";
 import { isPrivateApp, mountSnapshot, snapshotOf, useSnapshots } from "./snapshots";
 import { foregroundId, useWM, type AppWindow } from "./window-manager";
 
@@ -69,7 +69,8 @@ export function GesturePeek() {
   if (!active || !fg) return null;
   return (
     <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }} aria-hidden data-testid="gesture-peek" data-axis={axis ?? ""}>
-      {axis === "y" && <motion.div className="absolute inset-0 bg-background/80 backdrop-blur-xl" style={{ opacity: backdrop }} />}
+      {/* Step 2.11 (the reference video): the home screen shows through behind the card, blurred and a little dimmed. */}
+      {axis === "y" && <motion.div className="absolute inset-0 bg-black/[0.12] backdrop-blur-[22px] backdrop-saturate-[1.35]" style={{ opacity: backdrop }} data-testid="gesture-backdrop" />}
       {prev && (axis === "y" || axis === "x") && <Neighbour win={prev} side={-1} w={w} h={h} axis={axis} />}
       {next && (axis === "y" || axis === "x") && <Neighbour win={next} side={1} w={w} h={h} axis={axis} />}
     </div>
@@ -78,6 +79,8 @@ export function GesturePeek() {
 
 function Neighbour({ win, side, w, h, axis }: { win: AppWindow; side: -1 | 1; w: number; h: number; axis: "x" | "y" | null }) {
   const scale = useTransform(barDrag.y, (y) => dragScale(-y, h));
+  // The same corners as the card under the finger.
+  const radius = useTransform(barDrag.y, (y) => Math.max(30, dragRadius(-y)));
   const x = useTransform([barDrag.x, scale] as MotionValue<number>[], ([bx, s]) => (bx as number) + side * (w * (s as number) + GAP));
   const opacity = useTransform([barDrag.x, barDrag.y] as MotionValue<number>[], ([bx, by]) =>
     axis === "x" ? (Math.sign(bx as number) === -side ? 1 : 0) : Math.min(1, Math.max(0, (-(by as number) - 30) / 110)),
@@ -85,7 +88,7 @@ function Neighbour({ win, side, w, h, axis }: { win: AppWindow; side: -1 | 1; w:
   return (
     <motion.div
       className="absolute left-0 top-0 overflow-hidden shadow-window"
-      style={{ width: w, height: h, x, y: barDrag.y, scale, opacity, transformOrigin: "50% 100%", borderRadius: 30 }}
+      style={{ width: w, height: h, x, y: barDrag.y, scale, opacity, transformOrigin: "50% 100%", borderRadius: radius }}
       data-testid={`gesture-peek-${win.appId}`}
     >
       <SnapshotView win={win} className="relative size-full" />
