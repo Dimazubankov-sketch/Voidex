@@ -9,8 +9,8 @@ import {
   RiDeleteBinLine,
   RiFileLine,
   RiImageLine,
+  RiMic2Fill,
   RiMoreFill,
-  RiNotificationOffLine,
   RiPushpin2Fill,
   RiSendPlaneFill,
   RiShareForwardLine,
@@ -18,6 +18,7 @@ import {
   RiPhoneLine,
   RiReplyLine,
   RiVidiconLine,
+  RiVolumeMuteFill,
 } from "@remixicon/react";
 import { VIBEX_FILES_MAX, VIBEX_MESSAGE_MAX, chatSections, type VibexChatDto, type VibexChatOrder, type VibexFileDto, type VibexMessageDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -32,7 +33,7 @@ import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
 import { checkVibexFile, filesApi, markRead, useChat, useChats, useEditMessage, useFileUrl, useMessages, useSendMessage, useSetPins } from "./data";
 import { FileChip, Lightbox, VibexImage, VibexVideoTile } from "./media";
-import { VoiceBubble } from "./media-bubbles";
+import { VideoMessageGlyph, VoiceBubble } from "./media-bubbles";
 import { ForwardSheet, MessageMenu, PinnedBar, SelectDot, SelectionBar, SwipeReplyIcon, useSwipeReply, type MessageMenuState } from "./message-actions";
 import { CircleBubble } from "./circle-player";
 import { type RecordKind, type Recording } from "./recorder";
@@ -58,6 +59,8 @@ function Preview({ chat }: { chat: VibexChatDto }) {
   if (!m) return <span className="text-text-tertiary">{chat.group ? t("vibex.group.created") : t("vibex.chat.empty", { name: chat.peer?.firstName ?? "" })}</span>;
   // Groups: who wrote it.
   const author = chat.group && !m.mine ? chat.group.members.find((x) => x.id === m.senderId)?.firstName : null;
+  // Step 2.11: voice and video messages read with their marks (the same video mark as the record button).
+  const mark = m.kind === "voice" ? <RiMic2Fill className="-mt-0.5 mr-1 inline size-3.5 text-text-tertiary" /> : m.kind === "circle" ? <VideoMessageGlyph className="-mt-0.5 mr-1 inline size-[15px] text-text-tertiary" /> : null;
   const what = m.kind === "voice"
     ? t("vibex.voice.message")
     : m.kind === "circle"
@@ -75,6 +78,7 @@ function Preview({ chat }: { chat: VibexChatDto }) {
     <>
       {m.mine && <span className="text-text-secondary">{t("vibex.chats.you")} </span>}
       {author && <span className="text-text-secondary">{author}: </span>}
+      {mark}
       {m.kind === "text" && !m.text && m.files.length > 0 &&
         (m.files.some((f) => f.kind === "image") ? (
           <RiImageLine className="-mt-0.5 mr-1 inline size-3.5 text-text-tertiary" />
@@ -93,31 +97,34 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
   return (
     <>
       <StoryHalo personId={chat.peer?.id} gap="ring-[var(--chat-card)]">
-        <ChatAvatar chat={chat} size={54} />
+        <ChatAvatar chat={chat} size={50} />
       </StoryHalo>
-      <span className="min-w-0 flex-1 self-stretch py-2.5 pr-3">
-        <span className="flex items-center gap-1.5">
-          <span className={cx("min-w-0 truncate text-[15.5px] font-semibold", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
-          {chat.muted && <RiNotificationOffLine className="size-3.5 shrink-0 text-text-tertiary" aria-label={t("vibex.chats.muted")} data-testid="chat-muted" />}
-          <span className="flex-1" />
+      <span className="min-w-0 flex-1 self-stretch py-[9px] pr-3">
+        <span className="flex items-center gap-1">
+          <span className={cx("min-w-0 truncate text-[15.5px] font-semibold tracking-[-0.01em]", active ? "text-primary-strong" : "text-text")}>{chatTitle(chat)}</span>
+          {chat.muted && <RiVolumeMuteFill className="size-[14px] shrink-0 text-text-tertiary/80" aria-label={t("vibex.chats.muted")} data-testid="chat-muted" />}
+          <span className="min-w-2 flex-1" />
           {chat.lastMessage?.mine &&
-            (read ? <RiCheckDoubleLine className="size-4 shrink-0 text-primary" /> : <RiCheckLine className="size-4 shrink-0 text-text-tertiary" />)}
-          <span className={cx("shrink-0 text-[12.5px] tabular-nums text-text-tertiary", HOVER_HIDE)}>{chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}</span>
+            (read ? <RiCheckDoubleLine className="size-[15px] shrink-0 text-primary" /> : <RiCheckLine className="size-[15px] shrink-0 text-text-tertiary" />)}
+          <span className={cx("shrink-0 text-[12px] tabular-nums", chat.unread > 0 && !chat.muted ? "font-medium text-primary" : "text-text-tertiary", HOVER_HIDE)}>
+            {chat.lastMessage ? formatShortDate(chat.lastMessage.createdAt, lang) : ""}
+          </span>
         </span>
-        <span className="mt-0.5 flex items-start gap-2">
-          <span className="line-clamp-2 min-w-0 flex-1 text-[14px] leading-snug text-text-secondary">
+        <span className="mt-[3px] flex items-center gap-2">
+          <span className="min-w-0 flex-1 truncate text-[14px] leading-snug text-text-secondary">
             <Preview chat={chat} />
           </span>
-          {chat.unread > 0 ? (
+          {chat.pinnedPosition !== null && (
+            <RiPushpin2Fill className={cx("size-[14px] shrink-0 rotate-45 text-text-tertiary/80", HOVER_HIDE)} aria-label={t("vibex.chats.pinnedOne")} data-testid="chat-pinned" />
+          )}
+          {chat.unread > 0 && (
             <span
-              className={cx("mt-0.5 flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full px-1.5 text-[12.5px] font-semibold text-white", chat.muted ? "bg-text-tertiary/70" : "bg-primary", HOVER_HIDE)}
+              className={cx("flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[12px] font-semibold tabular-nums", chat.muted ? "bg-[var(--chat-badge-muted)] text-white" : "bg-primary text-white", HOVER_HIDE)}
               data-testid="chat-unread"
             >
-              {chat.unread}
+              {chat.unread > 999 ? "999+" : chat.unread}
             </span>
-          ) : chat.pinnedPosition !== null ? (
-            <RiPushpin2Fill className="mt-0.5 size-4 shrink-0 rotate-45 text-text-tertiary" aria-hidden />
-          ) : null}
+          )}
         </span>
       </span>
     </>
@@ -127,11 +134,16 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
 /** With a mouse, the row's [...] button takes the place of the time and the counter on hover. */
 const HOVER_HIDE = "transition-opacity [@media(hover:hover)]:group-hover:opacity-0";
 
-/** Step 2.10: every chat is its own card (--chat-card: grey on a white app, white on a grey one, dark in the dark look). */
+/**
+ * Step 2.11: every chat is its own quiet card (semantic tokens: --chat-card,
+ * --chat-card-shadow, --chat-card-active; light, Media / Notes looks and dark
+ * each set them). The open chat (PC) reads as selected by tone and a thin
+ * violet edge, never by a heavy border.
+ */
 function rowClass(active: boolean) {
   return cx(
-    "vx-chat-card flex w-full items-center gap-3 rounded-[20px] pl-2.5 text-left transition-colors",
-    active ? "!bg-primary-soft" : "[@media(hover:hover)]:hover:brightness-[0.98]",
+    "vx-chat-card flex w-full items-center gap-3 rounded-[22px] pl-2.5 text-left transition-[background-color,box-shadow,filter] duration-150",
+    active ? "vx-chat-card-active" : "[@media(hover:hover)]:hover:brightness-[0.985] active:brightness-[0.97]",
   );
 }
 

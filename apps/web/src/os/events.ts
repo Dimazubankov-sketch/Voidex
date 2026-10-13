@@ -15,8 +15,10 @@ import { notificationsChanged, receiveNotification } from "./notifications/store
 import { useWM } from "./window-manager";
 import { lockInFlight } from "./lock/auto-lock";
 
-export const useConnection = create<{ connected: boolean; online: boolean }>(() => ({
+export const useConnection = create<{ connected: boolean; online: boolean; everConnected: boolean }>(() => ({
   connected: false,
+  /** Step 2.11: the stream was up at least once (before that, not connected yet is just starting). */
+  everConnected: false,
   online: typeof navigator === "undefined" ? true : navigator.onLine,
 }));
 
@@ -28,6 +30,8 @@ async function refreshMe() {
 }
 
 const seenMessages = new Set<string>();
+/** No byte from the event stream for this long (the server pings every 25 s): it is dead. */
+const STREAM_SILENCE_MS = 45_000;
 
 function handle(event: ServerEvent) {
   const session = useSession.getState();
@@ -133,6 +137,11 @@ function handle(event: ServerEvent) {
     case "apps.updated":
       void queryClient.invalidateQueries({ queryKey: qk.apps });
       break;
+    case "store.reviews":
+      // Step 2.11: my review changed on another device.
+      void queryClient.invalidateQueries({ queryKey: ["store", "reviews", event.appId] });
+      void queryClient.invalidateQueries({ queryKey: ["store", "stats"] });
+      break;
     case "sessions.updated":
       void queryClient.invalidateQueries({ queryKey: qk.sessions });
       break;
@@ -169,9 +178,19 @@ export function useServerEvents() {
     let stopped = false;
     let controller: AbortController | null = null;
     let backoff = 1000;
+    // Step 2.11: the wait between reconnects ends at once when the network comes back.
+    let wake: (() => void) | null = null;
 
-    const onOnline = () => useConnection.setState({ online: true });
-    const onOffline = () => useConnection.setState({ online: false, connected: false });
+    const onOnline = () => {
+      useConnection.setState({ online: true });
+      backoff = 1000;
+      wake?.();
+    };
+    // Step 2.11: offline drops the stream at once (an open one would hang and never reconnect).
+    const onOffline = () => {
+      useConnection.setState({ online: false, connected: false });
+      controller?.abort();
+    };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
 
@@ -195,46 +214,63 @@ export function useServerEvents() {
             break;
           }
           if (!res.ok || !res.body) throw new Error(`events ${res.status}`);
-          useConnection.setState({ connected: true });
+          useConnection.setState({ connected: true, everConnected: true });
           if (!first) void queryClient.invalidateQueries();
           first = false;
           backoff = 1000;
           const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
           let buf = "";
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buf += value;
-            let idx;
-            while ((idx = buf.indexOf("\n\n")) !== -1) {
-              const chunk = buf.slice(0, idx);
-              buf = buf.slice(idx + 2);
-              const data = chunk
-                .split("\n")
-                .filter((l) => l.startsWith("data: "))
-                .map((l) => l.slice(6))
-                .join("\n");
-              if (data) {
-                try {
-                  handle(JSON.parse(data) as ServerEvent);
-                } catch {
-                  /* malformed event */
+          // Step 2.11: the server pings every 25 s; 45 s of silence is a dead stream (a timeout): reconnect.
+          const ctl = controller;
+          let silence = setTimeout(() => ctl.abort(), STREAM_SILENCE_MS);
+          try {
+            for (;;) {
+              const { value, done } = await reader.read();
+              clearTimeout(silence);
+              if (done) break;
+              silence = setTimeout(() => ctl.abort(), STREAM_SILENCE_MS);
+              buf += value;
+              let idx;
+              while ((idx = buf.indexOf("\n\n")) !== -1) {
+                const chunk = buf.slice(0, idx);
+                buf = buf.slice(idx + 2);
+                const data = chunk
+                  .split("\n")
+                  .filter((l) => l.startsWith("data: "))
+                  .map((l) => l.slice(6))
+                  .join("\n");
+                if (data) {
+                  try {
+                    handle(JSON.parse(data) as ServerEvent);
+                  } catch {
+                    /* malformed event */
+                  }
                 }
               }
             }
+          } finally {
+            clearTimeout(silence);
           }
         } catch {
           if (stopped) break;
         }
         useConnection.setState({ connected: false });
         if (stopped) break;
-        await new Promise((r) => setTimeout(r, backoff));
+        await new Promise<void>((r) => {
+          const timer = setTimeout(r, backoff);
+          wake = () => {
+            clearTimeout(timer);
+            r();
+          };
+        });
+        wake = null;
         backoff = Math.min(backoff * 2, 15_000);
       }
     })();
 
     return () => {
       stopped = true;
+      wake?.();
       controller?.abort();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);

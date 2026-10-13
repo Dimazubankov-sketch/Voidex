@@ -182,3 +182,14 @@ describe("Step 2.11: install / update", () => {
     expect((await a.d.post("/api/store/apps/settings/install")).status).toBe(404);
   });
 });
+
+describe("Step 2.11: search shows who I follow", () => {
+  it("lists the people found that I follow", async () => {
+    const [me, x, y] = [await user("Тимур"), await user("Ульяна", "Поисковая"), await user("Фёдор", "Поисковый")];
+    await me.d.post(`/api/vibex/people/${x.id}/follow`);
+    const r = (await me.d.get(`/api/vibex/search?q=${encodeURIComponent("Поисков")}`)).body as { people: { id: string }[]; following: string[] };
+    expect(r.people.map((p) => p.id)).toEqual(expect.arrayContaining([x.id, y.id]));
+    expect(r.following).toContain(x.id);
+    expect(r.following).not.toContain(y.id);
+  });
+});

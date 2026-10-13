@@ -224,29 +224,17 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
 }
 
 /**
- * Step 2.5: the "video circle" glyph for the composer — a round message with
- * its progress ring and a play mark. Deliberately not a camera.
- */
-/**
- * Step 2.10: the video-message mode of the record button: a compact camera
- * in a round frame (a circle is a round video).
+ * Step 2.11: the video-message mark, one component everywhere (the record
+ * button, the chat list, previews): a minimal camera, a rounded square with
+ * a round lens and a small dot (an original drawing in the spirit of the
+ * well-known camera glyph, not its artwork).
  */
 export function VideoMessageGlyph({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden data-testid="video-message-glyph">
-      <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.7" />
-      <rect x="6.6" y="8.9" width="7.6" height="6.2" rx="1.7" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M14.4 11.2l2.7-1.6c.3-.18.7.04.7.4v4c0 .36-.4.58-.7.4l-2.7-1.6" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export function CircleMessageGlyph({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden data-testid="circle-glyph">
-      <circle cx="12" cy="12" r="8.6" stroke="currentColor" strokeWidth="1.7" opacity="0.38" />
-      <path d="M12 3.4a8.6 8.6 0 0 1 8.6 8.6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M10.3 9.1v5.8a.5.5 0 0 0 .76.43l4.6-2.9a.5.5 0 0 0 0-.85l-4.6-2.9a.5.5 0 0 0-.76.42Z" fill="currentColor" />
+      <rect x="3.6" y="3.6" width="16.8" height="16.8" rx="5.3" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16.9" cy="7.1" r="1.1" fill="currentColor" />
     </svg>
   );
 }

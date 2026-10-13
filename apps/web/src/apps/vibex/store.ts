@@ -21,10 +21,6 @@ export interface VibexUiState {
   commentsFor: string | null;
   /** Phones: the side menu drawer. */
   drawer: boolean;
-  /** Step 2.9: the feed header's search (grown from its button) and what is typed in it. */
-  feedSearch: boolean;
-  feedQuery: string;
-  setFeedSearch: (open: boolean, query?: string) => void;
   /** Step 2.9: playback speed of expanded video circles — kept while this Vibex window lives (a new window starts at 1x). */
   circleSpeed: number;
   setCircleSpeed: (speed: number) => void;
@@ -50,9 +46,6 @@ export function createVibexStore() {
     sharing: null,
     commentsFor: null,
     drawer: false,
-    feedSearch: false,
-    feedQuery: "",
-    setFeedSearch: (feedSearch, feedQuery = "") => set({ feedSearch, feedQuery }),
     circleSpeed: 1,
     setCircleSpeed: (circleSpeed) => set({ circleSpeed }),
     // Step 2.9: "Закладки" live inside "История" (its second tab).

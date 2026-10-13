@@ -1353,4 +1353,7 @@ export const ru: Record<MessageKey, string> = {
   "vibex.stories.replyTo": "Ответ на историю",
   "vibex.stories.replyToYours": "Ответ на вашу историю",
   "vibex.stories.gone": "История больше недоступна",
+  "vibex.chats.pinnedOne": "Закреплён",
+  "net.updating": "Обновление...",
+  "vibex.search.followingShort": "Вы подписаны",
 };

@@ -69,7 +69,7 @@ for (const width of [320, 390, 430]) {
   });
 }
 
-test("Search: the grid of real public photos; @username first; posts by text; a tap opens the person / the post", async ({ page, browser }) => {
+test("Search: the grid of real public photos; typing shows people only (@username first, follow state); cleared: the grid; a tap opens the person / the post", async ({ page, browser }) => {
   await signUpViaApi(page, "Ищущий", "Поисков");
   const bp = await newPage(browser, isMobile(page));
   const b = await signUpViaApi(bp, "Фотограф", "Снимков");
@@ -84,10 +84,19 @@ test("Search: the grid of real public photos; @username first; posts by text; a 
   // @username: B first.
   await page.getByTestId("people-search").fill(`@${b.username}`);
   await expect(page.getByTestId("person-row").first()).toHaveAttribute("data-person-id", b.id);
-  // Text: the post.
-  await page.getByTestId("people-search").fill(word);
-  await expect(page.locator(`[data-testid="search-posts"] [data-post-id="${post.id}"]`)).toBeVisible();
-  await page.locator(`[data-post-id="${post.id}"]`).click();
+  // Step 2.11: only people while typing, with their follow button (no posts, no grid).
+  await expect(page.getByTestId("search-posts")).toHaveCount(0);
+  await expect(page.getByTestId("explore-grid")).toHaveCount(0);
+  const row = page.getByTestId("person-row").first();
+  await expect(row.getByTestId("person-follow")).toHaveText("Подписаться");
+  await row.getByTestId("person-follow").click();
+  await expect(row).toHaveAttribute("data-following", "true");
+  await expect(row.getByTestId("person-follow")).toHaveText("Вы подписаны");
+  await expect.poll(async () => (await api(page, "GET", `/api/vibex/search?q=${encodeURIComponent("@" + b.username)}`)).body.following).toContain(b.id);
+  // Cleared: the grid again; a tile opens the post.
+  await page.getByTestId("people-search").fill("");
+  await expect(page.getByTestId("explore-grid")).toBeVisible();
+  await page.locator(`[data-testid="explore-tile"][data-post-id="${post.id}"]`).click();
   await expect(page.getByText(`Красивый ${word}`).first()).toBeVisible();
   await bp.context().close();
 });

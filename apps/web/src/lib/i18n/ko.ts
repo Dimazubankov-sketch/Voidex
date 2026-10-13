@@ -1338,4 +1338,7 @@ export const ko: Record<MessageKey, string> = {
   "vibex.stories.replyTo": "스토리에 답장",
   "vibex.stories.replyToYours": "내 스토리에 답장",
   "vibex.stories.gone": "더 이상 볼 수 없는 스토리입니다",
+  "vibex.chats.pinnedOne": "고정됨",
+  "net.updating": "업데이트 중...",
+  "vibex.search.followingShort": "팔로잉",
 };

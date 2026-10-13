@@ -54,6 +54,8 @@ export function useEdgeSwipe(
           return;
         }
         active.engaged = true;
+        // Step 2.11: a close animation still running (swipe-open right after a close) yields to the finger.
+        o.current.progress.stop();
       }
       const p = o.current.progress;
       // The drawer is never wider than 84 % of the app (see PushDrawer).

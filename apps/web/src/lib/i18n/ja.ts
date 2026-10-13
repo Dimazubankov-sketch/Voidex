@@ -1338,4 +1338,7 @@ export const ja: Record<MessageKey, string> = {
   "vibex.stories.replyTo": "ストーリーへの返信",
   "vibex.stories.replyToYours": "あなたのストーリーに返信",
   "vibex.stories.gone": "このストーリーは表示できません",
+  "vibex.chats.pinnedOne": "ピン留め",
+  "net.updating": "更新中...",
+  "vibex.search.followingShort": "フォロー中",
 };

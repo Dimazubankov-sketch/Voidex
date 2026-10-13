@@ -487,32 +487,16 @@ test("voice seek owns its drag: dragging on the waveform seeks and never swipes 
 
 // ---------------------------------------------------------- feed / profile
 
-test("feed: the search button grows into the field in place (nothing below jumps) and X shrinks it back; History has Liked / Bookmarks; + opens a new post", async ({ page }) => {
+test("feed: the search button opens the Search tab (Step 2.11: no field in the header); History has Liked / Bookmarks; + opens a new post", async ({ page }) => {
   await signUpViaApi(page, "Лента", "Поисковая");
   const post = (await api(page, "POST", "/api/vibex/posts", { text: "Сохранённый пост" })).body;
   await api(page, "POST", `/api/vibex/posts/${post.id}/bookmark`);
   await launchVibex(page);
   await expect(page.getByTestId("vibex-feed")).toBeVisible();
-  const search = page.getByTestId("vibex-feed-search");
-  const closed = (await search.boundingBox())!;
-  expect(Math.round(closed.width)).toBe(40);
-  const feedTop = (await page.getByTestId("vibex-feed").boundingBox())!.y;
-  await page.getByTestId("vibex-feed-search-open").click();
-  await expect(search).toHaveAttribute("data-open", "true");
-  await page.waitForTimeout(450);
-  const open = (await search.boundingBox())!;
-  expect(open.width).toBeGreaterThan(closed.width * 3);
-  // The same place (right edge kept), only one field, nothing below moved.
-  expect(Math.abs(open.x + open.width - (closed.x + closed.width))).toBeLessThan(2);
-  expect(Math.abs((await page.getByTestId("vibex-feed").boundingBox())!.y - feedTop)).toBeLessThan(2);
-  await expect(page.getByTestId("people-search")).toHaveCount(0);
-  await page.getByTestId("vibex-feed-search-input").fill("Лента");
-  await expect(page.getByTestId("vibex-feed-results")).toBeVisible();
-  await shot(page, `feed-search-${isMobile(page) ? "phone" : "pc"}`);
-  await page.getByTestId("vibex-feed-search-close").click();
-  await expect(search).not.toHaveAttribute("data-open", "true");
-  await page.waitForTimeout(450);
-  expect(Math.round((await search.boundingBox())!.width)).toBe(40);
+  await expect(page.getByTestId("vibex-feed-search")).toHaveCount(0);
+  await page.getByTestId("vibex-search").first().click();
+  await expect(page.getByTestId("search-screen")).toBeVisible();
+  await page.getByTestId(isMobile(page) ? "vibex-tab-feed" : "vibex-nav-feed").last().click();
   await expect(page.getByTestId("vibex-feed")).toBeVisible();
 
   // The floating + (bottom right) opens a new post.

@@ -1338,4 +1338,7 @@ export const tr: Record<MessageKey, string> = {
   "vibex.stories.replyTo": "Hikâyeye yanıt",
   "vibex.stories.replyToYours": "Hikâyenize yanıt",
   "vibex.stories.gone": "Hikâye artık mevcut değil",
+  "vibex.chats.pinnedOne": "Sabitlendi",
+  "net.updating": "Güncelleniyor...",
+  "vibex.search.followingShort": "Takip ediliyor",
 };

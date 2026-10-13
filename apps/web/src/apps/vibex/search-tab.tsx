@@ -1,20 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { RiImageLine, RiPlayFill, RiSearchLine, RiStackLine } from "@remixicon/react";
-import type { VibexPostDto } from "@voidex/shared";
+import type { VibexPersonDto, VibexPostDto, VibexSearchDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { useT } from "@/lib/i18n";
 import { EmptyState, Skeleton, Spinner } from "@/ui/controls";
 import { VoidexSearchField } from "@/ui/search-field";
-import { useExplore, useFileUrl, useVibexSearch } from "./data";
+import { cx } from "@/lib/cx";
+import { errorMessage } from "@/lib/errors";
+import { queryClient } from "@/lib/query";
+import { useSession } from "@/lib/session";
+import { toast } from "@/ui/overlays";
+import { useExplore, useFileUrl, useFollow, useVibexSearch } from "./data";
 import { useVibex } from "./store";
 
 /**
- * Step 2.10 — the Search tab (Instagram-like, in Vibex's look).
+ * Step 2.10 / 2.11: the Search tab (Instagram-like, in Vibex's look).
  *
  * A large field on top. Empty: a grid of everyone's public photos and videos
- * (real posts, newest first, loaded as it scrolls). With a query: accounts
- * first (an exact @username / address on top, then names), then posts whose
- * text has it ("#tag" finds tagged posts). A tap opens the person / the post.
+ * (real posts, newest first, loaded as it scrolls). Typing: people only (an
+ * exact @username / address on top, then names), each with its follow
+ * button. Cleared: the grid again. A tap opens the person / the post.
  */
 export function SearchScreen() {
   const t = useT();
@@ -32,9 +37,9 @@ export function SearchScreen() {
   );
 }
 
+/** Step 2.11: while typing, only people (avatar, name, @voidops address, follow state); no posts. */
 function SearchResults({ q }: { q: string }) {
   const t = useT();
-  const push = useVibex((s) => s.push);
   const res = useVibexSearch(q);
   if (res.isPending) {
     return (
@@ -46,42 +51,63 @@ function SearchResults({ q }: { q: string }) {
     );
   }
   const people = res.data?.people ?? [];
-  const posts = res.data?.posts ?? [];
-  if (!people.length && !posts.length) return <EmptyState icon={<RiSearchLine className="size-7" />} title={t("vibex.people.empty")} />;
+  const following = new Set(res.data?.following ?? []);
+  if (!people.length) return <EmptyState icon={<RiSearchLine className="size-7" />} title={t("vibex.people.empty")} />;
   return (
-    <div className="flex flex-col gap-4" data-testid="search-results">
-      {people.length > 0 && (
-        <section className="flex flex-col" data-testid="search-people">
-          <h3 className="px-2 pb-1 text-[12px] font-semibold uppercase tracking-wide text-text-tertiary">{t("vibex.search.accounts")}</h3>
-          {people.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => push({ kind: "person", id: p.id })}
-              className="pressable flex w-full items-center gap-3 rounded-[20px] px-2 py-2 text-left hover:bg-surface-hover"
-              data-testid="person-row"
-              data-person-id={p.id}
-            >
-              <Avatar name={p.name} userId={p.id} version={p.avatarVersion} size={48} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px] font-semibold">{p.handle}</span>
-                <span className="block truncate text-[13px] text-text-secondary">
-                  {p.name} · {p.address}
-                </span>
-              </span>
-            </button>
-          ))}
-        </section>
-      )}
-      {posts.length > 0 && (
-        <section className="flex flex-col gap-2" data-testid="search-posts">
-          <h3 className="px-2 text-[12px] font-semibold uppercase tracking-wide text-text-tertiary">{t("vibex.search.posts")}</h3>
-          <div className="grid grid-cols-3 gap-1">
-            {posts.map((p) => (
-              <PostTile key={p.id} post={p} />
-            ))}
-          </div>
-        </section>
+    <section className="flex flex-col" data-testid="search-results">
+      <div className="flex flex-col" data-testid="search-people">
+        {people.map((p) => (
+          <PersonResult key={p.id} person={p} q={q} followed={following.has(p.id)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PersonResult({ person: p, q, followed }: { person: VibexPersonDto; q: string; followed: boolean }) {
+  const t = useT();
+  const me = useSession((s) => s.user?.id);
+  const push = useVibex((s) => s.push);
+  const follow = useFollow(p.id);
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const on = !followed;
+    // Optimistic: the button changes at once; the list keeps the server's answer.
+    const key = ["vibex", "search", q] as const;
+    const set = (v: boolean) =>
+      queryClient.setQueryData<VibexSearchDto>(key, (d) => d && { ...d, following: v ? [...new Set([...(d.following ?? []), p.id])] : (d.following ?? []).filter((x) => x !== p.id) });
+    set(on);
+    follow.mutate(on, { onError: (err) => (set(!on), toast({ title: errorMessage(t, err), tone: "danger" })) });
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => push({ kind: "person", id: p.id })}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), push({ kind: "person", id: p.id }))}
+      className="pressable flex w-full cursor-pointer items-center gap-3 rounded-[20px] px-2 py-2 text-left hover:bg-surface-hover"
+      data-testid="person-row"
+      data-person-id={p.id}
+      data-following={followed || undefined}
+    >
+      <Avatar name={p.name} userId={p.id} version={p.avatarVersion} size={48} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-semibold">{p.name}</span>
+        <span className="block truncate text-[13px] text-text-secondary">{p.address}</span>
+      </span>
+      {p.id !== me && (
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={follow.isPending}
+          className={cx(
+            "h-9 shrink-0 rounded-[12px] px-4 text-[14px] font-semibold transition-colors disabled:opacity-60",
+            followed ? "bg-surface-secondary text-text" : "bg-primary text-white",
+          )}
+          data-testid="person-follow"
+        >
+          {t(followed ? "vibex.search.followingShort" : "vibex.profile.follow")}
+        </button>
       )}
     </div>
   );

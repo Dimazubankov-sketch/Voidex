@@ -257,9 +257,8 @@ export type ServerEvent =
   | { type: "vibex.message.updated"; conversationId: string; messageId: string }
   /** Step 2.10 Vibex: the activity tab changed (new item or read elsewhere). */
   | { type: "vibex.activity"; unread: number }
-  /** Step 2.11 Store: my review of an app changed on another device; installed apps changed. */
+  /** Step 2.11 Store: my review of an app changed (on another device). */
   | { type: "store.reviews"; appId: string }
-  | { type: "apps.changed" }
   /** Step 2.6 Notes: a document was saved (by me on another device, or by a co-editor). */
   | { type: "notes.document.updated"; documentId: string; projectId: string; revision: number; byUserId: string; byName: string }
   /** Step 2.6 Notes: the owner removed my access — close the document / project now. */

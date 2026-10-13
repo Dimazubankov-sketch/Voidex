@@ -654,12 +654,29 @@ img[data-system-asset] { pointer-events: none; }
  */
 .vx-app { --app-bg: var(--surface); background: var(--app-bg); }
 /* Step 2.10: chat cards in «Чаты» stand out from the app background without a border. */
-.vx-app { --chat-card: #f2f2f5; }
-.vx-chat-card { background: var(--chat-card); }
+/* Step 2.11: semantic tokens of the card: its tone, a soft lift, the selected (open) chat, the muted badge. */
+.vx-app {
+  --chat-card: #f4f4f7;
+  --chat-card-shadow: none;
+  --chat-card-active: color-mix(in srgb, var(--primary) 11%, var(--chat-card));
+  --chat-card-active-edge: color-mix(in srgb, var(--primary) 28%, transparent);
+  --chat-badge-muted: #a9a8b8;
+}
+.vx-chat-card { background: var(--chat-card); box-shadow: var(--chat-card-shadow); }
+.vx-chat-card-active { background: var(--chat-card-active) !important; box-shadow: inset 0 0 0 1px var(--chat-card-active-edge); }
 :root[data-app-look="media"]:not([data-theme="dark"]) .vx-app,
-:root[data-app-look="notes"]:not([data-theme="dark"]) .vx-app { --chat-card: #ffffff; }
+:root[data-app-look="notes"]:not([data-theme="dark"]) .vx-app {
+  --chat-card: #ffffff;
+  --chat-card-shadow: 0 1px 2px rgba(40, 28, 110, 0.04), 0 6px 18px -12px rgba(60, 40, 150, 0.22);
+}
 :root[data-app-look="dark"] .vx-app,
-:root[data-theme="dark"] .vx-app { --chat-card: #1d1d27; }
+:root[data-theme="dark"] .vx-app {
+  --chat-card: #1c1c26;
+  --chat-card-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+  --chat-card-active: #2a2546;
+  --chat-card-active-edge: rgba(150, 132, 255, 0.35);
+  --chat-badge-muted: #5d5c6e;
+}
 .vx-app-bg { background: var(--app-bg); }
 .vx-app .vx-settings-bg,
 .vx-app .vx-settings-nav { background: var(--app-bg); }

@@ -511,4 +511,6 @@ export interface VibexActivityPageDto {
 export interface VibexSearchDto {
   people: VibexPersonDto[];
   posts: VibexPostDto[];
+  /** Step 2.11: which of `people` I follow (the Search tab shows «Подписаться» / «Вы подписаны»). */
+  following?: string[];
 }

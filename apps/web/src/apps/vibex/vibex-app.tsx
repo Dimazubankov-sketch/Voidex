@@ -14,11 +14,10 @@ import {
   RiUser3Fill,
   RiUser3Line,
 } from "@remixicon/react";
-import { Avatar, VibexGlyph } from "@/brand/brand";
+import { VibexGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
-import { useSession } from "@/lib/session";
 import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { Conversation } from "./chats";
@@ -26,10 +25,9 @@ import { ChatsPane } from "./chat-home";
 import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
-import { HistoryScreen, PeopleResults, PostPage } from "./people";
+import { HistoryScreen, PostPage } from "./people";
 import { SearchScreen } from "./search-tab";
 import { ActivityScreen } from "./activity-tab";
-import { ExpandingSearch } from "@/ui/expanding-search";
 import { MePage, PersonPage } from "./profile";
 import { VibexSettingsScreen } from "./settings";
 import { useEdgeSwipe } from "@/ui/edge-swipe";
@@ -38,6 +36,7 @@ import { ShareSheet } from "./share-sheet";
 import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
 import { PushDrawer } from "@/ui/push-drawer";
 import { useActivityCount, useChats, useFeed } from "./data";
+import { VibexHeader, VibexSearchButton, VibexTitle } from "./header";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -95,30 +94,12 @@ const SECTION_TITLE: Record<VibexSection, MessageKey> = {
 
 function Feed() {
   const feed = useFeed();
-  const query = useVibex((s) => s.feedQuery).trim();
-  // Step 2.9: the header's own search shows its results in the feed's place (the header never moves).
-  if (query) {
-    return (
-      <div className="flex flex-col gap-3" data-testid="vibex-feed-results">
-        <PeopleResults query={query} />
-      </div>
-    );
-  }
   return (
     <div className="flex flex-col gap-3" data-testid="vibex-feed">
       <ComposerPrompt />
       <PostList query={feed} empty={<FeedEmpty />} />
     </div>
   );
-}
-
-/** Step 2.9: the feed header's search button that grows into the field (see ExpandingSearch). */
-function FeedSearch() {
-  const t = useT();
-  const open = useVibex((s) => s.feedSearch);
-  const q = useVibex((s) => s.feedQuery);
-  const set = useVibex((s) => s.setFeedSearch);
-  return <ExpandingSearch open={open} value={q} onOpen={() => set(true)} onChange={(v) => set(true, v)} onClose={() => set(false)} placeholder={t("vibex.people.search")} openLabel={t("vibex.nav.search")} closeLabel={t("vibex.search.close")} />;
 }
 
 function SectionBody({ section }: { section: VibexSection }) {
@@ -210,7 +191,7 @@ function DesktopVibex() {
             <ChatsPane
               header={(stories) => (
                 <WindowHeader menu={false}>
-                  <span className="flex-1 pl-1.5 text-[17px] font-bold">{t("vibex.nav.messages")}</span>
+                  <VibexTitle className="flex-1 justify-start pl-1.5">{t("vibex.nav.messages")}</VibexTitle>
                   {stories}
                 </WindowHeader>
               )}
@@ -232,18 +213,15 @@ function DesktopVibex() {
         </div>
       ) : (
         <div className="relative flex min-w-0 flex-1 flex-col">
-          <WindowHeader className="border-b bg-surface/90 backdrop-blur">
+          <WindowHeader className="bg-surface/90 backdrop-blur">
             {page && (
               <IconButton label={t("common.back")} onClick={back} data-testid="vibex-back">
                 <RiArrowLeftLine className="size-5" />
               </IconButton>
             )}
-            {!page && <span className="pl-1.5 text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>}
-            {!page && section === "feed" && (
-              <span className="relative ml-auto h-10 w-[min(360px,50%)]">
-                <FeedSearch />
-              </span>
-            )}
+            {!page && <VibexTitle className="justify-start pl-1.5">{t(SECTION_TITLE[section])}</VibexTitle>}
+            {/* Step 2.11: the same search button as on phones (Главная, Профиль): it opens the Search tab. */}
+            {!page && (section === "feed" || section === "me") && <VibexSearchButton className="ml-auto" />}
           </WindowHeader>
           <div className="scroll-area flex-1">
             <Column>{page ? <PageBody page={page} key={`${page.kind}:${page.id}`} /> : <SectionBody section={section} />}</Column>
@@ -260,7 +238,6 @@ function DesktopVibex() {
 /** Phones: Voyzen layout — avatar opens the side menu; bottom bar Home · New post · Messages. */
 function MobileVibex() {
   const t = useT();
-  const me = useSession((s) => s.user)!;
   const section = useVibex((s) => s.section);
   const go = useVibex((s) => s.go);
   const stack = useVibex((s) => s.stack);
@@ -268,7 +245,6 @@ function MobileVibex() {
   const chatId = useVibex((s) => s.chatId);
   const drawer = useVibex((s) => s.drawer);
   const setDrawer = useVibex((s) => s.setDrawer);
-  const feedSearch = useVibex((s) => s.feedSearch);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
   const root = useRef<HTMLDivElement>(null);
   // A swipe to the right from anywhere opens the side menu (only on the main screens, not over a chat / page).
@@ -290,74 +266,13 @@ function MobileVibex() {
     <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col [&_.scroll-area:not(.overflow-x-auto)]:touch-pan-y">
       {/* Step 2.9: the system side drawer — the menu lies under the screen, which slides right over it (no dimming). */}
       <PushDrawer open={drawer} onClose={() => setDrawer(false)} progress={drawerProgress} width={DRAWER_WIDTH} menu={<SidebarPanel variant="drawer" onClose={() => setDrawer(false)} />} testId="vibex-drawer">
-      {section === "me" ? (
-        // Step 2.8 profile (the user's reference): the Vibex logo (opens the menu), "Profile", a round search button.
-        <WindowHeader className="h-[60px] gap-3 px-4">
-          <button
-            type="button"
-            onClick={() => setDrawer(true)}
-            aria-label={t("vibex.nav.menu")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-surface shadow-[0_2px_10px_rgba(60,40,140,0.12)]"
-            data-testid="vibex-menu"
-          >
-            <VibexGlyph className="size-[26px]" />
-          </button>
-          <span className="flex-1 truncate text-center text-[19px] font-bold tracking-tight">{t(SECTION_TITLE[section])}</span>
-          <button
-            type="button"
-            onClick={() => go("people")}
-            aria-label={t("vibex.nav.search")}
-            title={t("vibex.nav.search")}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-text shadow-[0_2px_10px_rgba(60,40,140,0.12)]"
-            data-testid="vibex-search"
-          >
-            <RiSearchLine className="size-[22px]" />
-          </button>
-        </WindowHeader>
-      ) : section === "chats" ? null : (
-        // Step 2.10: the title is centred on the whole header (not in the space left between the buttons).
-        <WindowHeader className="relative border-b bg-surface">
-          <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="relative z-[1] shrink-0 rounded-full" data-testid="vibex-menu">
-            <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
-          </button>
-          <span
-            className={cx(
-              "pointer-events-none absolute left-1/2 top-1/2 max-w-[calc(100%-128px)] -translate-x-1/2 -translate-y-1/2 truncate text-center text-[17px] font-bold transition-opacity",
-              section === "feed" && feedSearch && "opacity-0",
-            )}
-            data-testid="vibex-header-title"
-          >
-            {t(SECTION_TITLE[section])}
-          </span>
-          {section === "feed" ? (
-            // Step 2.9: the search button grows into the field over the title, in place.
-            <span className="relative flex h-10 min-w-0 flex-1 items-center">
-              <FeedSearch />
-            </span>
-          ) : section === "history" || section === "bookmarks" || section === "people" || section === "activity" ? null : (
-            // Step 2.10: «История» has no search button.
-            <IconButton label={t("vibex.nav.search")} onClick={() => go("people")} data-testid="vibex-search" className="relative z-[1] ml-auto">
-              <RiSearchLine className="size-5" />
-            </IconButton>
-          )}
-        </WindowHeader>
-      )}
+      {/* Step 2.11: one header for every tab (search only on Главная and Профиль). Chats bring their own (with the stories). */}
+      {section !== "chats" && <VibexHeader title={t(SECTION_TITLE[section])} search={section === "feed" || section === "me"} />}
 
       {section === "chats" ? (
         // Step 2.9 (Telegram-like): stacked story avatars beside «Чаты»; pull down for the search, then the stories.
         <ChatsPane
-          header={(stories) => (
-            <WindowHeader className="border-b bg-surface">
-              <button type="button" onClick={() => setDrawer(true)} aria-label={t("vibex.nav.menu")} className="shrink-0 rounded-full" data-testid="vibex-menu">
-                <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={34} />
-              </button>
-              <span className="flex min-w-0 flex-1 items-center justify-center gap-2">
-                {stories}
-                <span className="truncate text-[17px] font-bold">{t(SECTION_TITLE[section])}</span>
-              </span>
-              <span className="size-[34px] shrink-0" aria-hidden />
-            </WindowHeader>
-          )}
+          header={(stories) => <VibexHeader title={t(SECTION_TITLE[section])} beside={stories} />}
         />
       ) : (
         <div className="scroll-area flex-1">

@@ -47,7 +47,7 @@ export class AppsService {
       .values({ userId, appId: id, version })
       .onConflictDoUpdate({ target: [installedApps.userId, installedApps.appId], set: { version } });
     const [row] = await this.ctx.db.select().from(installedApps).where(and(eq(installedApps.userId, userId), eq(installedApps.appId, id)));
-    this.ctx.events.toUser(userId, { type: "apps.changed" });
+    this.ctx.events.toUser(userId, { type: "apps.updated" });
     return { id, installedAt: row!.installedAt.toISOString(), manifest: APP_REGISTRY[id], version: row!.version };
   }
 }

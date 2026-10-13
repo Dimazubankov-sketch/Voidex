@@ -63,9 +63,16 @@ export function PushDrawer({
   const menuVisibility = useTransform(progress, (p) => (p <= 0.001 ? "hidden" : "visible"));
   const contentOpacity = useTransform(progress, [0, 1], [1, 0.5]);
 
+  // Step 2.11: one animation at a time. A new open / close replaces the running one from where it is
+  // (rapid toggles never stack, never leave a half-open screen); unmounting stops it.
   useEffect(() => {
-    if (reduced) progress.set(open ? 1 : 0);
-    else void animate(progress, open ? 1 : 0, SPRING);
+    if (reduced) {
+      progress.stop();
+      progress.set(open ? 1 : 0);
+      return;
+    }
+    const a = animate(progress, open ? 1 : 0, SPRING);
+    return () => a.stop();
   }, [open, progress, reduced]);
 
   useEffect(() => {
@@ -93,7 +100,13 @@ export function PushDrawer({
       }
       if (dx > -8) return;
       d.on = true;
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      // Step 2.11: the finger takes over from whatever animation is running (no tug of war).
+      progress.stop();
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      } catch {
+        /* the pointer is gone already */
+      }
     }
     progress.set(Math.max(0, Math.min(1, 1 + dx / w.current)));
   };
@@ -102,8 +115,11 @@ export function PushDrawer({
     drag.current = null;
     if (!d || d.id !== e.pointerId || !d.on) return;
     const v = (e.clientX - d.x) / Math.max(1, performance.now() - d.t);
-    if (progress.get() < 0.65 || v < -0.5) onClose();
-    else void animate(progress, 1, SPRING);
+    if (progress.get() < 0.65 || v < -0.5) {
+      onClose();
+      // Already closing by state (a tap raced the swipe): still settle.
+      if (!open) void animate(progress, 0, SPRING);
+    } else void animate(progress, 1, SPRING);
   };
   const cancel = () => {
     if (drag.current?.on) void animate(progress, open ? 1 : 0, SPRING);
@@ -113,7 +129,7 @@ export function PushDrawer({
   return (
     <div ref={root} className={cx("relative flex min-h-0 min-w-0 flex-1 overflow-hidden", className)} data-testid={testId} data-open={open || undefined}>
       <motion.aside
-        className="absolute inset-y-0 left-0 z-0 flex flex-col bg-surface"
+        className="absolute inset-y-0 left-0 z-0 flex touch-pan-y flex-col bg-surface"
         // Fully closed: not painted at all (it is off screen under the app, and must not be found or hit).
         style={{ x: menuX, width: menuWidth, visibility: menuVisibility }}
         aria-hidden={!open}
@@ -139,7 +155,8 @@ export function PushDrawer({
           // The visible part of the screen: a tap closes the menu. Transparent: the screen is never dimmed.
           <button
             type="button"
-            className="absolute inset-0 z-[70] cursor-default bg-transparent"
+            // touch-none: a swipe here is the drawer's (the browser must not claim it and cancel the pointer).
+            className="absolute inset-0 z-[70] cursor-default touch-none bg-transparent"
             aria-label={t("common.close")}
             onClick={onClose}
             onPointerDown={down}

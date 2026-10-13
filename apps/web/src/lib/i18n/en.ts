@@ -1369,6 +1369,9 @@ export const en = {
   "vibex.stories.replyTo": "Reply to a story",
   "vibex.stories.replyToYours": "Replied to your story",
   "vibex.stories.gone": "The story is no longer available",
+  "vibex.chats.pinnedOne": "Pinned",
+  "net.updating": "Updating...",
+  "vibex.search.followingShort": "Following",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -1338,4 +1338,7 @@ export const zh: Record<MessageKey, string> = {
   "vibex.stories.replyTo": "回复快拍",
   "vibex.stories.replyToYours": "回复了你的快拍",
   "vibex.stories.gone": "该快拍已不可用",
+  "vibex.chats.pinnedOne": "已置顶",
+  "net.updating": "正在更新...",
+  "vibex.search.followingShort": "已关注",
 };

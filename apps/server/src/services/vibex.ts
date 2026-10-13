@@ -1969,7 +1969,15 @@ export class VibexService {
     };
     const people = found.map((p, i) => ({ p, r: rank(p), i })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.p);
     const posts = await this.page(viewerId, and(eq(vibexPosts.kind, "post"), ilike(vibexPosts.text, `%${escapeLike(query)}%`)), undefined, 30);
-    return { people, posts: posts.items };
+    const following = people.length
+      ? (
+          await this.ctx.db
+            .select({ id: vibexFollows.followeeId })
+            .from(vibexFollows)
+            .where(and(eq(vibexFollows.followerId, viewerId), inArray(vibexFollows.followeeId, people.map((p) => p.id))))
+        ).map((r) => r.id)
+      : [];
+    return { people, posts: posts.items, following };
   }
 
   /** The Search tab's grid: everyone's public posts with a picture or a video, newest first (not mine). */

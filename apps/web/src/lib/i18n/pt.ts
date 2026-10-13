@@ -1338,4 +1338,7 @@ export const pt: Record<MessageKey, string> = {
   "vibex.stories.replyTo": "Resposta a um story",
   "vibex.stories.replyToYours": "Respondeu ao seu story",
   "vibex.stories.gone": "O story não está mais disponível",
+  "vibex.chats.pinnedOne": "Fixado",
+  "net.updating": "Atualizando...",
+  "vibex.search.followingShort": "Seguindo",
 };

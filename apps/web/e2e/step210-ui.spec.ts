@@ -79,7 +79,7 @@ test("Mail: the search button grows into the field in place; X clears and folds 
 });
 
 for (const width of [320, 390, 430]) {
-  test(`Vibex: «Главная» is centred on the header at ${width}px; «История» has no search button`, async ({ page }) => {
+  test(`Vibex: «Главная» is centred on the header at ${width}px; search opens the Search tab; «История» has no search button`, async ({ page }) => {
     test.skip(!isMobile(page), "phone header");
     await page.setViewportSize({ width, height: 844 });
     await signUpViaApi(page, "Центр", "Заголовка");
@@ -90,10 +90,10 @@ for (const width of [320, 390, 430]) {
     const t = (await title.boundingBox())!;
     const header = (await page.locator('section[data-state="open"] [data-window-content]').boundingBox())!;
     expect(Math.abs(t.x + t.width / 2 - (header.x + header.width / 2))).toBeLessThan(1.5);
-    // The search still grows over the title.
-    await page.getByTestId("vibex-feed-search-open").click();
-    await expect(page.getByTestId("vibex-feed-search")).toHaveAttribute("data-open", "true");
-    await page.getByTestId("vibex-feed-search-close").click();
+    // Step 2.11: the search button opens the Search tab (no field in the header).
+    await page.getByTestId("vibex-search").click();
+    await expect(page.getByTestId("search-screen")).toBeVisible();
+    await page.getByTestId("vibex-tab-feed").click();
 
     await page.getByTestId("vibex-menu").click();
     await page.getByTestId("vibex-nav-history").last().click();
