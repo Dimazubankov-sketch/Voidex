@@ -1251,6 +1251,19 @@ export class VibexService {
     // Step 2.10: forwarded copies name the original's author.
     const fwdIds = [...new Set(rows.map((r) => r.forwardedFromId).filter((x): x is string => !!x))];
     const fwd = fwdIds.length ? await this.persons(fwdIds) : new Map<string, VibexPersonDto>();
+    // Step 2.11: replies to stories show the story while it is there (its author always sees it, others for its 24 hours).
+    const storyIds = [...new Set(rows.map((r) => r.storyId).filter((x): x is string => !!x))];
+    const stories = storyIds.length ? await this.ctx.db.select().from(vibexStories).where(inArray(vibexStories.id, storyIds)) : [];
+    const storyFiles = stories.length ? await this.ctx.db.select().from(vibexFiles).where(inArray(vibexFiles.id, stories.map((x) => x.fileId))) : [];
+    const storyBy = new Map(stories.map((x) => [x.id, x]));
+    const storyFileBy = new Map(storyFiles.map((f) => [f.id, fileDto(f)]));
+    const now = this.ctx.now();
+    const storyRef = (id: string | null) => {
+      const st = id ? storyBy.get(id) : undefined;
+      if (!st) return null;
+      const shown = !st.deletedAt && (st.ownerId === viewerId || st.expiresAt > now);
+      return { id: st.id, ownerId: st.ownerId, kind: st.kind, file: shown ? (storyFileBy.get(st.fileId) ?? null) : null };
+    };
     for (const r of rows) {
       const to = r.replyToId ? repliedBy.get(r.replyToId) : undefined;
       out.set(r.id, {
@@ -1271,6 +1284,7 @@ export class VibexService {
         createdAt: r.createdAt.toISOString(),
         editedAt: r.editedAt?.toISOString() ?? null,
         forwardedFrom: r.forwardedFromId ? { id: r.forwardedFromId, name: fwd.get(r.forwardedFromId)?.name ?? "" } : null,
+        ...(r.storyId ? { story: storyRef(r.storyId) } : {}),
       });
     }
     return out;
@@ -1325,6 +1339,8 @@ export class VibexService {
       notesCard?: NotesCardDto;
       /** Step 2.10: a forwarded copy of this message (its text, files, post, card; the original author). */
       forwardOf?: MessageRow;
+      /** Step 2.11: a reply to this story. */
+      storyId?: string;
     },
   ): Promise<VibexMessageDto> {
     const now = this.ctx.now();
@@ -1365,6 +1381,7 @@ export class VibexService {
           replyToId,
           notesCard: kind === "text" ? (input.notesCard ?? null) : null,
           forwardedFromId: input.forwardOf ? (input.forwardOf.forwardedFromId ?? input.forwardOf.senderId) : null,
+          storyId: input.storyId ?? null,
           createdAt: now,
         })
         .returning();
@@ -1734,16 +1751,21 @@ export class VibexService {
     const [people, files, seen, counts] = await Promise.all([
       this.persons(rows.map((r) => r.ownerId)),
       this.ctx.db.select().from(vibexFiles).where(inArray(vibexFiles.id, rows.map((r) => r.fileId))),
-      this.ctx.db.select({ id: vibexStoryViews.storyId }).from(vibexStoryViews).where(and(inArray(vibexStoryViews.storyId, ids), eq(vibexStoryViews.viewerId, viewerId))),
       this.ctx.db
-        .select({ id: vibexStoryViews.storyId, n: sql<number>`count(*)::int` })
+        .select({ id: vibexStoryViews.storyId, reaction: vibexStoryViews.reaction })
+        .from(vibexStoryViews)
+        .where(and(inArray(vibexStoryViews.storyId, ids), eq(vibexStoryViews.viewerId, viewerId))),
+      this.ctx.db
+        .select({ id: vibexStoryViews.storyId, n: sql<number>`count(*)::int`, r: sql<number>`count(${vibexStoryViews.reaction})::int` })
         .from(vibexStoryViews)
         .where(inArray(vibexStoryViews.storyId, ids))
         .groupBy(vibexStoryViews.storyId),
     ]);
     const fileBy = new Map(files.map((f) => [f.id, fileDto(f)]));
     const seenSet = new Set(seen.map((r) => r.id));
+    const reactionBy = new Map(seen.map((r) => [r.id, r.reaction]));
     const countBy = new Map(counts.map((r) => [r.id, r.n]));
+    const reactedBy = new Map(counts.map((r) => [r.id, r.r]));
     const now = this.ctx.now();
     return rows
       .filter((r) => people.has(r.ownerId) && fileBy.has(r.fileId))
@@ -1760,6 +1782,8 @@ export class VibexService {
           seen: mine || seenSet.has(r.id),
           views: mine ? (countBy.get(r.id) ?? 0) : 0,
           mine,
+          myReaction: mine ? null : (reactionBy.get(r.id) ?? null),
+          reactions: mine ? (reactedBy.get(r.id) ?? 0) : 0,
         };
       });
   }
@@ -2032,7 +2056,46 @@ export class VibexService {
     if (!st) throw notFound("Story");
     const rows = await this.ctx.db.select().from(vibexStoryViews).where(eq(vibexStoryViews.storyId, storyId)).orderBy(desc(vibexStoryViews.viewedAt));
     const people = await this.persons(rows.map((r) => r.viewerId));
-    return rows.filter((r) => people.has(r.viewerId)).map((r) => ({ person: people.get(r.viewerId)!, viewedAt: r.viewedAt.toISOString() }));
+    return rows
+      .filter((r) => people.has(r.viewerId))
+      .map((r) => ({ person: people.get(r.viewerId)!, viewedAt: r.viewedAt.toISOString(), reaction: r.reaction ?? null, reactedAt: r.reactedAt?.toISOString() ?? null }));
+  }
+
+  /** A story someone else posted that I may see right now (live, not deleted, allowed by its author). */
+  private async visibleStory(viewerId: string, storyId: string) {
+    const [st] = await this.ctx.db.select().from(vibexStories).where(eq(vibexStories.id, storyId));
+    if (!st || st.deletedAt || st.ownerId === viewerId || st.expiresAt <= this.ctx.now() || !(await this.canSee(viewerId, st.ownerId, "posts"))) throw notFound("Story");
+    return st;
+  }
+
+  /**
+   * Step 2.11: my reaction to a story (one per person: a new one replaces the
+   * old, null takes it back). A reaction counts as a view; the author sees it
+   * in the viewers list. No message and no duplicate events.
+   */
+  async reactStory(viewerId: string, storyId: string, reaction: string | null) {
+    const st = await this.visibleStory(viewerId, storyId);
+    const now = this.ctx.now();
+    const [before] = await this.ctx.db.select({ reaction: vibexStoryViews.reaction }).from(vibexStoryViews).where(and(eq(vibexStoryViews.storyId, st.id), eq(vibexStoryViews.viewerId, viewerId)));
+    await this.ctx.db
+      .insert(vibexStoryViews)
+      .values({ storyId: st.id, viewerId, reaction, reactedAt: reaction ? now : null })
+      .onConflictDoUpdate({ target: [vibexStoryViews.storyId, vibexStoryViews.viewerId], set: { reaction, reactedAt: reaction ? now : null } });
+    if ((before?.reaction ?? null) !== reaction || !before) this.ctx.events.toUser(st.ownerId, { type: "vibex.stories", userId: st.ownerId });
+    return { reaction };
+  }
+
+  /**
+   * Step 2.11: a reply to a story is a direct message to its author that
+   * refers to the story (the chat is created if there is none yet). Replying
+   * also counts as a view.
+   */
+  async replyStory(viewerId: string, storyId: string, text: string): Promise<{ chatId: string; message: VibexMessageDto }> {
+    const st = await this.visibleStory(viewerId, storyId);
+    await this.ctx.db.insert(vibexStoryViews).values({ storyId: st.id, viewerId }).onConflictDoNothing();
+    const chat = await this.openDirect(viewerId, st.ownerId);
+    const message = await this.send(viewerId, chat.id, { text, fileIds: [], storyId: st.id });
+    return { chatId: chat.id, message };
   }
 
   /** The author removes a story (live or archived); its file goes with it. */

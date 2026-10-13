@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media";
+export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media" | "store";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -276,6 +276,32 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
       tr: ["fotoğraflar", "videolar", "galeri", "albümler", "ekran görüntüleri", "resimler"],
     },
     window: { defaultWidth: 1120, defaultHeight: 760, minWidth: 380, minHeight: 500, singleton: true },
+  },
+  store: {
+    id: "store",
+    // Step 2.11: Appex Store, the catalog of the registry (install, open, update, reviews).
+    name: { en: "Appex Store", ru: "Appex Store", es: "Appex Store", de: "Appex Store", fr: "Appex Store", pt: "Appex Store", zh: "Appex Store", ja: "Appex Store", ko: "Appex Store", tr: "Appex Store" },
+    caption: { en: "Apps", ru: "Приложения", es: "Aplicaciones", de: "Apps", fr: "Applications", pt: "Aplicativos", zh: "应用", ja: "アプリ", ko: "앱", tr: "Uygulamalar" },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    permissions: ["account.read"],
+    status: "available",
+    category: "system",
+    keywords: {
+      en: ["store", "apps", "install", "update", "market", "appex"],
+      ru: ["магазин", "приложения", "установить", "обновить", "маркет", "appex"],
+      es: ["tienda", "aplicaciones", "instalar", "actualizar", "appex"],
+      de: ["Laden", "Apps", "installieren", "aktualisieren", "appex"],
+      fr: ["boutique", "applications", "installer", "mettre à jour", "appex"],
+      pt: ["loja", "aplicativos", "instalar", "atualizar", "appex"],
+      zh: ["商店", "应用", "安装", "更新", "appex"],
+      ja: ["ストア", "アプリ", "インストール", "アップデート", "appex"],
+      ko: ["스토어", "앱", "설치", "업데이트", "appex"],
+      tr: ["mağaza", "uygulamalar", "yükle", "güncelle", "appex"],
+    },
+    window: { defaultWidth: 1120, defaultHeight: 760, minWidth: 380, minHeight: 520, singleton: true },
   },
 };
 

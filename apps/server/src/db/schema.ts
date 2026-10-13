@@ -554,6 +554,8 @@ export const vibexMessages = pgTable(
     editedAt: ts("edited_at"),
     /** Step 2.10: a forwarded copy: who wrote the original. */
     forwardedFromId: uuid("forwarded_from_id").references(() => users.id, { onDelete: "set null" }),
+    /** Step 2.11: a reply to a story (the story it answers; null once the story is gone). */
+    storyId: uuid("story_id").references((): AnyPgColumn => vibexStories.id, { onDelete: "set null" }),
   },
   (t) => [index("vibex_messages_conversation_idx").on(t.conversationId, t.createdAt)],
 );
@@ -662,6 +664,9 @@ export const vibexStoryViews = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     viewedAt: ts("viewed_at").notNull().defaultNow(),
+    /** Step 2.11: this person's reaction to the story (one, replaceable; null: none). */
+    reaction: text("reaction"),
+    reactedAt: ts("reacted_at"),
   },
   (t) => [primaryKey({ name: "vibex_story_views_pk", columns: [t.storyId, t.viewerId] }), index("vibex_story_views_viewer_idx").on(t.viewerId)],
 );
@@ -959,4 +964,60 @@ export const vibexActivity = pgTable(
     readAt: ts("read_at"),
   },
   (t) => [index("vibex_activity_user_idx").on(t.userId, t.createdAt)],
+);
+
+/* ==========================================================================
+   Step 2.11: Appex Store reviews
+   ========================================================================== */
+
+/** One review per person and app (editable, deletable). Name and address come from the account, never from the form. */
+export const storeReviews = pgTable(
+  "store_reviews",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    appId: text("app_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    rating: integer("rating").notNull(),
+    title: text("title").notNull().default(""),
+    text: text("text").notNull().default(""),
+    createdAt: createdAt(),
+    editedAt: ts("edited_at"),
+  },
+  (t) => [uniqueIndex("store_reviews_app_user_uq").on(t.appId, t.userId), index("store_reviews_app_idx").on(t.appId, t.createdAt)],
+);
+
+/** A like (1) or dislike (-1) on a review, one per person. */
+export const storeReviewVotes = pgTable(
+  "store_review_votes",
+  {
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => storeReviews.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    vote: integer("vote").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ name: "store_review_votes_pk", columns: [t.reviewId, t.userId] })],
+);
+
+/** A report on a review (once per person), for moderation. */
+export const storeReviewReports = pgTable(
+  "store_review_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => storeReviews.id, { onDelete: "cascade" }),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    reason: text("reason", { enum: ["spam", "abuse", "offtopic", "other"] }).notNull(),
+    description: text("description").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("store_review_reports_uq").on(t.reviewId, t.reporterId)],
 );

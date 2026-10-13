@@ -97,6 +97,8 @@ export interface VibexMessageDto {
   editedAt?: string | null;
   /** Step 2.10: a forwarded copy: who wrote the original. */
   forwardedFrom?: { id: string; name: string } | null;
+  /** Step 2.11: a reply to a story (the story; `file` is null once it is gone or past its 24 hours). */
+  story?: { id: string; ownerId: string; kind: "photo" | "video"; file: VibexFileDto | null } | null;
 }
 
 /** Step 2.4: a group chat (several people, a name, an optional picture). */
@@ -374,6 +376,10 @@ export interface VibexStoryDto {
   /** The author only: how many people saw it (others get 0). */
   views: number;
   mine: boolean;
+  /** Step 2.11: my reaction to it (others' stories). */
+  myReaction?: string | null;
+  /** Step 2.11: the author only: how many people reacted. */
+  reactions?: number;
 }
 
 /** One person's current stories (the feed of the Chats header). */
@@ -388,7 +394,16 @@ export interface VibexStoryGroupDto {
 export interface VibexStoryViewerDto {
   person: VibexPersonDto;
   viewedAt: string;
+  /** Step 2.11: this viewer's reaction (null: none). */
+  reaction?: string | null;
+  reactedAt?: string | null;
 }
+
+/** Step 2.11: the quick reactions to a story (one per person, replaceable). */
+export const VIBEX_STORY_REACTIONS = ["❤️", "🔥", "😂", "😮", "😢", "👏"] as const;
+export const VibexStoryReactSchema = z.object({ reaction: z.enum(VIBEX_STORY_REACTIONS).nullable() });
+/** Step 2.11: a reply to a story goes to its author as a direct message. */
+export const VibexStoryReplySchema = z.object({ text: z.string().trim().min(1).max(VIBEX_MESSAGE_MAX) });
 
 export const VibexCreateStorySchema = z.object({ fileId: z.string().uuid() });
 

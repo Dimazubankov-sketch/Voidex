@@ -17,3 +17,4 @@ export * from "./notifications.js";
 export * from "./mini-calc.js";
 export * from "./security.js";
 export * from "./notes.js";
+export * from "./store.js";

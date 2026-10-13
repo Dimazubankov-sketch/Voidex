@@ -28,6 +28,8 @@ import {
   VibexChatSearchQuerySchema,
   VibexChatUpdateSchema,
   VibexCreateStorySchema,
+  VibexStoryReactSchema,
+  VibexStoryReplySchema,
   VibexDeleteChatSchema,
 } from "@voidex/shared";
 import { z } from "zod";
@@ -287,6 +289,9 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
   app.post("/stories/:id/view", limit(600), async (req) => vibex.viewStory(req.auth!.userId, parse(idParam, req.params).id));
   app.get("/stories/:id/viewers", async (req) => vibex.storyViewers(req.auth!.userId, parse(idParam, req.params).id));
   app.delete("/stories/:id", limit(60), async (req) => vibex.deleteStory(req.auth!.userId, parse(idParam, req.params).id));
+  // Step 2.11: a reaction (one, replaceable) and a reply (a direct message) to someone's story.
+  app.post("/stories/:id/react", limit(240), async (req) => vibex.reactStory(req.auth!.userId, parse(idParam, req.params).id, parse(VibexStoryReactSchema, req.body).reaction));
+  app.post("/stories/:id/reply", limit(60), async (req) => vibex.replyStory(req.auth!.userId, parse(idParam, req.params).id, parse(VibexStoryReplySchema, req.body).text));
 
   // --------------------------------------------------------------- history
   app.get("/history", async (req) => {
