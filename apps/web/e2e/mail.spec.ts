@@ -23,8 +23,8 @@ test("internal mail: compose with autosave, deliver in real time, reply, archive
   await page.getByTestId("composer-send").click();
   await expect(page.getByText("Письмо отправлено")).toBeVisible();
 
-  // Bob gets a real-time banner and the unread badge.
-  await expect(bobPage.getByTestId("toast").filter({ hasText: "Алиса Смирнова" })).toBeVisible();
+  // Bob gets a real-time pop-up (Step 2.11: the system pop-up of the notification) and the unread badge.
+  await expect(bobPage.getByTestId("system-popup").filter({ hasText: "Алиса Смирнова" })).toBeVisible();
   await openApp(bobPage, "mail");
   const row = bobPage.getByTestId("thread-row").first();
   await expect(row).toHaveAttribute("data-unread", "true");

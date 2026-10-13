@@ -137,7 +137,7 @@ test("preview: the whole history scrolls and nothing is read (A/B); no «Отк�
   const row = page.locator(`[data-testid="chat-row"][data-chat-id="${chat.id}"]`);
   await expect(row.getByTestId("chat-unread")).toHaveText("60");
   // The arrival banners go away first (they would sit over the first row).
-  await expect(page.getByTestId("toast")).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByTestId("system-popup")).toHaveCount(0, { timeout: 20_000 });
 
   const openPreview = async () => {
     if (isMobile(page)) {

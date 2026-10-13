@@ -20,7 +20,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  * How each source's notifications look and what a tap opens. A new app
  * registers here (and its types in shared NOTIFICATION_SOURCES).
  */
-interface Renderer {
+export interface Renderer {
   Icon: (p: { className?: string }) => ReactNode;
   appName: (lang: string) => string;
   /** The action line ("New message", "commented on your post"). */
@@ -39,7 +39,7 @@ const ACTION: Record<string, MessageKey> = {
   "system.update": "notifications.system.update",
 };
 
-const RENDERERS: Record<NotificationDto["app"], Renderer> = {
+export const RENDERERS: Record<NotificationDto["app"], Renderer> = {
   mail: {
     Icon: MailGlyph,
     appName: (lang) => APP_REGISTRY.mail.name[lang as "en"] ?? "Mail",
@@ -60,11 +60,12 @@ const RENDERERS: Record<NotificationDto["app"], Renderer> = {
     Icon: VoidexMark,
     appName: () => "VOIDEX",
     action: (_n, t) => t("notifications.system.update"),
-    open: () => undefined,
+    // Step 2.11: a system notification opens its section (Settings).
+    open: () => useWM.getState().open("settings"),
   },
 };
 
-function timeLabel(iso: string, lang: string, t: TFunction) {
+export function timeLabel(iso: string, lang: string, t: TFunction) {
   const d = new Date(iso);
   const mins = Math.round((Date.now() - d.getTime()) / 60_000);
   if (mins < 1) return t("notifications.now");

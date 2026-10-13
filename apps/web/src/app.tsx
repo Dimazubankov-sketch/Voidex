@@ -7,6 +7,7 @@ import { queryClient } from "@/lib/query";
 import { VoidexMark } from "@/brand/brand";
 import { LogoIntro } from "@/brand/logo-intro";
 import { ToastViewport } from "@/ui/overlays";
+import { SystemPopups } from "@/os/notifications/popups";
 
 const AuthRoot = lazy(() => import("@/auth/auth-root").then((m) => ({ default: m.AuthRoot })));
 const Workspace = lazy(() => import("@/os/workspace").then((m) => ({ default: m.Workspace })));
@@ -76,6 +77,7 @@ export function App() {
         </AnimatePresence>
       )}
       <ToastViewport />
+      <SystemPopups />
       <LogoIntro />
     </MotionConfig>
   );

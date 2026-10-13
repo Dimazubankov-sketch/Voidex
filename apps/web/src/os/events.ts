@@ -3,16 +3,13 @@ import { create } from "zustand";
 import type { MeDto, ServerEvent } from "@voidex/shared";
 import { isSigningOut } from "@/lib/account";
 import { accessToken, api, refreshSession } from "@/lib/api";
-import { t } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
 import { useSession } from "@/lib/session";
-import { toast } from "@/ui/overlays";
-import { playNotificationSound } from "@/lib/sound";
 import { visibleChats } from "@/apps/vibex/store";
 import { useNotesSync } from "@/apps/notes/sync";
 import { layoutEpoch, mergeServerUser } from "./home/layout";
 import { notificationsChanged, receiveNotification } from "./notifications/store";
-import { useWM } from "./window-manager";
+import { popupNotification } from "./notifications/popups";
 import { lockInFlight } from "./lock/auto-lock";
 
 export const useConnection = create<{ connected: boolean; online: boolean; everConnected: boolean }>(() => ({
@@ -29,7 +26,6 @@ async function refreshMe() {
   queryClient.setQueryData(qk.me, me);
 }
 
-const seenMessages = new Set<string>();
 /** No byte from the event stream for this long (the server pings every 25 s): it is dead. */
 const STREAM_SILENCE_MS = 45_000;
 
@@ -39,46 +35,15 @@ function handle(event: ServerEvent) {
     case "mail.changed":
       void queryClient.invalidateQueries({ queryKey: qk.mail });
       break;
-    case "mail.received": {
+    case "mail.received":
+      // Step 2.11: the pop-up and its sound come with the notification itself ("notification.new").
       void queryClient.invalidateQueries({ queryKey: qk.mail });
-      // One banner per message even if several streams were briefly open.
-      if (seenMessages.has(event.messageId)) break;
-      seenMessages.add(event.messageId);
-      // Step 2.8: Settings → Apps → Mail → Notifications off: no banner, no sound (the Notification Center still lists it).
-      if (session.user?.preferences.apps?.mail?.notifications === false) break;
-      const prefs = session.user?.preferences.notifications;
-      if (prefs?.newMailBanner) {
-        toast({
-          title: t("mail.newMail", { name: event.from.name ?? event.from.address }),
-          body: prefs.showPreview ? event.subject || event.snippet : undefined,
-          onClick: () => useWM.getState().open("mail", { params: { threadId: event.threadId } }),
-          duration: 6000,
-        });
-      }
-      if (prefs?.sound) playNotificationSound();
       break;
-    }
     case "vibex.message": {
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
       void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
-      if (event.senderId === session.user?.id || seenMessages.has(event.messageId)) break;
-      seenMessages.add(event.messageId);
-      // No banner for a chat that is already on screen.
-      if (visibleChats.has(event.conversationId) && document.visibilityState === "visible") break;
-      // Step 2.9: notifications of this chat are off.
-      if (queryClient.getQueryData<{ id: string; muted?: boolean }[]>(["vibex", "chats"])?.some((c) => c.id === event.conversationId && c.muted)) break;
-      if (session.user?.preferences.apps?.vibex?.notifications === false) break;
-      const prefs = session.user?.preferences.notifications;
-      if (prefs?.newMailBanner) {
-        toast({
-          title: t("vibex.newMessage", { name: event.senderName }),
-          body: prefs.showPreview ? event.snippet || t("vibex.chats.attachment") : undefined,
-          onClick: () => useWM.getState().open("vibex", { params: { chatId: event.conversationId } }),
-          duration: 6000,
-        });
-      }
-      if (prefs?.sound) playNotificationSound();
+      // Step 2.11: the pop-up and its sound come with the notification itself ("notification.new").
       break;
     }
     case "vibex.message.deleted":
@@ -117,9 +82,16 @@ function handle(event: ServerEvent) {
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
       if (event.conversationId) void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
       break;
-    case "notification.new":
+    case "notification.new": {
       receiveNotification(event.notification);
+      // Step 2.11: the system pop-up (no pop-up for a chat that is already on screen).
+      const chatId = event.notification.target.chatId;
+      const onScreen = !!chatId && visibleChats.has(chatId) && document.visibilityState === "visible";
+      // Step 2.9: notifications of this chat are off (the server sends none; a stale one is not popped up).
+      const muted = !!chatId && !!queryClient.getQueryData<{ id: string; muted?: boolean }[]>(["vibex", "chats"])?.some((c) => c.id === chatId && c.muted);
+      popupNotification(event.notification, { onScreen: onScreen || muted });
       break;
+    }
     case "notifications.changed":
       notificationsChanged();
       break;
