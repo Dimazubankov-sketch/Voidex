@@ -55,3 +55,26 @@ export async function sendFiles({ dest, picked, text }: ShareSendInput, files: F
   }
   void queryClient.invalidateQueries({ queryKey: ["mail"] });
 }
+
+/**
+ * Step 2.11: share a text (e.g. an app from Appex Store) through the same
+ * dialog: a Vibex message to each picked chat / person, or one VoidOps letter.
+ */
+export async function sendText({ dest, picked }: ShareSendInput, subject: string, body: string) {
+  if (dest === "vibex") {
+    for (const p of picked) {
+      const chatId = p.chatId ?? (await openDirect(p.userId!)).id;
+      await api.post<VibexMessageDto>(`/api/vibex/chats/${chatId}/messages`, { text: body });
+    }
+    void queryClient.invalidateQueries({ queryKey: vk.chats });
+    return;
+  }
+  const draft = await draftsApi.create({ to: picked.map((p) => p.address!), subject, body } as Parameters<typeof draftsApi.create>[0]);
+  try {
+    await draftsApi.send(draft.id);
+  } catch (e) {
+    await draftsApi.remove(draft.id).catch(() => undefined);
+    throw e;
+  }
+  void queryClient.invalidateQueries({ queryKey: ["mail"] });
+}

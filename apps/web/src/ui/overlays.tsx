@@ -213,6 +213,7 @@ export function ConfirmDialog({
   danger,
   loading,
   top,
+  centered,
   testId,
 }: {
   open: boolean;
@@ -225,11 +226,13 @@ export function ConfirmDialog({
   loading?: boolean;
   /** Step 2.11: shown above a full-screen viewer. */
   top?: boolean;
+  /** Step 2.11: over another centred dialog it must be one too (its own layer takes the pointer). */
+  centered?: boolean;
   testId?: string;
 }) {
   const t = useT();
   return (
-    <Sheet open={open} onClose={onClose} title={title} width={420} top={top} testId={testId}>
+    <Sheet open={open} onClose={onClose} title={title} width={420} top={top} centered={centered} testId={testId}>
       {message && <p className="text-[15px] text-text-secondary">{message}</p>}
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onClose}>
