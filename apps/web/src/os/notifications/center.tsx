@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { RiCheckDoubleLine, RiCloseLine, RiDeleteBin6Line, RiNotification3Line } from "@remixicon/react";
 import { APP_REGISTRY, type NotificationDto } from "@voidex/shared";
-import { Avatar, MailGlyph, VibexGlyph, VoidexMark } from "@/brand/brand";
+import { Avatar, MailGlyph, StoreGlyph, VibexGlyph, VoidexMark } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, useLanguage, useT, type MessageKey, type TFunction } from "@/lib/i18n";
@@ -62,6 +62,13 @@ export const RENDERERS: Record<NotificationDto["app"], Renderer> = {
     action: (_n, t) => t("notifications.system.update"),
     // Step 2.11: a system notification opens its section (Settings).
     open: () => useWM.getState().open("settings"),
+  },
+  // Step 2.12: Appex Store: an update is available, or was installed by itself. A tap opens the Store's updates.
+  store: {
+    Icon: StoreGlyph,
+    appName: () => "Appex Store",
+    action: (n, t) => t(n.target.kind === "updated" ? "notifications.store.updated" : "notifications.store.available", { version: n.target.version ?? n.body }),
+    open: () => useWM.getState().open("store", { params: { page: "updates" } }),
   },
 };
 

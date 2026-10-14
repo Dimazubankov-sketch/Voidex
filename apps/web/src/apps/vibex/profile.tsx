@@ -49,6 +49,7 @@ import { PhotoEditor, type PhotoShape } from "./photo-editor";
 import { FeedEmpty, PostActions, PostList } from "./posts";
 import { useVibex } from "./store";
 import { StoryHalo, StoryViewer } from "./stories";
+import { AvatarViewer } from "./avatar-viewer";
 
 /** Soft VOIDEX cover when the person has none (no stock photos): milk and two violets. */
 const COVER = "radial-gradient(80% 120% at 85% 0%, #cbbffb 0%, rgba(203,191,251,0) 60%), radial-gradient(60% 90% at 10% 100%, #e6dffb 0%, rgba(230,223,251,0) 70%), #f6f4fc";
@@ -115,6 +116,8 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
   const [uploading, setUploading] = useState<PhotoShape | null>(null);
   // Step 2.11: the person's unseen story, opened from the ring on the avatar.
   const [story, setStory] = useState<string | null>(null);
+  // Step 2.12: no live story: the avatar opens the photo full screen.
+  const [photoOpen, setPhotoOpen] = useState(false);
   const storyGroups = useStories(!!story).data ?? [];
   const coverInput = useRef<HTMLInputElement>(null);
   const avatarInput = useRef<HTMLInputElement>(null);
@@ -176,7 +179,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
       <div className="relative -mt-6 rounded-[24px] bg-surface px-5 pb-5 sm:px-6">
         <div className="flex items-end justify-between gap-3">
           <span className="relative -mt-[38px] inline-flex shrink-0 rounded-full bg-surface p-[5px] shadow-[0_0_0_1px_rgba(108,92,255,0.12),0_10px_28px_-10px_rgba(80,60,200,0.45)]" data-testid="profile-avatar">
-            <StoryHalo personId={profile.me ? null : person.id} onOpen={() => setStory(person.id)}>
+            <StoryHalo personId={person.id} onOpen={() => setStory(person.id)} onNone={person.avatarVersion > 0 ? () => setPhotoOpen(true) : undefined}>
               <span className="block size-[96px] sm:size-[108px] [&>*]:!size-full">
                 <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={104} />
               </span>
@@ -329,6 +332,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
         </>
       )}
       <StoryViewer groups={storyGroups} startPerson={story} onClose={() => setStory(null)} onArchive={() => setStory(null)} />
+      <AvatarViewer person={photoOpen ? person : null} onClose={() => setPhotoOpen(false)} />
     </div>
   );
 }

@@ -34,7 +34,23 @@ export interface MosaicItem {
 
 const MAX_CELLS = 6;
 
-export function MediaMosaic({ items, onOpen, className, testId = "media-mosaic" }: { items: MosaicItem[]; onOpen?: (index: number) => void; className?: string; testId?: string }) {
+export function MediaMosaic({
+  items,
+  onOpen,
+  className,
+  testId = "media-mosaic",
+  fill = false,
+  flat = false,
+}: {
+  items: MosaicItem[];
+  onOpen?: (index: number) => void;
+  className?: string;
+  testId?: string;
+  /** Step 2.12: as wide as its container (a message), instead of at most 420 px. */
+  fill?: boolean;
+  /** Step 2.12: no own radius (inside a bubble whose corners clip it). */
+  flat?: boolean;
+}) {
   const n = items.length;
   const shown = items.slice(0, MAX_CELLS);
   const rest = n - MAX_CELLS;
@@ -74,7 +90,8 @@ export function MediaMosaic({ items, onOpen, className, testId = "media-mosaic" 
   const single = ratio ? Math.max(0.75, Math.min(1.6, ratio)) : 4 / 3;
   return (
     <div
-      className={cx("grid w-[min(300px,100%)] grid-cols-6 gap-[2px] overflow-hidden rounded-[18px] bg-black/[0.04]", box, className)}
+      // Step 2.12: the thin gaps are neutral (never the violet of a bubble around the photos).
+      className={cx("grid grid-cols-6 gap-[2px] overflow-hidden", fill ? "w-full" : "w-[min(420px,100%)]", flat ? "rounded-none bg-surface" : "rounded-[18px] bg-black/[0.04]", box, className)}
       style={layout === "one" ? { aspectRatio: String(single) } : undefined}
       data-testid={testId}
       data-layout={layout}

@@ -78,3 +78,12 @@ with an X. One at a time on phones (a queue), up to three on a PC. A tap marks i
 and opens its target (Vibex chat / post / person, a Mail thread, Settings for system
 notices). The chime plays at most once every 1.5 s and only with sound on; an app's
 notifications turned off in Settings → Apps: no pop-up.
+
+## Step 2.12
+- No pop-up (and no chime) for the app in front: `activeApp()` asks the window manager
+  for the foreground window (the focused window of the current space on a PC, the open
+  app on a phone; none while the switcher is open or the page is hidden). Other apps'
+  notifications still pop up; the Notification Center lists everything.
+- Appex Store: `store.update` notifications (an update installed by itself, or one
+  waiting), with Store → account → «Уведомления об обновлениях»; a tap opens the
+  update center.

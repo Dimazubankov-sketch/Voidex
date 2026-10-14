@@ -5,10 +5,11 @@ import { RiCloseLine } from "@remixicon/react";
 import type { NotificationDto } from "@voidex/shared";
 import { create } from "zustand";
 import { Avatar } from "@/brand/brand";
-import { useFormFactor } from "@/lib/form-factor";
+import { getFormFactor, useFormFactor } from "@/lib/form-factor";
 import { useLanguage, useT } from "@/lib/i18n";
 import { playNotificationSound } from "@/lib/sound";
 import { useSession } from "@/lib/session";
+import { foregroundId, useWM } from "../window-manager";
 import { RENDERERS, timeLabel } from "./center";
 import { notificationActions } from "./store";
 
@@ -66,6 +67,20 @@ const seen = new Set<string>();
  * A notification arrived over the event stream: pop it up (unless that is
  * off, or it is about what is already on screen) and chime.
  */
+/**
+ * Step 2.12: the app the person is using right now (from the window manager,
+ * not a guess from a route): the front window of this desktop on a PC, the
+ * open app on a phone; none on the home screen, in the app switcher or while
+ * VOIDEX itself is in the background.
+ */
+export function activeApp(): string | null {
+  if (document.visibilityState !== "visible") return null;
+  const wm = useWM.getState();
+  if (getFormFactor() === "mobile" && wm.switcherOpen) return null;
+  const id = getFormFactor() === "desktop" ? foregroundId(wm, wm.space) : foregroundId(wm);
+  return (id && wm.windows[id]?.appId) || null;
+}
+
 export function popupNotification(n: NotificationDto, opts: { onScreen?: boolean } = {}) {
   const key = `${n.id}:${n.createdAt}`;
   if (n.read || seen.has(key)) return;
@@ -74,6 +89,9 @@ export function popupNotification(n: NotificationDto, opts: { onScreen?: boolean
   // Settings → Apps → <app> → Notifications off: the Notification Center still lists it, no pop-up, no sound.
   if (n.app !== "system" && prefs?.apps?.[n.app]?.notifications === false) return;
   if (opts.onScreen) return;
+  // Step 2.12: no banner (and no chime) over the app it comes from while that app is in front: the app shows
+  // it itself (badges, lists); the Notification Center still keeps it. Other apps' banners still show.
+  if (n.app !== "system" && activeApp() === n.app) return;
   if (prefs?.notifications.newMailBanner !== false) {
     const max = window.matchMedia?.("(min-width: 900px)").matches ? 3 : 1;
     usePopups.getState().push(n, max);

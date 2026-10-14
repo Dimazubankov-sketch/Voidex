@@ -47,7 +47,7 @@ export function StoryRing({ group, size = 64, onClick, label, plus, onPlus, test
         aria-label={label ?? person.name}
         className={cx(
           "flex size-full items-center justify-center rounded-full p-[2.5px]",
-          group ? (unseen ? STORY_GRADIENT : "bg-border") : "bg-transparent",
+          group ? (unseen ? STORY_GRADIENT : "bg-[var(--story-seen)]") : "bg-transparent",
         )}
         data-unseen={unseen || undefined}
       >
@@ -75,29 +75,57 @@ export const STORY_GRADIENT = "bg-[conic-gradient(from_200deg,#8b7bff,#5b8cff,#c
 
 /**
  * Step 2.11: the story ring on any avatar (chat list, profile): drawn outside
- * the avatar, so it appears and goes away without moving anything. Only while
- * the person has a live story I have not seen; once seen, no colored ring.
+ * the avatar, so it appears and goes away without moving anything.
+ * Step 2.12: violet while the person (me too) has a live story I have not
+ * seen, grey once all are seen, none without a live story. The avatar never
+ * gives the browser's image menu (no callout / save).
  * `gap` is the color between the ring and the avatar (the surface it sits on).
  */
-export function StoryHalo({ personId, children, gap = "ring-surface", onOpen, className }: { personId: string | null | undefined; children: React.ReactNode; gap?: string; onOpen?: () => void; className?: string }) {
+export function StoryHalo({
+  personId,
+  children,
+  gap = "ring-surface",
+  onOpen,
+  onNone,
+  className,
+}: {
+  personId: string | null | undefined;
+  children: React.ReactNode;
+  gap?: string;
+  /** A tap while the person has a live story (seen or not). */
+  onOpen?: () => void;
+  /** Step 2.12: a tap while they have none (the profile opens the photo). */
+  onNone?: () => void;
+  className?: string;
+}) {
   const t = useT();
   const g = useStoryGroup(personId);
-  const unseen = !!g && !g.seen && !g.mine;
+  // Step 2.12: violet while unseen, grey once every story was seen (mine too), nothing without a live story.
+  const state = g ? (g.seen ? "seen" : "unseen") : null;
   const inner = (
     <>
-      {unseen && <span className={cx("pointer-events-none absolute -inset-[3.5px] rounded-full", STORY_GRADIENT)} aria-hidden />}
-      <span className={cx("relative flex rounded-full", unseen && cx("ring-2", gap))}>{children}</span>
+      {state && <span className={cx("pointer-events-none absolute -inset-[3.5px] rounded-full", state === "unseen" ? STORY_GRADIENT : "bg-[var(--story-seen)]")} aria-hidden data-testid="story-ring" />}
+      <span className={cx("relative flex select-none rounded-full [-webkit-touch-callout:none]", state && cx("ring-2", gap))}>{children}</span>
     </>
   );
-  if (unseen && onOpen) {
+  const click = g ? onOpen : onNone;
+  if (click) {
     return (
-      <button type="button" onClick={onOpen} className={cx("relative inline-flex shrink-0 rounded-full", className)} aria-label={t("vibex.stories.of", { name: g!.person.name })} data-story-ring="unseen" data-testid="story-halo">
+      <button
+        type="button"
+        onClick={click}
+        onContextMenu={(e) => e.preventDefault()}
+        className={cx("relative inline-flex shrink-0 rounded-full", className)}
+        aria-label={g ? t("vibex.stories.of", { name: g.person.name }) : t("vibex.profile.photo")}
+        data-story-ring={state ?? undefined}
+        data-testid={state ? "story-halo" : "avatar-open"}
+      >
         {inner}
       </button>
     );
   }
   return (
-    <span className={cx("relative inline-flex shrink-0 rounded-full", className)} data-story-ring={unseen ? "unseen" : undefined} data-testid={unseen ? "story-halo" : undefined}>
+    <span className={cx("relative inline-flex shrink-0 rounded-full", className)} data-story-ring={state ?? undefined} data-testid={state ? "story-halo" : undefined}>
       {inner}
     </span>
   );
@@ -133,10 +161,17 @@ export function StoriesStrip({ groups, onOpen, onCreate }: { groups: VibexStoryG
   const others = groups.filter((g) => !g.mine);
   return (
     <div className="scroll-area flex gap-3.5 overflow-x-auto overscroll-x-contain px-3 pb-1 pt-1 [scrollbar-width:none]" role="list" aria-label={t("vibex.stories.title")} data-testid="stories-strip">
+      {/* Step 2.12: «Моя история +» always adds a story; once I posted one, my story has its own circle beside it. */}
       <div className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
-        <StoryRing group={mine} size={62} onClick={() => (mine ? onOpen(mine.person.id) : onCreate())} label={t("vibex.stories.mine")} plus onPlus={onCreate} testId="story-mine" />
+        <StoryRing group={null} size={62} onClick={onCreate} label={t("vibex.stories.add")} plus onPlus={onCreate} testId="story-mine" />
         <span className="w-full truncate text-center text-[12px] text-text-secondary">{t("vibex.stories.mine")}</span>
       </div>
+      {mine && (
+        <div className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
+          <StoryRing group={mine} size={62} onClick={() => onOpen(mine.person.id)} label={t("vibex.stories.yours")} testId="story-own" />
+          <span className="w-full truncate text-center text-[12px] text-text-secondary">{t("vibex.stories.yours")}</span>
+        </div>
+      )}
       {others.map((g) => (
         <div key={g.person.id} className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
           <StoryRing group={g} size={62} onClick={() => onOpen(g.person.id)} testId="story-person" />

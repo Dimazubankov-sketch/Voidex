@@ -108,6 +108,20 @@ export function Workspace() {
     return () => window.removeEventListener("hashchange", follow);
   }, [hydrated]);
 
+  // Step 2.12: Appex Store links (#store/app/<id>) open the app's page in the Store.
+  useEffect(() => {
+    if (!hydrated) return;
+    const follow = () => {
+      const m = /^#store\/app\/([a-z]{2,20})$/.exec(window.location.hash);
+      if (!m) return;
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      useWM.getState().open("store", { params: { appId: m[1] } });
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, [hydrated]);
+
   // PC: only the current virtual desktop's windows count as open.
   const fg = ff === "desktop" ? foregroundId(wm, wm.space) : foregroundId(wm);
   const anyVisible = !!fg;

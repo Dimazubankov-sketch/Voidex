@@ -127,8 +127,17 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
     if (top > 64 && level >= 1 && !query && !focused) setLevel(0);
   };
 
+  const push = useVibex((s) => s.push);
+  const openChat = useVibex((s) => s.openChat);
   const actions = {
     onPreview: (chat: VibexChatDto) => setPreview(chat),
+    // Step 2.12: the avatar: the person's story (seen or not) when there is one, else the profile; a group: the chat.
+    onAvatar: (chat: VibexChatDto) => {
+      const peer = chat.peer?.id;
+      if (peer && groups.some((g) => g.person.id === peer)) setViewing(peer);
+      else if (peer && chat.kind === "direct") push({ kind: "person", id: peer });
+      else openChat(chat.id);
+    },
     onMenu: (chat: VibexChatDto, at: { x: number; y: number }) => (pc ? setMenu({ chat, ...at }) : setPreview(chat)),
   };
 
@@ -138,7 +147,7 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
       {header?.(stack)}
       <div
         ref={scroller}
-        className="scroll-area relative min-h-0 flex-1 overscroll-y-contain"
+        className="vx-chat-list scroll-area relative min-h-0 flex-1 overscroll-y-contain"
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}

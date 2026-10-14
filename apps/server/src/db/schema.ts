@@ -263,6 +263,12 @@ export const installedApps = pgTable(
     appId: text("app_id").notNull(),
     version: text("version").notNull(),
     installedAt: ts("installed_at").notNull().defaultNow(),
+    /** Step 2.12: when the installed version last changed by an update. */
+    updatedAt: ts("updated_at"),
+    /** Step 2.12: this app's own auto-update choice (null: the Store's global choice). */
+    autoUpdate: boolean("auto_update"),
+    /** Step 2.12: the version an "update available" notification was sent for. */
+    notifiedVersion: text("notified_version"),
   },
   (t) => [primaryKey({ columns: [t.userId, t.appId] })],
 );

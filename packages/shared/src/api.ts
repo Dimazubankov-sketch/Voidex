@@ -113,6 +113,13 @@ export type ViCloudPrefs = z.infer<typeof ViCloudPrefsSchema>;
 export const AppPrefsSchema = z.object({ lock: z.boolean(), notifications: z.boolean() });
 export type AppPrefs = z.infer<typeof AppPrefsSchema>;
 export const DEFAULT_APP_PREFS: AppPrefs = { lock: false, notifications: true };
+/**
+ * Step 2.12: Appex Store choices. Updates install by themselves unless turned
+ * off (globally here, or for one app on its row); a notification about an
+ * update is sent only while updateNotifications is on.
+ */
+export const StorePrefsSchema = z.object({ autoUpdate: z.boolean(), updateNotifications: z.boolean() });
+export type StorePrefs = z.infer<typeof StorePrefsSchema>;
 
 export const PreferencesSchema = z.object({
   notifications: z.object({
@@ -121,6 +128,7 @@ export const PreferencesSchema = z.object({
     sound: z.boolean(),
   }),
   vicloud: ViCloudPrefsSchema,
+  store: StorePrefsSchema,
   apps: z.partialRecord(z.enum(APP_IDS as [string, ...string[]]), AppPrefsSchema.partial()),
   workspace: z.object({
     appOrder: z.array(z.enum(APP_IDS as [string, ...string[]])).max(100),
@@ -133,12 +141,14 @@ export const PreferencesPatchSchema = z.object({
   notifications: PreferencesSchema.shape.notifications.partial().optional(),
   workspace: PreferencesSchema.shape.workspace.partial().optional(),
   vicloud: ViCloudPrefsSchema.partial().optional(),
+  store: StorePrefsSchema.partial().optional(),
   /** One app's settings, merged into what is stored. */
   apps: PreferencesSchema.shape.apps.optional(),
 });
 export const DEFAULT_PREFERENCES: Preferences = {
   notifications: { newMailBanner: true, showPreview: true, sound: false },
   vicloud: { syncFiles: true, syncMedia: true, backup: true, backupMedia: true, backupCellular: false },
+  store: { autoUpdate: true, updateNotifications: true },
   apps: {},
   workspace: { appOrder: ["mail", "settings"] },
 };

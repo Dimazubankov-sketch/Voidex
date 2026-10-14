@@ -96,7 +96,8 @@ test("deleting my story: the confirmation is above the viewer; Cancel returns to
   await launchVibex(page);
   await toChats(page);
   await openStrip(page);
-  await page.getByTestId("story-mine").locator("button").first().click();
+  // Step 2.12: my story is a circle of its own beside «Моя история +» (which always adds one).
+  await page.getByTestId("story-own").locator("button").first().click();
   const viewer = page.getByTestId("story-viewer");
   await expect(viewer.getByTestId("story-image")).toBeVisible();
   await viewer.getByTestId("story-delete").click();
@@ -116,12 +117,13 @@ test("deleting my story: the confirmation is above the viewer; Cancel returns to
   await confirm.getByRole("button", { name: "Отмена" }).click();
   await expect(confirm).toHaveCount(0);
   await expect(viewer).toBeVisible();
-  // Delete: gone on the server, the viewer closes (it was the last one), no ring on «Моя история».
+  // Delete: gone on the server, the viewer closes (it was the last one), my story's circle is gone.
   await viewer.getByTestId("story-delete").click();
   await page.getByTestId("story-delete-confirm").getByTestId("confirm-action").click();
   await expect(viewer).toHaveCount(0);
   await expect.poll(async () => (await apiAs(page, "GET", "/api/vibex/stories")).body.find((g: { mine: boolean }) => g.mine) ?? null).toBeNull();
-  await expect(page.getByTestId("story-mine").locator("button").first()).not.toHaveAttribute("data-unseen", "true");
+  await expect(page.getByTestId("story-own")).toHaveCount(0);
+  await expect(page.getByTestId("story-mine")).toBeVisible();
   await bp.context().close();
 });
 
@@ -158,7 +160,7 @@ test("someone else's story: a reaction (replaceable) and a reply (a direct messa
   await launchVibex(bvx);
   await toChats(bvx);
   await openStrip(bvx);
-  await bvx.getByTestId("story-mine").locator("button").first().click();
+  await bvx.getByTestId("story-own").locator("button").first().click();
   const own = bvx.getByTestId("story-viewer");
   await expect(own.getByTestId("story-views-count")).toHaveText("1");
   await expect(own.getByTestId("story-reactions-count")).toHaveText("1");

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiStarFill, RiStarLine } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiSearchLine, RiStarFill, RiStarLine } from "@remixicon/react";
 import { APP_REGISTRY } from "@voidex/shared";
 import { AppTile } from "@/brand/brand";
 import { cx } from "@/lib/cx";
+import { useFormFactor } from "@/lib/form-factor";
 import { errorMessage } from "@/lib/errors";
 import { useLanguage, useT } from "@/lib/i18n";
 import { CLIENT_APPS } from "@/os/app-registry";
@@ -60,6 +61,8 @@ export function GetButton({ id, size = "md", onColor = false }: { id: StoreAppId
     }
   };
   const label = state === "open" ? t("store.open") : state === "update" ? t("store.update") : t("store.get");
+  // Step 2.12: while the app's code downloads and the server records it: «Установка...» / «Обновление...».
+  const busyLabel = t(state === "update" ? "store.updatingShort" : "store.installingShort");
   return (
     <button
       type="button"
@@ -79,7 +82,14 @@ export function GetButton({ id, size = "md", onColor = false }: { id: StoreAppId
       data-app={id}
       data-state={busy ? "installing" : state}
     >
-      {busy ? <Spinner size={16} className={state === "open" || onColor ? "" : "text-white"} /> : label}
+      {busy ? (
+        <span className="flex items-center gap-1.5">
+          <Spinner size={14} className={state === "open" || onColor ? "" : "text-white"} />
+          {busyLabel}
+        </span>
+      ) : (
+        label
+      )}
     </button>
   );
 }
@@ -109,11 +119,18 @@ export function AppRow({ id, onOpen, rank }: { id: StoreAppId; onOpen: (id: Stor
   );
 }
 
-/** A strip of real screenshots (phone or PC), scrolled sideways; a tap opens the full-screen viewer. */
-export function ScreenshotStrip({ id, kind, onOpen }: { id: StoreAppId; kind: "phone" | "pc"; onOpen: (index: number) => void }) {
+export type ShotKind = "phone" | "desktop";
+
+/** Step 2.12: the screenshots this device shows: a phone sees phone screenshots, a computer desktop ones (no switch). */
+export function useShotKind(): ShotKind {
+  return useFormFactor() === "mobile" ? "phone" : "desktop";
+}
+
+/** A strip of real screenshots of this device's kind, scrolled sideways; a tap opens the full-screen viewer. */
+export function ScreenshotStrip({ id, kind, onOpen }: { id: StoreAppId; kind: ShotKind; onOpen: (index: number) => void }) {
   const t = useT();
   const name = useAppName()(id);
-  const shots = CATALOG[id][kind];
+  const shots = CATALOG[id].screenshots[kind];
   return (
     <div className="scroll-area -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-4 pb-2 [scrollbar-width:none]" data-testid="store-shots" data-kind={kind}>
       {shots.map((src, i) => (
@@ -121,7 +138,7 @@ export function ScreenshotStrip({ id, kind, onOpen }: { id: StoreAppId; kind: "p
           key={src}
           type="button"
           onClick={() => onOpen(i)}
-          className={cx("relative shrink-0 snap-start overflow-hidden rounded-[22px] bg-surface-secondary shadow-tile", kind === "phone" ? "aspect-[390/844] w-[170px] sm:w-[200px]" : "aspect-[16/10] w-[300px] sm:w-[420px]")}
+          className={cx("relative shrink-0 snap-start overflow-hidden rounded-[22px] border border-border/60 bg-surface-secondary", kind === "phone" ? "aspect-[390/844] w-[170px] sm:w-[200px]" : "aspect-[1440/900] w-[300px] sm:w-[420px]")}
           aria-label={t("store.screenshot", { app: name, n: i + 1 })}
           data-testid="store-shot"
         >
@@ -248,5 +265,76 @@ export function RatingChart({ counts }: { counts: [number, number, number, numbe
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Step 2.12: the Store's search field: a compact soft-grey pill, no frame, the
+ * magnifier on the left. While it is focused (or has text) an X sits inside on
+ * the right: it clears the text, and on an empty field it leaves the search.
+ */
+export function StoreSearch({ value, onChange, onExit, placeholder }: { value: string; onChange: (v: string) => void; onExit: () => void; placeholder: string }) {
+  const t = useT();
+  const input = useRef<HTMLInputElement>(null);
+  const [focused, setFocused] = useState(false);
+  return (
+    <label className="flex h-11 w-full items-center gap-2.5 rounded-full bg-[var(--store-search)] pl-4 pr-1.5 text-text-tertiary" data-testid="store-search-field">
+      <RiSearchLine className="size-[19px] shrink-0" aria-hidden />
+      <input
+        ref={input}
+        type="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") (onChange(""), onExit(), input.current?.blur());
+          if (e.key === "Enter") input.current?.blur();
+        }}
+        className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-text outline-none placeholder:text-text-tertiary [&::-webkit-search-cancel-button]:hidden"
+        aria-label={placeholder}
+        data-testid="store-search"
+      />
+      {(focused || value) && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (value) {
+              onChange("");
+              input.current?.focus();
+            } else {
+              onExit();
+              input.current?.blur();
+            }
+          }}
+          aria-label={value ? t("common.clear") : t("store.closeSearch")}
+          className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border/70 bg-surface text-text-secondary"
+          data-testid="store-search-clear"
+        >
+          <RiCloseLine className="size-[18px]" />
+        </button>
+      )}
+    </label>
+  );
+}
+
+/** Step 2.12: the round buttons of the page tops (back, share): a soft circle, no bar around them. */
+export function RoundButton({ label, onClick, children, testId }: { label: string; onClick: () => void; children: ReactNode; testId?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="pressable flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-surface text-text-secondary shadow-[0_4px_14px_-10px_rgba(40,30,90,0.35)]"
+      data-testid={testId}
+    >
+      {children}
+    </button>
   );
 }

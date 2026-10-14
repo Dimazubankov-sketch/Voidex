@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import { RiCloseLine, RiPlayFill } from "@remixicon/react";
 import type { VibexFileDto } from "@voidex/shared";
 import { useT } from "@/lib/i18n";
@@ -40,6 +40,13 @@ function useNearViewport<T extends Element>(margin = "160px") {
  * loaded (metadata first). Tap: it grows right where it is (the chat stays
  * around it, nothing covers the screen) and plays from the start with sound.
  * When it ends, or with the X, it shrinks back.
+ *
+ * Step 2.12: the circle is a circle in every frame. Its box never changes
+ * size while it moves: it is laid out at its final size, square (aspect 1),
+ * clipped by `clip-path: circle(50%)` and a 50% radius, and only `transform`
+ * (scale, translate) animates from where the small circle was. Nothing
+ * animates width / height / border-radius; the video inside fills it with
+ * object-fit: cover and has its own transform (the zoom).
  */
 export function CircleBubble({ file, durationMs }: { file: VibexFileDto; durationMs: number | null }) {
   const t = useT();
@@ -47,8 +54,9 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
   const [box, near] = useNearViewport<HTMLDivElement>();
   const { data: src } = useFileUrl(near ? file.id : null);
   const video = useRef<HTMLVideoElement>(null);
-  const [open, setOpen] = useState(false);
-  const size = 208;
+  const small = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState<DOMRect | null>(null);
+  const size = SMALL;
 
   useEffect(() => {
     const v = video.current;
@@ -57,22 +65,18 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
     else v.pause();
   }, [near, autoplay, open, src]);
 
-  // Step 2.11: one shared layout for the small and the opened circle: it grows and shrinks in place
-  // (the circle itself travels, the chat follows smoothly; nothing jumps).
-  const layoutId = `circle:${useId()}`;
   return (
-    <motion.div ref={box} layout="size" transition={LAYOUT} className="relative shrink-0" data-gesture-owner="circle-seek">
+    <div ref={box} className="relative shrink-0" data-gesture-owner="circle-seek">
       {open ? (
-        <InlineCircle file={file} src={src ?? null} durationMs={durationMs} onClose={() => setOpen(false)} layoutId={layoutId} />
+        <InlineCircle file={file} src={src ?? null} durationMs={durationMs} from={open} onClose={() => setOpen(null)} />
       ) : (
-        <motion.button
+        <button
+          ref={small}
           type="button"
-          layoutId={layoutId}
-          transition={LAYOUT}
-          onClick={() => setOpen(true)}
+          onClick={() => setOpen(small.current?.getBoundingClientRect() ?? new DOMRect())}
           aria-label={t("vibex.circle.play")}
-          className="relative block shrink-0 overflow-hidden rounded-full bg-black/80"
-          style={{ width: size, height: size, borderRadius: size / 2 }}
+          className="relative block aspect-square shrink-0 overflow-hidden rounded-full bg-black/80 [clip-path:circle(50%_at_50%_50%)] [isolation:isolate]"
+          style={{ width: size, height: size }}
           data-testid="circle-message"
           data-autoplay={near && autoplay ? "on" : "off"}
         >
@@ -85,11 +89,11 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
               playsInline
               autoPlay={near && autoplay}
               preload="metadata"
-              className="size-full rounded-full object-cover"
+              className="absolute inset-0 size-full object-cover"
               data-testid="circle-preview-video"
             />
           ) : (
-            <span className="flex size-full items-center justify-center rounded-full">
+            <span className="flex size-full items-center justify-center">
               <Spinner className="text-white" />
             </span>
           )}
@@ -103,13 +107,15 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
           {durationMs !== null && (
             <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] tabular-nums text-white">{formatDuration(durationMs)}</span>
           )}
-        </motion.button>
+        </button>
       )}
-    </motion.div>
+    </div>
   );
 }
 
-const LAYOUT = { type: "spring", stiffness: 420, damping: 40, mass: 0.9 } as const;
+/** The small circle in the chat (px). */
+const SMALL = 208;
+const GROW = { type: "spring", stiffness: 380, damping: 36, mass: 0.9 } as const;
 
 /**
  * The opened circle, in place: larger, with sound, the progress ring around
@@ -117,9 +123,17 @@ const LAYOUT = { type: "spring", stiffness: 420, damping: 40, mass: 0.9 } as con
  * under it (1x → 1.5x → 2x, kept while Vibex is open). A tap on the video
  * plays / pauses; at the end it closes by itself.
  */
-function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: VibexFileDto; src: string | null; durationMs: number | null; onClose: () => void; layoutId: string }) {
+function InlineCircle({ file, src, durationMs, from, onClose }: { file: VibexFileDto; src: string | null; durationMs: number | null; from: DOMRect; onClose: () => void }) {
   const t = useT();
   const reduced = useReducedMotion();
+  // Step 2.12: the move from the small circle: transform only (see CircleBubble).
+  const scale = useMotionValue(1);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const chrome = useMotionValue(0);
+  const height = useMotionValue<number | "auto">(SMALL);
+  const start = useRef({ scale: 1, x: 0, y: 0 });
+  const closing = useRef(false);
   const speed = useVibex((s) => s.circleSpeed);
   const setSpeed = useVibex((s) => s.setCircleSpeed);
   const video = useRef<HTMLVideoElement>(null);
@@ -135,9 +149,20 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
   const [zoom, setZoom] = useState(1);
   const zoomRef = useRef(1);
   zoomRef.current = zoom;
-  usePinch(face, { enabled: true, begin: () => zoomRef.current, change: (z) => setZoom(Math.max(1, Math.min(4, z))) });
-  // As large as the chat allows (never wider than the message column).
-  const [size, setSize] = useState(280);
+  const pinching = useRef(false);
+  usePinch(face, {
+    enabled: true,
+    begin: () => {
+      pinching.current = true;
+      return zoomRef.current;
+    },
+    change: (z) => setZoom(Math.max(1, Math.min(4, z))),
+    end: () => {
+      pinching.current = false;
+    },
+  });
+  // As large as the chat allows (never wider than the message column); known before the first frame.
+  const [size, setSize] = useState(() => Math.max(200, Math.min(window.innerWidth - 120, 320)));
   const pad = 22;
   const outer = size + pad * 2;
   // Step 2.11: the seek ring lies inside the circle's edge, thin and grey.
@@ -148,14 +173,52 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
     return v && Number.isFinite(v.duration) && v.duration > 0 ? v.duration : (durationMs ?? 0) / 1000;
   };
 
+  // Before the first frame at the final size: start exactly where the small circle was, then grow.
+  const sized = useRef(false);
+  useLayoutEffect(() => {
+    if (sized.current || !face.current || !root.current) return;
+    const host = root.current.closest<HTMLElement>('[data-testid="messages"]');
+    const fit = Math.max(200, Math.min((host?.clientWidth ?? window.innerWidth) - 120, 320));
+    if (fit !== size) return setSize(fit); // laid out again at that size, still before the first frame
+    sized.current = true;
+    const b = face.current.getBoundingClientRect();
+    const from0 = { scale: SMALL / size, x: from.left + from.width / 2 - (b.left + b.width / 2), y: from.top + from.height / 2 - (b.top + b.height / 2) };
+    start.current = from0;
+    const full = root.current.scrollHeight;
+    if (reduced || !from.width) {
+      height.set("auto");
+      chrome.set(1);
+      return;
+    }
+    scale.set(from0.scale);
+    x.set(from0.x);
+    y.set(from0.y);
+    height.set(SMALL);
+    void animate(scale, 1, GROW);
+    void animate(x, 0, GROW);
+    void animate(y, 0, GROW);
+    void animate(height as unknown as ReturnType<typeof useMotionValue<number>>, full, { ...GROW, onComplete: () => height.set("auto") });
+    void animate(chrome, 1, { duration: 0.18, delay: 0.12 });
+  });
+  /** Shrinks back into the small circle, then closes (one close, however many taps). */
+  const close = () => {
+    if (closing.current) return;
+    closing.current = true;
+    video.current?.pause();
+    if (reduced || !from.width) return onClose();
+    const s0 = start.current;
+    height.set(root.current?.scrollHeight ?? SMALL);
+    void animate(chrome, 0, { duration: 0.1 });
+    void animate(scale, s0.scale, GROW);
+    void animate(x, s0.x, GROW);
+    void animate(y, s0.y, GROW);
+    void animate(height as unknown as ReturnType<typeof useMotionValue<number>>, SMALL, { ...GROW, onComplete: onClose });
+  };
   useEffect(() => {
-    const host = root.current?.closest<HTMLElement>('[data-testid="messages"]');
-    const w = host?.clientWidth ?? window.innerWidth;
-    setSize(Math.max(200, Math.min(w - 120, 320)));
     // The chat keeps its place; the opened circle is brought fully into view.
     window.setTimeout(() => root.current?.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" }), 60);
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") close();
       else if (e.key === " " && document.activeElement?.closest?.('[data-testid="circle-expanded"]')) toggle();
       else return;
       e.preventDefault();
@@ -198,6 +261,7 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
     <motion.div
       ref={root}
       className="relative flex flex-col items-center gap-2"
+      style={{ height }}
       role="group"
       aria-label={t("vibex.circle.message")}
       data-testid="circle-expanded"
@@ -208,10 +272,8 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
       <div className="relative" style={{ width: outer, height: outer }}>
         <motion.div
           ref={face}
-          layoutId={layoutId}
-          transition={reduced ? { duration: 0 } : LAYOUT}
-          className="absolute touch-none overflow-hidden rounded-full bg-black shadow-window"
-          style={{ left: pad, top: pad, width: size, height: size, borderRadius: size / 2 }}
+          className="absolute aspect-square touch-none overflow-hidden rounded-full bg-black shadow-window [clip-path:circle(50%_at_50%_50%)] [isolation:isolate]"
+          style={{ left: pad, top: pad, width: size, height: size, scale, x, y, originX: 0.5, originY: 0.5 }}
           data-testid="circle-face"
           data-zoom={zoom.toFixed(2)}
         >
@@ -232,8 +294,8 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
             onEnded={() => {
               setPlaying(false);
               setPos(1);
-              // Step 2.10: at the end it closes by itself.
-              onClose();
+              // Step 2.10: at the end it closes by itself; Step 2.12: not while the picture is being zoomed (it stops at the end).
+              if (!pinching.current && zoomRef.current <= 1) close();
             }}
             onTimeUpdate={(e) => {
               if (seeking.current) return;
@@ -247,14 +309,15 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
         )}
         </motion.div>
         {!playing && src && (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <motion.span className="pointer-events-none absolute inset-0 flex items-center justify-center" style={{ opacity: chrome }}>
             <span className="flex size-14 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" data-testid="circle-paused">
               <RiPlayFill className="size-8" />
             </span>
-          </span>
+          </motion.span>
         )}
         {/* The progress ring: drag along it to seek. */}
-        <svg
+        <motion.svg
+          style={{ opacity: chrome }}
           ref={ring}
           className="pointer-events-none absolute inset-0 touch-none rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           width={outer}
@@ -327,20 +390,20 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
             onPointerCancel={() => ((seeking.current = false), setDragging(false))}
             data-testid="circle-ring-track"
           />
-        </svg>
+        </motion.svg>
         {/* Step 2.10: X at the top RIGHT of the ring. */}
-        <button
+        <motion.button
           type="button"
-          onClick={onClose}
+          onClick={close}
           aria-label={t("vibex.circle.collapse")}
           className="absolute flex size-10 items-center justify-center rounded-full bg-surface text-text shadow-float"
-          style={{ left: outer / 2 + (size / 2 + 6) * Math.cos(Math.PI / 4) - 20, top: outer / 2 - (size / 2 + 6) * Math.sin(Math.PI / 4) - 20 }}
+          style={{ left: outer / 2 + (size / 2 + 6) * Math.cos(Math.PI / 4) - 20, top: outer / 2 - (size / 2 + 6) * Math.sin(Math.PI / 4) - 20, opacity: chrome }}
           data-testid="circle-collapse"
         >
           <RiCloseLine className="size-5" />
-        </button>
+        </motion.button>
       </div>
-      <div className="flex items-center gap-2">
+      <motion.div className="flex items-center gap-2" style={{ opacity: chrome }}>
         <button
           type="button"
           onClick={() => setSpeed(nextSpeed(speed))}
@@ -353,7 +416,7 @@ function InlineCircle({ file, src, durationMs, onClose, layoutId }: { file: Vibe
         <span className="rounded-full bg-black/45 px-3 py-1 text-[12.5px] tabular-nums text-white" data-testid="circle-time">
           {formatDuration(pos * length() * 1000)} / {formatDuration(length() * 1000)}
         </span>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }

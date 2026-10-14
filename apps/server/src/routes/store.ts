@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { STORE_REVIEW_SORTS, StoreReportSchema, StoreReviewSchema, StoreVoteSchema } from "@voidex/shared";
+import { STORE_REVIEW_SORTS, StoreAutoUpdateSchema, StoreReportSchema, StoreReviewSchema, StoreVoteSchema } from "@voidex/shared";
 import { z } from "zod";
 import { parse } from "../http.js";
 import { catalogApp } from "../services/store.js";
@@ -44,4 +44,10 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
     return store.report(me(req), id, reviewId, body.reason, body.description);
   });
   app.post("/apps/:id/install", limit(60), async (req) => apps.install(me(req), catalogApp(parse(appParam, req.params).id)));
+  // Step 2.12: my reviews (the Store's account page) and one app's auto-update choice.
+  app.get("/me/reviews", async (req) => store.mine(me(req)));
+  app.put("/apps/:id/auto-update", limit(60), async (req) => {
+    const id = catalogApp(parse(appParam, req.params).id);
+    return apps.setAutoUpdate(me(req), id, parse(StoreAutoUpdateSchema, req.body).autoUpdate);
+  });
 };

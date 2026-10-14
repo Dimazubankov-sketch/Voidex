@@ -449,3 +449,24 @@ Long press (phones) or right click (PC) opens the actions. The chat dims and the
   left on the server).
 - Video circles: open and close in place (shared layout), a thin grey seek ring inside
   the circle with a knob while dragged, two-finger zoom (never below 1x).
+
+## Step 2.12
+- Header: a round menu button with two bars (the lower one shorter) instead of the logo
+  opens the side menu; on a PC the same bars fold the side menu. No logo by «Чаты».
+- Chat cards: (almost) the colour of what they lie on (`--chat-card` on
+  `--chat-list-bg`), a soft shadow and a barely visible edge; theme tokens, dark mode.
+- Photos and videos: a message of only media is the media itself (no bubble, no
+  coloured frame; the time on the picture); with a caption or a reply the photos reach
+  the bubble's edges. Width `min(86%, 420px)`. The mosaic: 1 / 2 / 3 / 4 / 5 / 6+
+  (`+N` on the last cell), no empty cells, a video mark.
+- Video circles: transform-only open and close (scale and position from the small
+  circle), always clipped to a circle (`clip-path: circle()`), never a square frame;
+  at the end it closes by itself, except while the picture is zoomed.
+- Avatars in the chat list: no callout or download on a long press (the press opens
+  the chat's preview / menu); a tap opens the person's story if there is one, else the
+  profile. In a profile the avatar opens the story, else the photo full screen
+  (`avatar-viewer.tsx`, pinch zoom, no download).
+- Stories: «Моя история +» always adds one; my current story is a circle of its own
+  next to it. Rings: purple gradient while unseen, grey (`--story-seen`) once seen,
+  none without a story; my own views are recorded (so my ring turns grey) but never
+  counted in my story's views.

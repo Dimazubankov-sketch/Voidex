@@ -485,6 +485,7 @@ export class AccountService {
       notifications: { ...base.notifications, ...patch.notifications },
       workspace: { ...base.workspace, ...patch.workspace },
       vicloud: { ...base.vicloud, ...patch.vicloud },
+      store: { ...base.store, ...patch.store },
       apps,
     };
     if (patch.workspace?.layout) {
@@ -519,6 +520,7 @@ export function mergePreferences(data: Partial<Preferences> | undefined | null):
     notifications: { ...DEFAULT_PREFERENCES.notifications, ...data?.notifications },
     workspace: { ...DEFAULT_PREFERENCES.workspace, ...data?.workspace },
     vicloud: { ...DEFAULT_PREFERENCES.vicloud, ...data?.vicloud },
+    store: { ...DEFAULT_PREFERENCES.store, ...data?.store },
     apps: { ...data?.apps },
   };
 }

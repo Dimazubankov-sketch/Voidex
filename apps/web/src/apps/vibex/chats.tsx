@@ -132,6 +132,32 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
   );
 }
 
+/**
+ * Step 2.12: the avatar of a chat row is its own target (laid over the row's
+ * avatar, outside the row's button): a tap opens the person's story when they
+ * have one, else their profile (a group opens the chat). A long press does
+ * what it does on the row (the preview), never the browser's image menu
+ * (no callout, no save / download of the picture).
+ */
+function AvatarTap({ chat, actions, hold }: { chat: VibexChatDto; actions: ChatRowActions; hold: ReturnType<typeof useHold> }) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      className="absolute left-2.5 top-1/2 size-[50px] -translate-y-1/2 select-none rounded-full [-webkit-touch-callout:none] [touch-action:pan-y]"
+      aria-label={t("vibex.chats.avatarOpen", { name: chatTitle(chat) })}
+      onClick={() => !hold.fired() && actions.onAvatar(chat)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        actions.onMenu(chat, { x: e.clientX, y: e.clientY });
+      }}
+      onDragStart={(e) => e.preventDefault()}
+      {...hold.handlers}
+      data-testid="chat-avatar"
+    />
+  );
+}
+
 /** With a mouse, the row's [...] button takes the place of the time and the counter on hover. */
 const HOVER_HIDE = "transition-opacity [@media(hover:hover)]:group-hover:opacity-0";
 
@@ -152,6 +178,8 @@ function rowClass(active: boolean) {
 export interface ChatRowActions {
   pinnedIds: string[];
   onPreview: (chat: VibexChatDto) => void;
+  /** Step 2.12: a tap on the avatar: the person's story when there is one, else their profile. */
+  onAvatar: (chat: VibexChatDto) => void;
   onMenu: (chat: VibexChatDto, at: { x: number; y: number }) => void;
 }
 
@@ -179,6 +207,7 @@ function ChatRow({ chat, actions }: { chat: VibexChatDto; actions: ChatRowAction
       >
         <ChatRowBody chat={chat} active={activeId === chat.id} />
       </button>
+      <AvatarTap chat={chat} actions={actions} hold={hold} />
       <IconButton
         label={t("vibex.post.more")}
         size="sm"
@@ -346,6 +375,7 @@ function PinnedRow({
         >
           <ChatRowBody chat={chat} active={activeId === chat.id} />
         </button>
+        <AvatarTap chat={chat} actions={actions} hold={hold} />
         <IconButton
           label={t("vibex.post.more")}
           size="sm"
@@ -557,8 +587,11 @@ function Bubble({
   const hold = useHold({ onHold: (e) => e.pointerType !== "mouse" && !selecting && openMenu(), ms: 450 }).handlers;
   // Step 2.10: swipe left to reply (players keep their own drags).
   const swipe = useSwipeReply(() => actions.onReply(msg), !selecting);
+  // Step 2.12: photos / videos alone (no text, file, quote, author): the media group itself is the bubble,
+  // without the coloured frame of a bubble around it; the time sits on the media.
+  const mediaOnly = images.length > 0 && !msg.text && !files.length && !msg.notesCard && msg.sharedPost === undefined && msg.kind === "text" && !msg.replyTo && !msg.story && !msg.forwardedFrom && !author;
   const meta = (
-    <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mine ? "text-white/75" : "text-text-tertiary")}>
+    <span className={cx("ml-auto flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums", mediaOnly ? "text-white" : mine ? "text-white/75" : "text-text-tertiary")}>
       {msg.editedAt && (
         <span className="mr-0.5" data-testid="message-edited">
           {t("vibex.msg.edited")}
@@ -607,11 +640,20 @@ function Bubble({
         <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} />
         <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
       </div>
+    ) : mediaOnly ? (
+      <div ref={bubble} className="relative w-[min(86%,420px)]" data-testid="message-media">
+        <MediaMosaic items={images.map((f) => ({ key: f.id, kind: f.kind === "video" ? "video" : "image", file: f }))} onOpen={setViewer} fill />
+        <span className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center rounded-full bg-black/45 px-2 py-0.5 backdrop-blur-sm" data-testid="message-media-meta">
+          {meta}
+        </span>
+      </div>
     ) : (
       <div
         ref={bubble}
         className={cx(
-          "flex max-w-[min(78%,520px)] flex-col gap-1.5 overflow-hidden px-1 py-1",
+          "flex flex-col gap-1.5 overflow-hidden",
+          // Step 2.12: with photos the bubble is as wide as they are and they reach its edges (no coloured frame).
+          images.length > 0 ? "w-[min(86%,420px)] pb-1" : "max-w-[min(78%,520px)] px-1 py-1",
           mine ? "bg-primary text-white" : "bg-surface text-text shadow-tile",
           "rounded-[22px]",
           tail && (mine ? "rounded-br-[8px]" : "rounded-bl-[8px]"),
@@ -623,15 +665,21 @@ function Bubble({
           </span>
         )}
         {forwarded}
-        {msg.story && <StoryReplyRef story={msg.story} mine={mine} />}
-        {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
+        {(msg.story || msg.replyTo) && (
+          <div className={cx("flex flex-col gap-1.5", images.length > 0 && "px-1 pt-1")}>
+            {msg.story && <StoryReplyRef story={msg.story} mine={mine} />}
+            {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
+          </div>
+        )}
         {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
         {images.length > 0 && (
           // Step 2.11: a Telegram-like mosaic (one outer radius, thin gaps, no empty cells).
-          <MediaMosaic items={images.map((f) => ({ key: f.id, kind: f.kind === "video" ? "video" : "image", file: f }))} onOpen={setViewer} />
+          <MediaMosaic items={images.map((f) => ({ key: f.id, kind: f.kind === "video" ? "video" : "image", file: f }))} onOpen={setViewer} fill flat />
         )}
         {files.map((f) => (
-          <FileChip key={f.id} file={f} tone={mine ? "mine" : "default"} />
+          <div key={f.id} className={images.length > 0 ? "px-1" : undefined}>
+            <FileChip file={f} tone={mine ? "mine" : "default"} />
+          </div>
         ))}
         {msg.notesCard && (
           <div className="px-1 pt-1">

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "store:screens": "playwright test --config playwright.screens.config.ts",
     "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {

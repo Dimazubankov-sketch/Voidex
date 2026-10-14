@@ -1792,10 +1792,12 @@ export class VibexService {
         .select({ id: vibexStoryViews.storyId, reaction: vibexStoryViews.reaction })
         .from(vibexStoryViews)
         .where(and(inArray(vibexStoryViews.storyId, ids), eq(vibexStoryViews.viewerId, viewerId))),
+      // Step 2.12: the author's own view (kept for their seen / unseen ring) is never counted.
       this.ctx.db
         .select({ id: vibexStoryViews.storyId, n: sql<number>`count(*)::int`, r: sql<number>`count(${vibexStoryViews.reaction})::int` })
         .from(vibexStoryViews)
-        .where(inArray(vibexStoryViews.storyId, ids))
+        .innerJoin(vibexStories, eq(vibexStories.id, vibexStoryViews.storyId))
+        .where(and(inArray(vibexStoryViews.storyId, ids), ne(vibexStoryViews.viewerId, vibexStories.ownerId)))
         .groupBy(vibexStoryViews.storyId),
     ]);
     const fileBy = new Map(files.map((f) => [f.id, fileDto(f)]));
@@ -1816,7 +1818,8 @@ export class VibexService {
           createdAt: r.createdAt.toISOString(),
           expiresAt: r.expiresAt.toISOString(),
           archived: r.expiresAt <= now,
-          seen: mine || seenSet.has(r.id),
+          // Step 2.12: my own story too is "seen" only once I watched it (its ring turns grey).
+          seen: seenSet.has(r.id),
           views: mine ? (countBy.get(r.id) ?? 0) : 0,
           mine,
           myReaction: mine ? null : (reactionBy.get(r.id) ?? null),
@@ -2084,14 +2087,16 @@ export class VibexService {
     return this.storyDtos(ownerId, rows);
   }
 
-  /** "Seen": counted once per person; the author's own views and stories I can't see are ignored. */
+  /**
+   * "Seen": once per person; stories I can't see are refused. Step 2.12: the
+   * author's own view is kept too (their ring goes from violet to grey on
+   * every device) but never counted as a view nor listed among the viewers.
+   */
   async viewStory(viewerId: string, storyId: string) {
     const [st] = await this.ctx.db.select().from(vibexStories).where(eq(vibexStories.id, storyId));
     if (!st || st.deletedAt || (st.ownerId !== viewerId && (st.expiresAt <= this.ctx.now() || !(await this.canSee(viewerId, st.ownerId, "posts"))))) throw notFound("Story");
-    if (st.ownerId !== viewerId) {
-      const inserted = await this.ctx.db.insert(vibexStoryViews).values({ storyId, viewerId }).onConflictDoNothing().returning();
-      if (inserted.length) this.ctx.events.toUser(st.ownerId, { type: "vibex.stories", userId: st.ownerId });
-    }
+    const inserted = await this.ctx.db.insert(vibexStoryViews).values({ storyId, viewerId }).onConflictDoNothing().returning();
+    if (inserted.length) this.ctx.events.toUser(st.ownerId, { type: "vibex.stories", userId: st.ownerId });
     return { ok: true };
   }
 
@@ -2099,7 +2104,11 @@ export class VibexService {
   async storyViewers(ownerId: string, storyId: string): Promise<VibexStoryViewerDto[]> {
     const [st] = await this.ctx.db.select().from(vibexStories).where(and(eq(vibexStories.id, storyId), eq(vibexStories.ownerId, ownerId)));
     if (!st) throw notFound("Story");
-    const rows = await this.ctx.db.select().from(vibexStoryViews).where(eq(vibexStoryViews.storyId, storyId)).orderBy(desc(vibexStoryViews.viewedAt));
+    const rows = await this.ctx.db
+      .select()
+      .from(vibexStoryViews)
+      .where(and(eq(vibexStoryViews.storyId, storyId), ne(vibexStoryViews.viewerId, ownerId)))
+      .orderBy(desc(vibexStoryViews.viewedAt));
     const people = await this.persons(rows.map((r) => r.viewerId));
     return rows
       .filter((r) => people.has(r.viewerId))

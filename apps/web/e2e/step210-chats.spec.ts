@@ -119,7 +119,7 @@ test("chat cards: separate rounded cards with gaps, a background of their own, n
   for (const lookName of ["media", "notes", "mail", "dark"]) {
     await page.evaluate((v) => document.documentElement.setAttribute("data-app-look", v), lookName);
     // The card's colour has a transition: wait until it has settled (a slow runner takes longer).
-    if (lookName === "dark") await expect.poll(async () => (await look())[0]!.card, { timeout: 5000 }).toMatch(/^rgb\((28, 28, 38|29, 29, 39|37, 37, 48)\)$/);
+    if (lookName === "dark") await expect.poll(async () => (await look())[0]!.card, { timeout: 5000 }).toBe("rgb(34, 34, 44)");
     else await page.waitForTimeout(450);
     await expect.poll(async () => { const l = await look(); return l[0]!.card !== l[0]!.app; }, { timeout: 5000 }).toBe(true);
   }

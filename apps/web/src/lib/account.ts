@@ -52,6 +52,7 @@ export interface PreferencesPatch {
   notifications?: Partial<Preferences["notifications"]>;
   workspace?: Partial<Preferences["workspace"]>;
   vicloud?: Partial<Preferences["vicloud"]>;
+  store?: Partial<Preferences["store"]>;
   apps?: Preferences["apps"];
 }
 
@@ -68,6 +69,7 @@ export function useUpdatePreferences() {
           notifications: { ...user.preferences.notifications, ...patch.notifications },
           workspace: { ...user.preferences.workspace, ...patch.workspace },
           vicloud: { ...user.preferences.vicloud, ...patch.vicloud },
+          store: { ...user.preferences.store, ...patch.store },
           apps: Object.fromEntries(
             [...new Set([...Object.keys(user.preferences.apps ?? {}), ...Object.keys(patch.apps ?? {})])].map((id) => [
               id,

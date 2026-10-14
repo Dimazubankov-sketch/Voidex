@@ -1,41 +1,64 @@
-import { APP_IDS, type AppId } from "@voidex/shared";
+import { APP_IDS, APP_RELEASES, type AppId } from "@voidex/shared";
 import type { MessageKey } from "@/lib/i18n";
 
 /**
- * Step 2.11: what Appex Store shows about each app. The list itself is the
- * App Registry (every registered, available app except the Store and
- * Settings); this file only adds the Store's words and pictures: a subtitle,
- * a description, its features, what is new, and real screenshots (taken from
- * the running apps by scripts/store-screenshots.mjs in development, shipped
- * as static files; no account data in them).
+ * Step 2.11 / 2.12: what Appex Store shows about each app. The list itself is
+ * the App Registry (every registered, available app except the Store and
+ * Settings); this file only adds the Store's words and pictures.
+ *
+ * Screenshots are real captures of the running apps, made in development by
+ * `pnpm --filter @voidex/web store:screens` (tools/store-screens) and shipped
+ * as static files in public/store/screens: `<app>-phone-<n>.jpg` (a phone,
+ * 390 x 844) and `<app>-desktop-<n>.jpg` (a computer, 1440 x 900), at least
+ * three of each, no account data in them. A new app: add its entry here, its
+ * scenes to the capture script, run it.
+ *
+ * Release notes: one entry per version of APP_RELEASES (shared/apps.ts): a
+ * headline and what the release brought. A new version gets its notes here
+ * together with its APP_RELEASES entry (a version without notes is not listed).
  */
 export type StoreAppId = Exclude<AppId, "store" | "settings">;
 
 export const STORE_APPS = APP_IDS.filter((id): id is StoreAppId => id !== "store" && id !== "settings");
 
+export interface StoreRelease {
+  title: MessageKey;
+  items: MessageKey[];
+}
+
 export interface StoreEntry {
   subtitle: MessageKey;
   description: MessageKey;
-  news: MessageKey;
   features: MessageKey[];
-  /** Real screenshots (static files): phone and, where the app has one, PC. */
-  phone: string[];
-  pc: string[];
+  screenshots: { phone: string[]; desktop: string[] };
+  /** Notes per version (keys: the versions of APP_RELEASES). */
+  releases: Record<string, StoreRelease>;
 }
 
-const shots = (id: string, phone: number, pc: number) => ({
-  phone: Array.from({ length: phone }, (_, i) => `/store/screens/${id}-phone-${i + 1}.jpg`),
-  pc: Array.from({ length: pc }, (_, i) => `/store/screens/${id}-pc-${i + 1}.jpg`),
+/** The screenshot files of an app (static, never inlined): `n` per platform. */
+export const screenshots = (id: StoreAppId, n = 3) => ({
+  phone: Array.from({ length: n }, (_, i) => `/store/screens/${id}-phone-${i + 1}.jpg`),
+  desktop: Array.from({ length: n }, (_, i) => `/store/screens/${id}-desktop-${i + 1}.jpg`),
 });
 
-export const CATALOG: Record<StoreAppId, StoreEntry> = {
-  vibex: { subtitle: "store.app.vibex.subtitle", description: "store.app.vibex.desc", news: "store.app.vibex.news", features: ["store.app.vibex.f1", "store.app.vibex.f2", "store.app.vibex.f3"], ...shots("vibex", 2, 1) },
-  mail: { subtitle: "store.app.mail.subtitle", description: "store.app.mail.desc", news: "store.app.mail.news", features: ["store.app.mail.f1", "store.app.mail.f2", "store.app.mail.f3"], ...shots("mail", 2, 1) },
-  notes: { subtitle: "store.app.notes.subtitle", description: "store.app.notes.desc", news: "store.app.notes.news", features: ["store.app.notes.f1", "store.app.notes.f2", "store.app.notes.f3"], ...shots("notes", 2, 1) },
-  calculator: { subtitle: "store.app.calculator.subtitle", description: "store.app.calculator.desc", news: "store.app.calculator.news", features: ["store.app.calculator.f1", "store.app.calculator.f2", "store.app.calculator.f3"], ...shots("calculator", 2, 1) },
-  files: { subtitle: "store.app.files.subtitle", description: "store.app.files.desc", news: "store.app.files.news", features: ["store.app.files.f1", "store.app.files.f2", "store.app.files.f3"], ...shots("files", 1, 1) },
-  media: { subtitle: "store.app.media.subtitle", description: "store.app.media.desc", news: "store.app.media.news", features: ["store.app.media.f1", "store.app.media.f2", "store.app.media.f3"], ...shots("media", 1, 1) },
+const entry = (id: StoreAppId): StoreEntry => {
+  const f = [`store.app.${id}.f1`, `store.app.${id}.f2`, `store.app.${id}.f3`] as MessageKey[];
+  return {
+    subtitle: `store.app.${id}.subtitle` as MessageKey,
+    description: `store.app.${id}.desc` as MessageKey,
+    features: f,
+    screenshots: screenshots(id),
+    // 1.0.0: what the app is today (its first and only release so far).
+    releases: { "1.0.0": { title: `store.app.${id}.news` as MessageKey, items: f } },
+  };
 };
+
+export const CATALOG = Object.fromEntries(STORE_APPS.map((id) => [id, entry(id)])) as Record<StoreAppId, StoreEntry>;
+
+/** An app's releases with their notes, newest first (only versions that have notes). */
+export function releasesOf(id: StoreAppId) {
+  return APP_RELEASES[id].filter((r) => CATALOG[id].releases[r.version]).map((r) => ({ ...r, notes: CATALOG[id].releases[r.version]! }));
+}
 
 /** The home page: the carousel and three collections (only registry apps). */
 export const HERO: { id: StoreAppId; title: MessageKey; text: MessageKey; tone: string }[] = [

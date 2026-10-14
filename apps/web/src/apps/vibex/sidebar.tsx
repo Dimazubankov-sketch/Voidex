@@ -8,12 +8,11 @@ import {
   RiNotification3Line,
   RiSearchLine,
   RiSettings4Line,
-  RiSidebarFoldLine,
-  RiSidebarUnfoldLine,
   RiUser3Line,
 } from "@remixicon/react";
 import { Avatar, VibexGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
+import { MenuGlyph } from "./header";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { useWindow } from "@/os/window-context";
@@ -126,7 +125,8 @@ export function SidebarPanel({ variant, collapsed = false, onToggle, onClose }: 
             className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition hover:bg-surface-hover hover:text-text"
             data-testid="vibex-sidebar-toggle"
           >
-            {collapsed ? <RiSidebarUnfoldLine className="size-[18px]" /> : <RiSidebarFoldLine className="size-[18px]" />}
+            {/* Step 2.12: the same menu mark as the phone header (it opens / folds this menu). */}
+            <MenuGlyph className="size-[20px]" />
           </button>
         )}
       </BrandRow>

@@ -18,6 +18,8 @@ export const NOTIFICATION_SOURCES = {
   mail: ["mail.new"],
   vibex: ["vibex.message", "vibex.group", "vibex.comment", "vibex.reply", "vibex.like", "vibex.follow"],
   system: ["system.update"],
+  /** Step 2.12: Appex Store: an update is available (target.kind "available") or was installed by itself ("updated"). */
+  store: ["store.update"],
 } as const;
 
 export type NotificationApp = keyof typeof NOTIFICATION_SOURCES;

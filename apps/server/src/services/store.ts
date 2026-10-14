@@ -137,6 +137,15 @@ export class StoreService {
     return { items, stats: await this.stats(id), mine };
   }
 
+  /** Step 2.12: every review I wrote (my account page in the Store), newest first. */
+  async mine(userId: string): Promise<StoreReviewDto[]> {
+    const rows = await this.ctx.db.select().from(storeReviews).where(eq(storeReviews.userId, userId)).orderBy(desc(sql`coalesce(${storeReviews.editedAt}, ${storeReviews.createdAt})`));
+    return this.dtos(
+      userId,
+      rows.filter((r) => isAppId(r.appId) && r.appId !== "store" && r.appId !== "settings" && APP_REGISTRY[r.appId].status === "available"),
+    );
+  }
+
   /** My review of an app: written the first time, replaced (edited) after that. */
   async upsert(userId: string, appId: string, input: { rating: number; title: string; text: string }): Promise<StoreReviewDto> {
     const id = catalogApp(appId);

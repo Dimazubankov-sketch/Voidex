@@ -1,34 +1,54 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "motion/react";
-import { RiArrowLeftLine, RiArrowRightSLine, RiCloseLine, RiDeleteBinLine, RiHistoryLine, RiSearchLine, RiShareForwardLine, RiShieldCheckLine } from "@remixicon/react";
-import { APP_REGISTRY, type AppCategory } from "@voidex/shared";
-import { StoreGlyph } from "@/brand/brand";
+import {
+  RiArrowLeftSLine,
+  RiArrowRightSLine,
+  RiChat3Line,
+  RiDownloadCloud2Line,
+  RiLinkM,
+  RiNotification3Line,
+  RiRefreshLine,
+  RiSearchLine,
+  RiUpload2Line,
+  RiShieldCheckLine,
+  RiStarLine,
+} from "@remixicon/react";
+import { APP_REGISTRY, toPublicAddress, type AppCategory } from "@voidex/shared";
+import { Avatar, StoreGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
-import { errorMessage } from "@/lib/errors";
 import { useFormFactor } from "@/lib/form-factor";
-import { useLanguage, useT, type MessageKey } from "@/lib/i18n";
+import { formatDate, useLanguage, useT, type MessageKey } from "@/lib/i18n";
+import { useSession } from "@/lib/session";
+import { useMailDomain } from "@/lib/system";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { VoidexShareDialog, type ShareSendInput } from "@/os/share/share-dialog";
 import { sendText } from "@/os/share/send-files";
-import { IconButton, EmptyState } from "@/ui/controls";
-import { ConfirmDialog, toast } from "@/ui/overlays";
-import { VoidexSearchField } from "@/ui/search-field";
-import { CATALOG, COLLECTIONS, DEVELOPER, HERO, STORE_APPS, type StoreAppId } from "./catalog";
-import { removeApp, useAppStates, useReviews, useStoreStats } from "./data";
-import { AppRow, GetButton, ScreenshotStrip, ShotViewer, Stars, StoreIcon, useAppName } from "./parts";
+import { EmptyState, Spinner, Switch } from "@/ui/controls";
+import { MenuList, Popover, toast, usePopover } from "@/ui/overlays";
+import { CATALOG, COLLECTIONS, DEVELOPER, HERO, STORE_APPS, releasesOf, type StoreAppId } from "./catalog";
+import { installApp, setAppAutoUpdate, useAppStates, useInstalledRows, useInstalls, useMyReviews, useReviews, useStorePrefs } from "./data";
+import { AppRow, GetButton, RoundButton, ScreenshotStrip, ShotViewer, Stars, StoreIcon, StoreSearch, useAppName, useShotKind } from "./parts";
 import { RatingSummary, ReviewCard, ReviewSheet, ReviewsPage } from "./reviews";
 
 /**
- * Step 2.11: Appex Store, the VOIDEX app catalog, as a native app (from the
- * delivered prototype; no iframe, no second sign-in, no backend of its own:
- * the VOIDEX session and API). Pages: the catalog (a carousel and
- * collections), search (history and matching apps while typing, results
- * with screenshots on Enter), an app's page (screenshots, description,
- * what is new, the developer, ratings and reviews), all reviews, the
- * developer's apps. Every button does something real.
+ * Step 2.11 / 2.12: Appex Store, the VOIDEX app catalog, as a native app (no
+ * iframe, no second sign-in, no backend of its own: the VOIDEX session and
+ * API; one VOIDEX account is one Store account). Pages: the catalog with its
+ * search, an app's page (this device's screenshots, description, versions,
+ * ratings and reviews, more apps), all reviews, the version history, the
+ * developer's apps, and the account: updates, auto-update, update
+ * notifications, my reviews. Every button does something real.
  */
 
-type Page = { kind: "home" } | { kind: "all"; developer?: boolean } | { kind: "app"; id: StoreAppId } | { kind: "reviews"; id: StoreAppId };
+type Page =
+  | { kind: "home" }
+  | { kind: "all"; developer?: boolean }
+  | { kind: "app"; id: StoreAppId }
+  | { kind: "reviews"; id: StoreAppId }
+  | { kind: "versions"; id: StoreAppId }
+  | { kind: "account" }
+  | { kind: "updates" }
+  | { kind: "myReviews" };
 
 const CATEGORY: Record<AppCategory, MessageKey> = {
   work: "store.category.work",
@@ -39,24 +59,10 @@ const CATEGORY: Record<AppCategory, MessageKey> = {
   system: "store.category.system",
 };
 
-const HISTORY_KEY = "voidex-store-history";
-function loadHistory(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 8) : [];
-  } catch {
-    return [];
-  }
-}
-function saveHistory(list: string[]) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 8)));
-  } catch {
-    /* private mode: no history */
-  }
-}
+/** Step 2.12: a link that opens an app's page in the Store (workspace.tsx follows #store/app/<id>). */
+export const storeLink = (id: StoreAppId) => `${window.location.origin}/#store/app/${id}`;
 
-/** Apps matching a query: name, keywords and category in the interface language (and English). */
+/** Apps matching a query: name, category, developer, keywords and subtitle, in the interface language (and English). */
 function useMatch() {
   const lang = useLanguage();
   const t = useT();
@@ -65,21 +71,34 @@ function useMatch() {
     if (!s) return [];
     return STORE_APPS.filter((id) => {
       const m = APP_REGISTRY[id];
-      const hay = [m.name[lang], m.name.en, ...(m.keywords[lang] ?? []), ...m.keywords.en, t(CATEGORY[m.category]), t(CATALOG[id].subtitle)].join(" ").toLocaleLowerCase(lang);
+      const hay = [m.name[lang], m.name.en, ...(m.keywords[lang] ?? []), ...m.keywords.en, t(CATEGORY[m.category]), t(CATALOG[id].subtitle), DEVELOPER.name].join(" ").toLocaleLowerCase(lang);
       return hay.includes(s);
     });
   };
 }
 
+/** The page a deep link asks for (window params): an app's page, the updates, the account. */
+function linked(params: Record<string, unknown> | undefined): Page[] | null {
+  const id = params?.appId as StoreAppId | undefined;
+  if (id && STORE_APPS.includes(id)) return [{ kind: "home" }, { kind: "app", id }];
+  if (params?.page === "updates") return [{ kind: "home" }, { kind: "account" }, { kind: "updates" }];
+  if (params?.page === "account") return [{ kind: "home" }, { kind: "account" }];
+  return null;
+}
+
 export function StoreApp() {
   const t = useT();
-  const lang = useLanguage();
   const ff = useFormFactor();
   const win = useWindow();
-  const [stack, setStack] = useState<Page[]>(() => {
-    const id = win.params?.appId as StoreAppId | undefined;
-    return id && STORE_APPS.includes(id) ? [{ kind: "home" }, { kind: "app", id }] : [{ kind: "home" }];
-  });
+  const [stack, setStack] = useState<Page[]>(() => linked(win.params) ?? [{ kind: "home" }]);
+  // A link followed while the Store is open (a notification, a shared link) shows its page.
+  const seen = useRef(win.paramsVersion);
+  useEffect(() => {
+    if (win.paramsVersion === seen.current) return;
+    seen.current = win.paramsVersion;
+    const next = linked(win.params);
+    if (next) setStack(next);
+  }, [win.paramsVersion, win.params]);
   const page = stack.at(-1)!;
   const push = (p: Page) => setStack((s) => [...s, p]);
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
@@ -89,82 +108,65 @@ export function StoreApp() {
     scroller.current?.scrollTo({ top: 0 });
   }, [stack.length, page.kind]);
 
-  // Search: typing shows history and matching apps; Enter shows the results; X goes back to the catalog.
   const [q, setQ] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [submitted, setSubmitted] = useState("");
-  const [history, setHistory] = useState(loadHistory);
-  const submit = (text: string) => {
-    const v = text.trim();
-    if (!v) return;
-    setQ(v);
-    setSubmitted(v);
-    setSearching(true);
-    const next = [v, ...history.filter((h) => h.toLocaleLowerCase() !== v.toLocaleLowerCase())];
-    setHistory(next);
-    saveHistory(next);
-  };
-  const closeSearch = () => {
-    setQ("");
-    setSubmitted("");
-    setSearching(false);
-  };
   const openApp = (id: StoreAppId) => push({ kind: "app", id });
-
   const top = page.kind === "home";
+
   return (
-    <div className="vx-app relative flex min-h-0 flex-1 flex-col" data-testid="store-app">
-      <WindowHeader className={cx("bg-surface", !top && "border-b")}>
-        {!top ? (
-          <>
-            <IconButton label={t("common.back")} onClick={back} data-testid="store-back">
-              <RiArrowLeftLine className="size-5" />
-            </IconButton>
-            <span className="truncate text-[16px] font-semibold">{page.kind === "app" || page.kind === "reviews" ? APP_REGISTRY[page.id].name[lang] : t(page.developer ? "store.developerApps" : "store.allApps")}</span>
-          </>
-        ) : (
-          <span className="flex items-center gap-2 pl-1">
-            <StoreGlyph className="size-6" />
-            <span className="text-[16px] font-semibold">Appex Store</span>
-          </span>
-        )}
-      </WindowHeader>
+    <div className="vx-app relative flex min-h-0 flex-1 flex-col" data-testid="store-app" data-page={page.kind}>
+      {/* Step 2.12: no bar around the top: on inner pages only Back (left) and, on an app's page, Share (right). */}
+      {(!top || ff === "desktop") && (
+        <WindowHeader className="bg-transparent" right={page.kind === "app" ? <ShareButton id={page.id} /> : undefined}>
+          {top ? (
+            <span className="flex items-center gap-2 pl-1 text-text-secondary">
+              <StoreGlyph className="size-6" />
+              <span className="text-[15px] font-semibold">Appex Store</span>
+            </span>
+          ) : (
+            <RoundButton label={t("common.back")} onClick={back} testId="store-back">
+              <RiArrowLeftSLine className="size-6" />
+            </RoundButton>
+          )}
+        </WindowHeader>
+      )}
       <div ref={scroller} className="scroll-area min-h-0 flex-1">
-        <div className={cx("mx-auto flex w-full max-w-[920px] flex-col gap-6 px-4 pb-10", ff === "desktop" ? "pt-4" : "pt-2")}>
+        <div className={cx("mx-auto flex w-full max-w-[920px] flex-col gap-6 px-4 pb-10", top && ff === "mobile" ? "pt-[max(var(--safe-top),14px)]" : "pt-2")}>
           {top && (
             <>
-              <h1 className="text-[32px] font-bold leading-tight tracking-tight" data-testid="store-title">
-                {t("store.title")}
-              </h1>
-              <form
-                role="search"
-                className="flex items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  submit(q);
-                }}
-              >
-                <span className="min-w-0 flex-1" onFocus={() => setSearching(true)}>
-                  <VoidexSearchField value={q} onChange={(v) => (setQ(v), setSubmitted(""), setSearching(true))} placeholder={t("store.searchHint")} testId="store-search" />
-                </span>
-                {searching && (
-                  <button type="button" onClick={closeSearch} aria-label={t("store.closeSearch")} className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-secondary text-text-secondary" data-testid="store-search-close">
-                    <RiCloseLine className="size-5" />
-                  </button>
-                )}
-              </form>
+              <div className="flex items-center justify-between gap-3">
+                <h1 className="text-[32px] font-bold leading-tight tracking-tight" data-testid="store-title">
+                  {t(q.trim() ? "store.searchTitle" : "store.title")}
+                </h1>
+                <AccountButton onClick={() => push({ kind: "account" })} />
+              </div>
+              <StoreSearch value={q} onChange={setQ} onExit={() => setQ("")} placeholder={t("store.searchHint")} />
             </>
           )}
-          {top && searching ? (
-            <SearchBody q={q} submitted={submitted} history={history} onPick={submit} onClear={() => (setHistory([]), saveHistory([]))} onOpen={openApp} />
+          {top && q.trim() ? (
+            <SearchResults q={q} onOpen={openApp} />
           ) : page.kind === "home" ? (
             <Home onOpen={openApp} onAll={() => push({ kind: "all" })} />
           ) : page.kind === "all" ? (
             <AllApps onOpen={openApp} developer={page.developer} />
           ) : page.kind === "app" ? (
-            <AppPage id={page.id} onReviews={() => push({ kind: "reviews", id: page.id })} onDeveloper={() => push({ kind: "all", developer: true })} key={page.id} />
-          ) : (
+            <AppPage
+              id={page.id}
+              onOpen={openApp}
+              onReviews={() => push({ kind: "reviews", id: page.id })}
+              onVersions={() => push({ kind: "versions", id: page.id })}
+              onDeveloper={() => push({ kind: "all", developer: true })}
+              key={page.id}
+            />
+          ) : page.kind === "reviews" ? (
             <ReviewsPage appId={page.id} />
+          ) : page.kind === "versions" ? (
+            <VersionsPage id={page.id} />
+          ) : page.kind === "account" ? (
+            <AccountPage onUpdates={() => push({ kind: "updates" })} onReviews={() => push({ kind: "myReviews" })} />
+          ) : page.kind === "updates" ? (
+            <UpdatesPage onOpen={openApp} />
+          ) : (
+            <MyReviewsPage onOpen={openApp} />
           )}
         </div>
       </div>
@@ -172,67 +174,110 @@ export function StoreApp() {
   );
 }
 
-function SearchBody({ q, submitted, history, onPick, onClear, onOpen }: { q: string; submitted: string; history: string[]; onPick: (q: string) => void; onClear: () => void; onOpen: (id: StoreAppId) => void }) {
+/** Step 2.12: the account's avatar (top right of the catalog): opens the Store's account page. */
+function AccountButton({ onClick }: { onClick: () => void }) {
   const t = useT();
-  const match = useMatch();
-  const name = useAppName();
-  if (submitted) {
-    const found = match(submitted);
-    return (
-      <section className="flex flex-col gap-5" data-testid="store-search-results">
-        <p className="text-[13px] text-text-secondary">{t("store.found", { n: found.length })}</p>
-        {found.length ? (
-          found.map((id) => <SearchResult key={id} id={id} onOpen={onOpen} />)
-        ) : (
-          <EmptyState icon={<RiSearchLine className="size-7" />} title={t("store.nothingFound")} hint={t("store.nothingFoundHint")} />
-        )}
-      </section>
-    );
-  }
-  const shown = history.filter((h) => !q || h.toLocaleLowerCase().includes(q.trim().toLocaleLowerCase()));
-  const apps = match(q).slice(0, 6);
+  const user = useSession((s) => s.user);
+  const pending = usePendingUpdates().length;
+  if (!user) return null;
+  const name = `${user.firstName} ${user.lastName}`.trim();
   return (
-    <div className="flex flex-col gap-5" data-testid="store-search-suggestions">
-      {shown.length > 0 && (
-        <section>
-          <div className="mb-1 flex items-center justify-between">
-            <h2 className="text-[17px] font-bold">{t("store.history")}</h2>
-            <button type="button" onClick={onClear} className="text-[14px] font-medium text-primary" data-testid="store-history-clear">
-              {t("store.clear")}
-            </button>
-          </div>
-          {shown.map((h) => (
-            <button key={h} type="button" onClick={() => onPick(h)} className="flex h-11 w-full items-center gap-3 text-left text-[15px]" data-testid="store-history-item">
-              <RiHistoryLine className="size-5 text-text-tertiary" />
-              <span className="min-w-0 flex-1 truncate">{h}</span>
-              <RiArrowRightSLine className="size-5 text-text-tertiary" />
-            </button>
-          ))}
-        </section>
+    <button type="button" onClick={onClick} aria-label={t("store.account")} className="pressable relative shrink-0 rounded-full" data-testid="store-account-open">
+      <Avatar name={name} userId={user.id} version={user.avatarVersion} size={40} />
+      {pending > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[11px] font-semibold text-white ring-2 ring-[var(--surface)]" data-testid="store-account-badge">
+          {pending}
+        </span>
       )}
-      <section>
-        <h2 className="mb-1 text-[17px] font-bold">{q.trim() ? t("store.matching") : t("store.popular")}</h2>
-        {(q.trim() ? apps : (["vibex", "notes", "mail"] as StoreAppId[])).map((id) => (
-          <button key={id} type="button" onClick={() => (q.trim() ? onOpen(id) : onPick(name(id)))} className="flex h-12 w-full items-center gap-3 text-left text-[15px]" data-testid="store-suggestion" data-app={id}>
-            <RiSearchLine className="size-5 text-text-tertiary" />
-            <span className="min-w-0 flex-1 truncate">{name(id)}</span>
-            <RiArrowRightSLine className="size-5 text-text-tertiary" />
-          </button>
-        ))}
-        {q.trim() && !apps.length && <p className="py-2 text-[14px] text-text-tertiary">{t("store.noMatching")}</p>}
-      </section>
-    </div>
+    </button>
   );
 }
 
-function SearchResult({ id, onOpen }: { id: StoreAppId; onOpen: (id: StoreAppId) => void }) {
-  const [shot, setShot] = useState<number | null>(null);
+/** Step 2.12: Share on an app's page: the phone's share sheet (else the link is copied); on a computer a menu: copy the link or send it in Vibex. */
+function ShareButton({ id }: { id: StoreAppId }) {
+  const t = useT();
+  const ff = useFormFactor();
+  const name = useAppName()(id);
+  const pop = usePopover();
+  const [vibex, setVibex] = useState(false);
+  const link = storeLink(id);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast({ title: t("store.linkCopied"), tone: "success" });
+    } catch {
+      toast({ title: link });
+    }
+  };
+  const share = async () => {
+    if (ff === "mobile" && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: `Appex Store · ${name}`, text: t(CATALOG[id].subtitle), url: link });
+        return;
+      } catch (e) {
+        if ((e as DOMException)?.name === "AbortError") return;
+      }
+    }
+    if (ff === "mobile") return void copy();
+    pop.toggle();
+  };
+  const send = async (input: ShareSendInput) => {
+    const text = `${t("store.shareText", { app: name })}\n${link}`;
+    await sendText(input, `Appex Store · ${name}`, input.text.trim() ? `${input.text.trim()}\n\n${text}` : text);
+  };
   return (
-    <div className="flex flex-col gap-2" data-testid="store-search-result" data-app={id}>
-      <AppRow id={id} onOpen={onOpen} />
-      <ScreenshotStrip id={id} kind="phone" onOpen={setShot} />
-      <ShotViewer shots={CATALOG[id].phone} index={shot} onIndex={setShot} />
-    </div>
+    <>
+      <button
+        ref={pop.anchor}
+        type="button"
+        onClick={() => void share()}
+        aria-label={t("store.share")}
+        title={t("store.share")}
+        className="pressable flex size-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-surface text-text-secondary shadow-[0_4px_14px_-10px_rgba(40,30,90,0.35)]"
+        data-testid="store-share-open"
+      >
+        <RiUpload2Line className="size-5" />
+      </button>
+      <Popover open={pop.open} onClose={pop.close} anchor={pop.anchor} testId="store-share-menu">
+        <MenuList
+          onDone={pop.close}
+          items={[
+            { id: "store-copy-link", label: t("store.copyLink"), icon: <RiLinkM className="size-5" />, onSelect: () => void copy() },
+            { id: "store-send-vibex", label: t("store.sendVibex"), icon: <RiChat3Line className="size-5" />, onSelect: () => setVibex(true) },
+          ]}
+        />
+      </Popover>
+      <VoidexShareDialog
+        subject={vibex ? { key: `store:${id}`, icon: <StoreIcon id={id} size={48} />, title: name, hint: t(CATALOG[id].subtitle) } : null}
+        onClose={() => setVibex(false)}
+        onSend={send}
+        testId="store-share"
+        sentTitle={t("store.shared")}
+      />
+    </>
+  );
+}
+
+/** Step 2.12: results while typing (an empty field shows the catalog again; X clears). */
+function SearchResults({ q, onOpen }: { q: string; onOpen: (id: StoreAppId) => void }) {
+  const t = useT();
+  const found = useMatch()(q);
+  const kind = useShotKind();
+  const [shot, setShot] = useState<{ id: StoreAppId; i: number } | null>(null);
+  return (
+    <section className="flex flex-col gap-5" data-testid="store-search-results" data-count={found.length}>
+      {found.length ? (
+        found.map((id) => (
+          <div key={id} className="flex flex-col gap-2" data-testid="store-search-result" data-app={id}>
+            <AppRow id={id} onOpen={onOpen} />
+            <ScreenshotStrip id={id} kind={kind} onOpen={(i) => setShot({ id, i })} />
+          </div>
+        ))
+      ) : (
+        <EmptyState icon={<RiSearchLine className="size-7" />} title={t("store.nothingFound")} hint={t("store.nothingFoundHint")} />
+      )}
+      <ShotViewer shots={shot ? CATALOG[shot.id].screenshots[kind] : []} index={shot?.i ?? null} onIndex={(i) => setShot((s) => (s && i !== null ? { ...s, i } : null))} />
+    </section>
   );
 }
 
@@ -305,10 +350,10 @@ function Hero({ onOpen }: { onOpen: (id: StoreAppId) => void }) {
   );
 }
 
-function Section({ title, apps, onOpen, onAll }: { title: string; apps: StoreAppId[]; onOpen: (id: StoreAppId) => void; onAll?: () => void }) {
+function Section({ title, apps, onOpen, onAll, testId = "store-section" }: { title: string; apps: StoreAppId[]; onOpen: (id: StoreAppId) => void; onAll?: () => void; testId?: string }) {
   const t = useT();
   return (
-    <section data-testid="store-section">
+    <section data-testid={testId}>
       <div className="flex items-center justify-between">
         <h2 className="text-[20px] font-bold tracking-tight">{title}</h2>
         {onAll && (
@@ -357,43 +402,40 @@ function AllApps({ onOpen, developer }: { onOpen: (id: StoreAppId) => void; deve
 }
 
 /** An app's page. */
-function AppPage({ id, onReviews, onDeveloper }: { id: StoreAppId; onReviews: () => void; onDeveloper: () => void }) {
+function AppPage({ id, onOpen, onReviews, onVersions, onDeveloper }: { id: StoreAppId; onOpen: (id: StoreAppId) => void; onReviews: () => void; onVersions: () => void; onDeveloper: () => void }) {
   const t = useT();
+  const lang = useLanguage();
   const name = useAppName()(id);
   const m = APP_REGISTRY[id];
   const entry = CATALOG[id];
-  const stats = useStoreStats().data?.[id];
-  const state = useAppStates()[id];
+  const kind = useShotKind();
   const reviews = useReviews(id, "helpful");
-  const [kind, setKind] = useState<"phone" | "pc">("phone");
+  const state = useAppStates()[id];
+  const row = useInstalledRows()[id];
+  const [prefs] = useStorePrefs();
   const [shot, setShot] = useState<number | null>(null);
   const [writing, setWriting] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const stats = reviews.data?.stats;
   const top = (reviews.data?.items ?? []).slice(0, 2);
-  const share = async (input: ShareSendInput) => {
-    const text = `${t("store.shareText", { app: name })}\n${t(entry.subtitle)}`;
-    await sendText(input, `Appex Store · ${name}`, input.text.trim() ? `${input.text.trim()}\n\n${text}` : text);
-  };
+  const release = releasesOf(id)[0];
+  const auto = row?.autoUpdate ?? prefs.autoUpdate;
   return (
     <div className="flex flex-col gap-6" data-testid="store-app-page" data-app={id}>
       <section className="flex items-center gap-4">
         <StoreIcon id={id} size={96} />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[24px] font-bold leading-tight tracking-tight" data-testid="store-app-name">
+          <h1 className="truncate text-[26px] font-bold leading-tight tracking-tight" data-testid="store-app-name">
             {name}
           </h1>
           <p className="truncate text-[14px] text-text-secondary">{t(entry.subtitle)}</p>
-          <div className="mt-2.5 flex items-center gap-2">
+          <div className="mt-2.5">
             <GetButton id={id} size="lg" />
-            <button type="button" onClick={() => setSharing(true)} aria-label={t("store.share")} title={t("store.share")} className="flex size-10 items-center justify-center rounded-full bg-surface-secondary text-text" data-testid="store-share-open">
-              <RiShareForwardLine className="size-5" />
-            </button>
           </div>
         </div>
       </section>
 
-      <div className="grid grid-cols-4 divide-x divide-border/60 rounded-[20px] bg-surface py-3 text-center shadow-tile" data-testid="store-stats">
+      {/* Phones: the four facts scroll sideways at their own width (never cut); a computer has room for four columns. */}
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0" data-testid="store-stats">
         <Stat value={stats && stats.total ? stats.average.toFixed(1) : "–"} label={t("store.stat.rating", { n: stats?.total ?? 0 })} />
         <Stat value={t(CATEGORY[m.category])} label={t("store.stat.category")} />
         <Stat value={m.version} label={t("store.stat.version")} />
@@ -401,20 +443,9 @@ function AppPage({ id, onReviews, onDeveloper }: { id: StoreAppId; onReviews: ()
       </div>
 
       <section>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-[20px] font-bold tracking-tight">{t("store.screenshots")}</h2>
-          {entry.pc.length > 0 && (
-            <div className="flex rounded-full bg-surface-secondary p-0.5 text-[13px]" role="tablist">
-              {(["phone", "pc"] as const).map((k) => (
-                <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => setKind(k)} className={cx("h-8 rounded-full px-3 font-medium", kind === k ? "bg-surface text-text shadow-tile" : "text-text-secondary")} data-testid={`store-shots-${k}`}>
-                  {t(k === "phone" ? "store.phone" : "store.pc")}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <h2 className="mb-2 text-[20px] font-bold tracking-tight">{t("store.screenshots")}</h2>
         <ScreenshotStrip id={id} kind={kind} onOpen={setShot} />
-        <ShotViewer shots={entry[kind]} index={shot} onIndex={setShot} />
+        <ShotViewer shots={entry.screenshots[kind]} index={shot} onIndex={setShot} />
       </section>
 
       <section data-testid="store-description">
@@ -429,15 +460,22 @@ function AppPage({ id, onReviews, onDeveloper }: { id: StoreAppId; onReviews: ()
         </ul>
       </section>
 
-      <section className="rounded-[22px] bg-surface p-4 shadow-tile" data-testid="store-news">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-[17px] font-bold">{t("store.whatsNew")}</h2>
-          <span className="text-[13px] text-text-tertiary">{t("store.version", { v: m.version })}</span>
-        </div>
-        <p className="mt-1.5 text-[14.5px] text-text-secondary">{t(entry.news)}</p>
-      </section>
+      {release && (
+        <button type="button" onClick={onVersions} className="flex flex-col gap-1.5 rounded-[22px] border border-border/60 bg-surface p-4 text-left shadow-[0_8px_22px_-18px_rgba(40,30,110,0.35)]" data-testid="store-news">
+          <span className="flex w-full items-baseline justify-between gap-3">
+            <span className="text-[17px] font-bold">{t("store.whatsNew")}</span>
+            <span className="flex items-center text-[13.5px] font-medium text-primary" data-testid="store-versions-open">
+              {t("store.versionHistory")} <RiArrowRightSLine className="size-4" />
+            </span>
+          </span>
+          <span className="text-[13px] text-text-tertiary">
+            {t("store.version", { v: release.version })} · {formatDate(new Date(release.date), lang, { day: "numeric", month: "long", year: "numeric" })}
+          </span>
+          <span className="text-[14.5px] text-text-secondary">{t(release.notes.title)}</span>
+        </button>
+      )}
 
-      <button type="button" onClick={onDeveloper} className="flex items-center gap-3 rounded-[22px] bg-surface p-4 text-left shadow-tile" data-testid="store-developer-link">
+      <button type="button" onClick={onDeveloper} className="flex items-center gap-3 rounded-[22px] border border-border/60 bg-surface p-4 text-left shadow-[0_8px_22px_-18px_rgba(40,30,110,0.35)]" data-testid="store-developer-link">
         <RiShieldCheckLine className="size-6 shrink-0 text-primary" />
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-semibold">{t("store.developer", { name: DEVELOPER.name })}</span>
@@ -445,6 +483,17 @@ function AppPage({ id, onReviews, onDeveloper }: { id: StoreAppId; onReviews: ()
         </span>
         <RiArrowRightSLine className="size-5 text-text-tertiary" />
       </button>
+
+      {state !== "get" && (
+        <div className="flex items-center gap-3 rounded-[22px] border border-border/60 bg-surface px-4 py-3" data-testid="store-app-auto">
+          <RiRefreshLine className="size-5 shrink-0 text-text-secondary" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-medium">{t("store.autoUpdateApp")}</span>
+            <span className="block text-[12.5px] text-text-tertiary">{t(row?.autoUpdate == null ? "store.autoUpdateFollows" : "store.autoUpdateOwn")}</span>
+          </span>
+          <Switch checked={auto} label={t("store.autoUpdateApp")} onChange={(v) => void setAppAutoUpdate(id, v === prefs.autoUpdate ? null : v)} />
+        </div>
+      )}
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -462,42 +511,243 @@ function AppPage({ id, onReviews, onDeveloper }: { id: StoreAppId; onReviews: ()
         </button>
       </section>
 
-      {state !== "get" && (
-        <button type="button" onClick={() => setRemoving(true)} className="flex h-11 items-center justify-center gap-2 rounded-full text-[15px] font-medium text-danger hover:bg-danger-soft" data-testid="store-remove">
-          <RiDeleteBinLine className="size-5" /> {t("store.remove")}
-        </button>
-      )}
+      {/* Step 2.12: more real apps of the catalog (never this one, the Store or Settings). */}
+      <Section title={t("store.more.space")} apps={STORE_APPS.filter((x) => x !== id)} onOpen={onOpen} testId="store-more" />
 
       <ReviewSheet open={writing} appId={id} mine={reviews.data?.mine ?? null} onClose={() => setWriting(false)} />
-      <VoidexShareDialog
-        subject={sharing ? { key: `store:${id}`, icon: <StoreIcon id={id} size={48} />, title: name, hint: t(entry.subtitle) } : null}
-        onClose={() => setSharing(false)}
-        onSend={share}
-        testId="store-share"
-        sentTitle={t("store.shared")}
-      />
-      <ConfirmDialog
-        open={removing}
-        onClose={() => setRemoving(false)}
-        onConfirm={() => {
-          setRemoving(false);
-          void removeApp(id).catch((e) => toast({ title: errorMessage(t, e), tone: "danger" }));
-        }}
-        title={t("store.removeTitle", { app: name })}
-        message={t("store.removeBody")}
-        confirmLabel={t("store.remove")}
-        danger
-        testId="store-remove-confirm"
-      />
     </div>
   );
 }
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-0.5 px-1">
-      <strong className="max-w-full truncate text-[15px] font-semibold text-text">{value}</strong>
+    <div className="flex min-w-[92px] shrink-0 flex-col gap-0.5 rounded-[16px] border border-border/60 bg-surface px-3 py-2.5 sm:min-w-0">
+      <strong className="max-w-full truncate text-[16px] font-semibold text-text">{value}</strong>
       <span className="max-w-full truncate text-[11.5px] text-text-tertiary">{label}</span>
     </div>
+  );
+}
+
+/** Step 2.12: every release of the app, newest first: the version, its date, what it brought; the current one is marked. */
+function VersionsPage({ id }: { id: StoreAppId }) {
+  const t = useT();
+  const lang = useLanguage();
+  const name = useAppName()(id);
+  const installed = useInstalledRows()[id]?.version;
+  const list = releasesOf(id);
+  return (
+    <section className="flex flex-col" data-testid="store-versions" data-app={id}>
+      <div className="flex items-center gap-2 self-end text-[13.5px] text-text-secondary">
+        <StoreIcon id={id} size={28} /> {name}
+      </div>
+      <p className="mt-3 text-[12px] font-semibold uppercase tracking-[0.14em] text-text-tertiary">{t("store.versions.eyebrow")}</p>
+      <h1 className="mt-1 text-[32px] font-bold leading-tight tracking-tight">{t("store.versionHistory")}</h1>
+      <p className="mt-1 text-[14.5px] text-text-secondary">{t("store.versions.hint")}</p>
+      <ol className="mt-6 flex flex-col gap-4 border-l border-primary/25 pl-5">
+        {list.map((r, i) => (
+          <li key={r.version} className="relative rounded-[22px] border border-border/60 bg-surface p-4 shadow-[0_8px_22px_-18px_rgba(40,30,110,0.35)]" data-testid="store-release" data-version={r.version}>
+            <span className={cx("absolute -left-[29px] top-6 size-3.5 rounded-full border-[3px] border-surface", i === 0 ? "bg-primary" : "bg-border-strong")} aria-hidden />
+            <div className="flex flex-wrap items-center gap-2">
+              <strong className="text-[24px] font-bold tracking-tight">{r.version}</strong>
+              {i === 0 && (
+                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[12px] font-medium text-primary" data-testid="store-release-current">
+                  {t("store.versions.current")}
+                </span>
+              )}
+              {installed === r.version && i > 0 && <span className="rounded-full bg-surface-secondary px-2.5 py-0.5 text-[12px] text-text-secondary">{t("store.versions.installed")}</span>}
+            </div>
+            <p className="mt-0.5 text-[13px] text-text-tertiary">{formatDate(new Date(r.date), lang, { day: "numeric", month: "long", year: "numeric" })}</p>
+            <h2 className="mt-2.5 text-[16px] font-semibold">{t(r.notes.title)}</h2>
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {r.notes.items.map((k) => (
+                <li key={k} className="flex items-start gap-2 text-[14.5px] text-text-secondary">
+                  <span className="mt-[8px] size-1.5 shrink-0 rounded-full bg-text-tertiary" aria-hidden />
+                  {t(k)}
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ account
+
+/** Installed catalog apps (on the desktop) with a newer version available. */
+function usePendingUpdates(): StoreAppId[] {
+  const states = useAppStates();
+  return STORE_APPS.filter((id) => states[id] === "update");
+}
+
+function AccountPage({ onUpdates, onReviews }: { onUpdates: () => void; onReviews: () => void }) {
+  const t = useT();
+  const user = useSession((s) => s.user);
+  const mailDomain = useMailDomain();
+  const states = useAppStates();
+  const pending = usePendingUpdates();
+  const [prefs, setPrefs] = useStorePrefs();
+  if (!user) return null;
+  const name = `${user.firstName} ${user.lastName}`.trim();
+  const installed = STORE_APPS.filter((id) => states[id] !== "get").length;
+  return (
+    <section className="flex flex-col gap-5" data-testid="store-account">
+      <div className="flex items-center gap-4 rounded-[24px] border border-border/60 bg-surface p-4 shadow-[0_8px_22px_-18px_rgba(40,30,110,0.35)]">
+        <Avatar name={name} userId={user.id} version={user.avatarVersion} size={64} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[19px] font-bold" data-testid="store-account-name">
+            {name}
+          </p>
+          <p className="truncate text-[14px] text-text-secondary" data-testid="store-account-address">
+            {toPublicAddress(user.mailAddress, mailDomain)}
+          </p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Stat value={String(installed)} label={t("store.account.installed")} />
+        <Stat value={String(pending.length)} label={t("store.account.pending")} />
+      </div>
+      <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-[22px] border border-border/60 bg-surface">
+        <button type="button" onClick={onUpdates} className="flex h-14 items-center gap-3 px-4 text-left hover:bg-surface-hover" data-testid="store-account-updates">
+          <RiDownloadCloud2Line className="size-5 text-text-secondary" />
+          <span className="flex-1 text-[15.5px]">{t("store.updates.title")}</span>
+          {pending.length > 0 && <span className="rounded-full bg-primary px-2 text-[12px] font-semibold leading-5 text-white">{pending.length}</span>}
+          <RiArrowRightSLine className="size-5 text-text-tertiary" />
+        </button>
+        <div className="flex min-h-14 items-center gap-3 px-4 py-2">
+          <RiRefreshLine className="size-5 text-text-secondary" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15.5px]">{t("store.autoUpdate")}</span>
+            <span className="block text-[12.5px] text-text-tertiary">{t("store.autoUpdateHint")}</span>
+          </span>
+          <span data-testid="store-pref-auto">
+            <Switch checked={prefs.autoUpdate} label={t("store.autoUpdate")} onChange={(v) => setPrefs({ autoUpdate: v })} />
+          </span>
+        </div>
+        <div className="flex min-h-14 items-center gap-3 px-4 py-2">
+          <RiNotification3Line className="size-5 text-text-secondary" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15.5px]">{t("store.updateNotifications")}</span>
+            <span className="block text-[12.5px] text-text-tertiary">{t("store.updateNotificationsHint")}</span>
+          </span>
+          <span data-testid="store-pref-notify">
+            <Switch checked={prefs.updateNotifications} label={t("store.updateNotifications")} onChange={(v) => setPrefs({ updateNotifications: v })} />
+          </span>
+        </div>
+        <button type="button" onClick={onReviews} className="flex h-14 items-center gap-3 px-4 text-left hover:bg-surface-hover" data-testid="store-account-reviews">
+          <RiStarLine className="size-5 text-text-secondary" />
+          <span className="flex-1 text-[15.5px]">{t("store.myReviews")}</span>
+          <RiArrowRightSLine className="size-5 text-text-tertiary" />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** Step 2.12: the update center: what can be updated (installed vs. new version) and what was updated lately. */
+function UpdatesPage({ onOpen }: { onOpen: (id: StoreAppId) => void }) {
+  const t = useT();
+  const lang = useLanguage();
+  const name = useAppName();
+  const rows = useInstalledRows();
+  const states = useAppStates();
+  const busy = useInstalls((s) => s.busy);
+  const pending = usePendingUpdates();
+  const recent = STORE_APPS.filter((id) => states[id] !== "get" && rows[id]?.updatedAt).sort((a, b) => (rows[b]!.updatedAt! > rows[a]!.updatedAt! ? 1 : -1));
+  const updateAll = async () => {
+    for (const id of pending) await installApp(id).catch(() => undefined);
+  };
+  return (
+    <section className="flex flex-col gap-6" data-testid="store-updates">
+      <h1 className="text-[28px] font-bold tracking-tight">{t("store.updates.title")}</h1>
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="text-[17px] font-bold">{t("store.updates.available")}</h2>
+          {pending.length > 1 && (
+            <button type="button" onClick={() => void updateAll()} className="text-[14px] font-medium text-primary" data-testid="store-update-all">
+              {t("store.updates.all")}
+            </button>
+          )}
+        </div>
+        {pending.length ? (
+          <div className="divide-y divide-border/60">
+            {pending.map((id) => (
+              <div key={id} className="flex items-center gap-3 py-2.5" data-testid="store-update-row" data-app={id}>
+                <button type="button" onClick={() => onOpen(id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  <StoreIcon id={id} size={52} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15.5px] font-semibold">{name(id)}</span>
+                    <span className="block truncate text-[13px] text-text-secondary" data-testid="store-update-versions">
+                      {rows[id]?.version} → {APP_REGISTRY[id].version}
+                    </span>
+                  </span>
+                </button>
+                {busy[id] ? <Spinner size={18} /> : <GetButton id={id} />}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-[18px] bg-surface-secondary px-4 py-3.5 text-[14.5px] text-text-secondary" data-testid="store-updates-none">
+            {t("store.updates.none")}
+          </p>
+        )}
+      </div>
+      <div>
+        <h2 className="mb-1 text-[17px] font-bold">{t("store.updates.recent")}</h2>
+        {recent.length ? (
+          <div className="divide-y divide-border/60">
+            {recent.map((id) => (
+              <div key={id} className="flex items-center gap-3 py-2.5" data-testid="store-recent-row" data-app={id}>
+                <button type="button" onClick={() => onOpen(id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+                  <StoreIcon id={id} size={52} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15.5px] font-semibold">{name(id)}</span>
+                    <span className="block truncate text-[13px] text-text-secondary">
+                      {t("store.version", { v: rows[id]!.version ?? "" })} · {formatDate(new Date(rows[id]!.updatedAt!), lang, { day: "numeric", month: "long" })}
+                    </span>
+                  </span>
+                </button>
+                <GetButton id={id} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[14px] text-text-tertiary">{t("store.updates.noRecent")}</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Step 2.12: the reviews I wrote: the app, my stars, the date, the start of the text; a tap opens the app's page. */
+function MyReviewsPage({ onOpen }: { onOpen: (id: StoreAppId) => void }) {
+  const t = useT();
+  const lang = useLanguage();
+  const name = useAppName();
+  const mine = useMyReviews();
+  const list = (mine.data ?? []).filter((r): r is typeof r & { appId: StoreAppId } => STORE_APPS.includes(r.appId as StoreAppId));
+  return (
+    <section className="flex flex-col gap-3" data-testid="store-my-reviews">
+      <h1 className="text-[28px] font-bold tracking-tight">{t("store.myReviews")}</h1>
+      {mine.isLoading ? (
+        <Spinner className="mx-auto mt-6" />
+      ) : list.length ? (
+        list.map((r) => (
+          <button key={r.id} type="button" onClick={() => onOpen(r.appId)} className="flex items-start gap-3 rounded-[22px] border border-border/60 bg-surface p-4 text-left" data-testid="store-my-review" data-app={r.appId}>
+            <StoreIcon id={r.appId} size={52} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15.5px] font-semibold">{name(r.appId)}</span>
+              <span className="mt-0.5 flex items-center gap-2 text-[12.5px] text-text-tertiary">
+                <Stars value={r.rating} size={12} /> {formatDate(new Date(r.editedAt ?? r.createdAt), lang, { day: "numeric", month: "short", year: "numeric" })}
+              </span>
+              {(r.title || r.text) && <span className="mt-1 line-clamp-2 text-[14px] text-text-secondary">{r.title ? `${r.title}. ${r.text}` : r.text}</span>}
+            </span>
+          </button>
+        ))
+      ) : (
+        <EmptyState icon={<RiStarLine className="size-7" />} title={t("store.myReviews.empty")} hint={t("store.myReviews.emptyHint")} />
+      )}
+    </section>
   );
 }

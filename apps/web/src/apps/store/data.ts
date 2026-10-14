@@ -1,16 +1,18 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { APP_REGISTRY, type AppId, type InstalledAppDto, type StoreReportReason, type StoreReviewDto, type StoreReviewSort, type StoreReviewStatsDto, type StoreReviewsDto } from "@voidex/shared";
+import { APP_REGISTRY, DEFAULT_PREFERENCES, compareVersions, type AppId, type InstalledAppDto, type StorePrefs, type StoreReportReason, type StoreReviewDto, type StoreReviewSort, type StoreReviewStatsDto, type StoreReviewsDto } from "@voidex/shared";
 import { api, qs } from "@/lib/api";
 import { qk, queryClient } from "@/lib/query";
-import { offloadApp } from "@/lib/app-storage";
 import { APP_LOADERS } from "@/os/app-registry";
-import { addToDesktop, removeAppsFromDesktop } from "@/os/home/actions";
+import { useSession } from "@/lib/session";
+import { useUpdatePreferences } from "@/lib/account";
+import { addToDesktop } from "@/os/home/actions";
 import { currentLayout, useWorkspaceLayout } from "@/os/home/layout";
 import { create } from "zustand";
 import type { StoreAppId } from "./catalog";
 
 export const sk = {
   stats: ["store", "stats"] as const,
+  mine: ["store", "mine"] as const,
   reviews: (id: string, sort: StoreReviewSort) => ["store", "reviews", id, sort] as const,
 };
 
@@ -25,7 +27,13 @@ export function useReviews(id: string, sort: StoreReviewSort = "date") {
 const refreshReviews = (id: string) => {
   void queryClient.invalidateQueries({ queryKey: ["store", "reviews", id] });
   void queryClient.invalidateQueries({ queryKey: sk.stats });
+  void queryClient.invalidateQueries({ queryKey: sk.mine });
 };
+
+/** Step 2.12: every review I wrote (the account page), newest first. */
+export function useMyReviews() {
+  return useQuery({ queryKey: sk.mine, queryFn: () => api.get<StoreReviewDto[]>("/api/store/me/reviews"), staleTime: 0, refetchOnMount: "always" }); // written on another device too: always fresh when opened
+}
 
 export function useSaveReview(id: string) {
   return useMutation({
@@ -69,9 +77,27 @@ export function useAppStates(): Record<StoreAppId, AppState> {
   for (const id of Object.keys(APP_REGISTRY) as AppId[]) {
     if (id === "store" || id === "settings") continue;
     const row = byId[id];
-    out[id as StoreAppId] = !row || hidden.has(id) ? "get" : row.version && row.version !== row.manifest.version ? "update" : "open";
+    out[id as StoreAppId] = !row || hidden.has(id) ? "get" : row.version && compareVersions(row.version, row.manifest.version) < 0 ? "update" : "open";
   }
   return out;
+}
+
+/** Step 2.12: the installed rows (version, update date, the app's own auto-update choice). */
+export function useInstalledRows(): Partial<Record<AppId, InstalledAppDto>> {
+  return useWorkspaceLayout().byId;
+}
+
+/** Step 2.12: the Store's choices (auto-update, update notifications), kept with the account. */
+export function useStorePrefs(): [StorePrefs, (patch: Partial<StorePrefs>) => void] {
+  const prefs = useSession((s) => s.user?.preferences.store) ?? DEFAULT_PREFERENCES.store;
+  const update = useUpdatePreferences();
+  return [{ ...DEFAULT_PREFERENCES.store, ...prefs }, (patch) => update.mutate({ store: patch })];
+}
+
+/** Step 2.12: one app's auto-update choice (null: the Store's global choice). */
+export async function setAppAutoUpdate(id: StoreAppId, autoUpdate: boolean | null) {
+  const dto = await api.put<InstalledAppDto>(`/api/store/apps/${id}/auto-update`, { autoUpdate });
+  queryClient.setQueryData<InstalledAppDto[]>(qk.apps, (list) => list?.map((a) => (a.id === id ? dto : a)));
 }
 
 /** Installs in flight (the buttons show their progress; a second press waits for it). */
@@ -102,9 +128,3 @@ export async function installApp(id: StoreAppId) {
   }
 }
 
-/** Remove: the system's own way (its windows close as on a normal close; it leaves the desktop and the launcher). */
-export async function removeApp(id: StoreAppId): Promise<boolean> {
-  if (!(await offloadApp(id))) return false;
-  removeAppsFromDesktop([id]);
-  return true;
-}

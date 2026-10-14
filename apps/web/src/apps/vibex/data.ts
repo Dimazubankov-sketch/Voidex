@@ -641,7 +641,7 @@ export async function publishStory(file: File) {
 const viewedStories = new Set<string>();
 /** "Seen" once per story on this device (the server counts once per person anyway). */
 export function markStoryViewed(story: VibexStoryDto) {
-  if (story.mine || story.seen || viewedStories.has(story.id)) return;
+  if (story.seen || viewedStories.has(story.id)) return;
   viewedStories.add(story.id);
   void api
     .post(`/api/vibex/stories/${story.id}/view`)

@@ -55,3 +55,5 @@ export const StoreReviewSchema = z.object({
 });
 export const StoreVoteSchema = z.object({ vote: z.union([z.literal(1), z.literal(-1), z.literal(0)]) });
 export const StoreReportSchema = z.object({ reason: z.enum(STORE_REPORT_REASONS), description: z.string().trim().min(1).max(1000) });
+/** Step 2.12: one app's auto-update choice (null: the Store's global choice applies). */
+export const StoreAutoUpdateSchema = z.object({ autoUpdate: z.boolean().nullable() });

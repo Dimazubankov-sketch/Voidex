@@ -310,3 +310,43 @@ export const APP_IDS = Object.keys(APP_REGISTRY) as AppId[];
 export function isAppId(value: unknown): value is AppId {
   return typeof value === "string" && value in APP_REGISTRY;
 }
+
+/**
+ * Step 2.12: every release of each app, newest first. The first one is always
+ * the manifest's version (checked by a test); the Store shows this list as the
+ * app's version history and compares it with the version an account has.
+ * A new release = a new entry on top + the manifest's version + its notes in
+ * the Store catalog (web: apps/store/catalog.ts). Dates are when the release
+ * reached VOIDEX (yyyy-mm-dd).
+ */
+export interface AppRelease {
+  version: string;
+  date: string;
+}
+
+export const APP_RELEASES: Record<AppId, AppRelease[]> = {
+  settings: [{ version: "1.0.0", date: "2026-09-28" }],
+  mail: [{ version: "1.0.0", date: "2026-09-28" }],
+  vibex: [{ version: "1.0.0", date: "2026-10-01" }],
+  calculator: [{ version: "1.0.0", date: "2026-10-02" }],
+  notes: [{ version: "1.0.0", date: "2026-10-04" }],
+  files: [{ version: "1.0.0", date: "2026-10-06" }],
+  media: [{ version: "1.0.0", date: "2026-10-06" }],
+  store: [{ version: "1.0.0", date: "2026-10-13" }],
+};
+
+/** Compares dotted versions ("1.2.0" > "1.10" is false): negative, 0 or positive. Missing parts count as 0. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((x) => Number.parseInt(x, 10) || 0);
+  const pb = b.split(".").map((x) => Number.parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+/** An update is available when the installed version is older than the registry's. */
+export function updateAvailable(installed: string | undefined | null, id: AppId): boolean {
+  return !!installed && compareVersions(installed, APP_REGISTRY[id].version) < 0;
+}

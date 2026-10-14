@@ -109,7 +109,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
     verification,
     accounts,
     challenges: new ChallengeService(ctx, sessions, verification, accounts),
-    apps: new AppsService(ctx),
+    apps: new AppsService(ctx, notifications),
     legal: new LegalService(),
     mail: new MailService(ctx, notifications),
     vibex: new VibexService(ctx, notifications),

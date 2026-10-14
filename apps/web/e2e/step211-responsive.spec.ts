@@ -5,6 +5,7 @@ import { signUpViaApi } from "./helpers";
  * Step 2.11 responsive QA: Vibex (chats, search) and Appex Store (catalog,
  * an app's page) at 320 / 390 / 430 / 820 (phone layout) and 1180 / 1440 /
  * 1920 (computer). Nothing scrolls sideways; the main controls are on screen.
+ * Step 2.12: the Store's account, update center and version history too.
  */
 
 const WIDTHS = [320, 390, 430, 820, 1180, 1440, 1920];
@@ -60,5 +61,26 @@ for (const width of WIDTHS) {
     await noOverflow(page);
     await inside(page, "store-stats");
     await inside(page, "store-get");
+    // Step 2.12: Back and Share, the screenshots, «Ещё для вашего пространства», versions, the account and the update center.
+    await inside(page, "store-back");
+    await inside(page, "store-share-open");
+    await inside(page, "store-more");
+    await page.getByTestId("store-versions-open").click();
+    await expect(page.getByTestId("store-versions")).toBeVisible();
+    await noOverflow(page);
+    await inside(page, "store-release");
+    await page.getByTestId("store-back").click();
+    await page.getByTestId("store-back").click();
+    await page.getByTestId("store-back").click();
+    await page.getByTestId("store-account-open").click();
+    await expect(page.getByTestId("store-account")).toBeVisible();
+    await noOverflow(page);
+    await inside(page, "store-pref-auto");
+    await inside(page, "store-account-reviews");
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/resp-${width}-store-account.png` });
+    await page.getByTestId("store-account-updates").click();
+    await expect(page.getByTestId("store-updates")).toBeVisible();
+    await noOverflow(page);
+    await inside(page, "store-updates-none");
   });
 }

@@ -208,7 +208,7 @@ export function Avatar({
   });
   return (
     <span
-      className={cx("inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-white", className)}
+      className={cx("inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-semibold text-white [-webkit-touch-callout:none]", className)}
       style={{ width: size, height: size, background: src ? undefined : tone(name), fontSize: size * 0.38 }}
       aria-hidden
     >

@@ -41,7 +41,7 @@ async function toApp(page: Page, id: string) {
   await expect(page.getByTestId("store-app-page")).toHaveAttribute("data-app", id);
 }
 
-test("catalog: every registry app (no Store, no Settings), the carousel, collections, search with history and results; no iframe", async ({ page }) => {
+test("catalog: every registry app (no Store, no Settings), the carousel, collections, search with results; no iframe", async ({ page }) => {
   await signUpViaApi(page, "Каталог", "Магазина");
   await openStore(page);
   await expect(page.locator('[data-testid="window-store"] iframe')).toHaveCount(0);
@@ -55,22 +55,17 @@ test("catalog: every registry app (no Store, no Settings), the carousel, collect
   // The carousel: a dot takes it to that story.
   await page.getByTestId("store-hero-dot").nth(2).click();
   await expect(page.getByTestId("store-hero")).toHaveAttribute("data-index", "2");
-  // Search: typing suggests apps; Enter shows results with real screenshots; X back to the catalog.
+  // Search (Step 2.12: results while typing, no history): real screenshots; X back to the catalog.
   const field = page.getByTestId("store-search");
   await field.fill("почт");
-  await expect(page.locator('[data-testid="store-suggestion"][data-app="mail"]')).toBeVisible();
-  await field.press("Enter");
   await expect(page.locator('[data-testid="store-search-result"][data-app="mail"]')).toBeVisible();
   await expect(page.locator('[data-testid="store-search-result"] [data-testid="store-shot"] img').first()).toHaveJSProperty("complete", true);
-  await page.getByTestId("store-search-close").click();
+  await page.getByTestId("store-search-clear").click();
   await expect(page.getByTestId("store-home")).toBeVisible();
-  await field.click();
-  await expect(page.getByTestId("store-history-item").first()).toHaveText("почт");
-  await page.getByTestId("store-history-clear").click();
-  await expect(page.getByTestId("store-history-item")).toHaveCount(0);
+  await expect(page.getByTestId("store-hero")).toBeVisible();
 });
 
-test("an app's page: real screenshots (full screen, arrows on PC), description, what's new, developer page, share to Vibex", async ({ page, browser }) => {
+test("an app's page: real screenshots (full screen, arrows on PC), description, what's new, developer page, share to Vibex (PC)", async ({ page, browser }) => {
   const me = await signUpViaApi(page, "Страница", "Приложения");
   const bp = await newPage(browser, isMobile(page));
   const b = await signUpViaApi(bp, "Друг", "Получатель");
@@ -81,8 +76,9 @@ test("an app's page: real screenshots (full screen, arrows on PC), description, 
   await toApp(page, "notes");
   await expect(page.getByTestId("store-description")).toContainText("проекты");
   await expect(page.getByTestId("store-news")).toContainText("Версия");
+  // Step 2.12: this platform's screenshots only, at least three.
   const shots = page.getByTestId("store-shot");
-  await expect(shots).toHaveCount(2);
+  await expect(shots).toHaveCount(3);
   const ok = await shots.locator("img").evaluateAll((imgs) => Promise.all(imgs.map((i) => (i as HTMLImageElement).decode().then(() => (i as HTMLImageElement).naturalWidth > 100))));
   expect(ok.every(Boolean)).toBe(true);
   await shot(page, "store-app");
@@ -95,15 +91,14 @@ test("an app's page: real screenshots (full screen, arrows on PC), description, 
   }
   await page.keyboard.press("Escape");
   await expect(viewer).toHaveCount(0);
-  // The PC screenshots tab.
-  await page.getByTestId("store-shots-pc").click();
-  await expect(page.locator('[data-testid="store-shots"][data-kind="pc"] [data-testid="store-shot"]')).toHaveCount(1);
   // Developer: all its apps.
   await page.getByTestId("store-developer-link").click();
   await expect(page.getByTestId("store-developer")).toBeVisible();
   await page.getByTestId("store-back").click();
-  // Share to Vibex: a real message.
+  // Share to Vibex (PC: the share menu; phones get the system share sheet, step212-store): a real message.
+  if (isMobile(page)) return void (await bp.context().close());
   await page.getByTestId("store-share-open").click();
+  await page.getByTestId("menu-store-send-vibex").click();
   await page.getByTestId("store-share-app-vibex").click();
   await page.getByTestId("store-share-contact").first().click();
   await page.getByTestId("store-share-send").click();
@@ -180,14 +175,42 @@ test("reviews: no made-up ones; write (stars required), the author from the acco
   await expect(page.locator('[data-testid="store-review"][data-mine="true"]')).toHaveCount(0);
 });
 
-test("remove from the desktop, get it back (honest progress), open; an older version offers «Обновить»", async ({ page }) => {
+/** Edit mode on the home screen: long press on free space (phone), the desktop menu (PC). */
+async function removeFromHome(page: Page, id: string) {
+  const home = page.getByTestId("home");
+  if (isMobile(page)) {
+    const box = (await page.getByTestId("home-page-0").boundingBox())!;
+    const p = { x: box.x + box.width / 2, y: box.y + box.height - 80 };
+    const cdp = await page.context().newCDPSession(page);
+    await expect(async () => {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [p] });
+      await page.waitForTimeout(700);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await expect(home).toHaveAttribute("data-editing", "true", { timeout: 1500 });
+    }).toPass({ timeout: 15_000 });
+  } else {
+    const box = (await page.getByTestId("desktop-space").boundingBox())!;
+    await page.mouse.click(box.x + box.width - 60, box.y + box.height - 60, { button: "right" });
+    await page.getByTestId("menu-edit").click();
+    await expect(home).toHaveAttribute("data-editing", "true");
+  }
+  await page.getByTestId(`app-${id}`).getByTestId("home-remove-badge").click({ force: true });
+  await page.getByTestId("remove-selection-delete").click();
+  await page.getByTestId("remove-confirm-ok").click();
+  await page.getByTestId("remove-confirm-ok").click();
+  await expect(page.getByTestId(`app-${id}`)).toHaveCount(0);
+  await page.getByTestId("home-done").click();
+  await expect(home).not.toHaveAttribute("data-editing", "true");
+}
+
+test("removed from the desktop (the system's way), get it back in the Store (honest progress), open; an older version offers «Обновить»", async ({ page }) => {
   await signUpViaApi(page, "Установка", "Приложений");
+  // Step 2.12: the Store has no remove button; an app leaves through the desktop's own editing.
+  await removeFromHome(page, "calculator");
   await openStore(page);
   await toApp(page, "calculator");
-  const get = page.locator('[data-testid="store-app-page"] [data-testid="store-get"]');
-  await expect(get).toHaveAttribute("data-state", "open");
-  await page.getByTestId("store-remove").click();
-  await page.getByTestId("store-remove-confirm").getByTestId("confirm-action").click();
+  // The app's own button (the page lists other apps with theirs too).
+  const get = page.locator('[data-testid="store-app-page"] [data-testid="store-get"][data-app="calculator"]').first();
   await expect(get).toHaveAttribute("data-state", "get");
   await expect(get).toHaveText("Загрузить");
   await expect.poll(async () => ((await api(page, "GET", "/api/preferences")).body.workspace?.layout?.hidden ?? [])).toContain("calculator");
@@ -209,7 +232,7 @@ test("remove from the desktop, get it back (honest progress), open; an older ver
   if (await page.getByTestId("lock-screen").count()) await page.keyboard.type("135790");
   await openStore(page);
   await toApp(page, "notes");
-  const upd = page.locator('[data-testid="store-app-page"] [data-testid="store-get"]');
+  const upd = page.locator('[data-testid="store-app-page"] [data-testid="store-get"][data-app="notes"]').first();
   await expect(upd).toHaveAttribute("data-state", "update");
   await page.unroute("**/api/apps");
   await upd.click();

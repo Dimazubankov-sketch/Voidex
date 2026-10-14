@@ -113,8 +113,12 @@ export interface InstalledAppDto {
   id: AppId;
   installedAt: string;
   manifest: AppManifest;
-  /** Step 2.11: the installed version (an update is available when it differs from the manifest's). */
+  /** Step 2.11: the installed version (an update is available when it is older than the manifest's). */
   version?: string;
+  /** Step 2.12: when the installed version last changed by an update (null: never updated). */
+  updatedAt?: string | null;
+  /** Step 2.12: this app's own auto-update choice (null: the Store's global choice applies). */
+  autoUpdate?: boolean | null;
 }
 
 export interface ServerInfoDto {

@@ -82,11 +82,16 @@ test("mosaic layouts 1 · 2 · 3 · 4 · 5 · 7 (+N): no empty cells, no frames,
       const tiles = [...el.querySelectorAll<HTMLElement>('[data-testid="mosaic-tile"]')].map((t) => t.getBoundingClientRect());
       const area = tiles.reduce((a, r) => a + r.width * r.height, 0);
       const borders = [...el.querySelectorAll<HTMLElement>('[data-testid="mosaic-tile"]')].map((t) => getComputedStyle(t).borderTopWidth);
-      return { cover: area / (box.width * box.height), borders, radius: getComputedStyle(el).borderTopLeftRadius };
+      // Step 2.12: with a caption the photos reach the bubble's edges; the bubble (which clips them) has the one outer radius.
+      const bubble = el.parentElement!;
+      const bs = getComputedStyle(bubble);
+      return { cover: area / (box.width * box.height), borders, radius: parseFloat(bs.borderTopLeftRadius), clip: bs.overflow, inset: box.left - bubble.getBoundingClientRect().left };
     });
     expect(geo.cover, `${n}`).toBeGreaterThan(0.93);
     expect(geo.borders.every((b) => b === "0px")).toBe(true);
-    expect(geo.radius).toBe("18px");
+    expect(geo.radius).toBeGreaterThanOrEqual(18);
+    expect(geo.clip).toBe("hidden");
+    expect(geo.inset).toBeLessThan(1);
   }
   // 7: the sixth cell says "+2".
   await expect(page.getByTestId("message").filter({ hasText: "7 фото" }).getByTestId("mosaic-more")).toHaveText("+2");
