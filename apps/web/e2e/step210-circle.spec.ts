@@ -143,6 +143,8 @@ test("cancel from the composer sends nothing and releases the camera; zoom never
   if (isMobile(page)) {
     // Step 2.11: phones pinch with two fingers on the circle (no slider); the camera reports 0.5x–3x, never below 1x.
     await expect(zoom).toHaveCount(0);
+    // Pinch works once the camera has reported its zoom range.
+    await expect(page.getByTestId("circle-capture-face")).toHaveAttribute("data-pinch", "true");
     const face = (await page.getByTestId("circle-capture-face").boundingBox())!;
     const cx = face.x + face.width / 2;
     const cy = face.y + face.height / 2;

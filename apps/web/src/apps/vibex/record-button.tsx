@@ -432,8 +432,9 @@ function CircleCapture({
   const face = useRef<HTMLDivElement>(null);
   const zoomNow = useRef(zoom);
   zoomNow.current = zoom;
+  const pinchable = locked && !!zoomRange && !desktop;
   usePinch(face, {
-    enabled: locked && !!zoomRange && !desktop,
+    enabled: pinchable,
     begin: () => zoomNow.current,
     change: (z) => zoomRange && onZoom(Math.max(zoomRange.min, Math.min(zoomRange.max, z))),
   });
@@ -454,7 +455,7 @@ function CircleCapture({
       data-paused={paused || undefined}
       data-facing={facing}
     >
-      <div ref={face} className={cx("relative", locked && "pointer-events-auto touch-none")} style={{ width: size + 16, height: size + 16 }} data-testid="circle-capture-face">
+      <div ref={face} className={cx("relative", locked && "pointer-events-auto touch-none")} style={{ width: size + 16, height: size + 16 }} data-testid="circle-capture-face" data-pinch={pinchable || undefined}>
         <svg className="absolute inset-0 -rotate-90" width={size + 16} height={size + 16} aria-hidden>
           <circle cx={(size + 16) / 2} cy={(size + 16) / 2} r={r} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="4" />
           <circle cx={(size + 16) / 2} cy={(size + 16) / 2} r={r} fill="none" stroke="#8b7bff" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(1, elapsed / max))} />
