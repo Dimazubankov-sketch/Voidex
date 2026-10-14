@@ -245,7 +245,12 @@ test("no pop-up for the app in front; another app's pop-up still shows", async (
   const bp = await newPage(browser, isMobile(page));
   await signUpViaApi(bp, "Пишущий", "Друг");
   const chat = (await api(bp, "POST", "/api/vibex/chats/direct", { userId: me.id })).body as { id: string };
+  // A banner that came before Vibex was opened goes away once Vibex is in front.
+  await page.waitForTimeout(1200);
+  await api(bp, "POST", `/api/vibex/chats/${chat.id}/messages`, { text: "До открытия" });
+  await expect(page.locator('[data-testid="system-popup"][data-app="vibex"]')).toBeVisible();
   await launchVibex(page);
+  await expect(page.locator('[data-testid="system-popup"][data-app="vibex"]')).toHaveCount(0);
   await toChats(page);
   await page.waitForTimeout(1200);
   await api(bp, "POST", `/api/vibex/chats/${chat.id}/messages`, { text: "Пока Vibex открыт" });

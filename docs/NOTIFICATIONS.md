@@ -83,7 +83,8 @@ notifications turned off in Settings → Apps: no pop-up.
 - No pop-up (and no chime) for the app in front: `activeApp()` asks the window manager
   for the foreground window (the focused window of the current space on a PC, the open
   app on a phone; none while the switcher is open or the page is hidden). Other apps'
-  notifications still pop up; the Notification Center lists everything.
+  notifications still pop up; the Notification Center lists everything. Banners that
+  arrived before their app was opened (shown or queued) go away once it is in front.
 - Appex Store: `store.update` notifications (an update installed by itself, or one
   waiting), with Store → account → «Уведомления об обновлениях»; a tap opens the
   update center.

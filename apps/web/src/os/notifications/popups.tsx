@@ -39,6 +39,8 @@ interface PopupState {
   queue: NotificationDto[];
   push: (n: NotificationDto, max: number) => void;
   dismiss: (id: string, max: number) => void;
+  /** Step 2.12: an app came to the front: its banners (shown or waiting) go away. */
+  dropApp: (app: string, max: number) => void;
 }
 
 export const usePopups = create<PopupState>((set, get) => ({
@@ -57,6 +59,14 @@ export const usePopups = create<PopupState>((set, get) => ({
     const s = shown.filter((x) => x.id !== id);
     const room = Math.max(0, max - s.length);
     set({ shown: [...s, ...queue.slice(0, room)], queue: queue.slice(room) });
+  },
+  dropApp: (app, max) => {
+    const { shown, queue } = get();
+    if (!shown.some((x) => x.app === app) && !queue.some((x) => x.app === app)) return;
+    const s = shown.filter((x) => x.app !== app);
+    const q = queue.filter((x) => x.app !== app);
+    const room = Math.max(0, max - s.length);
+    set({ shown: [...s, ...q.slice(0, room)], queue: q.slice(room) });
   },
 }));
 
@@ -107,6 +117,20 @@ export function SystemPopups() {
   const shown = usePopups((s) => s.shown);
   const max = ff === "desktop" ? 3 : 1;
   const phone = ff !== "desktop";
+  // Step 2.12: banners that arrived before their app was opened leave once it is in front.
+  useEffect(() => {
+    const check = () => {
+      const app = activeApp();
+      if (app) usePopups.getState().dropApp(app, max);
+    };
+    check();
+    const offWm = useWM.subscribe(check);
+    const offPopups = usePopups.subscribe(check);
+    return () => {
+      offWm();
+      offPopups();
+    };
+  }, [max]);
   return createPortal(
     <div
       className={
