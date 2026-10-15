@@ -1536,4 +1536,3 @@ export const tr: Record<MessageKey, string> = {
   "notes.book.toFiles": "Dosyalar’a kaydet (.book)",
   "notes.book.savedToFiles": "Dosyalar’a kaydedildi",
 };
-

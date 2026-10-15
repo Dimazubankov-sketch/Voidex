@@ -407,12 +407,12 @@ test("vibex: comment threads — root, reply, reply to a reply (one level, @name
     await page.getByTestId("vibex-drawer").getByTestId("vibex-me").click();
   } else await page.getByTestId("vibex-me").click();
   await page.getByTestId("profile-tab-media").click();
-  await expect(page.getByTestId("profile-media-grid").getByTestId("vibex-image")).toHaveCount(1);
-  // Step 2.9: «Публикации» opens the post itself, media first (its text folded under «Показать текст»).
-  await page.getByTestId("profile-media-grid").getByTestId("vibex-image").click();
-  await expect(page.getByTestId("publication")).toBeVisible();
+  await expect(page.getByTestId("profile-media-grid").getByTestId("publication-tile")).toHaveCount(1);
+  // Step 2.13: «Публикации» opens the publications as a feed, media first.
+  await page.getByTestId("profile-media-grid").getByTestId("publication-tile").click();
+  await expect(page.getByTestId("publication-viewer")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("publication")).toHaveCount(0);
+  await expect(page.getByTestId("publication-viewer")).toHaveCount(0);
   expect(a.id).toBeTruthy();
   await bPage.context().close();
 });

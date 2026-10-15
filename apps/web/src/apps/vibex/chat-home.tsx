@@ -83,7 +83,8 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
   /** The list is too short to scroll: a scroll up can't fold the parts, so a move up does. */
   const cantScroll = () => {
     const el = scroller.current;
-    return !el || el.scrollHeight - el.clientHeight < 8;
+    // Step 2.13: the room left under the floating tab bar (padding) is not something to scroll to.
+    return !el || el.scrollHeight - el.clientHeight - (parseFloat(getComputedStyle(el).paddingBottom) || 0) < 8;
   };
 
   // Pull-down at the top of the list (touch and mouse); a wheel up at the top does the same on PC.

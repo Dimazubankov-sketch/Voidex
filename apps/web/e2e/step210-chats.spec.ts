@@ -45,9 +45,10 @@ test("«Чаты» header: folded at first; a pull opens the search, more opens 
   for (let k = 0; k < 2; k++) {
     await page.waitForTimeout(450);
     if (isMobile(page)) {
-      await page.mouse.move(list.x + list.width / 2, list.y + list.height - 60);
+      // Step 2.13: above the floating tab bar, which lies over the list's last 70 px.
+      await page.mouse.move(list.x + list.width / 2, list.y + list.height - 130);
       await page.mouse.down();
-      for (let i = 1; i <= 6; i++) await page.mouse.move(list.x + list.width / 2, list.y + list.height - 60 - i * 10);
+      for (let i = 1; i <= 6; i++) await page.mouse.move(list.x + list.width / 2, list.y + list.height - 130 - i * 10);
       await page.mouse.up();
     } else {
       await page.mouse.move(list.x + list.width / 2, list.y + 200);

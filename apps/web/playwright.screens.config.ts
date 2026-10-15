@@ -10,7 +10,8 @@ import { defineConfig } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./tools/store-screens",
-  timeout: 240_000,
+  // One long run per platform through every app (it grew with Step 2.13's scenes).
+  timeout: 480_000,
   workers: 1,
   reporter: [["list"]],
   use: {

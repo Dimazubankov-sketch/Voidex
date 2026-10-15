@@ -1536,4 +1536,3 @@ export const de: Record<MessageKey, string> = {
   "notes.book.toFiles": "In Dateien sichern (.book)",
   "notes.book.savedToFiles": "In Dateien gesichert",
 };
-

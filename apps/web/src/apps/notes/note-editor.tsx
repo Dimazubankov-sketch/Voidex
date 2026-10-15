@@ -1369,4 +1369,3 @@ function ImageTools({
     </div>
   );
 }
-

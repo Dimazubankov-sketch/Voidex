@@ -1536,4 +1536,3 @@ export const ja: Record<MessageKey, string> = {
   "notes.book.toFiles": "ファイルに保存 (.book)",
   "notes.book.savedToFiles": "ファイルに保存しました",
 };
-

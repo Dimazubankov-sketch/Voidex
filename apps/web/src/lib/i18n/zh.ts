@@ -1536,4 +1536,3 @@ export const zh: Record<MessageKey, string> = {
   "notes.book.toFiles": "保存到文件 (.book)",
   "notes.book.savedToFiles": "已保存到文件",
 };
-

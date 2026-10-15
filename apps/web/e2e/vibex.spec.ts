@@ -66,7 +66,11 @@ async function nav(page: Page, section: "feed" | "chats" | "people" | "history" 
         await expect(b).toHaveCount(0); // wait for the page to slide away
       }
     }
-    await page.getByTestId("vibex-menu").click();
+    // Step 2.13: the feed's top bar slides away while scrolling down; scrolling up brings it (and the menu) back.
+    const menu = page.getByTestId("vibex-menu");
+    for (let i = 0; i < 10 && !(await menu.isVisible() && (await menu.boundingBox())!.y >= 0); i++) await page.getByTestId("vibex-scroll").evaluate((el) => el.scrollBy({ top: -400 }));
+    await expect.poll(async () => (await menu.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+    await menu.click();
   }
   // Step 2.9: «Закладки» is the second tab of «История».
   await page.getByTestId(section === "me" ? "vibex-me" : section === "bookmarks" ? "vibex-nav-history" : `vibex-nav-${section}`).click();

@@ -898,4 +898,3 @@ img[data-system-asset] { pointer-events: none; }
 .vx-note-card-unread {
   background: color-mix(in srgb, var(--chat-card) 95%, var(--primary));
 }
-

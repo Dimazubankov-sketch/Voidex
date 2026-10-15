@@ -1551,4 +1551,3 @@ export const ru: Record<MessageKey, string> = {
   "notes.book.toFiles": "Сохранить в Файлы (.book)",
   "notes.book.savedToFiles": "Сохранено в Файлы",
 };
-

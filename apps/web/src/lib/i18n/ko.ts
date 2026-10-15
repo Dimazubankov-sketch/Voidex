@@ -1536,4 +1536,3 @@ export const ko: Record<MessageKey, string> = {
   "notes.book.toFiles": "파일에 저장 (.book)",
   "notes.book.savedToFiles": "파일에 저장됨",
 };
-

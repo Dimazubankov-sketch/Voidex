@@ -328,4 +328,3 @@ function stepOut(blocks: NoteBlock[], index: number, delta: -1 | 1): NoteBlock[]
   if (rest.length === 1) delete rest[0]!.row;
   return list;
 }
-

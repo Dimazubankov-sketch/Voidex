@@ -27,7 +27,7 @@ async function fingerDrag(page: Page, x: number, y: number, dx: number, dy: numb
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 }
 
-test("one header on every tab: same height and title size, no border; search only on Главная / Профиль and it opens Поиск", async ({ page }) => {
+test("one header on every tab: same height and title size, no border; search only on Профиль (Step 2.13: not on Главная) and it opens Поиск", async ({ page }) => {
   test.skip(!isMobile(page), "phone tabs");
   await signUpViaApi(page, "Шапка", "Единая");
   await openApp(page, "vibex");
@@ -47,7 +47,7 @@ test("one header on every tab: same height and title size, no border; search onl
     expect(s.h, s.tab).toBe(60);
     expect(s.font, s.tab).toBe("19px");
     expect(s.border, s.tab).toBe("0px");
-    expect(s.search, s.tab).toBe(s.tab === "feed" || s.tab === "me" ? 1 : 0);
+    expect(s.search, s.tab).toBe(s.tab === "me" ? 1 : 0);
   }
   await page.getByTestId("vibex-tab-me").click();
   await page.getByTestId("vibex-search").click();

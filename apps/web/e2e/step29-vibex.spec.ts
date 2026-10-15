@@ -488,14 +488,15 @@ test("voice seek owns its drag: dragging on the waveform seeks and never swipes 
 
 // ---------------------------------------------------------- feed / profile
 
-test("feed: the search button opens the Search tab (Step 2.11: no field in the header); History has Liked / Bookmarks; + opens a new post", async ({ page }) => {
+test("feed: no search in the Main header (Step 2.13: the Search tab); History has Liked / Bookmarks; + opens a new post", async ({ page }) => {
   await signUpViaApi(page, "Лента", "Поисковая");
   const post = (await api(page, "POST", "/api/vibex/posts", { text: "Сохранённый пост" })).body;
   await api(page, "POST", `/api/vibex/posts/${post.id}/bookmark`);
   await launchVibex(page);
   await expect(page.getByTestId("vibex-feed")).toBeVisible();
   await expect(page.getByTestId("vibex-feed-search")).toHaveCount(0);
-  await page.getByTestId("vibex-search").first().click();
+  await expect(page.getByTestId("vibex-search").filter({ visible: true })).toHaveCount(0);
+  await page.getByTestId(isMobile(page) ? "vibex-tab-people" : "vibex-nav-people").last().click();
   await expect(page.getByTestId("search-screen")).toBeVisible();
   await page.getByTestId(isMobile(page) ? "vibex-tab-feed" : "vibex-nav-feed").last().click();
   await expect(page.getByTestId("vibex-feed")).toBeVisible();
