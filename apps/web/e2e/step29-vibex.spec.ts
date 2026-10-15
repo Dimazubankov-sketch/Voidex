@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { newPage, openApp, profileActionRow, recordCircle, recordVoice, signUpViaApi } from "./helpers";
+import { newPage, openApp, profileActionRow, recordCircle, recordVoice, signUpViaApi, openVibexMenu } from "./helpers";
 
 /**
  * Step 2.9 — Vibex reconstruction: «Чаты» (sections, filter, search, stories,
@@ -511,7 +511,7 @@ test("feed: no search in the Main header (Step 2.13: the Search tab); History ha
   await page.keyboard.press("Escape");
 
   // History: one item in the menu with two tabs; no separate «Закладки».
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  if (isMobile(page)) await openVibexMenu(page);
   await expect(page.getByTestId("vibex-nav-bookmarks")).toHaveCount(0);
   await page.getByTestId("vibex-nav-history").last().click();
   await expect(page.getByTestId("history-tab-liked")).toBeVisible();
@@ -588,7 +588,7 @@ test("profile: tabs Публикации · Посты · Репосты; one me
   await api(page, "POST", "/api/vibex/posts", { text: "Подпись к фото", mediaIds: [pic] });
   await api(page, "POST", "/api/vibex/posts", { text: "Только текст" });
   await launchVibex(page);
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  if (isMobile(page)) await openVibexMenu(page);
   await page.getByTestId("vibex-me").last().click();
   const tabs = await page.getByTestId("profile-tabs").getByRole("tab").allInnerTexts();
   expect(tabs.map((x) => x.trim())).toEqual(["Публикации", "Посты", "Репосты"]);
@@ -615,7 +615,7 @@ test("profile: tabs Публикации · Посты · Репосты; one me
 test("profile (hotfix): «Редактировать» never enters the fixed «…» zone, with a safe gap, at 320 / 390 / 430 and on PC", async ({ page }) => {
   await signUpViaApi(page, "Константин", "Длиннофамильный");
   await launchVibex(page);
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  if (isMobile(page)) await openVibexMenu(page);
   await page.getByTestId("vibex-nav-me").last().click();
   await expect(page.getByTestId("profile-header")).toBeVisible();
   const widths = isMobile(page) ? [320, 390, 430] : [page.viewportSize()!.width];

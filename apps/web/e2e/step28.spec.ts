@@ -1,6 +1,6 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import type { AppId } from "@voidex/shared";
-import { newPage, openApp, phoneHome, profileActionRow, reloadUnlocked, settingsRoot, signUpViaApi } from "./helpers";
+import { newPage, openApp, phoneHome, profileActionRow, reloadUnlocked, settingsRoot, signUpViaApi, openVibexMenu } from "./helpers";
 
 /**
  * Step 2.8: ViCloud in Settings (no fake cloud, no payment), Settings → Apps
@@ -240,7 +240,7 @@ test("Vibex: a deleted message leaves nothing; the larger side menu", async ({ p
   await other.context().close();
 
   await launch(page, "vibex");
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  if (isMobile(page)) await openVibexMenu(page);
   const row = page.getByTestId("vibex-nav-feed").last();
   expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(47);
   // Settings sits at the bottom of the menu.
@@ -254,7 +254,7 @@ test("Vibex profile per the reference; post cards unchanged", async ({ page }) =
   await api(page, "PATCH", "/api/vibex/profile", { city: "Moscow" });
   expect((await api(page, "POST", "/api/vibex/posts", { text: "hello" })).status).toBe(201);
   await launch(page, "vibex");
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  if (isMobile(page)) await openVibexMenu(page);
   await page.getByTestId("vibex-nav-me").last().click();
   const header = page.getByTestId("profile-header");
   await expect(header).toBeVisible();

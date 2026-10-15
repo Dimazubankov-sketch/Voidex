@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, signUpViaApi } from "./helpers";
+import { openApp, signUpViaApi, openVibexMenu } from "./helpers";
 
 /**
  * Step 2.10 — Mail: the folders drawer follows a swipe from the left edge
@@ -98,7 +98,7 @@ for (const width of [320, 390, 430]) {
     await expect(page.getByTestId("search-screen")).toBeVisible();
     await page.getByTestId("vibex-tab-feed").click();
 
-    await page.getByTestId("vibex-menu").click();
+    await openVibexMenu(page);
     await page.getByTestId("vibex-nav-history").last().click();
     await expect(page.getByTestId("history-screen")).toBeVisible();
     await expect(title).toHaveText("История");

@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { PASSWORD, newPage, openApp, signUpViaApi, uniq, uniquePhoneDigits, reloadUnlocked } from "./helpers";
+import { PASSWORD, newPage, openApp, signUpViaApi, uniq, uniquePhoneDigits, reloadUnlocked, openVibexMenu } from "./helpers";
 
 const PNG = Buffer.from("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da6364f8cf00000301010036a2c3a90000000049454e44ae426082", "hex");
 
@@ -66,11 +66,7 @@ async function nav(page: Page, section: "feed" | "chats" | "people" | "history" 
         await expect(b).toHaveCount(0); // wait for the page to slide away
       }
     }
-    // Step 2.13: the feed's top bar slides away while scrolling down; scrolling up brings it (and the menu) back.
-    const menu = page.getByTestId("vibex-menu");
-    for (let i = 0; i < 10 && !(await menu.isVisible() && (await menu.boundingBox())!.y >= 0); i++) await page.getByTestId("vibex-scroll").evaluate((el) => el.scrollBy({ top: -400 }));
-    await expect.poll(async () => (await menu.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
-    await menu.click();
+    await openVibexMenu(page);
   }
   // Step 2.9: «Закладки» is the second tab of «История».
   await page.getByTestId(section === "me" ? "vibex-me" : section === "bookmarks" ? "vibex-nav-history" : `vibex-nav-${section}`).click();
@@ -265,7 +261,7 @@ test("vibex: the VOIDEX session is the identity (no Vibex sign-in); comments bot
   await expect(page.getByTestId("vibex-auth")).toHaveCount(0);
 
   // Sidebar: dense sections, Vibex's own settings; no account switch / sign-out, no Plus / analytics.
-  if (isMobile(page)) await page.getByTestId("vibex-menu").click();
+  if (isMobile(page)) await openVibexMenu(page);
   const sidebar = page.getByTestId("vibex-sidebar");
   for (const id of ["vibex-nav-feed", "vibex-nav-me", "vibex-nav-chats", "vibex-nav-people", "vibex-nav-history", "vibex-nav-settings", "vibex-me"]) await expect(sidebar.getByTestId(id)).toBeVisible();
   // Step 2.9: «Закладки» lives inside «История», not as its own item.

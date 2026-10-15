@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { newPage, openApp, recordVoice, signUpViaApi, reloadUnlocked } from "./helpers";
+import { newPage, openApp, recordVoice, signUpViaApi, reloadUnlocked, openVibexMenu } from "./helpers";
 
 /**
  * Step 2.3: one VOIDEX identity for every app, the Notification Center (phone
@@ -403,7 +403,7 @@ test("vibex: comment threads — root, reply, reply to a reply (one level, @name
 
   // Profile → Photo / Video: the post's picture is there automatically.
   if (mobile) {
-    await page.getByTestId("vibex-menu").click();
+    await openVibexMenu(page);
     await page.getByTestId("vibex-drawer").getByTestId("vibex-me").click();
   } else await page.getByTestId("vibex-me").click();
   await page.getByTestId("profile-tab-media").click();

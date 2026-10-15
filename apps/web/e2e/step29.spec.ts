@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, phoneHome, reloadUnlocked, signUpViaApi } from "./helpers";
+import { openApp, phoneHome, reloadUnlocked, signUpViaApi, openVibexMenu } from "./helpers";
 
 /**
  * Step 2.9 — shell: desktop logo size, the phone gesture bar that moves the
@@ -133,7 +133,7 @@ test("side drawer: the screen slides right over the menu, not dimmed or blurred;
   test.skip(!isMobile(page), "phone drawer");
   await signUpViaApi(page, "Меню", "Сбоку");
   await openApp(page, "vibex");
-  await page.getByTestId("vibex-menu").click();
+  await openVibexMenu(page);
   const root = page.getByTestId("vibex-drawer");
   await expect(root).toHaveAttribute("data-open", "true");
   await page.waitForTimeout(700);

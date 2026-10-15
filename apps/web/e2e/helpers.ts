@@ -288,3 +288,22 @@ export async function pullChats(page: Page) {
     await page.mouse.wheel(0, -120);
   }
 }
+
+/**
+ * Step 2.13: opens the Vibex side menu on a phone. On «Главная» the top bar
+ * (with the menu button) slides away while scrolling down; scrolling up
+ * brings it back, as a person would before tapping it.
+ */
+export async function openVibexMenu(page: Page) {
+  const menu = page.getByTestId("vibex-menu");
+  const shown = async () => (await menu.isVisible()) && ((await menu.boundingBox())?.y ?? -1) >= 0;
+  for (let i = 0; i < 10 && !(await shown()); i++) {
+    await page
+      .getByTestId("vibex-scroll")
+      .evaluate((el) => el.scrollBy({ top: -400 }))
+      .catch(() => undefined);
+    await page.waitForTimeout(150);
+  }
+  await expect.poll(shown).toBe(true);
+  await menu.click();
+}
