@@ -16,7 +16,7 @@ import { WindowHeader, useWindow } from "@/os/window-context";
 import { setBeforeClose } from "@/os/window-manager";
 import { FileTypeIcon } from "./file-icon";
 
-const MIME = { txt: "text/plain", prsn: "application/vnd.voidex.prsn+json" } as const;
+const MIME = { txt: "text/plain", prsn: "application/vnd.voidex.prsn+json", book: "application/vnd.voidex.book+json" } as const;
 
 /**
  * VOIDEX Files (Step 2.7): the portable Voidex Files module (packages/files)

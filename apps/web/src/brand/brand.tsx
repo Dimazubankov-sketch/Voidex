@@ -73,7 +73,7 @@ export function TrimmedLogo({ src, className, optical = 1 }: { src: string; clas
   const padY = (raw.h * (1 / optical - 1)) / 2;
   const vb = { x: raw.x - padX, y: raw.y - padY, w: raw.w + padX * 2, h: raw.h + padY * 2 };
   return (
-    <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className={className} aria-hidden data-system-ui preserveAspectRatio="xMidYMid meet">
+    <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className={className} aria-hidden data-system-ui data-logo={src} data-optical={optical} preserveAspectRatio="xMidYMid meet">
       {box && <image href={src} x={0} y={0} width={box.nw} height={box.nh} />}
     </svg>
   );
@@ -94,56 +94,66 @@ export function VoidexWordmark({ className }: { className?: string }) {
  * through TrimmedLogo so every mark fills the same box in its tile.
  */
 
+
+/**
+ * Step 2.13: optical size of every built-in app mark, in one place. Each logo
+ * is first fitted to the shared glyph box (its transparent margins trimmed);
+ * this factor then evens out its visual mass, measured on the artwork as
+ * 0.65 x sqrt(opaque coverage of the box) + 0.35 x sqrt(box coverage of its
+ * outline) and set to the median of the set: solid sheets (Notes, Media,
+ * Files) are drawn a little smaller, open or airy marks (Appex Store,
+ * Calculator, Settings) a little larger. The person's «Logo size» setting
+ * scales the box on top of this, so both work together.
+ */
+export const ICON_OPTICAL_SCALE = {
+  mail: 1,
+  vibex: 1,
+  settings: 1.07,
+  calculator: 1.12,
+  notes: 0.9,
+  files: 0.94,
+  media: 0.91,
+  store: 1.1,
+  desktops: 1.05,
+} as const;
+
 /** Settings — hexagonal shutter. */
 export function SettingsGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-settings.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-settings.png" className={className} optical={ICON_OPTICAL_SCALE.settings} />;
 }
 
-/** Mail — the envelope. */
+/** VoidOps Mail (Step 2.13): the violet envelope, cut out of the delivered artwork without redrawing. */
 export function MailGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-mail.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-mail.png" className={className} optical={ICON_OPTICAL_SCALE.mail} />;
 }
 
 /** Vibex — the speech-bubble mark. */
 export function VibexGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-vibex.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-vibex.png" className={className} optical={ICON_OPTICAL_SCALE.vibex} />;
 }
 
 /** Calculator: the user's logo (Step 2.3), extracted from the delivered artwork without redrawing. */
 export function CalculatorGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-calculator.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-calculator.png" className={className} optical={ICON_OPTICAL_SCALE.calculator} />;
 }
 
-/**
- * Optical size of the solid marks (Step 2.7). Fitted to the shared glyph box,
- * open marks cover: Mail 0.68, Vibex 0.61, Desktops 0.62, Settings 0.52,
- * Calculator 0.40. The solid sheets cover more (Notes 0.88, Media 0.86,
- * Files 0.79), so each is drawn smaller to cover about 0.6 of the box and
- * read the same size as the rest: in every tile, the dock, search, the
- * launcher, folder previews and app headers (all through these components).
- * Step 2.6 took Notes to 0.76 (0.51 of the box), which read too small.
- */
-export const NOTES_OPTICAL = 0.86;
-export const FILES_OPTICAL = 0.87;
-export const MEDIA_OPTICAL = 0.84;
 export function NotesGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-notes.png" className={className} optical={NOTES_OPTICAL} />;
+  return <TrimmedLogo src="/brand/app-notes.png" className={className} optical={ICON_OPTICAL_SCALE.notes} />;
 }
 
 /** Files: the user's folder logo (Step 2.7), cut out of the delivered artwork without redrawing. */
 export function FilesGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-files.png" className={className} optical={FILES_OPTICAL} />;
+  return <TrimmedLogo src="/brand/app-files.png" className={className} optical={ICON_OPTICAL_SCALE.files} />;
 }
 
 /** Media: the user's picture logo (Step 2.7), cut out of the delivered artwork without redrawing. */
 export function MediaGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-media.png" className={className} optical={MEDIA_OPTICAL} />;
+  return <TrimmedLogo src="/brand/app-media.png" className={className} optical={ICON_OPTICAL_SCALE.media} />;
 }
 
 /** Appex Store (Step 2.11): the mark delivered with the Store, cut out of its tile without redrawing. */
-export const STORE_OPTICAL = 0.8;
 export function StoreGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-store.png" className={className} optical={STORE_OPTICAL} />;
+  return <TrimmedLogo src="/brand/app-store.png" className={className} optical={ICON_OPTICAL_SCALE.store} />;
 }
 
 /** Share of the tile the logo's content box fills — the same for every app. */

@@ -80,3 +80,8 @@ avatar, name, public @voidops address, installed apps, pending updates; rows
 version, «Обновить все», «Недавно обновлённые», «Все приложения обновлены»),
 «Автообновление», «Уведомления об обновлениях», «Оценки и отзывы» (my reviews from
 `GET /api/store/me/reviews`, a tap opens the app; an honest empty state).
+
+## Step 2.13
+Notes' Store texts name books (`.book`) beside notes and presentations; Files'
+caption and keywords name `.book`. The Mail logo in the screenshots is the new
+envelope.

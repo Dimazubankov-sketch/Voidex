@@ -26,6 +26,7 @@ import {
   ArrowDownUp,
   RefreshCw,
   FolderOpen,
+  BookOpen,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import {
@@ -53,7 +54,7 @@ import { Skeleton } from '../../components/ui/skeleton';
 import { Progress } from '../../components/ui/progress';
 import { Toaster, toast } from 'sonner';
 import type { Entry, FileData, Listing, OpenFile } from './model';
-import { byteSize, QUOTA, nameStem, withExtension, fileExtension } from './model';
+import { byteSize, QUOTA, nameStem, withExtension, fileExtension, isBook } from './model';
 import { httpAdapter } from './adapter';
 import type { FilesAdapter, FilesHost } from './adapter';
 import { Editor, canvasBackground } from './Editor';
@@ -65,6 +66,7 @@ const categories = [
   ['all', 'Все', LayoutGrid],
   ['txt', '.txt', FileText],
   ['prsn', '.prsn', Presentation],
+  ['book', '.book', BookOpen],
   ['downloaded', 'Скачанные', Download],
   ['folders', 'Папки', Folder],
 ] as const;
@@ -108,11 +110,12 @@ function ContentPreview({ entry, adapter, onOpen }: { entry: Entry; adapter: Fil
       ob.disconnect();
     };
   }, [entry.id, entry.revision, adapter]);
-  const p = data && typeof data !== 'string' ? data.slides[0] : null;
+  const p = data && typeof data !== 'string' && !isBook(data) ? data.slides[0] : null;
+  const bookPage = data && isBook(data) ? data.pages[0] : null;
   return (
     <button
       ref={ref}
-      className={'vf-preview ' + (entry.kind === 'prsn' ? 'presentation' : '')}
+      className={'vf-preview ' + (entry.kind === 'prsn' ? 'presentation' : entry.kind === 'book' ? 'book' : '')}
       onClick={onOpen}
       aria-label={'Открыть ' + entry.name}
     >
@@ -131,6 +134,12 @@ function ContentPreview({ entry, adapter, onOpen }: { entry: Entry; adapter: Fil
               <Skeleton className="h-2 w-full" />
             </>
           )
+        ) : bookPage ? (
+          bookPage.blocks.slice(0, 5).map((b) => (
+            <div key={b.id} className={b.kind === 'heading' || b.kind === 'heading2' ? 'heading' : 'text'}>
+              {b.text}
+            </div>
+          ))
         ) : typeof data === 'string' ? (
           <div className="vf-txt-preview">{data || 'Пустой документ'}</div>
         ) : (
@@ -144,6 +153,11 @@ function ContentPreview({ entry, adapter, onOpen }: { entry: Entry; adapter: Fil
             ))
         )}
       </div>
+      {entry.kind === 'book' && (
+        <span className="vf-format">
+          <BookOpen size={12} /> BOOK
+        </span>
+      )}
       {entry.kind === 'prsn' && (
         <span className="vf-format">
           <Presentation size={12} /> PRSN
@@ -735,7 +749,7 @@ export function FilesApp({
                         : section === 'trash'
                           ? 'Удалённые документы можно восстановить здесь.'
                           : cloudOff
-                            ? 'Файлы .txt и .prsn из Vibex и Почты VoidOps открываются здесь.'
+                            ? 'Файлы .txt, .prsn и .book из Vibex и Почты VoidOps открываются здесь.'
                             : 'Скачанные документы и презентации сохраняются здесь, в облаке Voidex.'}
                     </p>
                   </div>

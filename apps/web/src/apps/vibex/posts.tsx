@@ -221,7 +221,7 @@ export function PostActions({ post }: { post: VibexPostDto }) {
  * else's: not interested, report. Plus bookmarks (VOIDEX history) and, on my
  * repost, taking it off my page.
  */
-function PostMenu({ post, wrapper }: { post: VibexPostDto; wrapper?: VibexPostDto }) {
+export function PostMenu({ post, wrapper }: { post: VibexPostDto; wrapper?: VibexPostDto }) {
   const t = useT();
   const pop = usePopover();
   const del = useDeletePost();

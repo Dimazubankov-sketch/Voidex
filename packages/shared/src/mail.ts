@@ -44,6 +44,8 @@ export const MAIL_ATTACHMENT_TYPES: Record<string, string> = {
   txt: "text/plain",
   /** Step 2.7: VOIDEX presentation (Files): JSON, checked by content on the server. */
   prsn: "application/vnd.voidex.prsn+json",
+  /** Step 2.13: VOIDEX book (Notes / Files): JSON, checked by content on the server. */
+  book: "application/vnd.voidex.book+json",
   csv: "text/csv",
   md: "text/markdown",
   rtf: "application/rtf",

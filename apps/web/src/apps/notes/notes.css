@@ -358,3 +358,171 @@
     height: 38px;
   }
 }
+
+/* ---------------------------------------------------------------- Step 2.13: block styles, picture rows, wrap */
+
+.vn2-b-heading2 {
+  font-size: 22px;
+}
+.vn2-b-heading2 .vn2-text {
+  font-weight: 700;
+  line-height: 1.35;
+  padding-top: 10px;
+}
+.vn2-style-sample-heading {
+  font-size: 18px;
+  font-weight: 700;
+}
+.vn2-style-sample-subheading {
+  font-size: 16px;
+  font-weight: 650;
+}
+.vn2-style-sample-heading2 {
+  font-size: 16.5px;
+  font-weight: 700;
+}
+.vn2-style-sample-quote {
+  font-style: italic;
+  border-left: 3px solid color-mix(in srgb, var(--primary) 55%, transparent);
+  padding-left: 8px;
+}
+.vn2-style-sample-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+.vn2-style-btn:hover {
+  background: var(--surface-hover);
+}
+.vn2-toolbar {
+  scrollbar-width: none;
+}
+.vn2-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* A sheet holds its floating pictures (text never runs out under the next one). */
+.vn2-sheet,
+.vn2-book-content,
+.vn2-page-col {
+  display: flow-root;
+}
+
+/* Pictures side by side: one row, small gaps, each as wide as its share. */
+.vn2-img-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  break-inside: avoid-column;
+}
+.vn2-img.vn2-img-in-row {
+  min-width: 0;
+  padding: 0;
+}
+.vn2-img-in-row img {
+  max-height: 60vh;
+  object-fit: cover;
+}
+@container (max-width: 480px) {
+  .vn2-img-row {
+    gap: 5px;
+  }
+}
+
+/* Text around a picture: the picture floats, text blocks (flex boxes) stand beside it and never under it. */
+.vn2-img.vn2-img-wrap {
+  display: block;
+  padding: 6px 0;
+}
+.vn2-img-wrap-left {
+  float: left;
+  margin-right: 18px;
+}
+.vn2-img-wrap-right {
+  float: right;
+  margin-left: 18px;
+}
+@container (max-width: 480px) {
+  /* Phones: enough room is left for the words beside it. */
+  .vn2-img.vn2-img-wrap {
+    max-width: 55%;
+  }
+  .vn2-img-wrap-left {
+    margin-right: 12px;
+  }
+  .vn2-img-wrap-right {
+    margin-left: 12px;
+  }
+}
+
+/* ---------------------------------------------------------------- Step 2.13: books */
+
+.vn2-spread {
+  position: relative;
+}
+.vn2-book-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--vn2-paper);
+  color: var(--vn2-ink);
+  border-radius: 6px;
+  padding: 44px 40px 40px;
+  box-shadow:
+    0 1px 2px rgba(30, 20, 80, 0.05),
+    0 18px 46px -24px rgba(40, 30, 120, 0.3);
+  container-type: inline-size;
+}
+.vn2-book-content {
+  flex: 1;
+  min-height: 0;
+}
+.vn2-book-blank {
+  opacity: 0.7;
+}
+.vn2-spread-two .vn2-book-left {
+  border-radius: 8px 2px 2px 8px;
+  box-shadow:
+    inset -18px 0 22px -20px rgba(40, 30, 120, 0.28),
+    0 18px 46px -24px rgba(40, 30, 120, 0.3);
+}
+.vn2-spread-two .vn2-book-right {
+  border-radius: 2px 8px 8px 2px;
+  box-shadow:
+    inset 18px 0 22px -20px rgba(40, 30, 120, 0.28),
+    0 18px 46px -24px rgba(40, 30, 120, 0.3);
+}
+.vn2-book-number {
+  position: absolute;
+  bottom: 14px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--vn2-ink-soft);
+  pointer-events: none;
+}
+@media (max-width: 520px) {
+  .vn2-book-page {
+    padding: 30px 22px 36px;
+  }
+}
+
+/* Reading mode: the same paper and type, nothing to edit. */
+.vn2-reader {
+  background: var(--background);
+}
+.vn2-r-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.vn2-r-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.vn2-reader-page img {
+  cursor: default;
+}
+

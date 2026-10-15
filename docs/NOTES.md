@@ -118,3 +118,39 @@ PATCH name/cover/position, DELETE), `/access/:type/:id` (members),
 
 `packages/notes/test`, `packages/shared/src/notes.test.ts`,
 `apps/server/test/notes.test.ts`, `apps/web/e2e/step26-notes.spec.ts`.
+
+## Step 2.13: pictures in rows, text around pictures, styles, books
+
+- **Block styles**: the toolbar's selector names the current style: Обычный,
+  Заголовок, Подзаголовок, Заголовок 2 (new kind `heading2`), Цитата, Код. It applies
+  to the paragraph the cursor is in. Headings are `role=heading` with a level.
+- **Pictures side by side**: «Рядом с предыдущим» puts a picture beside the one
+  before it (blocks with the same `row` id form a row); each takes its share of the
+  width (`width` as a weight), small gaps, rows stay rows on phones. Inside a row the
+  arrows move left / right; at a row's edge a picture steps out; «Отдельной строкой»
+  takes it back to a line of its own. Logic: `layoutBlocks`, `joinRow`, `leaveRow`,
+  `moveInPage` in `packages/notes` (tested).
+- **Text around a picture**: a picture aligned left or right with «Обтекание текстом»
+  (`wrap`) floats; the text blocks after it stand beside it (they are their own
+  formatting contexts), never under it; on phones a wrapped picture takes at most
+  55 % of the line. The picture's tools sit in a bar above the toolbar so they never
+  cover the text.
+- **Books** (`kind: "book"`, `.book`): `{ kind: "book", format: "book", pages }`,
+  the same pages and blocks as a note, on the same projects, saving (debounced,
+  compare-and-swap on `revision`), realtime events, roles, sharing (copy / access),
+  revoke and deep links (`#notes/doc/<id>`). No migration: `kind` is text.
+  - Editor: the note editor in book mode. A spread (two pages) on wide screens, one
+    page on phones; paper with margins, page bounds and numbers; only the pages shown
+    are rendered. Pages come only from «+» (Добавить страницу / Добавить разворот /
+    delete or clear), never by themselves. ‹ 1–2 / 6 › and ← / → keys. Text sizes
+    12 / 14 / 16 / 18 / 20 / 24 / 32 (`size`), bold, italic, lists, pictures (rows,
+    wrap), undo / redo.
+  - «Чтение» (`book-reader.tsx`): no toolbar, nothing to edit; real headings,
+    paragraphs, quotes and lists; arrows, swipe on phones, ← → PageUp PageDown Space
+    Home End; optional fullscreen; «Редактирование» goes back. Viewers open books in
+    reading mode.
+  - Files: «Сохранить в Файлы (.book)» puts the text into Files as a `.book`
+    (`{ format: "voidex.book", version: 1, book }`); Files recognises it (filter
+    «.book», preview, pages to read). Mail / Vibex accept `.book` attachments, checked
+    by content on the server.
+  - Store: Notes' description now names books (it is part of Notes, not an app).

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { RiAddLine, RiArrowLeftSLine, RiCheckLine, RiCloseLine, RiImageAddLine, RiMoreFill } from "@remixicon/react";
-import type { NotesDocKind } from "@voidex/shared";
+import type { NotesDocKind, NotesExt } from "@voidex/shared";
 import { NotesGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -10,7 +10,9 @@ import { Popover, Sheet, toast, usePopover } from "@/ui/overlays";
 import { WindowMenu } from "@/os/system-menu";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { downscale, notesApi, useMediaUrl } from "./data";
+import { FILE_ICON } from "./file-icons";
 import { VoidexSearchField } from "@/ui/search-field";
+
 
 /**
  * Header of the Notes browser screens. The Notes logo has a fixed place:
@@ -114,6 +116,8 @@ export function BottomBar({
 export interface MenuEntry {
   id: string;
   label: string;
+  /** Step 2.13: shown instead of the label (e.g. a style sample); the label stays the accessible name. */
+  labelNode?: ReactNode;
   icon?: ReactNode;
   onSelect: () => void;
   danger?: boolean;
@@ -142,7 +146,9 @@ export function Menu({ items, onDone }: { items: MenuEntry[]; onDone: () => void
             <span className={cx("flex size-5 shrink-0 items-center justify-center", it.danger ? "text-danger" : "text-text-secondary")}>
               {it.checked ? <RiCheckLine className="size-[18px] text-primary" /> : it.icon}
             </span>
-            <span className="min-w-0 flex-1 leading-tight">{it.label}</span>
+            <span className="min-w-0 flex-1 leading-tight" aria-label={it.labelNode ? it.label : undefined}>
+              {it.labelNode ?? it.label}
+            </span>
           </button>
         </div>
       ))}
@@ -233,7 +239,24 @@ export function DocCover({ cover, kind, preview, id, className }: { cover: strin
       aria-hidden
       data-system-ui
     >
-      {kind === "presentation" ? (
+      {kind === "book" ? (
+        <span className="flex h-[66%] w-[84%] overflow-hidden rounded-[5px] bg-white shadow-[0_6px_18px_-8px_rgba(60,40,160,0.35)]">
+          {[0, 1].map((side) => (
+            <span key={side} className={cx("flex flex-1 flex-col gap-[7%] p-[7%]", side === 0 && "border-r border-[#e5e3f3]")}>
+              {side === 0 && preview ? (
+                <span className="line-clamp-6 text-[7.5px] leading-[1.35] text-[#6b6880]">{preview}</span>
+              ) : (
+                <>
+                  <span className="h-[6%] w-[70%] rounded-full" style={{ background: side === 0 ? `hsl(${h} 70% 70%)` : "#e5e3f3" }} />
+                  <span className="h-[4%] w-full rounded-full bg-[#e5e3f3]" />
+                  <span className="h-[4%] w-[85%] rounded-full bg-[#e5e3f3]" />
+                  <span className="h-[4%] w-[60%] rounded-full bg-[#e5e3f3]" />
+                </>
+              )}
+            </span>
+          ))}
+        </span>
+      ) : kind === "presentation" ? (
         <span className="flex aspect-video w-[78%] flex-col justify-center gap-[6%] rounded-[8%/14%] bg-white px-[8%] shadow-[0_6px_18px_-8px_rgba(60,40,160,0.35)]">
           <span className="h-[14%] w-[70%] rounded-full" style={{ background: `hsl(${h} 70% 62%)` }} />
           <span className="h-[8%] w-[50%] rounded-full bg-[#d9d6ef]" />
@@ -256,9 +279,9 @@ export function DocCover({ cover, kind, preview, id, className }: { cover: strin
   );
 }
 
-/** The VOIDEX file icon of a share card: .txt (notes, projects) or .prsn (presentations). */
-export function FileIcon({ ext, className }: { ext: ".txt" | ".prsn"; className?: string }) {
-  return <img src={ext === ".prsn" ? "/brand/file-prsn.webp" : "/brand/file-txt.webp"} alt="" className={cx("object-contain", className)} draggable={false} data-system-ui />;
+/** The VOIDEX file icon of a share card. */
+export function FileIcon({ ext, className }: { ext: NotesExt; className?: string }) {
+  return <img src={FILE_ICON[ext]} alt="" className={cx("object-contain", className)} draggable={false} data-system-ui />;
 }
 
 /**

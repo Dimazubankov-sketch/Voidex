@@ -17,11 +17,8 @@ import {
   RiUserFollowLine,
   RiUserForbidLine,
   RiUserSearchLine,
-  RiPlayFill,
-  RiStackLine,
-  RiImageLine,
 } from "@remixicon/react";
-import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexPostDto, type VibexProfileDto } from "@voidex/shared";
+import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -44,9 +41,9 @@ import {
   uploadAvatar,
   uploadCover,
 } from "./data";
-import { MediaGrid, VibexImage, VibexVideoTile } from "./media";
 import { PhotoEditor, type PhotoShape } from "./photo-editor";
-import { FeedEmpty, PostActions, PostList } from "./posts";
+import { FeedEmpty, PostList } from "./posts";
+import { PublicationsGrid } from "./publications";
 import { useVibex } from "./store";
 import { StoryHalo, StoryViewer } from "./stories";
 import { AvatarViewer } from "./avatar-viewer";
@@ -636,10 +633,10 @@ export function ProfileEditor({ profile, open, onClose }: { profile: VibexProfil
  * first; its text stays folded under «Показать текст». The same posts are in
  * «Посты» as full cards: two views of one post, nothing copied.
  */
-function PublicationsTab({ userId }: { userId: string }) {
+function PublicationsTab({ userId, title }: { userId: string; title: string }) {
   const t = useT();
   const q = usePersonPublications(userId);
-  const [open, setOpen] = useState<VibexPostDto | null>(null);
+  const open = useVibex((s) => s.openPublication);
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <div className="flex flex-col gap-3" data-testid="profile-media">
@@ -648,65 +645,15 @@ function PublicationsTab({ userId }: { userId: string }) {
       ) : !items.length ? (
         <EmptyState icon={<RiImageEditLine className="size-7" />} title={t("vibex.profile.noPublications")} />
       ) : (
-        <div className="grid grid-cols-3 gap-1 overflow-hidden rounded-2xl" data-testid="profile-media-grid">
-          {items.map((p) => {
-            const first = p.media.find((m) => m.kind === "image" || m.kind === "video");
-            if (!first) return null;
-            const several = p.media.filter((m) => m.kind === "image" || m.kind === "video").length > 1;
-            return (
-              <div key={p.id} className="relative" data-testid="publication-tile" data-post-id={p.id} data-kind={first.kind}>
-                {first.kind === "video" ? (
-                  <VibexVideoTile file={first} className="aspect-square w-full" onClick={() => setOpen(p)} />
-                ) : (
-                  <VibexImage file={first} className="aspect-square w-full" onClick={() => setOpen(p)} />
-                )}
-                <span
-                  className="pointer-events-none absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur"
-                  aria-label={t(first.kind === "video" ? "vibex.profile.videoMark" : several ? "vibex.profile.albumMark" : "vibex.profile.photoMark")}
-                  data-testid="publication-mark"
-                  data-mark={first.kind === "video" ? "video" : several ? "album" : "photo"}
-                >
-                  {first.kind === "video" ? <RiPlayFill className="size-3.5" /> : several ? <RiStackLine className="size-3.5" /> : <RiImageLine className="size-3.5" />}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        // Step 2.13: equal 3:4 cells, hairline gaps, white type marks; a tap opens the publications as a feed.
+        <PublicationsGrid query={q} onOpen={(postId) => open({ userId, postId, title })} />
       )}
       {q.hasNextPage && (
         <Button variant="ghost" onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage}>
           {t("vibex.feed.more")}
         </Button>
       )}
-      <PublicationSheet post={open} onClose={() => setOpen(null)} />
     </div>
-  );
-}
-
-/** A publication, media first: the photos / videos, then «Показать текст» to unfold the caption, then the actions. */
-function PublicationSheet({ post, onClose }: { post: VibexPostDto | null; onClose: () => void }) {
-  const t = useT();
-  const [shown, setShown] = useState(false);
-  useEffect(() => setShown(false), [post?.id]);
-  return (
-    <Sheet open={!!post} onClose={onClose} width={560} testId="publication">
-      {post && (
-        <div className="flex flex-col gap-3">
-          <MediaGrid media={post.media} />
-          {post.text.trim() &&
-            (shown ? (
-              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text" data-selectable data-testid="publication-text">
-                {post.text}
-              </p>
-            ) : (
-              <button type="button" onClick={() => setShown(true)} className="w-fit rounded-full bg-surface-secondary px-3.5 py-1.5 text-[13.5px] font-semibold text-text-secondary hover:text-text" data-testid="publication-show-text">
-                {t("vibex.profile.showText")}
-              </button>
-            ))}
-          <PostActions post={post} />
-        </div>
-      )}
-    </Sheet>
   );
 }
 
@@ -731,7 +678,7 @@ export function PersonPage({ id }: { id: string }) {
       {profile.data && !profile.data.visible && !profile.data.me ? (
         <EmptyState icon={<RiUserForbidLine className="size-7" />} title={t("vibex.profile.private")} />
       ) : tab === "media" ? (
-        <PublicationsTab userId={id} />
+        <PublicationsTab userId={id} title={profile.data?.person.name ?? ""} />
       ) : (
         <>
           {profile.data?.me && tab === "posts" && <ProfileComposer />}

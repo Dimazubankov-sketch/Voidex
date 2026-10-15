@@ -470,3 +470,27 @@ Long press (phones) or right click (PC) opens the actions. The chat dims and the
   next to it. Rings: purple gradient while unseen, grey (`--story-seen`) once seen,
   none without a story; my own views are recorded (so my ring turns grey) but never
   counted in my story's views.
+
+## Step 2.13
+- Phone tab bar (`tabbar.tsx`): a floating, rounded, softly translucent bar a little
+  above the bottom edge (safe area respected), five icons that never move, and one
+  capsule for the whole bar that glides to the tapped tab (its two edges on springs,
+  so it stretches on the way and settles). It is placed (not animated) on the first
+  render and on resize, so it never jumps; `role=tablist`, tabs with `aria-label`,
+  `aria-selected`, `aria-current="page"`. The PC sidebar is unchanged.
+- Main feed: no search in its header (search is its own tab). A switch
+  «Публикации | Посты» (`feed-mode`) shows the same posts two ways and is kept in the
+  person's Vibex settings (`settings.feed.mode`, stored with the other settings, no
+  migration). Publications are media first, Instagram-like: author with the story
+  ring, the media at its own aspect (clamped 0.8 to 1.91), actions, caption, time; no
+  card. Posts keep the current feed.
+- Phone feed top bar: hides on scrolling down and comes back on scrolling up
+  (translateY plus a little fade, motion values, no re-render per frame).
+- Notifications: soft rounded cards like the profile's tabs (avatar, text, time,
+  thumbnail or action, a dot while unread); the day groups stay.
+- Profile publications: equal 3:4 cells with hairline gaps inside the profile's width
+  (never touching the screen edges), white type marks (photo, carousel, video). A tap
+  opens the viewer (`publications.tsx`): the person's publications as one feed starting
+  at the tapped one; photos at their own aspect with pinch zoom (fit to 4x, pan while
+  zoomed, double tap 1x / 2x, reset when closed), videos with controls that pause out
+  of view. Back (or Esc) returns to the grid where it was.

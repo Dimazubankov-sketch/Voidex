@@ -9,6 +9,7 @@ import {
   NOTES_NAME_MAX,
   NOTES_PROJECTS_MAX,
   NOTES_SHARES_MAX,
+  emptyBook,
   emptyNote,
   emptyPresentation,
   legacySnapshot,
@@ -255,7 +256,7 @@ export class NotesService {
       kind: d.kind,
       name: d.name,
       cover: d.cover,
-      format: (data.format ?? (d.kind === "note" ? "vertical" : "rect")) as NotesDocMetaDto["format"],
+      format: (data.format ?? (d.kind === "note" ? "vertical" : d.kind === "book" ? "book" : "rect")) as NotesDocMetaDto["format"],
       role,
       revision: d.revision,
       pages: notesPageCount(d.data),
@@ -388,14 +389,16 @@ export class NotesService {
       if (!validNotesBody(input.kind, input.data)) throw fail(ErrorCode.ValidationFailed, "This is not a Notes document.");
       data = input.data;
       await this.checkMedia(userId, notesMediaIds(data), []);
-    } else data = input.kind === "note" ? emptyNote(input.format === "square" ? "square" : "vertical") : emptyPresentation(input.format === "square" ? "square" : "rect");
+    } else
+      data =
+        input.kind === "note" ? emptyNote(input.format === "square" ? "square" : "vertical") : input.kind === "book" ? emptyBook() : emptyPresentation(input.format === "square" ? "square" : "rect");
     if (Buffer.byteLength(JSON.stringify(data)) > NOTES_DOC_MAX_BYTES) throw fail(ErrorCode.NotesTooLarge, "The document is too large.");
     const [row] = await this.ctx.db
       .insert(notesDocuments)
       .values({
         projectId,
         kind: input.kind,
-        name: cleanName(input.name, input.kind === "note" ? "Новая заметка" : "Новая презентация"),
+        name: cleanName(input.name, input.kind === "note" ? "Новая заметка" : input.kind === "book" ? "Новая книга" : "Новая презентация"),
         data: data as unknown as Record<string, unknown>,
         mediaIds: [...notesMediaIds(data)],
         position: max + 1,
@@ -715,7 +718,7 @@ export class NotesService {
     const docs = Array.isArray(data.documents) ? data.documents : [];
     const documents = docs
       .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
-      .filter((d) => (d.kind === "note" || d.kind === "presentation") && validNotesBody(d.kind as NotesDocKind, d.data))
+      .filter((d) => (d.kind === "note" || d.kind === "presentation" || d.kind === "book") && validNotesBody(d.kind as NotesDocKind, d.data))
       .map((d) => ({ legacyId: "", kind: d.kind as NotesDocKind, name: String(d.name ?? ""), cover: notesMediaId(d.cover) ? (d.cover as string) : null, data: d.data as NotesBody }));
     return { legacyId: "", name: String(data.name ?? "Проект"), cover: notesMediaId(data.cover) ? (data.cover as string) : null, documents };
   }

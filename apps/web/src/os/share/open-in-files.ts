@@ -1,8 +1,8 @@
 import { sessionFiles } from "@/os/cloud/session";
 import { useWM } from "@/os/window-manager";
 
-/** .txt / .prsn attachments open in Files (Step 2.7). */
-export const opensInFiles = (filename: string) => /\.(txt|prsn)$/i.test(filename);
+/** .txt / .prsn (Step 2.7) and .book (Step 2.13) attachments open in Files. */
+export const opensInFiles = (filename: string) => /\.(txt|prsn|book)$/i.test(filename);
 
 /**
  * A .txt / .prsn attachment from Vibex or Mail goes into Files through

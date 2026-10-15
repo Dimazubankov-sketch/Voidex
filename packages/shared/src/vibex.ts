@@ -200,6 +200,9 @@ export interface VibexMediaItemDto {
 export const VIBEX_AUDIENCES = ["everyone", "followers", "nobody"] as const;
 /** Step 2.9: sections of the chat list (pinned are always on top). */
 export const VIBEX_CHAT_ORDERS = ["chats-first", "groups-first", "mixed"] as const;
+/** Step 2.13: the two views of one feed (the same posts): media first, or text first. */
+export const VIBEX_FEED_MODES = ["publications", "posts"] as const;
+export type VibexFeedMode = (typeof VIBEX_FEED_MODES)[number];
 export type VibexChatOrder = (typeof VIBEX_CHAT_ORDERS)[number];
 export type VibexAudience = (typeof VIBEX_AUDIENCES)[number];
 
@@ -229,7 +232,14 @@ export const VibexSettingsSchema = z.object({
   /** Step 2.9: the chat list — pinned always first, then chats and groups in this order (or mixed). */
   chats: z.object({
     order: z.enum(VIBEX_CHAT_ORDERS).default("chats-first"),
-  }).default({ order: "chats-first" }),
+    })
+    .default({ order: "chats-first" }),
+  /** Step 2.13: how Главная shows the feed: «Посты» (text first) or «Публикации» (media first). */
+  feed: z
+    .object({
+      mode: z.enum(VIBEX_FEED_MODES).default("posts"),
+    })
+    .default({ mode: "posts" }),
 });
 export type VibexSettings = z.infer<typeof VibexSettingsSchema>;
 export const DEFAULT_VIBEX_SETTINGS: VibexSettings = VibexSettingsSchema.parse({});
@@ -240,7 +250,9 @@ export const VibexSettingsUpdateSchema = z.object({
   notifications: VibexSettingsSchema.shape.notifications.unwrap().partial().optional(),
   media: VibexSettingsSchema.shape.media.unwrap().partial().optional(),
   chats: VibexSettingsSchema.shape.chats.unwrap().partial().optional(),
+  feed: VibexSettingsSchema.shape.feed.unwrap().partial().optional(),
 });
+
 
 /** Profile editor: names are the VOIDEX account's own (one identity); the rest is Vibex. */
 export const VibexProfileUpdateSchema = z

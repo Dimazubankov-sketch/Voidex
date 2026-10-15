@@ -73,3 +73,9 @@ tables exist for it yet (no migration in Step 2.7).
 Centred dialogs (share, Users, Cloud, attach chooser) sit in the visual
 viewport on phones (above the keyboard, safe-area aware) and are a Radix
 layer above the Files editor / Media viewer, so those stay open underneath.
+
+## Step 2.13: .book
+Files recognises VOIDEX books (`.book`, `application/vnd.voidex.book+json`): a filter
+chip «.book», a preview of the first page, and the pages to read (books are written
+in Notes). They arrive from Notes («Сохранить в Файлы»), Vibex and Mail attachments,
+and can be attached from Files like `.txt` / `.prsn`.

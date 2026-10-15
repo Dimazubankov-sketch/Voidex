@@ -21,6 +21,9 @@ export interface VibexUiState {
   commentsFor: string | null;
   /** Phones: the side menu drawer. */
   drawer: boolean;
+  /** Step 2.13: the publications viewer (a person's publications as a feed, from this one on). */
+  publication: { userId: string; postId: string; title: string } | null;
+  openPublication: (p: { userId: string; postId: string; title: string } | null) => void;
   /** Step 2.9: playback speed of expanded video circles — kept while this Vibex window lives (a new window starts at 1x). */
   circleSpeed: number;
   setCircleSpeed: (speed: number) => void;
@@ -46,13 +49,35 @@ export function createVibexStore() {
     sharing: null,
     commentsFor: null,
     drawer: false,
+    publication: null,
+    openPublication: (publication) => set({ publication }),
     circleSpeed: 1,
     setCircleSpeed: (circleSpeed) => set({ circleSpeed }),
     // Step 2.9: "Закладки" live inside "История" (its second tab).
     go: (section) =>
-      set(section === "bookmarks" ? { section: "history", historyKind: "bookmarks", stack: [], chatId: null, commentsFor: null, drawer: false } : { section, stack: [], chatId: null, commentsFor: null, drawer: false }),
+      set(
+        section === "bookmarks"
+          ? {
+              section: "history",
+              historyKind: "bookmarks",
+              stack: [],
+              chatId: null,
+              commentsFor: null,
+              drawer: false,
+              publication: null,
+            }
+          : {
+              section,
+              stack: [],
+              chatId: null,
+              commentsFor: null,
+              drawer: false,
+              publication: null,
+            },
+      ),
     openChat: (chatId) => set({ section: "chats", chatId, stack: [] }),
-    push: (p) => set((s) => (p.kind === "chat" ? { section: "chats", chatId: p.id, stack: [] } : { stack: [...s.stack, p] })),
+    // A page opened from the publications viewer (the author) takes its place (the viewer closes).
+    push: (p) => set((s) => (p.kind === "chat" ? { section: "chats", chatId: p.id, stack: [], publication: null } : { stack: [...s.stack, p], publication: null })),
     back: () => set((s) => (s.stack.length ? { stack: s.stack.slice(0, -1) } : { chatId: null })),
     setHistoryKind: (historyKind) => set({ historyKind }),
     compose: (composing) => set({ composing }),

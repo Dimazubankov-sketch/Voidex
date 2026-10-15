@@ -1,7 +1,11 @@
 import type { Space } from './presentation';
 import { validWorkspace, space } from './presentation';
-export type Kind = 'txt' | 'prsn';
-export type FileData = string | Space;
+export type Kind = 'txt' | 'prsn' | 'book';
+/** Step 2.13: a VOIDEX book (.book) as a file: its pages of text blocks (pictures stay in Notes). */
+export type BookBlock = { id: string; kind: string; text: string; checked?: boolean };
+export type BookFile = { kind: 'book'; pages: { id: string; blocks: BookBlock[] }[] };
+export type FileData = string | Space | BookFile;
+export const isBook = (d: unknown): d is BookFile => !!d && typeof d === 'object' && (d as BookFile).kind === 'book';
 export type Entry = {
   id: string;
   name: string;
@@ -19,8 +23,24 @@ export type Listing = { files: Entry[]; folders: Folder[]; used: number; quota: 
 export type OpenFile = { file: Entry; data: FileData; editable: boolean; shared?: boolean };
 export const QUOTA = 5 * 1024 ** 3;
 export const MAX_FILE = 1024 * 1024;
-export const newData = (kind: Kind, name: string): FileData => (kind === 'txt' ? '' : space(name, 'presentation', 'landscape'));
+export const newData = (kind: Kind, name: string): FileData =>
+  kind === 'txt' ? '' : kind === 'book' ? { kind: 'book', pages: [{ id: 'p1', blocks: [] }] } : space(name, 'presentation', 'landscape');
+const validBook = (d: unknown) =>
+  isBook(d) &&
+  Array.isArray(d.pages) &&
+  d.pages.length >= 1 &&
+  d.pages.length <= 1000 &&
+  d.pages.every(
+    (p) =>
+      !!p &&
+      typeof p.id === 'string' &&
+      Array.isArray(p.blocks) &&
+      p.blocks.length <= 3000 &&
+      p.blocks.every((b) => !!b && typeof b.id === 'string' && typeof b.kind === 'string' && b.kind.length <= 20 && typeof b.text === 'string'),
+  ) &&
+  JSON.stringify(d).length <= MAX_FILE;
 export function validData(kind: Kind, data: unknown): data is FileData {
+  if (kind === 'book') return validBook(data);
   if (kind === 'txt') return typeof data === 'string' && !data.includes('\u0000') && new TextEncoder().encode(data).length <= MAX_FILE;
   if (!data || typeof data !== 'object') return false;
   const s = data as Space;
@@ -32,9 +52,16 @@ export function validData(kind: Kind, data: unknown): data is FileData {
   );
 }
 export function parseFile(name: string, raw: string): { kind: Kind; data: FileData } {
-  const kind = name.toLowerCase().endsWith('.txt') ? 'txt' : name.toLowerCase().endsWith('.prsn') ? 'prsn' : null;
-  if (!kind) throw new Error('Поддерживаются только .txt и .prsn');
+  const lower = name.toLowerCase();
+  const kind = lower.endsWith('.txt') ? 'txt' : lower.endsWith('.prsn') ? 'prsn' : lower.endsWith('.book') ? 'book' : null;
+  if (!kind) throw new Error('Поддерживаются только .txt, .prsn и .book');
   let data: unknown = raw;
+  if (kind === 'book') {
+    const x = JSON.parse(raw);
+    data = x?.format === 'voidex.book' && x.version === 1 ? x.book : x;
+    if (!validData(kind, data)) throw new Error('Некорректный файл книги Voidex.');
+    return { kind, data: data as BookFile };
+  }
   if (kind === 'prsn') {
     const x = JSON.parse(raw);
     data = x?.format === 'voidex.prsn' && x.version === 1 ? x.space : x;
@@ -43,13 +70,18 @@ export function parseFile(name: string, raw: string): { kind: Kind; data: FileDa
   return { kind, data };
 }
 export function serialize(kind: Kind, data: FileData) {
+  if (kind === 'book') return JSON.stringify({ format: 'voidex.book', version: 1, book: data }, null, 2);
   return kind === 'txt' ? String(data) : JSON.stringify({ format: 'voidex.prsn', version: 1, space: data }, null, 2);
 }
 export const fileText = (data: FileData) =>
-  typeof data === 'string' ? data : data.slides.flatMap((s) => s.blocks.map((b) => b.text)).join(' ');
+  typeof data === 'string'
+    ? data
+    : isBook(data)
+      ? data.pages.flatMap((p) => p.blocks.map((b) => b.text)).join(' ')
+      : data.slides.flatMap((s) => s.blocks.map((b) => b.text)).join(' ');
 export const cleanName = (s: string, kind: Kind) =>
   (s
-    .replace(/\.(txt|prsn)$/i, '')
+    .replace(/\.(txt|prsn|book)$/i, '')
     .trim()
     .slice(0, 150) || 'Без названия') +
   '.' +

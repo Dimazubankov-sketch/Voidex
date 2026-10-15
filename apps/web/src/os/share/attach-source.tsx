@@ -16,7 +16,7 @@ import { sessionFiles, sessionMedia } from "@/os/cloud/session";
 type Step = "choose" | "files" | "media";
 /** Step 2.9: which sources a chooser offers (a post's Media button: Media + device; its paperclip: Files only). */
 export type AttachSource = "files" | "media" | "device";
-const PRSN_MIME = "application/vnd.voidex.prsn+json";
+const FILE_MIME = { txt: "text/plain", prsn: "application/vnd.voidex.prsn+json", book: "application/vnd.voidex.book+json" } as const;
 
 /**
  * «Откуда выбрать?» (Step 2.7): the attach button of Vibex and VoidOps Mail
@@ -200,7 +200,7 @@ function FilesSource({ onBack, onDevice, onPick, max, testId }: { onBack?: () =>
                   className={cx("flex min-h-12 items-center gap-3 rounded-2xl px-2 text-left", on ? "bg-primary-soft" : "hover:bg-surface-hover")}
                   data-testid={`${testId}-file`}
                 >
-                  <span className={cx("grid size-9 shrink-0 place-items-center rounded-[10px] text-[10px] font-bold uppercase", entry.kind === "prsn" ? "bg-[#fff1e6] text-[#c25a12]" : "bg-[#efedff] text-[#5b4af0]")}>.{entry.kind}</span>
+                  <span className={cx("grid size-9 shrink-0 place-items-center rounded-[10px] text-[10px] font-bold uppercase", entry.kind === "prsn" ? "bg-[#fff1e6] text-[#c25a12]" : entry.kind === "book" ? "bg-[#e9f7ef] text-[#1f8a4c]" : "bg-[#efedff] text-[#5b4af0]")}>.{entry.kind}</span>
                   <span className="min-w-0 flex-1 truncate text-[15px] text-text">{entry.name}</span>
                   {on && <RiCheckLine className="size-5 shrink-0 text-primary" />}
                 </button>
@@ -214,7 +214,7 @@ function FilesSource({ onBack, onDevice, onPick, max, testId }: { onBack?: () =>
               onPick(
                 files
                   .filter((f) => picked.includes(f.entry.id))
-                  .map((f) => new File([serialize(f.entry.kind, f.data)], f.entry.name, { type: f.entry.kind === "prsn" ? PRSN_MIME : "text/plain" })),
+                  .map((f) => new File([serialize(f.entry.kind, f.data)], f.entry.name, { type: FILE_MIME[f.entry.kind] })),
               )
             }
           />

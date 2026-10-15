@@ -24,7 +24,7 @@ import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
 import { formatDate, formatShortDate, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
-import { Avatar } from "@/brand/brand";
+import { Avatar, MailGlyph } from "@/brand/brand";
 import { Button, EmptyState, IconButton, Notice, Skeleton } from "@/ui/controls";
 import { ConfirmDialog, toast } from "@/ui/overlays";
 import { useMailSummary } from "@/lib/mail-summary";
@@ -33,6 +33,10 @@ import { NotesFileCard } from "@/apps/notes/card";
 import { MessageAttachments } from "./attachments";
 import { useMail } from "./store";
 import { VoidexSearchField } from "@/ui/search-field";
+import { Linkified } from "@/lib/linkify";
+import { useFormFactor } from "@/lib/form-factor";
+import { SwipeToArchive } from "./swipe";
+
 
 export const FOLDERS: { view: MailView; label: MessageKey; icon: typeof RiInboxLine }[] = [
   { view: "inbox", label: "mail.inbox", icon: RiInboxLine },
@@ -164,7 +168,7 @@ export function ThreadList() {
   if (!items.length)
     return (
       <EmptyState
-        icon={query ? <RiSearchLine className="size-7" /> : <RiMailLine className="size-7" />}
+        icon={query ? <RiSearchLine className="size-7" /> : view === "inbox" ? <MailGlyph className="size-8" /> : <RiMailLine className="size-7" />}
         title={query ? t("mail.empty.search") : t(EMPTY[view])}
         hint={!query && view === "inbox" ? t("mail.empty.inboxHint") : undefined}
       />
@@ -209,64 +213,75 @@ function ThreadRow({ thread }: { thread: ThreadSummaryDto }) {
     if (thread.unread) action.mutate({ threadIds: [thread.id], action: "read", view });
   };
 
+
+  const run = useActionRunner();
+  const ff = useFormFactor();
+  // Step 2.13: on phones a swipe to the left archives (where archiving applies; undo in the toast).
+  const swipeable = ff === "mobile" && !thread.draftId && (view === "inbox" || view === "starred");
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(e) => e.key === "Enter" && open()}
-      data-testid="thread-row"
-      data-unread={thread.unread || undefined}
-      className={cx(
-        "group relative flex cursor-default gap-3 rounded-2xl px-3 py-3 outline-none transition-colors",
-        active ? "bg-primary-soft" : selected ? "bg-surface-hover" : "hover:bg-surface-hover focus-visible:bg-surface-hover",
-      )}
-    >
-      {thread.unread && <span className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary" />}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          toggle(thread.id);
-        }}
-        className="relative shrink-0"
-        aria-label="select"
+    <SwipeToArchive enabled={swipeable} onArchive={() => run([thread.id], "archive")}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={open}
+        onKeyDown={(e) => e.key === "Enter" && open()}
+        data-testid="thread-row"
+        data-unread={thread.unread || undefined}
+        className={cx(
+          "group relative flex cursor-default gap-3 rounded-2xl px-3 py-3 outline-none transition-colors",
+          active ? "bg-primary-soft" : selected ? "bg-surface-hover" : "hover:bg-surface-hover focus-visible:bg-surface-hover",
+        )}
       >
-        <span className={cx("transition-opacity", selected && "opacity-0")}>
-          <Avatar name={avatarOf?.name ?? avatarOf?.address ?? "?"} size={40} />
-        </span>
-        <span className={cx("absolute inset-0 flex items-center justify-center rounded-full bg-primary text-white transition-all", selected ? "scale-100 opacity-100" : "scale-75 opacity-0")}>
-          <RiCheckLine className="size-5" />
-        </span>
-      </button>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className={cx("min-w-0 flex-1 truncate text-[15px]", thread.unread ? "font-semibold text-text" : "text-text")}>{who}</span>
-          {thread.messageCount > 1 && <span className="text-[12px] text-text-tertiary">{thread.messageCount}</span>}
-          <span className={cx("shrink-0 text-[12px] tabular-nums", thread.unread ? "font-semibold text-primary" : "text-text-tertiary")}>{formatShortDate(thread.lastMessageAt, lang)}</span>
-        </div>
-        <div className={cx("truncate text-[14px]", thread.unread ? "font-semibold text-text" : "text-text")}>
-          {thread.draftId && <span className="mr-1.5 text-danger">{t("mail.draft")}</span>}
-          {thread.subject || t("mail.noSubject")}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 truncate text-[13px] text-text-secondary">{thread.snippet}</span>
-          {thread.hasAttachments && <RiAttachment2 className="size-4 shrink-0 text-text-tertiary" aria-label={t("mail.hasAttachments")} data-testid="thread-has-attachments" />}
-          {thread.hasDraft && !thread.draftId && <span className="shrink-0 text-[11px] font-semibold uppercase text-danger">{t("mail.draft")}</span>}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              action.mutate({ threadIds: [thread.id], action: thread.starred ? "unstar" : "star", view });
-            }}
-            className={cx("shrink-0 transition-opacity", thread.starred ? "text-warning" : "text-text-tertiary opacity-0 group-hover:opacity-100")}
-            aria-label={thread.starred ? t("mail.unstar") : t("mail.star")}
-          >
-            {thread.starred ? <RiStarFill className="size-4" /> : <RiStarLine className="size-4" />}
-          </button>
+        {thread.unread && <span className="absolute left-1 top-1/2 size-1.5 -translate-y-1/2 rounded-full bg-primary" />}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggle(thread.id);
+          }}
+          className="relative shrink-0"
+          aria-label="select"
+        >
+          <span className={cx("transition-opacity", selected && "opacity-0")}>
+            <Avatar name={avatarOf?.name ?? avatarOf?.address ?? "?"} size={40} />
+          </span>
+          <span className={cx("absolute inset-0 flex items-center justify-center rounded-full bg-primary text-white transition-all", selected ? "scale-100 opacity-100" : "scale-75 opacity-0")}>
+            <RiCheckLine className="size-5" />
+          </span>
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className={cx("min-w-0 flex-1 truncate text-[15px]", thread.unread ? "font-semibold text-text" : "text-text")}>{who}</span>
+            {thread.messageCount > 1 && <span className="text-[12px] text-text-tertiary">{thread.messageCount}</span>}
+            <span className={cx("shrink-0 text-[12px] tabular-nums", thread.unread ? "font-semibold text-primary" : "text-text-tertiary")}>{formatShortDate(thread.lastMessageAt, lang)}</span>
+          </div>
+          <div className={cx("truncate text-[14px]", thread.unread ? "font-semibold text-text" : "text-text")}>
+            {thread.draftId && <span className="mr-1.5 text-danger">{t("mail.draft")}</span>}
+            {thread.subject || t("mail.noSubject")}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-[13px] text-text-secondary">{thread.snippet}</span>
+            {thread.hasAttachments && <RiAttachment2 className="size-4 shrink-0 text-text-tertiary" aria-label={t("mail.hasAttachments")} data-testid="thread-has-attachments" />}
+            {thread.hasDraft && !thread.draftId && <span className="shrink-0 text-[11px] font-semibold uppercase text-danger">{t("mail.draft")}</span>}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                action.mutate({
+                  threadIds: [thread.id],
+                  action: thread.starred ? "unstar" : "star",
+                  view,
+                });
+              }}
+              className={cx("shrink-0 transition-opacity", thread.starred ? "text-warning" : "text-text-tertiary opacity-0 group-hover:opacity-100")}
+              aria-label={thread.starred ? t("mail.unstar") : t("mail.star")}
+            >
+              {thread.starred ? <RiStarFill className="size-4" /> : <RiStarLine className="size-4" />}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </SwipeToArchive>
   );
 }
 
@@ -449,14 +464,18 @@ function MessageCard({ message: m, defaultOpen }: { message: MailMessageDto; def
       {open && (
         <div className="px-5 pb-4 pt-3">
           <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text" data-selectable data-testid="message-body">
-            {mainText}
+            <Linkified text={mainText} />
           </div>
           {quoted && (
             <>
               <button className="mt-3 rounded-full bg-surface-secondary px-3 py-1 text-[12px] font-medium text-text-secondary hover:bg-surface-hover" onClick={() => setShowQuote((s) => !s)}>
                 {showQuote ? t("common.hide") : t("mail.showQuoted")}
               </button>
-              {showQuote && <div className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary/30 pl-3 text-[14px] text-text-secondary" data-selectable>{quoted}</div>}
+              {showQuote && (
+                <div className="mt-2 whitespace-pre-wrap break-words border-l-2 border-primary/30 pl-3 text-[14px] text-text-secondary" data-selectable>
+                  <Linkified text={quoted} />
+                </div>
+              )}
             </>
           )}
           <MessageAttachments items={m.attachments} />

@@ -2,7 +2,7 @@ import { useWallpapers } from "./wallpapers";
 import { RiAddLine, RiCheckLine, RiDeleteBinLine } from "@remixicon/react";
 import { DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
-import { TrimmedLogo } from "@/brand/brand";
+import { ICON_OPTICAL_SCALE, TrimmedLogo } from "@/brand/brand";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { Button } from "@/ui/controls";
@@ -24,7 +24,7 @@ import { useHomeUi } from "./ui-store";
  * like every other system icon, so it fills the same box (52% of the tile).
  */
 export function DesktopsGlyph({ className = "size-[62%]" }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-desktops.png" className={className} />;
+  return <TrimmedLogo src="/brand/app-desktops.png" className={className} optical={ICON_OPTICAL_SCALE.desktops} />;
 }
 
 interface Entry {

@@ -101,8 +101,8 @@ export function ActivityScreen() {
   return (
     <div className="flex flex-col gap-4" data-testid="activity-screen">
       {sections.map(({ s, groups }) => (
-        <section key={s} className="flex flex-col" data-testid="activity-section" data-section={s}>
-          <h3 className="px-2 pb-1 text-[15px] font-bold">{t(SECTION_LABEL[s])}</h3>
+        <section key={s} className="flex flex-col gap-2" data-testid="activity-section" data-section={s}>
+          <h3 className="px-2 text-[15px] font-bold">{t(SECTION_LABEL[s])}</h3>
           {groups.map((g) => (
             <ActivityRow key={g.key} items={g.items} />
           ))}
@@ -138,7 +138,9 @@ function ActivityRow({ items }: { items: VibexActivityDto[] }) {
       tabIndex={0}
       onClick={open}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), open())}
-      className={cx("flex cursor-pointer items-center gap-3 rounded-[18px] px-2 py-2 hover:bg-surface-hover", !it.read && "bg-primary/[0.06]")}
+      // Step 2.13: each notification (or group) is a soft card, like the profile's tabs: (almost) the background's
+      // colour, a barely visible edge and shadow; unread ones carry a violet dot.
+      className={cx("vx-note-card relative flex cursor-pointer items-center gap-3 rounded-[20px] py-2.5 pl-3 pr-3 transition-colors", !it.read && "vx-note-card-unread")}
       data-testid="activity-item"
       data-type={it.type}
       data-read={it.read || undefined}
@@ -168,6 +170,7 @@ function ActivityRow({ items }: { items: VibexActivityDto[] }) {
         <span className="whitespace-nowrap text-text-tertiary">{formatRelative(it.createdAt, lang)}</span>
       </span>
       {it.type === "follow" ? <FollowBack item={it} /> : it.postMedia ? <Thumb fileId={it.postMedia.fileId} video={it.postMedia.kind === "video"} /> : null}
+      {!it.read && <span className="absolute right-2 top-2 size-2 rounded-full bg-primary" aria-hidden data-testid="activity-unread-dot" />}
     </div>
   );
 }

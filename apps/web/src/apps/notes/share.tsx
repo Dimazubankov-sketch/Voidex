@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RiCloseLine, RiGroupLine, RiLinkM } from "@remixicon/react";
-import type { NotesRole, NotesShareKind, VibexMessageDto } from "@voidex/shared";
+import type { NotesExt, NotesRole, NotesShareKind, VibexMessageDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { api } from "@/lib/api";
 import { cx } from "@/lib/cx";
@@ -21,7 +21,7 @@ export interface ShareTarget {
   type: ResourceType;
   id: string;
   name: string;
-  ext: ".txt" | ".prsn";
+  ext: NotesExt;
   kind: NotesShareKind;
   role: NotesRole;
 }

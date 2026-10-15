@@ -20,6 +20,8 @@ export function looksLike(mime: string, b: Buffer): boolean {
       return b.length > 5 && b.subarray(0, 5).toString("latin1") === "%PDF-";
     case "application/vnd.voidex.prsn+json":
       return isPrsn(b);
+    case "application/vnd.voidex.book+json":
+      return isBook(b);
     default:
       return true;
   }
@@ -31,6 +33,17 @@ export function sniffImage(buf: Buffer): string | null {
   if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
   if (buf.length > 12 && buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP") return "image/webp";
   return null;
+}
+
+/** Step 2.13: a VOIDEX .book: `{ format: "voidex.book", version: 1, book: { kind: "book", pages: [...] } }`. */
+function isBook(b: Buffer): boolean {
+  if (b.length > 1024 * 1024) return false;
+  try {
+    const x = JSON.parse(b.toString("utf8")) as { format?: unknown; version?: unknown; book?: { kind?: unknown; pages?: unknown } };
+    return !!x && typeof x === "object" && x.format === "voidex.book" && x.version === 1 && !!x.book && x.book.kind === "book" && Array.isArray(x.book.pages);
+  } catch {
+    return false;
+  }
 }
 
 /** A VOIDEX .prsn: a JSON object in the Files format (`{ format: "voidex.prsn", version: 1, space }`). */

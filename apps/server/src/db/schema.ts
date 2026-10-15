@@ -840,7 +840,7 @@ export const notesShares = pgTable(
     /** … as a copy for the recipient, or as access to the original (role). */
     mode: text("mode", { enum: ["copy", "access"] }).notNull().default("copy"),
     role: text("role", { enum: ["editor", "viewer"] }).notNull().default("viewer"),
-    docKind: text("doc_kind", { enum: ["note", "presentation"] }),
+    docKind: text("doc_kind", { enum: ["note", "presentation", "book"] }),
     revokedAt: ts("revoked_at"),
   },
   (t) => [index("notes_shares_owner_idx").on(t.ownerId, t.createdAt), index("notes_shares_resource_idx").on(t.resourceType, t.resourceId)],

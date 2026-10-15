@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RiArrowGoBackLine, RiArrowGoForwardLine, RiArrowLeftSLine, RiErrorWarningLine, RiLockLine, RiPlayFill, RiShareForwardLine } from "@remixicon/react";
-import type { NotesBody, NotesDocumentDto, NoteBody, PresentationBody } from "@voidex/shared";
+import { RiFolderTransferLine, RiArrowGoBackLine, RiArrowGoForwardLine, RiArrowLeftSLine, RiBookOpenLine, RiErrorWarningLine, RiLockLine, RiPlayFill, RiShareForwardLine } from "@remixicon/react";
+import type { BookBody, NotesBody, NotesDocumentDto, NoteBody, PresentationBody } from "@voidex/shared";
+import { serialize, type BookFile } from "@voidex/files/model";
 import { ErrorCode } from "@voidex/shared";
 import { reflowPresentation, setNoteFormat, slideOverflows } from "@voidex/notes";
 import { ApiError } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
-import { useT } from "@/lib/i18n";
+import { t as tr, useT } from "@/lib/i18n";
 import { Button, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
 import { WindowHeader } from "@/os/window-context";
+import { openInFiles } from "@/os/share/open-in-files";
+import { BookReader } from "./book-reader";
 import { useDocActions } from "./browser";
 import { invalidateNotes, notesApi } from "./data";
 import { activeDoc } from "./editor-state";
@@ -37,6 +40,13 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
   const [status, setStatus] = useState<Status>("saved");
   const [conflict, setConflict] = useState<{ by: string; revision: number } | null>(null);
   const [playing, setPlaying] = useState<number | null>(null);
+  // Step 2.13: a book is read («Чтение») or edited («Редактирование»); viewers open it for reading.
+  const [reading, setReading] = useState(false);
+  const bookPage = useRef(0);
+  const opened = useRef(false);
+  const onBookPage = useCallback((p: number) => {
+    bookPage.current = p;
+  }, []);
   const [, setHistoryTick] = useState(0);
 
   const bodyRef = useRef<NotesBody | null>(null);
@@ -52,6 +62,10 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
 
   const apply = useCallback((d: NotesDocumentDto) => {
     setDoc(d);
+    if (!opened.current) {
+      opened.current = true;
+      if (d.kind === "book" && d.role === "viewer") setReading(true);
+    }
     setBody(d.data);
     bodyRef.current = d.data;
     revision.current = d.revision;
@@ -306,17 +320,19 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
     );
 
   const isNote = body.kind === "note";
-  const formatEntries: MenuEntry[] = readOnly
-    ? []
-    : isNote
-      ? [
-          { id: "format-vertical", label: t("notes.format.vertical"), checked: body.format === "vertical", onSelect: () => change(setNoteFormat(body as NoteBody, "vertical"), true) },
-          { id: "format-square", label: t("notes.format.square"), checked: body.format === "square", onSelect: () => change(setNoteFormat(body as NoteBody, "square"), true) },
-        ]
-      : [
-          { id: "format-rect", label: t("notes.format.rect"), checked: body.format === "rect", onSelect: () => switchSlides("rect") },
-          { id: "format-square", label: t("notes.format.squareSlides"), checked: body.format === "square", onSelect: () => switchSlides("square") },
-        ];
+  const isBook = body.kind === "book";
+  const formatEntries: MenuEntry[] =
+    readOnly || isBook
+      ? []
+      : isNote
+        ? [
+            { id: "format-vertical", label: t("notes.format.vertical"), checked: body.format === "vertical", onSelect: () => change(setNoteFormat(body as NoteBody, "vertical"), true) },
+            { id: "format-square", label: t("notes.format.square"), checked: body.format === "square", onSelect: () => change(setNoteFormat(body as NoteBody, "square"), true) },
+          ]
+        : [
+            { id: "format-rect", label: t("notes.format.rect"), checked: body.format === "rect", onSelect: () => switchSlides("rect") },
+            { id: "format-square", label: t("notes.format.squareSlides"), checked: body.format === "square", onSelect: () => switchSlides("square") },
+          ];
   function switchSlides(f: PresentationBody["format"]) {
     const next = reflowPresentation(body as PresentationBody, f);
     change(next, true);
@@ -325,8 +341,9 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
   }
   const meta = doc;
   const menu: MenuEntry[] = [
-    ...(!isNote ? [{ id: "play", label: t("notes.pres.play"), icon: <RiPlayFill className="size-[18px]" />, onSelect: () => setPlaying(0) }] : []),
-    ...formatEntries.map((e, i) => (i === 0 && !isNote ? { ...e, divider: true } : e)),
+    ...(body.kind === "presentation" ? [{ id: "play", label: t("notes.pres.play"), icon: <RiPlayFill className="size-[18px]" />, onSelect: () => setPlaying(0) }] : []),
+    ...(body.kind === "book" ? [{ id: "book-files", label: t("notes.book.toFiles"), icon: <RiFolderTransferLine className="size-[18px]" />, onSelect: () => void saveBookToFiles(doc.name, body) }] : []),
+    ...formatEntries.map((e, i) => (i === 0 && body.kind === "presentation" ? { ...e, divider: true } : e)),
     ...actions.entries(meta, null).map((e, i) => (i === 0 && formatEntries.length ? { ...e, divider: true } : e)),
   ];
   const statusText = readOnly
@@ -356,10 +373,23 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
       }}
     >
       <WindowHeader
-        className={cx("vn2-doc-top pointer-events-none absolute inset-x-0 top-0 z-30 [&>*]:pointer-events-auto", !isNote && "vn2-doc-top-pres")}
+        className={cx("vn2-doc-top pointer-events-none absolute inset-x-0 top-0 z-30 [&>*]:pointer-events-auto", body.kind === "presentation" && "vn2-doc-top-pres")}
         menu={false}
         right={
           <div className="vn2-float flex items-center gap-0.5 rounded-full p-1">
+            {isBook && (
+              <button
+                type="button"
+                onClick={() => setReading(true)}
+                aria-label={t("notes.book.reading")}
+                title={t("notes.book.reading")}
+                className="vn2-icon-btn h-9 grid-flow-col gap-1.5 px-2.5 text-[14px] font-semibold"
+                data-testid="notes-book-read"
+              >
+                <RiBookOpenLine className="size-[18px]" />
+                <span className="hidden sm:inline">{t("notes.book.reading")}</span>
+              </button>
+            )}
             {!readOnly && (
               <>
                 <button type="button" onClick={undo} disabled={!history.current.past.length} aria-label={t("notes.undo")} title={t("notes.undo")} className="vn2-icon-btn size-9" data-testid="notes-undo">
@@ -422,6 +452,12 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
 
       {body.kind === "note" ? (
         <NoteEditor body={body} onChange={change} readOnly={readOnly} />
+      ) : body.kind === "book" ? (
+        reading ? (
+          <BookReader body={body} title={doc.name} start={bookPage.current} canEdit={!readOnly} onEdit={() => setReading(false)} onClose={() => void leave()} onPage={onBookPage} />
+        ) : (
+          <NoteEditor body={body} onChange={change} readOnly={readOnly} initialPage={bookPage.current} onPage={onBookPage} />
+        )
       ) : (
         <PresentationEditor body={body} onChange={change} readOnly={readOnly} onPlay={(from) => setPlaying(from)} />
       )}
@@ -438,4 +474,24 @@ function BackButton({ onClick }: { onClick: () => void }) {
       <RiArrowLeftSLine className="size-6" />
     </button>
   );
+}
+
+/**
+ * Step 2.13: a book as a .book file in Files (its text, page by page; the
+ * pictures stay in Notes, where the book is written and shared).
+ */
+async function saveBookToFiles(name: string, body: BookBody) {
+  const data: BookFile = {
+    kind: "book",
+    pages: body.pages.map((p) => ({
+      id: p.id,
+      blocks: p.blocks.filter((b) => b.kind !== "image").map((b) => ({ id: b.id, kind: b.kind, text: b.text, ...(b.checked ? { checked: true } : {}) })),
+    })),
+  };
+  try {
+    await openInFiles(`${name}.book`, new Blob([serialize("book", data)], { type: "application/vnd.voidex.book+json" }));
+    toast({ title: tr("notes.book.savedToFiles"), tone: "success" });
+  } catch (e) {
+    toast({ title: e instanceof Error ? e.message : String(e), tone: "danger" });
+  }
 }

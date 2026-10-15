@@ -34,7 +34,9 @@ export function notesMediaId(src: unknown): string | null {
 
 // ---------------------------------------------------------------- documents
 
-export type NotesDocKind = "note" | "presentation";
+export type NotesDocKind = "note" | "presentation" | "book";
+/** Step 2.13: the file extension of a share card / file. */
+export type NotesExt = ".txt" | ".prsn" | ".book";
 export type NotesRole = "owner" | "editor" | "viewer";
 /** A note is a portrait sheet that grows downwards, or square pages that continue sideways. */
 export type NoteFormat = "vertical" | "square";
@@ -42,7 +44,9 @@ export type NoteFormat = "vertical" | "square";
 export type SlideFormat = "rect" | "square";
 export type SlideTransition = "none" | "fade" | "slide" | "scale";
 
-export const NOTE_BLOCK_KINDS = ["text", "heading", "subheading", "quote", "checklist", "bullet", "code", "image"] as const;
+export const NOTE_BLOCK_KINDS = ["text", "heading", "subheading", "heading2", "quote", "checklist", "bullet", "code", "image"] as const;
+/** Step 2.13: the text sizes a Book offers (px at 100 %). */
+export const BOOK_FONT_SIZES = [12, 14, 16, 18, 20, 24, 32] as const;
 export type NoteBlockKind = (typeof NOTE_BLOCK_KINDS)[number];
 export const SLIDE_TRANSITIONS: SlideTransition[] = ["none", "fade", "slide", "scale"];
 
@@ -58,6 +62,12 @@ export interface NoteBlock {
   align?: "left" | "center" | "right";
   bold?: boolean;
   italic?: boolean;
+  /** Step 2.13: text size in px (one of BOOK_FONT_SIZES); unset = the style's own size. */
+  size?: number;
+  /** Step 2.13: an image aligned left / right lets the text that follows flow beside it. */
+  wrap?: boolean;
+  /** Step 2.13: neighbouring images with the same row id stand side by side in one row. */
+  row?: string;
 }
 /** A page of a note. A note with one page is continuous (it grows as you write). */
 export interface NotePage {
@@ -96,7 +106,18 @@ export interface PresentationBody {
   format: SlideFormat;
   slides: Slide[];
 }
-export type NotesBody = NoteBody | PresentationBody;
+/**
+ * Step 2.13: a book. Fixed pages (shown as spreads on wide screens) holding
+ * the same blocks as a note; pages are only added by the person ("+"), never
+ * by themselves.
+ */
+export interface BookBody {
+  kind: "book";
+  format: "book";
+  pages: NotePage[];
+}
+export type NotesBody = NoteBody | PresentationBody | BookBody;
+
 
 type Obj = Record<string, unknown>;
 const isObj = (x: unknown): x is Obj => !!x && typeof x === "object" && !Array.isArray(x);
@@ -120,20 +141,24 @@ function validBlock(b: unknown) {
     opt(b.width, (v) => num(v, 10, 100)) &&
     opt(b.align, (v) => ALIGN.includes(v as string)) &&
     opt(b.bold, bool) &&
-    opt(b.italic, bool)
+    opt(b.italic, bool) &&
+    opt(b.size, (v) => (BOOK_FONT_SIZES as readonly number[]).includes(v as number)) &&
+    opt(b.wrap, bool) &&
+    opt(b.row, (v) => str(v, 64))
   );
 }
 
+
+const validPages = (x: unknown, max: number) =>
+  Array.isArray(x) && x.length >= 1 && x.length <= max && x.every((p) => isObj(p) && str(p.id, 64) && Array.isArray(p.blocks) && p.blocks.length <= 3000 && p.blocks.every(validBlock));
+
 export function validNoteBody(x: unknown): x is NoteBody {
-  return (
-    isObj(x) &&
-    x.kind === "note" &&
-    (x.format === "vertical" || x.format === "square") &&
-    Array.isArray(x.pages) &&
-    x.pages.length >= 1 &&
-    x.pages.length <= 500 &&
-    x.pages.every((p) => isObj(p) && str(p.id, 64) && Array.isArray(p.blocks) && p.blocks.length <= 3000 && p.blocks.every(validBlock))
-  );
+  return isObj(x) && x.kind === "note" && (x.format === "vertical" || x.format === "square") && validPages(x.pages, 500);
+}
+
+/** Step 2.13: a book (up to 1000 pages). */
+export function validBookBody(x: unknown): x is BookBody {
+  return isObj(x) && x.kind === "book" && x.format === "book" && validPages(x.pages, 1000);
 }
 
 function validLayer(l: unknown) {
@@ -175,7 +200,7 @@ export function validPresentationBody(x: unknown): x is PresentationBody {
 }
 
 export function validNotesBody(kind: NotesDocKind, x: unknown): x is NotesBody {
-  return kind === "note" ? validNoteBody(x) : validPresentationBody(x);
+  return kind === "note" ? validNoteBody(x) : kind === "book" ? validBookBody(x) : validPresentationBody(x);
 }
 
 /** Every Notes image something refers to (src / cover / background). */
@@ -198,6 +223,13 @@ const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString
 export function emptyNote(format: NoteFormat = "vertical"): NoteBody {
   return { kind: "note", format, pages: [{ id: newId(), blocks: [{ id: newId(), kind: "text", text: "" }] }] };
 }
+
+/** Step 2.13: a new book opens on its first spread (two empty pages). */
+export function emptyBook(): BookBody {
+  const page = (): NotePage => ({ id: newId(), blocks: [{ id: newId(), kind: "text", text: "" }] });
+  return { kind: "book", format: "book", pages: [page(), page()] };
+}
+
 
 export function titleSlide(title = "", subtitle = ""): Slide {
   return {
@@ -263,7 +295,7 @@ export interface NotesDocMetaDto {
   kind: NotesDocKind;
   name: string;
   cover: string | null;
-  format: NoteFormat | SlideFormat;
+  format: NoteFormat | SlideFormat | "book";
   role: NotesRole;
   revision: number;
   pages: number;
@@ -300,7 +332,7 @@ export interface NotesShareInfoDto {
   role: Exclude<NotesRole, "owner">;
   kind: NotesShareKind;
   name: string;
-  ext: ".txt" | ".prsn";
+  ext: NotesExt;
   owner: { id: string; name: string };
   /** My access to the original right now. */
   access: NotesRole | "none";
@@ -315,7 +347,7 @@ export interface NotesShareInfoDto {
 export interface NotesCardDto {
   token: string;
   title: string;
-  ext: ".txt" | ".prsn";
+  ext: NotesExt;
   kind: NotesShareKind;
 }
 
@@ -334,8 +366,9 @@ export interface NotesPrefsDto {
 }
 export const DEFAULT_NOTES_PREFS: NotesPrefsDto = { projectsView: "grid", projectsSort: "modified", docsView: "grid", docsSort: "custom" };
 
-/** The file-card extension: presentations are .prsn, notes and whole projects .txt. */
-export const notesExt = (kind: NotesShareKind): ".txt" | ".prsn" => (kind === "presentation" ? ".prsn" : ".txt");
+/** The file-card extension: presentations are .prsn, books .book, notes and whole projects .txt. */
+export const notesExt = (kind: NotesShareKind): NotesExt => (kind === "presentation" ? ".prsn" : kind === "book" ? ".book" : ".txt");
+
 
 // ---------------------------------------------------------------- legacy (Step 2.5 workspace)
 

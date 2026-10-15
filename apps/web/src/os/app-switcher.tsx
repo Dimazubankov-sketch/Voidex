@@ -6,7 +6,7 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { AppTile } from "@/brand/brand";
 import { IconButton } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
-import { SnapshotView } from "./gesture-peek";
+import { SnapshotView, SwitcherBackdrop } from "./gesture-peek";
 import { requestClose, useWM, type AppWindow } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -34,15 +34,16 @@ function EmptyDeck() {
   const wm = useWM();
   return (
     <motion.div
-      className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-background/80 backdrop-blur-xl"
-      initial={{ opacity: 0 }}
+      className="absolute inset-0 z-[100] flex flex-col items-center justify-center gap-5"
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.22 }}
       onClick={() => wm.goHome()}
       data-testid="app-switcher"
     >
-      <span className="text-[15px] text-text-secondary" data-testid="switcher-empty">
+      <SwitcherBackdrop />
+      <span className="relative text-[15px] text-text-secondary" data-testid="switcher-empty">
         {t("os.switcherEmpty")}
       </span>
     </motion.div>
@@ -142,8 +143,9 @@ function Deck({ items }: { items: AppWindow[] }) {
   return (
     <motion.div
       ref={root}
-      className="absolute inset-0 z-[100] touch-none select-none overflow-hidden bg-background/80 backdrop-blur-xl"
-      initial={{ opacity: 0 }}
+      className="absolute inset-0 z-[100] touch-none select-none overflow-hidden"
+      // Step 2.13: the blurred background is there at once (no blur growing in); only the cards fade.
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.22 }}
@@ -163,7 +165,8 @@ function Deck({ items }: { items: AppWindow[] }) {
       tabIndex={-1}
       data-testid="app-switcher"
     >
-      <motion.div className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center" style={{ x, gap: GAP }}>
+      <SwitcherBackdrop />
+      <motion.div className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center" style={{ x, gap: GAP }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
         {items.map((w, i) => (
           <Card
             key={w.id}

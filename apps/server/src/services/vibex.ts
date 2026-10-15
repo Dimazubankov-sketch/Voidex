@@ -199,7 +199,13 @@ export class VibexService {
 
   async updateSettings(
     userId: string,
-    patch: { privacy?: Partial<VibexSettings["privacy"]>; notifications?: Partial<VibexSettings["notifications"]>; media?: Partial<VibexSettings["media"]>; chats?: Partial<VibexSettings["chats"]> },
+    patch: {
+      privacy?: Partial<VibexSettings["privacy"]>;
+      notifications?: Partial<VibexSettings["notifications"]>;
+      media?: Partial<VibexSettings["media"]>;
+      chats?: Partial<VibexSettings["chats"]>;
+      feed?: Partial<VibexSettings["feed"]>;
+    },
   ): Promise<VibexSettings> {
     await this.ensureProfile(userId);
     const cur = await this.settings(userId);
@@ -208,6 +214,7 @@ export class VibexService {
       notifications: { ...cur.notifications, ...patch.notifications },
       media: { ...cur.media, ...patch.media },
       chats: { ...cur.chats, ...patch.chats },
+      feed: { ...cur.feed, ...patch.feed },
     });
     next.privacy.blocked = [...new Set(next.privacy.blocked.filter((id) => id !== userId))];
     await this.ctx.db.update(vibexProfiles).set({ settings: next }).where(eq(vibexProfiles.userId, userId));

@@ -3,7 +3,11 @@
  * shapes (see @voidex/shared notes.ts): pages of a note, Note → Presentation,
  * reflowing slides between formats. No React, no DOM: tested with node.
  */
-import type { NoteBlock, NoteBody, NotePage, PresentationBody, Slide, SlideFormat, SlideLayer } from "@voidex/shared";
+import type { BookBody, NoteBlock, NoteBody, NotePage, PresentationBody, Slide, SlideFormat, SlideLayer } from "@voidex/shared";
+
+/** A note or a book: pages of blocks (Step 2.13: the page functions serve both). */
+export type PagedBody = NoteBody | BookBody;
+
 
 export const newId = () => globalThis.crypto.randomUUID();
 
@@ -14,10 +18,11 @@ export function block(kind: NoteBlock["kind"] = "text", text = ""): NoteBlock {
 // ---------------------------------------------------------------- pages
 
 /** A note with one page is continuous; with several it is paged. */
-export const isPaged = (n: NoteBody) => n.pages.length > 1;
+export const isPaged = (n: PagedBody) => n.pages.length > 1;
+
 
 /** Splits the page that holds `blockId` so that block starts a new page ("Разделить здесь"). */
-export function splitAt(n: NoteBody, blockId: string): NoteBody {
+export function splitAt<T extends PagedBody>(n: T, blockId: string): T {
   const pages: NotePage[] = [];
   for (const p of n.pages) {
     const i = p.blocks.findIndex((b) => b.id === blockId);
@@ -31,21 +36,29 @@ export function splitAt(n: NoteBody, blockId: string): NoteBody {
 }
 
 /** Adds an empty page after page `index` (or at the end). */
-export function addPage(n: NoteBody, index = n.pages.length - 1): { note: NoteBody; page: NotePage } {
+export function addPage<T extends PagedBody>(n: T, index = n.pages.length - 1): { note: T; page: NotePage } {
   const page: NotePage = { id: newId(), blocks: [block()] };
   const pages = [...n.pages];
   pages.splice(index + 1, 0, page);
   return { note: { ...n, pages }, page };
 }
 
+
+/** Step 2.13 (books): adds two empty pages (a spread) after page `index` (or at the end). */
+export function addSpread<T extends PagedBody>(n: T, index = n.pages.length - 1): { note: T; page: NotePage } {
+  const first = addPage(n, index);
+  const second = addPage(first.note, index + 1);
+  return { note: second.note, page: first.page };
+}
+
 /** Joins all pages back into one continuous sheet (nothing is lost). */
-export function mergePages(n: NoteBody): NoteBody {
+export function mergePages<T extends PagedBody>(n: T): T {
   if (n.pages.length <= 1) return n;
   return { ...n, pages: [{ id: n.pages[0]!.id, blocks: n.pages.flatMap((p) => p.blocks) }] };
 }
 
 /** Removes a page; its blocks move to the previous page (never lost). */
-export function removePage(n: NoteBody, index: number): NoteBody {
+export function removePage<T extends PagedBody>(n: T, index: number): T {
   if (n.pages.length <= 1 || index < 0 || index >= n.pages.length) return n;
   const pages = n.pages.map((p) => ({ ...p, blocks: [...p.blocks] }));
   const [gone] = pages.splice(index, 1);
@@ -57,7 +70,7 @@ export function removePage(n: NoteBody, index: number): NoteBody {
 }
 
 /** True when a page holds anything (text or a picture). */
-export function pageHasContent(n: NoteBody, index: number): boolean {
+export function pageHasContent(n: PagedBody, index: number): boolean {
   return !!n.pages[index]?.blocks.some((b) => b.kind === "image" || b.text.trim());
 }
 
@@ -67,7 +80,7 @@ export function pageHasContent(n: NoteBody, index: number): boolean {
  * The first page is never deleted: it is cleared instead (whether it is the
  * only page or others follow), so a note always starts with a page.
  */
-export function deleteOrClearPage(n: NoteBody, index: number): { note: NoteBody; show: number; cleared: boolean } {
+export function deleteOrClearPage<T extends PagedBody>(n: T, index: number): { note: T; show: number; cleared: boolean } {
   if (index < 0 || index >= n.pages.length) return { note: n, show: 0, cleared: false };
   if (index === 0) {
     const pages = n.pages.map((p, i) => (i === 0 ? { ...p, blocks: [block()] } : p));
@@ -216,3 +229,103 @@ export function textFits(l: SlideLayer, format: SlideFormat): boolean {
 export function slideOverflows(s: Slide, format: SlideFormat): boolean {
   return s.layers.some((l) => !l.hidden && (l.y + l.h > 101 || l.x + l.w > 101 || !textFits(l, format)));
 }
+
+// ---------------------------------------------------------------- image rows (Step 2.13)
+
+/** A run of blocks as laid out: a single block, or images standing side by side in one row. */
+export type LaidOut = { kind: "block"; block: NoteBlock } | { kind: "row"; id: string; blocks: NoteBlock[] };
+
+/** Neighbouring images with the same row id form a row; anything else stands on its own. */
+export function layoutBlocks(blocks: NoteBlock[]): LaidOut[] {
+  const out: LaidOut[] = [];
+  for (const b of blocks) {
+    const last = out.at(-1);
+    if (b.kind === "image" && b.row && last) {
+      if (last.kind === "row" && last.id === b.row) {
+        last.blocks.push(b);
+        continue;
+      }
+      if (last.kind === "block" && last.block.kind === "image" && last.block.row === b.row) {
+        out[out.length - 1] = { kind: "row", id: b.row, blocks: [last.block, b] };
+        continue;
+      }
+    }
+    out.push({ kind: "block", block: b });
+  }
+  return out;
+}
+
+/** The indexes [from, to] of the row a block stands in (itself when it is alone). */
+export function rowExtent(blocks: NoteBlock[], index: number): [number, number] {
+  const row = blocks[index]?.row;
+  if (!row || blocks[index]!.kind !== "image") return [index, index];
+  let a = index;
+  let z = index;
+  while (a > 0 && blocks[a - 1]!.kind === "image" && blocks[a - 1]!.row === row) a--;
+  while (z < blocks.length - 1 && blocks[z + 1]!.kind === "image" && blocks[z + 1]!.row === row) z++;
+  return [a, z];
+}
+
+/** Puts the image at `index` beside the image before it (joining that one's row, or starting one). */
+export function joinRow(blocks: NoteBlock[], index: number, rowId: string): NoteBlock[] {
+  const prev = blocks[index - 1];
+  const b = blocks[index];
+  if (!prev || !b || prev.kind !== "image" || b.kind !== "image") return blocks;
+  const id = prev.row ?? rowId;
+  return blocks.map((x, i) => (i === index - 1 || i === index ? { ...x, row: id, wrap: undefined } : x));
+}
+
+/** Takes the image at `index` out of its row onto a line of its own (right after the row). */
+export function leaveRow(blocks: NoteBlock[], index: number): NoteBlock[] {
+  const b = blocks[index];
+  if (!b?.row) return blocks;
+  const [, z] = rowExtent(blocks, index);
+  const list = blocks.map((x) => ({ ...x }));
+  const [moved] = list.splice(index, 1);
+  delete moved!.row;
+  list.splice(z, 0, moved!);
+  // A row left with a single image is no row any more.
+  const rest = list.filter((x) => x.row === b.row);
+  if (rest.length === 1) delete rest[0]!.row;
+  return list;
+}
+
+/**
+ * Moves a block one step (an image inside a row moves within it; at the row's
+ * edge it steps out of the row; a block next to a row jumps over the whole row).
+ * Returns null when it is already at the edge of the page.
+ */
+export function moveInPage(blocks: NoteBlock[], index: number, delta: -1 | 1): NoteBlock[] | null {
+  const b = blocks[index];
+  if (!b) return null;
+  const list = blocks.map((x) => ({ ...x }));
+  if (b.row) {
+    const j = index + delta;
+    if (list[j]?.kind === "image" && list[j]!.row === b.row) {
+      [list[index], list[j]] = [list[j]!, list[index]!];
+      return list;
+    }
+    return stepOut(blocks, index, delta);
+  }
+  const j = index + delta;
+  if (j < 0 || j >= list.length) return null;
+  const [a, z] = rowExtent(list, j);
+  const [moved] = list.splice(index, 1);
+  // Back: before the neighbour (or its whole row). Forward: after it (indexes past `index` shifted by one).
+  list.splice(delta < 0 ? a : z, 0, moved!);
+  return list;
+}
+
+function stepOut(blocks: NoteBlock[], index: number, delta: -1 | 1): NoteBlock[] {
+  const [a, z] = rowExtent(blocks, index);
+  const list = blocks.map((x) => ({ ...x }));
+  const [moved] = list.splice(index, 1);
+  const row = moved!.row;
+  delete moved!.row;
+  // Before the row when stepping back, after it when stepping forward.
+  list.splice(delta < 0 ? a : z, 0, moved!);
+  const rest = list.filter((x) => x.row === row);
+  if (rest.length === 1) delete rest[0]!.row;
+  return list;
+}
+

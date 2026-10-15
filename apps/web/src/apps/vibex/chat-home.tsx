@@ -147,7 +147,7 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
       {header?.(stack)}
       <div
         ref={scroller}
-        className="vx-chat-list scroll-area relative min-h-0 flex-1 overscroll-y-contain"
+        className="vx-chat-list vx-tab-scroll scroll-area relative min-h-0 flex-1 overscroll-y-contain"
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}

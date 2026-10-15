@@ -596,12 +596,12 @@ test("profile: tabs Публикации · Посты · Репосты; one me
   await expect(page.getByTestId("publication-tile")).toHaveCount(1);
   await expect(page.getByTestId("publication-mark")).toHaveAttribute("data-mark", "photo");
   await shot(page, `profile-publications-${isMobile(page) ? "phone" : "pc"}`);
+  // Step 2.13: a tap opens the publications as a feed (media first, the caption under it).
   await page.getByTestId("publication-tile").click();
-  await expect(page.getByTestId("publication")).toBeVisible();
-  await expect(page.getByTestId("publication-text")).toHaveCount(0);
-  await page.getByTestId("publication-show-text").click();
-  await expect(page.getByTestId("publication-text")).toHaveText("Подпись к фото");
+  await expect(page.getByTestId("publication-viewer")).toBeVisible();
+  await expect(page.getByTestId("publication-viewer").getByTestId("publication-caption")).toContainText("Подпись к фото");
   await page.keyboard.press("Escape");
+  await expect(page.getByTestId("publication-viewer")).toHaveCount(0);
   // «Посты» shows the same post as a full card (one post, two views), and the text-only one.
   await page.getByTestId("profile-tab-posts").click();
   await expect(page.getByTestId("post-card")).toHaveCount(2);

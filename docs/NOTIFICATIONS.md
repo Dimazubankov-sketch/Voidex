@@ -88,3 +88,18 @@ notifications turned off in Settings → Apps: no pop-up.
 - Appex Store: `store.update` notifications (an update installed by itself, or one
   waiting), with Store → account → «Уведомления об обновлениях»; a tap opens the
   update center.
+
+## Step 2.13
+- Vibex notifications are soft cards (see VIBEX.md), grouped by day as before.
+- VoidOps Mail: addresses in a received letter (`http(s)://…`, `www.…`) are links
+  (`target=_blank`, `rel="noopener noreferrer nofollow"`). The text is split into
+  strings and links by `linkParts` (`packages/shared/src/links.ts`, unit tested); only
+  http(s) with a real host is linked, nothing is parsed as HTML, the rest stays text.
+- VoidOps Mail on phones: a swipe to the left archives a letter (`mail/swipe.tsx`):
+  the row follows the finger over a violet «В архив», past a third of its width (or a
+  flick) it goes, a short swipe springs back, a mostly vertical move scrolls the list
+  (`touch-action: pan-y`, axis lock at 8 px). The toast offers «Отменить». Archiving
+  without the gesture stays in the toolbar and the selection bar; PCs keep their
+  controls.
+- The Mail logo everywhere is the new violet envelope (`/brand/app-mail.png`, one
+  asset through `MailGlyph`).

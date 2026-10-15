@@ -5,6 +5,7 @@ import { Dialog as Primitive } from 'radix-ui';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
 import { ArrowLeft, Undo2, Redo2, Share2, Plus, ChevronLeft, ChevronRight, Trash2, Lock, Play, Copy } from 'lucide-react';
 import type { OpenFile, FileData } from './model';
+import { isBook } from './model';
 import type { FilesAdapter, FilesHost } from './adapter';
 import { slide, block, backgrounds } from './presentation';
 export const canvasBackground: Record<string, string> = {
@@ -101,9 +102,11 @@ export function Editor({
       setBusy(false);
     }
   }
-  const s = typeof data === 'string' ? null : data,
+  // Step 2.13: a book is read here; it is written in Notes.
+  const book = isBook(data) ? data : null,
+    s = typeof data === 'string' || isBook(data) ? null : data,
     p = s?.slides[Math.min(page, s.slides.length - 1)],
-    can = file.editable && !present;
+    can = file.editable && !present && !book;
   const setSlide = (next: Partial<NonNullable<typeof p>>) => {
     if (s && p) change({ ...s, slides: s.slides.map((a, i) => (i === page ? { ...a, ...next } : a)) });
   };
@@ -120,6 +123,7 @@ export function Editor({
   }
   const next = (d: number) => {
     if (s) setPage((v) => Math.max(0, Math.min(s.slides.length - 1, v + d)));
+    if (book) setPage((v) => Math.max(0, Math.min(book.pages.length - 1, v + d)));
   };
   return (
     <Dialog
@@ -205,7 +209,39 @@ export function Editor({
             </div>
           )}
           <div className="vf-editor-body">
-            {typeof data === 'string' ? (
+            {isBook(data) ? (
+              <div className="vf-book" data-testid="files-book">
+                <article className="vf-book-page" aria-label={'Страница ' + (Math.min(page, data.pages.length - 1) + 1)}>
+                  {data.pages[Math.min(page, data.pages.length - 1)]!.blocks.map((b) =>
+                    b.kind === 'heading' ? (
+                      <h2 key={b.id}>{b.text}</h2>
+                    ) : b.kind === 'heading2' ? (
+                      <h3 key={b.id}>{b.text}</h3>
+                    ) : b.kind === 'subheading' ? (
+                      <h4 key={b.id}>{b.text}</h4>
+                    ) : b.kind === 'quote' ? (
+                      <blockquote key={b.id}>{b.text}</blockquote>
+                    ) : (
+                      <p key={b.id} className={b.kind}>
+                        {b.kind === 'bullet' ? '• ' : b.kind === 'checklist' ? (b.checked ? '☑ ' : '☐ ') : ''}
+                        {b.text}
+                      </p>
+                    ),
+                  )}
+                </article>
+                <div className="vf-page-switch">
+                  <button className="vf-icon" disabled={page === 0} onClick={() => next(-1)} aria-label="Предыдущая страница">
+                    <ChevronLeft />
+                  </button>
+                  <span data-testid="files-book-indicator">
+                    {Math.min(page, data.pages.length - 1) + 1} / {data.pages.length}
+                  </span>
+                  <button className="vf-icon" disabled={page >= data.pages.length - 1} onClick={() => next(1)} aria-label="Следующая страница">
+                    <ChevronRight />
+                  </button>
+                </div>
+              </div>
+            ) : typeof data === 'string' ? (
               <div className="vf-paper">
                 <textarea
                   ref={textRef}
@@ -320,6 +356,7 @@ export function Editor({
             )}
           </div>
           {can &&
+            !isBook(data) &&
             (typeof data === 'string' ? (
               <footer className="vf-text-tools">
                 <button onClick={() => insert('• ')}>Список</button>

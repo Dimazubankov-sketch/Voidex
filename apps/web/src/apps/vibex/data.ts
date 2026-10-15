@@ -99,6 +99,7 @@ export function useUpdateSettings() {
             media: { ...s.media, ...patch.media },
             // Step 2.9: older servers / caches may have no chats section yet.
             chats: { ...(s.chats ?? { order: "chats-first" }), ...patch.chats },
+            feed: { ...(s.feed ?? { mode: "posts" }), ...patch.feed },
           },
         });
       }
@@ -764,11 +765,17 @@ export function useDeleteMessages(chatId: string) {
 }
 
 export const forwardMessages = (messageIds: string[], conversationIds: string[]) =>
-  api.post<{ ok: true; sent: number }>("/api/vibex/messages/forward", { messageIds, conversationIds }).then((r) => {
-    void queryClient.invalidateQueries({ queryKey: vk.chats });
-    for (const id of conversationIds) void queryClient.invalidateQueries({ queryKey: vk.messages(id) });
-    return r;
-  });
+  api
+    .post<{
+      ok: true;
+      sent: number;
+    }>("/api/vibex/messages/forward", { messageIds, conversationIds })
+    .then((r) => {
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+      for (const id of conversationIds) void queryClient.invalidateQueries({ queryKey: vk.messages(id) });
+      return r;
+    });
+
 
 export function usePinMessage(chatId: string) {
   return useMutation({

@@ -11,6 +11,26 @@ import { isPrivateApp, mountSnapshot, snapshotOf, useSnapshots } from "./snapsho
 import { foregroundId, useWM, type AppWindow } from "./window-manager";
 
 const GAP = 16;
+/** Travel (px) after which the gesture counts as entering the switcher and the backdrop is on. */
+const PEEK_ON = 10;
+
+/**
+ * Step 2.13: the switcher's background: the home screen behind the app cards,
+ * blurred and slightly dimmed. A single compositor layer (backdrop-filter) under
+ * the cards: the cards themselves are never blurred, and the blur never changes
+ * strength while dragging: it is either on (fully) or off.
+ */
+export function SwitcherBackdrop({ style, className, testId = "switcher-backdrop" }: { style?: React.ComponentProps<typeof motion.div>["style"]; className?: string; testId?: string }) {
+  return (
+    <motion.div
+      className={`absolute inset-0 bg-black/[0.12] backdrop-blur-[22px] backdrop-saturate-[1.35] [transform:translateZ(0)] ${className ?? ""}`}
+      style={style}
+      data-testid={testId}
+      data-blurred="true"
+    />
+  );
+}
+
 
 /** Step 2.9: the gesture bar is being dragged (and along which axis). */
 export const useGesturePeek = create<{ active: boolean; axis: "x" | "y" | null }>(() => ({ active: false, axis: null }));
@@ -65,12 +85,15 @@ export function GesturePeek() {
   const i = list.findIndex((x) => x.id === fg);
   const prev = i > 0 ? list[i - 1] : undefined;
   const next = i >= 0 ? list[i + 1] : undefined;
-  const backdrop = useTransform(barDrag.y, (y) => Math.min(1, Math.max(0, (-y - 10) / 140)));
+  // Step 2.13: once the drag has clearly started (either axis), the home screen behind the cards is
+  // already fully blurred: one ready layer switched on at once, never a blur that grows with the finger.
+  const backdrop = useTransform([barDrag.x, barDrag.y] as MotionValue<number>[], ([bx, by]) => (Math.abs(bx as number) > PEEK_ON || -(by as number) > PEEK_ON ? 1 : 0));
   if (!active || !fg) return null;
   return (
     <div className="pointer-events-none absolute inset-0" style={{ zIndex: 5 }} aria-hidden data-testid="gesture-peek" data-axis={axis ?? ""}>
       {/* Step 2.11 (the reference video): the home screen shows through behind the card, blurred and a little dimmed. */}
-      {axis === "y" && <motion.div className="absolute inset-0 bg-black/[0.12] backdrop-blur-[22px] backdrop-saturate-[1.35]" style={{ opacity: backdrop }} data-testid="gesture-backdrop" />}
+      {/* Step 2.13: the same blurred layer for sideways drags too: the gaps between the apps never show the sharp desktop. */}
+      {(axis === "y" || axis === "x") && <SwitcherBackdrop style={{ opacity: backdrop }} testId="gesture-backdrop" />}
       {prev && (axis === "y" || axis === "x") && <Neighbour win={prev} side={-1} w={w} h={h} axis={axis} />}
       {next && (axis === "y" || axis === "x") && <Neighbour win={next} side={1} w={w} h={h} axis={axis} />}
     </div>

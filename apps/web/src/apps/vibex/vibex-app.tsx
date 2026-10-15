@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, useDragControls } from "motion/react";
+import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useTransform } from "motion/react";
 import {
   RiAddLine,
   RiArrowLeftLine,
@@ -35,9 +35,13 @@ import { mayStart } from "@/os/gesture-priority";
 import { ShareSheet } from "./share-sheet";
 import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
 import { PushDrawer } from "@/ui/push-drawer";
-import { useActivityCount, useChats, useFeed } from "./data";
+import { useActivityCount, useChats, useFeed, useUpdateSettings, useVibexMe } from "./data";
 import { VibexHeader, VibexSearchButton, VibexTitle } from "./header";
+import { VibexTabBar } from "./tabbar";
+import { PublicationViewerHost, PublicationsList } from "./publications";
+import type { VibexFeedMode } from "@voidex/shared";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
+
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -74,6 +78,7 @@ function VibexShell() {
   return (
     <div className="vx-app-bg relative flex min-h-0 flex-1 overflow-hidden" data-testid="vibex-app">
       {ff === "desktop" ? <DesktopVibex /> : <MobileVibex />}
+      <PublicationViewerHost />
       <CommentsScreen />
       <PostComposer />
       <ShareSheet />
@@ -92,15 +97,101 @@ const SECTION_TITLE: Record<VibexSection, MessageKey> = {
   me: "vibex.nav.profile",
 };
 
-function Feed() {
-  const feed = useFeed();
+/** Step 2.13: «Публикации» or «Посты» for Главная, kept in the account's Vibex settings. */
+function useFeedMode(): [VibexFeedMode, (m: VibexFeedMode) => void] {
+  const mode = useVibexMe().data?.settings.feed?.mode ?? "posts";
+  const update = useUpdateSettings();
+  return [mode, (m) => m !== mode && update.mutate({ feed: { mode: m } })];
+}
+
+/** Step 2.13: the two views of the feed, a segmented switch with one sliding pill. */
+function FeedModeSwitch({ className }: { className?: string }) {
+  const t = useT();
+  const [mode, setMode] = useFeedMode();
+  const modes = [
+    { key: "publications" as const, label: t("vibex.feed.modePublications") },
+    { key: "posts" as const, label: t("vibex.feed.modePosts") },
+  ];
   return (
-    <div className="flex flex-col gap-3" data-testid="vibex-feed">
-      <ComposerPrompt />
-      <PostList query={feed} empty={<FeedEmpty />} />
+    <div role="tablist" aria-label={t("vibex.feed.mode")} className={cx("vx-feed-switch relative grid h-10 grid-cols-2 rounded-full p-1", className)} data-testid="feed-mode" data-mode={mode}>
+      {modes.map((m) => {
+        const on = m.key === mode;
+        return (
+          <button
+            key={m.key}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            onClick={() => setMode(m.key)}
+            className={cx("relative z-[1] rounded-full text-[14px] font-semibold transition-colors", on ? "text-text" : "text-text-secondary")}
+            data-testid={`feed-mode-${m.key}`}
+          >
+            {on && <motion.span layoutId="vx-feed-mode" className="vx-feed-switch-pill absolute inset-0 -z-[1] rounded-full" transition={{ type: "spring", stiffness: 480, damping: 38 }} />}
+            {m.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
+
+function Feed({ switcher = true }: { switcher?: boolean }) {
+  const feed = useFeed();
+  const [mode] = useFeedMode();
+  return (
+    <div className="flex flex-col gap-3" data-testid="vibex-feed" data-mode={mode}>
+      {switcher && <FeedModeSwitch className="mx-auto w-full max-w-[320px]" />}
+      <ComposerPrompt />
+      {mode === "publications" ? <PublicationsList query={feed} /> : <PostList query={feed} empty={<FeedEmpty />} />}
+    </div>
+  );
+}
+
+/**
+ * Step 2.13: the feed's top bar (title and the mode switch) slides away while
+ * scrolling down and comes back as soon as the scroll turns up (not only at
+ * the top): transform and a slight fade, no layout change.
+ */
+function useHideOnScroll(scroller: React.RefObject<HTMLElement | null>, height: number, enabled: boolean) {
+  const y = useMotionValue(0);
+  const opacity = useTransform(y, [-height, 0], [0.4, 1]);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !enabled) {
+      y.set(0);
+      return;
+    }
+    let last = el.scrollTop;
+    let hidden = false;
+    let travel = 0;
+    const show = (v: boolean) => {
+      if (hidden === !v) return;
+      hidden = !v;
+      void animate(y, v ? 0 : -height, {
+        type: "spring",
+        stiffness: 420,
+        damping: 40,
+      });
+    };
+    const onScroll = () => {
+      const top = el.scrollTop;
+      const d = top - last;
+      last = top;
+      if (top <= 8) {
+        travel = 0;
+        return show(true);
+      }
+      // A little travel in one direction before it reacts (no flicker on tiny moves).
+      travel = Math.sign(d) === Math.sign(travel) ? travel + d : d;
+      if (travel > 14 && top > height) show(false);
+      else if (travel < -10) show(true);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [scroller, height, enabled, y]);
+  return { y, opacity };
+}
+
 
 function SectionBody({ section }: { section: VibexSection }) {
   switch (section) {
@@ -221,7 +312,7 @@ function DesktopVibex() {
             )}
             {!page && <VibexTitle className="justify-start pl-1.5">{t(SECTION_TITLE[section])}</VibexTitle>}
             {/* Step 2.11: the same search button as on phones (Главная, Профиль): it opens the Search tab. */}
-            {!page && (section === "feed" || section === "me") && <VibexSearchButton className="ml-auto" />}
+            {!page && section === "me" && <VibexSearchButton className="ml-auto" />}
           </WindowHeader>
           <div className="scroll-area flex-1">
             <Column>{page ? <PageBody page={page} key={`${page.kind}:${page.id}`} /> : <SectionBody section={section} />}</Column>
@@ -247,6 +338,8 @@ function MobileVibex() {
   const setDrawer = useVibex((s) => s.setDrawer);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
   const root = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const feedTop = useHideOnScroll(scroller, 112, section === "feed" && !chatId && stack.length === 0);
   // A swipe to the right from anywhere opens the side menu (only on the main screens, not over a chat / page).
   useEdgeSwipe(root, { enabled: !drawer && !chatId && stack.length === 0, onOpen: () => setDrawer(true), progress: drawerProgress, width: DRAWER_WIDTH });
 
@@ -263,11 +356,21 @@ function MobileVibex() {
 
   return (
     // Step 2.10: vertical lists scroll natively but leave sideways moves to the page (the drawer swipe starts anywhere).
-    <div ref={root} className="relative flex min-h-0 min-w-0 flex-1 flex-col [&_.scroll-area:not(.overflow-x-auto)]:touch-pan-y">
+    <div ref={root} className="vx-has-tabbar relative flex min-h-0 min-w-0 flex-1 flex-col [&_.scroll-area:not(.overflow-x-auto)]:touch-pan-y">
       {/* Step 2.9: the system side drawer — the menu lies under the screen, which slides right over it (no dimming). */}
       <PushDrawer open={drawer} onClose={() => setDrawer(false)} progress={drawerProgress} width={DRAWER_WIDTH} menu={<SidebarPanel variant="drawer" onClose={() => setDrawer(false)} />} testId="vibex-drawer">
       {/* Step 2.11: one header for every tab (search only on Главная and Профиль). Chats bring their own (with the stories). */}
-      {section !== "chats" && <VibexHeader title={t(SECTION_TITLE[section])} search={section === "feed" || section === "me"} />}
+        {/* Step 2.13: no search in Главная's header (the Search tab is right below); its header slides away with the scroll. */}
+        {section !== "chats" && section !== "feed" && <VibexHeader title={t(SECTION_TITLE[section])} search={section === "me"} />}
+        {section === "feed" && (
+          <motion.div className="vx-feed-top absolute inset-x-0 top-0 z-[15]" style={{ y: feedTop.y, opacity: feedTop.opacity }} data-testid="feed-top">
+            <VibexHeader title={t(SECTION_TITLE[section])} />
+            <div className="px-4 pb-2.5 pt-0.5">
+              <FeedModeSwitch className="mx-auto w-full max-w-[320px]" />
+            </div>
+          </motion.div>
+        )}
+
 
       {section === "chats" ? (
         // Step 2.9 (Telegram-like): stacked story avatars beside «Чаты»; pull down for the search, then the stories.
@@ -275,50 +378,25 @@ function MobileVibex() {
           header={(stories) => <VibexHeader title={t(SECTION_TITLE[section])} beside={stories} />}
         />
       ) : (
-        <div className="scroll-area flex-1">
-          <Column>
-            <SectionBody section={section} />
-          </Column>
+          <div ref={scroller} className={cx("vx-tab-scroll scroll-area flex-1", section === "feed" && "pt-[112px]")} data-testid="vibex-scroll">
+            <Column>{section === "feed" ? <Feed switcher={false} /> : <SectionBody section={section} />}</Column>
         </div>
       )}
       {section === "chats" && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
       {(section === "feed" || section === "me") && <NewPostFab className="right-4 bottom-[84px]" />}
 
-      {/* No safe-area padding here: the window frame already keeps the home-indicator area below the app.
-          (Adding it again squeezed this 64px bar on iPhone and pushed the icons across the divider.) */}
-      {/* Step 2.10: five tabs; on narrow phones (< 380 px) the icons carry them (the labels stay for screen readers). */}
-      <nav className="flex h-[68px] shrink-0 items-center justify-around border-t bg-surface px-1" data-testid="vibex-tabbar">
-        {tabs.map((item) => {
-          const active = section === item.key;
-          const Icon = active ? item.fill : item.line;
-          const badge = item.key === "chats" ? unread : item.key === "activity" ? activityUnread : 0;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => go(item.key)}
-              aria-current={active ? "page" : undefined}
-              aria-label={t(item.label)}
-              className="relative flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 active:scale-95"
-              data-testid={`vibex-tab-${item.key}`}
-            >
-              {/* Step 2.8 (reference): the active tab sits on a soft violet pill. */}
-              <span className={cx("relative flex h-8 w-12 items-center justify-center rounded-full transition-colors", active && "bg-primary/10")}>
-                <Icon className={cx("size-6 transition-colors", active ? "text-primary" : "text-text-tertiary")} />
-                {badge > 0 && (
-                  <span
-                    className="absolute right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-white"
-                    data-testid={item.key === "activity" ? "vibex-activity-unread" : "vibex-unread"}
-                  >
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </span>
-              <span className={cx("max-w-full truncate px-0.5 text-[11px] font-medium max-[379px]:sr-only", active ? "text-primary" : "text-text-secondary")}>{t(item.label)}</span>
-            </button>
-          );
-        })}
-      </nav>
+        {/* Step 2.13: the floating tab bar of the reference video (one capsule gliding between the tabs). The window
+          frame already keeps the home-indicator area below the app; the content scrolls under the bar. */}
+        <VibexTabBar
+          items={tabs.map((tab) => ({
+            ...tab,
+            badge: tab.key === "chats" ? unread : tab.key === "activity" ? activityUnread : 0,
+            badgeTestId: tab.key === "activity" ? "vibex-activity-unread" : "vibex-unread",
+          }))}
+          active={section}
+          onSelect={go}
+        />
+
 
 
       {/* Chat page */}

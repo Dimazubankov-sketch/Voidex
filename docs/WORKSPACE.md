@@ -329,3 +329,12 @@ purpose with its own quota).
     dimming or blur.
   - It closes with a tap on the screen, Esc, or a swipe left. It is used by
     Mail and Vibex on phones.
+
+## Step 2.13
+- App marks: `ICON_OPTICAL_SCALE` (brand.tsx) holds one optical factor per built-in
+  mark, measured on the artwork (opaque coverage and outline coverage, set to the
+  median), applied on top of the trimmed box; the person's «Logo size» scales the
+  box. Appex Store, Settings and Calculator no longer look smaller than the others.
+- Phone app switcher: the background between the cards is blurred as soon as the
+  switcher opens (one compositor layer, `SwitcherBackdrop`); it does not ramp with the
+  finger, the cards are never blurred, and going home removes it.
