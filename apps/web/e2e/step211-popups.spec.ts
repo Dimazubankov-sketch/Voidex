@@ -76,6 +76,9 @@ test("it goes away by itself; phone: a swipe up dismisses it, and the next one w
     await expect(popups).toHaveCount(2);
     await popups.filter({ hasText: "Первое" }).getByTestId("system-popup-close").click();
     await expect(popups.filter({ hasText: "Первое" })).toHaveCount(0);
+    // The second card slides into the closed one's place under the pointer, and a card under the
+    // pointer waits (by design): the pointer leaves the stack, as a person moving on would.
+    await page.mouse.move(40, 40);
   }
   // Then it goes away by itself.
   await expect(popups).toHaveCount(0, { timeout: 9000 });
