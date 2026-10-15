@@ -79,6 +79,8 @@ test("phone tab bar: a floating bar, 5 tabs at 320 px, one capsule that glides t
   await expect(page.getByTestId("vibex-tab-feed")).toHaveAttribute("aria-current", "page");
   // First render: the capsule is already on the active tab (no jump in from elsewhere).
   expect(await capsuleOn(page, "feed")).toBe(true);
+  // Measure once the window has finished opening (its scale animation leaves no transform at rest).
+  await expect.poll(() => page.locator('section[data-state="open"]').first().evaluate((el) => getComputedStyle(el).transform), { timeout: 5000 }).toBe("none");
   // The icons don't move when the capsule does.
   const before = await Promise.all(["feed", "people", "activity", "chats", "me"].map(async (k) => (await page.getByTestId(`vibex-tab-${k}`).boundingBox())!.x));
   await page.getByTestId("vibex-tab-activity").click();

@@ -58,6 +58,8 @@ test("Mail: the search button grows into the field in place; X clears and folds 
   test.skip(!isMobile(page), "phone header");
   await signUpViaApi(page, "Почта", "Поиском");
   await openApp(page, "mail");
+  // Measure once the window has finished opening (its scale animation leaves no transform at rest).
+  await expect.poll(() => page.locator('section[data-state="open"]').first().evaluate((el) => getComputedStyle(el).transform), { timeout: 5000 }).toBe("none");
   const bar = page.getByTestId("mail-search-bar");
   const closed = (await bar.boundingBox())!;
   expect(Math.round(closed.width)).toBe(40);
