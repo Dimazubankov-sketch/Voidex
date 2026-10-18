@@ -21,6 +21,11 @@ export function rowHeight(m: IconMetrics, label: LabelStyle): number {
   return m.tile + 8 + text + 10;
 }
 
+/** A phone widget card inside its block: as wide as the block, at most a little taller than wide. */
+function phoneWidgetSize(w: number, h: number) {
+  return { w, h: Math.min(h, Math.round(w * 1.06)) };
+}
+
 export const gridId = (place: Place) => (place.surface === "mobile" ? `mobile:${place.page}` : `desktop:${place.space}`);
 
 export function placeOfGrid(id: string): Place | null {
@@ -127,11 +132,13 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         const p = placed.get(widgetKey(w.id));
         if (!p) return null;
         return (
-          <div key={w.id} style={area(p)} className={cx("relative min-h-0 min-w-0", fixed && "flex items-start justify-center")} data-widget-cell={w.id} data-cell={`${p.c},${p.r}`}>
+          <div key={w.id} style={area(p)} className={cx("relative min-h-0 min-w-0", fixed ? "flex items-start justify-center" : "flex items-center justify-center")} data-widget-cell={w.id} data-cell={`${p.c},${p.r}`}>
             {renderWidget(
               w.id,
               // PC: a widget fills its cells (with a small inset), like the icons spread over theirs.
-              fixed ? { w: Math.round(p.w * fixed.cellW - 12), h: Math.round(p.h * fixed.rowH - 12) } : { w: p.w * m.cell + (p.w - 1) * m.gapX, h: p.h * rowH + (p.h - 1) * m.gapY },
+              // Phone (Step 2.15, four icons per row: the cells are taller than wide): the widget keeps a
+              // near-square card, centred in the place of its icons (it never grows past them).
+              fixed ? { w: Math.round(p.w * fixed.cellW - 12), h: Math.round(p.h * fixed.rowH - 12) } : phoneWidgetSize(p.w * m.cell + (p.w - 1) * m.gapX - 8, p.h * rowH + (p.h - 1) * m.gapY),
             )}
           </div>
         );
