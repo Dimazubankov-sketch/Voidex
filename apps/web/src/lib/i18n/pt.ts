@@ -1563,4 +1563,8 @@ export const pt: Record<MessageKey, string> = {
   "widgets.full": "A área de trabalho já tem o máximo de widgets.",
   "widgets.calculatorName": "Minicalculadora",
   "widgets.clockName": "Relógio analógico",
+  "vibex.feed.modeRecommended": "Para você",
+  "vibex.feed.modeFollowing": "Seguindo",
+  "vibex.feed.followingEmpty": "Nenhum post de quem você segue",
+  "vibex.feed.followingEmptyHint": "Siga pessoas na Busca ou em Para você: os posts delas aparecerão aqui.",
 };

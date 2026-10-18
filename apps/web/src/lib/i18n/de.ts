@@ -1563,4 +1563,8 @@ export const de: Record<MessageKey, string> = {
   "widgets.full": "Der Schreibtisch hat bereits die maximale Anzahl an Widgets.",
   "widgets.calculatorName": "Minirechner",
   "widgets.clockName": "Analoguhr",
+  "vibex.feed.modeRecommended": "Für dich",
+  "vibex.feed.modeFollowing": "Abonniert",
+  "vibex.feed.followingEmpty": "Keine Posts von Leuten, denen du folgst",
+  "vibex.feed.followingEmptyHint": "Folge Leuten über die Suche oder „Für dich“: Ihre Posts erscheinen hier.",
 };

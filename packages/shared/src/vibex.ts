@@ -200,8 +200,13 @@ export interface VibexMediaItemDto {
 export const VIBEX_AUDIENCES = ["everyone", "followers", "nobody"] as const;
 /** Step 2.9: sections of the chat list (pinned are always on top). */
 export const VIBEX_CHAT_ORDERS = ["chats-first", "groups-first", "mixed"] as const;
-/** Step 2.13: the two views of one feed (the same posts): media first, or text first. */
-export const VIBEX_FEED_MODES = ["publications", "posts"] as const;
+/**
+ * Step 2.15: the two tabs of Главная, both posts only: «Рекомендации» (posts
+ * picked for the person; later also ads) and «Подписки» (only the people they
+ * follow). Publications are shown only in profiles now. Step 2.13 stored
+ * "publications" / "posts" (two views of one feed): both read as «Рекомендации».
+ */
+export const VIBEX_FEED_MODES = ["recommended", "following"] as const;
 export type VibexFeedMode = (typeof VIBEX_FEED_MODES)[number];
 export type VibexChatOrder = (typeof VIBEX_CHAT_ORDERS)[number];
 export type VibexAudience = (typeof VIBEX_AUDIENCES)[number];
@@ -234,12 +239,12 @@ export const VibexSettingsSchema = z.object({
     order: z.enum(VIBEX_CHAT_ORDERS).default("chats-first"),
     })
     .default({ order: "chats-first" }),
-  /** Step 2.13: how Главная shows the feed: «Посты» (text first) or «Публикации» (media first). */
+  /** Step 2.15: the tab Главная opens on: «Рекомендации» or «Подписки» (older stored values read as «Рекомендации»). */
   feed: z
     .object({
-      mode: z.enum(VIBEX_FEED_MODES).default("posts"),
+      mode: z.preprocess((v) => (v === "following" ? "following" : "recommended"), z.enum(VIBEX_FEED_MODES)),
     })
-    .default({ mode: "posts" }),
+    .default({ mode: "recommended" }),
 });
 export type VibexSettings = z.infer<typeof VibexSettingsSchema>;
 export const DEFAULT_VIBEX_SETTINGS: VibexSettings = VibexSettingsSchema.parse({});
@@ -293,6 +298,8 @@ export const VibexCursorQuerySchema = z.object({
   before: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(VIBEX_PAGE),
 });
+/** Step 2.15: Главная's two tabs. */
+export const VibexFeedQuerySchema = VibexCursorQuerySchema.extend({ mode: z.enum(VIBEX_FEED_MODES).default("recommended") });
 
 export const VibexOpenChatSchema = z.object({ userId: z.string().uuid() });
 

@@ -1563,4 +1563,8 @@ export const fr: Record<MessageKey, string> = {
   "widgets.full": "Le bureau a déjà le nombre maximal de widgets.",
   "widgets.calculatorName": "Mini calculatrice",
   "widgets.clockName": "Horloge analogique",
+  "vibex.feed.modeRecommended": "Pour vous",
+  "vibex.feed.modeFollowing": "Abonnements",
+  "vibex.feed.followingEmpty": "Aucune publication de vos abonnements",
+  "vibex.feed.followingEmptyHint": "Abonnez-vous à des personnes via Rechercher ou Pour vous : leurs publications apparaîtront ici.",
 };

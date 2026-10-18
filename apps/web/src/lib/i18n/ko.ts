@@ -1563,4 +1563,8 @@ export const ko: Record<MessageKey, string> = {
   "widgets.full": "데스크톱의 위젯 수가 최대입니다.",
   "widgets.calculatorName": "미니 계산기",
   "widgets.clockName": "아날로그 시계",
+  "vibex.feed.modeRecommended": "추천",
+  "vibex.feed.modeFollowing": "팔로잉",
+  "vibex.feed.followingEmpty": "팔로우하는 사람의 게시물이 없습니다",
+  "vibex.feed.followingEmptyHint": "검색이나 추천에서 사람을 팔로우하면 게시물이 여기에 표시됩니다.",
 };

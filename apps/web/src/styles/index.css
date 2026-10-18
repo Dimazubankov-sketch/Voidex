@@ -658,8 +658,8 @@ img[data-system-asset] { pointer-events: none; }
    of the background and stands out by a soft shadow and a barely visible edge, not by a grey fill. */
 .vx-app {
   --chat-card: var(--surface);
-  /* What the cards lie on: a breath off the card's own colour. */
-  --chat-list-bg: #f8f8fb;
+  /* Step 2.15: what the cards lie on is the app's own background (as on Главная and Профиль). */
+  --chat-list-bg: var(--app-bg);
   --chat-card-shadow: 0 0 0 1px rgba(24, 18, 60, 0.045), 0 1px 2px rgba(24, 18, 60, 0.04), 0 8px 20px -14px rgba(40, 28, 110, 0.26);
   --chat-card-active: color-mix(in srgb, var(--primary) 9%, var(--chat-card));
   --chat-card-active-edge: color-mix(in srgb, var(--primary) 26%, transparent);
@@ -674,7 +674,7 @@ img[data-system-asset] { pointer-events: none; }
 .vx-chat-card-active { background: var(--chat-card-active) !important; box-shadow: inset 0 0 0 1px var(--chat-card-active-edge), 0 8px 20px -14px rgba(40, 28, 110, 0.26); }
 :root[data-theme="dark"] .vx-app {
   --chat-card: #22222c;
-  --chat-list-bg: #1a1a22;
+  --chat-list-bg: var(--app-bg);
   --chat-card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.045), 0 10px 22px -16px rgba(0, 0, 0, 0.7);
   --chat-card-active: #2a2546;
   --chat-card-active-edge: rgba(150, 132, 255, 0.35);

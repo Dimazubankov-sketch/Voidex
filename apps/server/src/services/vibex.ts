@@ -12,6 +12,7 @@ import {
   VIBEX_POST_IMAGE_TYPES,
   VIBEX_POST_VIDEO_TYPES,
   VibexSettingsSchema,
+  type VibexFeedMode,
   type VibexMediaItemDto,
   type VibexMessageKind,
   type VibexSettings,
@@ -724,14 +725,21 @@ export class VibexService {
     return { items: items.map((r) => dtos.get(r.id)!), next: more ? encodeCursor(items.at(-1)!.createdAt, items.at(-1)!.id) : null };
   }
 
-  /** Everyone's posts and reposts, newest first — minus what I marked "not interested". */
-  feed(viewerId: string, cursor?: string, limit = 30) {
+  /**
+   * Главная, newest first, minus what I marked "not interested".
+   *   recommended  posts and reposts picked for me: for now everyone's I may
+   *                see (the place where ranking by interests and ads will go)
+   *   following    Step 2.15: only the posts and reposts of the people I follow
+   */
+  feed(viewerId: string, cursor?: string, limit = 30, mode: VibexFeedMode = "recommended") {
     const hidden = this.ctx.db.select({ id: vibexHiddenPosts.postId }).from(vibexHiddenPosts).where(eq(vibexHiddenPosts.userId, viewerId));
+    const followed = this.ctx.db.select({ id: vibexFollows.followeeId }).from(vibexFollows).where(eq(vibexFollows.followerId, viewerId));
     return this.page(
       viewerId,
       and(
         sql`${vibexPosts.id} NOT IN (${hidden})`,
         or(isNull(vibexPosts.repostOfId), sql`${vibexPosts.repostOfId} NOT IN (${hidden})`),
+        mode === "following" ? sql`${vibexPosts.authorId} IN (${followed})` : undefined,
       ),
       cursor,
       limit,

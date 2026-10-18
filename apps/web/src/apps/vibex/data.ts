@@ -27,6 +27,7 @@ import {
   type VibexStoryViewerDto,
   type VibexActivityPageDto,
   type VibexSearchDto,
+  type VibexFeedMode,
 } from "@voidex/shared";
 import { ApiError, accessToken, api, qs } from "@/lib/api";
 import { applyMe } from "@/lib/account";
@@ -99,7 +100,7 @@ export function useUpdateSettings() {
             media: { ...s.media, ...patch.media },
             // Step 2.9: older servers / caches may have no chats section yet.
             chats: { ...(s.chats ?? { order: "chats-first" }), ...patch.chats },
-            feed: { ...(s.feed ?? { mode: "posts" }), ...patch.feed },
+            feed: { ...(s.feed ?? { mode: "recommended" }), ...patch.feed },
           },
         });
       }
@@ -446,8 +447,9 @@ export function usePersonPublications(id: string) {
   return useInfiniteQuery(postPages(["vibex", "posts", "publications", id], (before) => `/api/vibex/people/${id}/publications${qs({ before })}`));
 }
 
-export function useFeed() {
-  return useInfiniteQuery(postPages(vk.feed, (before) => `/api/vibex/feed${qs({ before })}`));
+/** Step 2.15: Главная's tab: «Рекомендации» or «Подписки» (one cache entry each, under vk.feed). */
+export function useFeed(mode: VibexFeedMode = "recommended") {
+  return useInfiniteQuery(postPages([...vk.feed, mode] as const, (before) => `/api/vibex/feed${qs({ before, mode })}`));
 }
 
 export function usePersonPosts(id: string | null) {
@@ -480,7 +482,7 @@ function patchPost(updated: VibexPostDto) {
   for (const [key, data] of queryClient.getQueriesData<PostsData>({ queryKey: vk.posts })) {
     if (data?.pages) queryClient.setQueryData<PostsData>(key, { ...data, pages: data.pages.map((pg) => ({ ...pg, items: pg.items.map(fix) })) });
   }
-  queryClient.setQueryData<PostsData>(vk.feed, (d) => d && { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.map(fix) })) });
+  queryClient.setQueriesData<PostsData>({ queryKey: vk.feed }, (d) => d && { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.map(fix) })) });
   queryClient.setQueryData<VibexPostDto>(vk.post(updated.id), (p) => p && fix(p));
 }
 
@@ -538,7 +540,7 @@ export function useHidePost() {
   return useMutation({
     mutationFn: (id: string) => api.post(`/api/vibex/posts/${id}/hide`),
     onSuccess: (_r, id) => {
-      queryClient.setQueryData<PostsData>(vk.feed, (d) => d && { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.filter((p) => p.id !== id && p.repostOf?.id !== id) })) });
+      queryClient.setQueriesData<PostsData>({ queryKey: vk.feed }, (d) => d && { ...d, pages: d.pages.map((pg) => ({ ...pg, items: pg.items.filter((p) => p.id !== id && p.repostOf?.id !== id) })) });
     },
   });
 }

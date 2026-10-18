@@ -1563,4 +1563,8 @@ export const zh: Record<MessageKey, string> = {
   "widgets.full": "桌面上的小组件已达上限。",
   "widgets.calculatorName": "迷你计算器",
   "widgets.clockName": "模拟时钟",
+  "vibex.feed.modeRecommended": "推荐",
+  "vibex.feed.modeFollowing": "关注",
+  "vibex.feed.followingEmpty": "你关注的人还没有发帖",
+  "vibex.feed.followingEmptyHint": "在搜索或推荐中关注他人：他们的帖子会显示在这里。",
 };

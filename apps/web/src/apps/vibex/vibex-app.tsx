@@ -38,7 +38,7 @@ import { PushDrawer } from "@/ui/push-drawer";
 import { useActivityCount, useChats, useFeed, useUpdateSettings, useVibexMe } from "./data";
 import { VibexHeader, VibexSearchButton, VibexTitle } from "./header";
 import { VibexTabBar } from "./tabbar";
-import { PublicationViewerHost, PublicationsList } from "./publications";
+import { PublicationViewerHost } from "./publications";
 import type { VibexFeedMode } from "@voidex/shared";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
 
@@ -97,20 +97,21 @@ const SECTION_TITLE: Record<VibexSection, MessageKey> = {
   me: "vibex.nav.profile",
 };
 
-/** Step 2.13: «Публикации» or «Посты» for Главная, kept in the account's Vibex settings. */
+/** Step 2.15: «Рекомендации» or «Подписки» for Главная, kept in the account's Vibex settings. */
 function useFeedMode(): [VibexFeedMode, (m: VibexFeedMode) => void] {
-  const mode = useVibexMe().data?.settings.feed?.mode ?? "posts";
+  const raw = useVibexMe().data?.settings.feed?.mode;
+  const mode: VibexFeedMode = raw === "following" ? "following" : "recommended";
   const update = useUpdateSettings();
   return [mode, (m) => m !== mode && update.mutate({ feed: { mode: m } })];
 }
 
-/** Step 2.13: the two views of the feed, a segmented switch with one sliding pill. */
+/** Step 2.15: Главная's two tabs (posts only), a segmented switch with one sliding pill. */
 function FeedModeSwitch({ className }: { className?: string }) {
   const t = useT();
   const [mode, setMode] = useFeedMode();
   const modes = [
-    { key: "publications" as const, label: t("vibex.feed.modePublications") },
-    { key: "posts" as const, label: t("vibex.feed.modePosts") },
+    { key: "recommended" as const, label: t("vibex.feed.modeRecommended") },
+    { key: "following" as const, label: t("vibex.feed.modeFollowing") },
   ];
   return (
     <div role="tablist" aria-label={t("vibex.feed.mode")} className={cx("vx-feed-switch relative grid h-10 grid-cols-2 rounded-full p-1", className)} data-testid="feed-mode" data-mode={mode}>
@@ -135,14 +136,26 @@ function FeedModeSwitch({ className }: { className?: string }) {
   );
 }
 
+/** Главная: posts only (publications live in profiles). «Подписки» shows only the people I follow. */
 function Feed({ switcher = true }: { switcher?: boolean }) {
-  const feed = useFeed();
   const [mode] = useFeedMode();
+  const feed = useFeed(mode);
   return (
     <div className="flex flex-col gap-3" data-testid="vibex-feed" data-mode={mode}>
       {switcher && <FeedModeSwitch className="mx-auto w-full max-w-[320px]" />}
       <ComposerPrompt />
-      {mode === "publications" ? <PublicationsList query={feed} /> : <PostList query={feed} empty={<FeedEmpty />} />}
+      <PostList key={mode} query={feed} empty={mode === "following" ? <FollowingEmpty /> : <FeedEmpty />} />
+    </div>
+  );
+}
+
+/** «Подписки» with nobody followed (or nothing posted by them yet). */
+function FollowingEmpty() {
+  const t = useT();
+  return (
+    <div className="flex flex-col items-center gap-2 px-6 py-14 text-center" data-testid="feed-following-empty">
+      <p className="text-[16px] font-semibold text-text">{t("vibex.feed.followingEmpty")}</p>
+      <p className="max-w-[320px] text-[14px] text-text-secondary">{t("vibex.feed.followingEmptyHint")}</p>
     </div>
   );
 }

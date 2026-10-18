@@ -1563,4 +1563,8 @@ export const ja: Record<MessageKey, string> = {
   "widgets.full": "デスクトップのウィジェット数が上限に達しています。",
   "widgets.calculatorName": "ミニ電卓",
   "widgets.clockName": "アナログ時計",
+  "vibex.feed.modeRecommended": "おすすめ",
+  "vibex.feed.modeFollowing": "フォロー中",
+  "vibex.feed.followingEmpty": "フォロー中の人の投稿はまだありません",
+  "vibex.feed.followingEmptyHint": "検索やおすすめから人をフォローすると、その投稿がここに表示されます。",
 };

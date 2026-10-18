@@ -1563,4 +1563,8 @@ export const tr: Record<MessageKey, string> = {
   "widgets.full": "Masaüstünde en fazla widget zaten var.",
   "widgets.calculatorName": "Mini hesap makinesi",
   "widgets.clockName": "Analog saat",
+  "vibex.feed.modeRecommended": "Senin için",
+  "vibex.feed.modeFollowing": "Takip edilenler",
+  "vibex.feed.followingEmpty": "Takip ettiklerinden gönderi yok",
+  "vibex.feed.followingEmptyHint": "Arama'dan veya Senin için'den insanları takip et: gönderileri burada görünür.",
 };

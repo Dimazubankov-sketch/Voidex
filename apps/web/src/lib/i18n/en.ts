@@ -1594,6 +1594,10 @@ export const en = {
   "widgets.full": "The desktop has the most widgets it can hold.",
   "widgets.calculatorName": "Mini calculator",
   "widgets.clockName": "Analog clock",
+  "vibex.feed.modeRecommended": "For you",
+  "vibex.feed.modeFollowing": "Following",
+  "vibex.feed.followingEmpty": "No posts from the people you follow",
+  "vibex.feed.followingEmptyHint": "Follow people in Search or from Recommendations: their posts will appear here.",
 } as const;
 
 

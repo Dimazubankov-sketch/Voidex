@@ -1578,4 +1578,8 @@ export const ru: Record<MessageKey, string> = {
   "widgets.full": "На рабочем столе уже максимум виджетов.",
   "widgets.calculatorName": "Мини-калькулятор",
   "widgets.clockName": "Аналоговые часы",
+  "vibex.feed.modeRecommended": "Рекомендации",
+  "vibex.feed.modeFollowing": "Подписки",
+  "vibex.feed.followingEmpty": "Нет постов от ваших подписок",
+  "vibex.feed.followingEmptyHint": "Подпишитесь на людей в Поиске или из Рекомендаций: их посты появятся здесь.",
 };

@@ -3,6 +3,7 @@ import {
   ErrorCode,
   VibexCreatePostSchema,
   VibexCursorQuerySchema,
+  VibexFeedQuerySchema,
   VibexHistoryQuerySchema,
   VibexOpenChatSchema,
   VibexCreateGroupSchema,
@@ -228,8 +229,8 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
 
   // ------------------------------------------------------------ feed/posts
   app.get("/feed", async (req) => {
-    const q = parse(VibexCursorQuerySchema, req.query);
-    return vibex.feed(req.auth!.userId, q.before, q.limit);
+    const q = parse(VibexFeedQuerySchema, req.query);
+    return vibex.feed(req.auth!.userId, q.before, q.limit, q.mode);
   });
 
   app.post("/posts", limit(30), async (req, reply) => {
