@@ -150,3 +150,66 @@ test("detached wheel ignores queued scroll events after changing editors", () =>
   scroll();
   assert.deepEqual(changes, []);
 });
+
+// Step 2.15: mouse wheel, finger drag with momentum, endless cycling.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test("mouse wheel: one notch is one step; a trackpad's small deltas add up to steps", () => {
+  const w = wheel(10, 60, "minutes");
+  const changes: number[] = [];
+  mountWheels(w.root, (_k, v) => changes.push(v));
+  w.handlers.wheel!({ deltaY: 100, deltaMode: 0, preventDefault() {} });
+  flushWheels(w.root);
+  assert.equal(changes.at(-1), 11);
+  w.handlers.wheel!({ deltaY: -120, deltaMode: 0, preventDefault() {} });
+  w.handlers.wheel!({ deltaY: -120, deltaMode: 0, preventDefault() {} });
+  flushWheels(w.root);
+  assert.equal(changes.at(-1), 9);
+  // Trackpad: 10 px at a time; one row is 44 px.
+  for (let i = 0; i < 9; i++) w.handlers.wheel!({ deltaY: 10, deltaMode: 0, preventDefault() {} });
+  flushWheels(w.root);
+  assert.equal(changes.at(-1), 11);
+  unmountWheels(w.root);
+});
+
+test("a drag follows the pointer; a slow release lands on the next row, a fast flick spins on several rows", async () => {
+  const w = wheel(0, 60, "seconds");
+  const changes: number[] = [];
+  mountWheels(w.root, (_k, v) => changes.push(v));
+  // Slow: one row up, held, then lifted.
+  w.handlers.pointerdown!({ pointerId: 1, clientY: 300, button: 0 });
+  w.handlers.pointermove!({ pointerId: 1, clientY: 290 });
+  w.handlers.pointermove!({ pointerId: 1, clientY: 256 });
+  assert.equal(w.el.scrollTop, 60 * ROW_HEIGHT + 44); // 1:1 with the finger
+  await sleep(120);
+  w.handlers.pointerup!({ pointerId: 1, type: "pointerup" });
+  flushWheels(w.root);
+  assert.equal(changes.at(-1), 1);
+  // Fast: a quick flick of two rows keeps turning well past them, then rests on a row.
+  w.handlers.pointerdown!({ pointerId: 2, clientY: 300, button: 0 });
+  for (let i = 1; i <= 4; i++) {
+    await sleep(8);
+    w.handlers.pointermove!({ pointerId: 2, clientY: 300 - i * 22 });
+  }
+  w.handlers.pointerup!({ pointerId: 2, type: "pointerup" });
+  await sleep(1100);
+  const v = changes.at(-1)!;
+  assert.ok(v >= 5 && v <= 1 + 2 + 14, `spun to ${v}`);
+  assert.equal(w.el.scrollTop % ROW_HEIGHT, 0);
+  unmountWheels(w.root);
+});
+
+test("endless both ways: 58, 59, 00, 01 … and back 01, 00, 59, 58, never stopping at an end", () => {
+  const w = wheel(58, 60, "minutes");
+  const changes: number[] = [];
+  mountWheels(w.root, (_k, v) => changes.push(v));
+  for (let i = 0; i < 70; i++) w.handlers.keydown!({ key: "ArrowDown", preventDefault() {} });
+  flushWheels(w.root);
+  assert.equal(changes.at(-1), (58 + 70) % 60);
+  for (let i = 0; i < 75; i++) w.handlers.wheel!({ deltaY: -100, deltaMode: 0, preventDefault() {} });
+  flushWheels(w.root);
+  assert.equal(changes.at(-1), (((58 + 70 - 75) % 60) + 60) % 60);
+  // Always back in the middle copy at rest.
+  assert.ok(w.el.scrollTop >= 60 * ROW_HEIGHT && w.el.scrollTop < 120 * ROW_HEIGHT);
+  unmountWheels(w.root);
+});

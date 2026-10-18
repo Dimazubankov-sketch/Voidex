@@ -15,8 +15,9 @@ import { SOUND_URLS, WHEEL_TICK_URL } from "./sound-urls";
  *   ring     the alarm / timer signal, looped until Stop or Snooze
  *
  * Every start fades in over 35 ms and every stop fades out over 80 ms (no
- * clicks). When the browser keeps the context suspended (no gesture yet),
- * ring() resolves false and the ring sheet shows «Включить звук».
+ * clicks). Step 2.15: there is no «Включить звук»: the sound is unlocked by
+ * the first tap anywhere in VOIDEX while something is set to ring, and a ring
+ * whose sound the browser still holds back starts with the next tap.
  */
 
 interface AudioUi {
@@ -36,7 +37,8 @@ const buffers = new Map<string, Promise<AudioBuffer>>();
 let tickBuffer: AudioBuffer | null = null;
 let tickLoading = false;
 let lastTick = 0;
-let preview: { id: string; source: AudioBufferSourceNode; gain: GainNode } | null = null;
+let preview: { id: string; source: AudioBufferSourceNode; gain: GainNode; endsAt: number } | null = null;
+let previewSafety: number | undefined;
 let previewToken = 0;
 let ring: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
 let ringToken = 0;
@@ -141,6 +143,7 @@ function fadeStop(source: AudioBufferSourceNode, gain: GainNode) {
 
 export function stopPreview() {
   previewToken++;
+  window.clearTimeout(previewSafety);
   if (preview) {
     preview.source.onended = null;
     fadeStop(preview.source, preview.gain);
@@ -149,29 +152,43 @@ export function stopPreview() {
   if (useClockAudio.getState().previewId !== null) useClockAudio.setState({ previewId: null });
 }
 
-/** Plays a sound once. Ignored while that same sound is playing; another sound stops it first. */
+/**
+ * Plays a sound once (Step 2.15: reliably on every tap). The same sound is not
+ * started again while it is really playing; another sound stops it first. A
+ * preview that could not be heard (the context was held back, the end never
+ * came) never blocks the next tap: it is simply started again.
+ */
 export async function previewSound(id: string): Promise<void> {
-  if (useClockAudio.getState().previewId === id) return;
+  const ctxNow = context;
+  if (preview && preview.id === id && ctxNow?.state === "running" && ctxNow.currentTime < preview.endsAt) return;
   stopPreview();
   const token = ++previewToken;
   useClockAudio.setState({ previewId: id });
   try {
+    // Called from the tap: the context is created / resumed inside the gesture (enableAudio runs synchronously up to resume()).
     const buffer = await loadSound(id);
     if (token !== previewToken) return;
     const ctx = context!;
+    if (ctx.state !== "running") await ctx.resume().catch(() => {});
+    if (token !== previewToken) return;
+    if (ctx.state !== "running") throw new Error("audio-blocked");
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
     source.buffer = buffer;
     fadeIn(gain, 0.55);
     source.connect(gain).connect(ctx.destination);
-    source.onended = () => {
-      if (token === previewToken) {
-        preview = null;
-        useClockAudio.setState({ previewId: null });
-      }
+    const done = () => {
+      if (token !== previewToken) return;
+      window.clearTimeout(previewSafety);
+      preview = null;
+      useClockAudio.setState({ previewId: null });
     };
-    preview = { id, source, gain };
+    source.onended = done;
+    preview = { id, source, gain, endsAt: ctx.currentTime + buffer.duration };
     source.start();
+    // If "ended" never comes (the context was suspended meanwhile), the button comes back anyway.
+    window.clearTimeout(previewSafety);
+    previewSafety = window.setTimeout(done, buffer.duration * 1000 + 400);
   } catch (e) {
     if (token === previewToken) useClockAudio.setState({ previewId: null });
     throw e;
@@ -216,3 +233,48 @@ export async function ringSound(id: string, opts: { force?: boolean } = {}): Pro
     return false;
   }
 }
+
+/*
+ * Step 2.15: the stopwatch's ticking. While the stopwatch runs and Clock is in
+ * front, a quiet tick-tock on every whole second of the stopwatch. It stops
+ * when Clock goes to the background, another app comes to the front or Clock
+ * closes, and goes on when the running stopwatch is back on screen; the
+ * stopwatch itself counts regardless.
+ */
+let swTimer: number | undefined;
+let swTock = false;
+
+function playClockTick() {
+  if (!context || context.state !== "running" || !tickBuffer) return;
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  source.buffer = tickBuffer;
+  // Tick, tock: the second one a little lower and softer.
+  source.playbackRate.value = swTock ? 0.72 : 0.9;
+  gain.gain.value = swTock ? 0.05 : 0.065;
+  swTock = !swTock;
+  source.connect(gain).connect(context.destination);
+  source.start();
+}
+
+/** Starts the ticking; `elapsed` gives the stopwatch's time now (ticks land on its whole seconds). */
+export function startStopwatchTick(elapsed: () => number) {
+  stopStopwatchTick();
+  warmTick();
+  const next = () => {
+    const ms = elapsed();
+    swTimer = window.setTimeout(() => {
+      playClockTick();
+      next();
+    }, 1000 - (ms % 1000) + 2);
+  };
+  next();
+}
+
+export function stopStopwatchTick() {
+  window.clearTimeout(swTimer);
+  swTimer = undefined;
+}
+
+/** Test hook: whether the stopwatch is ticking now. */
+export const stopwatchTicking = () => swTimer !== undefined;

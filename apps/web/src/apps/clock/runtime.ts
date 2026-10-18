@@ -121,8 +121,8 @@ function enqueue(rings: RingEvent[]) {
   if (!fresh.length) return;
   useClock.setState({ rings: [...queue, ...fresh] });
   for (const r of fresh) notify(r);
-  // The first ring of an empty queue starts its sound now (the sheet offers «Включить звук» if it cannot).
-  if (!queue.length) void ringSound(fresh[0]!.sound);
+  // The first ring of an empty queue starts its sound now (resuming the audio if the page may play sound).
+  if (!queue.length) void ringSound(fresh[0]!.sound, { force: true });
 }
 
 /** Stop (or «Ещё N минут») for the ring on screen; the next one in the queue follows. */
@@ -139,11 +139,11 @@ export async function dismissRing(snooze: boolean) {
     stopRing();
     const rest = useClock.getState().rings.filter((r) => r.key !== current.key);
     useClock.setState({ rings: rest, dismissing: false });
-    if (rest[0]) void ringSound(rest[0].sound);
+    if (rest[0]) void ringSound(rest[0].sound, { force: true });
   }
 }
 
-/** «Включить звук»: a tap, so the browser lets the sound start. */
+/** Starts the sound of the ring on screen (a tap, or a retry once the page may play sound). */
 export async function enableRingSound(): Promise<boolean> {
   const current = useClock.getState().rings[0];
   if (!current) return false;
@@ -176,7 +176,7 @@ export function startClockLoop(): () => void {
     if (!hasPending(state) && !rings.length) return;
     unlockAudio();
     // A ring already on screen whose sound the browser held back starts with this tap (not with a tap on its own buttons).
-    if (rings.length && !useClockAudio.getState().ringing && !(e.target as Element | null)?.closest?.("[data-clock-ring]")) void enableRingSound();
+    if (rings.length && !useClockAudio.getState().ringing && !(e.target as Element | null)?.closest?.("[data-clock-ring] button")) void enableRingSound();
   };
   document.addEventListener("visibilitychange", onVisible);
   document.addEventListener("pointerdown", onTap, { capture: true, passive: true });

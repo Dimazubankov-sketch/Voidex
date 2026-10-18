@@ -30,9 +30,10 @@ export function ClockRuntime() {
 }
 
 /**
- * The alarm / timer sheet: what rings, the time now, «Ещё N мин» (when the
- * alarm repeats its signal), «Остановить», and «Включить звук» while the
- * browser holds the sound back (never a silent ring). One ring at a time;
+ * The alarm / timer overlay (Step 2.15): in the middle of the screen over
+ * any app (Clock does not open), the rest blurred: what rings, the time now,
+ * «Ещё N мин» (when the alarm repeats its signal) and «Остановить». The
+ * sound starts by itself; there is no «Включить звук». One ring at a time;
  * the next one in the queue follows when this one is stopped.
  */
 function RingSheet() {
@@ -44,21 +45,21 @@ function RingSheet() {
   const reduced = useReducedMotion();
   const stopRef = useRef<HTMLButtonElement>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [enabling, setEnabling] = useState(false);
-  const [blocked, setBlocked] = useState(false);
   const tr = (k: Parameters<typeof clockText>[1], v?: Record<string, string | number>) => clockText(lang, k, v);
 
   useEffect(() => {
     if (!ring) return;
-    setBlocked(false);
     const id = window.setInterval(() => setNow(Date.now()), 1000);
-    // The sound gets a moment to start before the sheet says it could not.
-    const hint = window.setTimeout(() => setBlocked(!useClockAudio.getState().ringing), 900);
+    // Step 2.15: no «Включить звук». While the browser still holds the sound back it is tried again
+    // (it starts as soon as the page may play sound, at the latest with the next tap anywhere).
+    const retry = window.setInterval(() => {
+      if (!useClockAudio.getState().ringing) void enableRingSound();
+    }, 1500);
     const previous = document.activeElement as HTMLElement | null;
     stopRef.current?.focus({ preventScroll: true });
     return () => {
       window.clearInterval(id);
-      window.clearTimeout(hint);
+      window.clearInterval(retry);
       if (previous?.isConnected) previous.focus?.({ preventScroll: true });
     };
   }, [ring?.key]);
@@ -84,7 +85,8 @@ function RingSheet() {
       {ring && (
         <motion.div
           key="clock-ring"
-          className="vx-app fixed inset-0 z-[420] flex items-end justify-center bg-black/35 p-3 pb-[max(var(--safe-bottom),12px)] backdrop-blur-md sm:items-center"
+          // Step 2.15: a system overlay over whatever is open (an app, the home screen): centred, the rest blurred.
+          className="vx-app fixed inset-0 z-[420] flex items-center justify-center bg-black/30 p-4 pb-[max(var(--safe-bottom),16px)] pt-[max(var(--safe-top),16px)] backdrop-blur-xl"
           initial={reduced ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={reduced ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, transition: { duration: 0.17 } }}
@@ -118,28 +120,7 @@ function RingSheet() {
               {cityClock(localZone(), now)}
             </div>
             {more > 0 && <p className="text-[12.5px] text-text-tertiary">{tr("ring.queue", { n: more })}</p>}
-            {!ringing && blocked && (
-              <p className="mx-auto mt-2 max-w-[300px] text-[12.5px] leading-snug text-text-secondary" data-testid="clock-ring-blocked">
-                {tr("ring.blocked")}
-              </p>
-            )}
             <div className="mt-5 flex flex-col gap-2.5">
-              {!ringing && (
-                <button
-                  type="button"
-                  disabled={enabling}
-                  onClick={async () => {
-                    setEnabling(true);
-                    const ok = await enableRingSound().finally(() => setEnabling(false));
-                    setBlocked(!ok);
-                  }}
-                  className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary text-[15px] font-semibold text-white shadow-[var(--glow-primary)] transition active:scale-[0.98] disabled:opacity-60"
-                  data-testid="clock-ring-enable"
-                >
-                  <ClockIcon name="sound" className="size-5" />
-                  {tr("ring.enable")}
-                </button>
-              )}
               {ring.snooze && ring.interval > 0 && (
                 <button
                   type="button"

@@ -10,6 +10,7 @@ import { useClock } from "./runtime";
 import { useClockT, type ClockKey } from "./strings";
 import { StopwatchPage, TimersPage } from "./timers";
 import { SheetHost, useArrive } from "./ui";
+import { GlassTabBar } from "@/ui/glass-tab-bar";
 import { CityPicker, WorldPage } from "./world";
 import "./clock.css";
 
@@ -183,14 +184,15 @@ export function ClockApp() {
           </main>
         </div>
         {phone && (
-          <nav className="vc-bottom-nav" aria-label={t("nav.label")} data-testid="clock-bottom-nav">
-            {TABS.map((x) => (
-              <button key={x.id} type="button" className={cx("vc-bottom-item", tab === x.id && "selected")} aria-current={tab === x.id ? "page" : undefined} onClick={() => setTab(x.id)} data-tab={x.id} data-testid={`clock-tab-${x.id}`}>
-                <ClockIcon name={x.icon} />
-                <span>{t(x.id === "world" ? "tab.world.short" : x.label)}</span>
-              </button>
-            ))}
-          </nav>
+          // Step 2.15: the system glass tab bar (as in Vibex), swipeable along the bar.
+          <GlassTabBar
+            ariaLabel={t("nav.label")}
+            testId="clock-bottom-nav"
+            labels
+            active={tab}
+            onSelect={setTab}
+            items={TABS.map((x) => ({ key: x.id, label: t(x.id === "world" ? "tab.world.short" : x.label), testId: `clock-tab-${x.id}`, icon: () => <ClockIcon name={x.icon} /> }))}
+          />
         )}
         <CityPicker open={cityOpen} onClose={() => setCityOpen(false)} phone={phone} />
         <AlarmEditor draft={editing} onClose={() => setEditing(null)} phone={phone} />

@@ -17,18 +17,29 @@ import {
   type TimerSetup,
 } from "@voidex/clock";
 import { cx } from "@/lib/cx";
+import { useWindow } from "@/os/window-context";
+import { startStopwatchTick, stopStopwatchTick, unlockAudio } from "./audio";
 import { ClockIcon } from "./icons";
 import { change, changeVia, useClock } from "./runtime";
 import { SoundPicker } from "./sounds";
 import { useClockT } from "./strings";
-import { ClockSheet, SwipeList, SwipeRow, useNow, Wheel } from "./ui";
+import { ClockSheet, SwipeList, SwipeRow, useNow, usePageVisible, Wheel } from "./ui";
 
 /** Stopwatch: Start / Pause and Reset. No laps. */
 export function StopwatchPage() {
   const t = useClockT();
+  const win = useWindow();
   const sw = useClock((s) => s.state.stopwatch);
   const now = useNow(sw.running ? 50 : 1000);
   const elapsed = stopwatchElapsed(sw, now);
+  const visible = usePageVisible();
+  // Step 2.15: ticking while it runs and Clock is in front (not minimized, not behind another app, tab visible).
+  const ticking = sw.running && win.focused && visible;
+  useEffect(() => {
+    if (!ticking) return;
+    startStopwatchTick(() => stopwatchElapsed(useClock.getState().state.stopwatch, Date.now()));
+    return () => stopStopwatchTick();
+  }, [ticking]);
   const C = 2 * Math.PI * 147;
   return (
     <div className="vc-page vc-stopwatch" data-testid="clock-stopwatch" data-running={sw.running ? "true" : "false"}>
@@ -50,7 +61,16 @@ export function StopwatchPage() {
           <ClockIcon name="reset" />
           <span>{t("sw.reset")}</span>
         </button>
-        <button type="button" className="vc-round primary" onClick={() => change((s) => toggleStopwatch(s))} data-testid="clock-stopwatch-toggle">
+        <button
+          type="button"
+          className="vc-round primary"
+          onClick={() => {
+            unlockAudio();
+            change((s) => toggleStopwatch(s));
+          }}
+          data-testid="clock-stopwatch-toggle"
+          data-ticking={ticking ? "true" : "false"}
+        >
           <ClockIcon name={sw.running ? "pause" : "play"} />
           <span>{sw.running ? t("sw.pause") : elapsed > 0 ? t("sw.resume") : t("sw.start")}</span>
         </button>
@@ -221,7 +241,7 @@ export function TimersPage({ phone, wide, focus }: { phone: boolean; wide: boole
   );
 
   return (
-    <div className={cx("vc-page vc-timers", wide && "vc-timers-wide")} data-testid="clock-timers">
+    <div className={cx("vc-page vc-timers", wide && (timers.length > 0 || history.length > 0) && "vc-timers-wide")} data-testid="clock-timers">
       {composerBlock}
       {lists}
       <ClockSheet open={sounds} onClose={() => setSounds(false)} labelledBy="clock-sound-title" phone={phone} testId="clock-timer-sounds">
@@ -229,10 +249,7 @@ export function TimersPage({ phone, wide, focus }: { phone: boolean; wide: boole
           value={setup.sound}
           backIsClose
           onBack={() => setSounds(false)}
-          onPick={(id) => {
-            update({ sound: id });
-            setSounds(false);
-          }}
+          onPick={(id) => update({ sound: id })}
         />
       </ClockSheet>
     </div>

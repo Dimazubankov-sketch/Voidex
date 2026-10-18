@@ -20,6 +20,7 @@ import {
 } from "../src/model.ts";
 import { browserScheduler, deleteAlarmVia, deviceClockStorage, nativeScheduler, pickScheduler, saveAlarmVia, setAlarmEnabledVia, snoozeVia, startTimerVia, type ClockSchedulerAdapter } from "../src/adapters.ts";
 import { DEFAULT_SOUND } from "../src/sounds.ts";
+import { nextAlarm } from "../src/engine.ts";
 
 // The behaviours of Voidex-Clock tests/interactions.test.js, on the state model.
 
@@ -239,4 +240,18 @@ test("device storage: one key per account, survives a reload, refuses quietly wh
   assert.ok(a.bytes() > 50);
   const full = deviceClockStorage({ getItem: () => null, setItem: () => { throw new Error("QuotaExceededError"); } }, "c");
   assert.equal(full.save(s), false);
+});
+
+test("Step 2.15: a new alarm has no day chosen: it rings once, at the next such time", () => {
+  const draft = newAlarmDraft();
+  assert.deepEqual(draft.days, []);
+  // 07:00 now, set for 21:00: today at 21:00.
+  const morning = new Date(2026, 9, 18, 7, 0, 0).getTime();
+  assert.equal(nextAlarm({ ...draft, time: "21:00" }, morning), new Date(2026, 9, 18, 21, 0, 0).getTime());
+  // 21:00 now, set for 07:00: tomorrow at 07:00.
+  const evening = new Date(2026, 9, 18, 21, 0, 0).getTime();
+  assert.equal(nextAlarm({ ...draft, time: "07:00" }, evening), new Date(2026, 9, 19, 7, 0, 0).getTime());
+  // Monday chosen: every Monday (18 Oct 2026 is a Sunday → Monday 19th, then the 26th).
+  assert.equal(nextAlarm({ ...draft, time: "07:00", days: [1] }, evening), new Date(2026, 9, 19, 7, 0, 0).getTime());
+  assert.equal(nextAlarm({ ...draft, time: "07:00", days: [1] }, new Date(2026, 9, 19, 8, 0, 0).getTime()), new Date(2026, 9, 26, 7, 0, 0).getTime());
 });

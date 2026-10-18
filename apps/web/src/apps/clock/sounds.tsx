@@ -9,9 +9,9 @@ import { SheetHeader } from "./ui";
 
 /**
  * The sound list (inside the alarm editor's sheet, or its own sheet for the
- * timer). The play button previews a sound once; while it plays, that same
- * button is disabled; another one stops it and plays its own; going back,
- * choosing or closing stops the preview.
+ * timer). Choosing a sound (or its play button) previews it once; while it
+ * plays, that same sound is not started again; another one stops it and plays
+ * its own; going back or closing stops the preview.
  */
 export function SoundPicker({ value, onPick, onBack, backIsClose }: { value: string; onPick: (id: string) => void; onBack: () => void; backIsClose?: boolean }) {
   const t = useClockT();
@@ -70,8 +70,9 @@ export function SoundPicker({ value, onPick, onBack, backIsClose }: { value: str
                 type="button"
                 className="vc-sound-select"
                 onClick={() => {
-                  stopPreview();
+                  // Step 2.15: choosing a melody plays it (the previous preview stops); the list stays open.
                   onPick(s.id);
+                  previewSound(s.id).catch(() => toast({ title: t("sound.loadFailed"), tone: "danger" }));
                 }}
                 aria-pressed={chosen}
                 aria-label={t("sound.choose", { name: s.name })}

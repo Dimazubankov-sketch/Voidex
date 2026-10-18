@@ -1,9 +1,8 @@
 /*
  * Step 2.14: Voidex Clock. The look of Voidex-Clock (soft violet cards, big
  * tabular digits, drums, round controls) drawn with VOIDEX's semantic
- * tokens: the background, cards, text and accents follow Settings →
- * Personalization → «Вид приложений» (Media, Notes, Mail, dark) and the dark
- * theme. No hardcoded white.
+ * tokens: the background, cards, text and accents follow the theme
+ * (Settings → Personalization: light, dark, system). No hardcoded white.
  */
 .vx-clock {
   --vc-accent: var(--primary);
@@ -29,9 +28,26 @@
   color: inherit;
   -webkit-tap-highlight-color: transparent;
 }
-.vx-clock :is(button, input, select, [tabindex="0"]):focus-visible {
+.vx-clock :is(button, select, [tabindex="0"]):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary) 70%, transparent);
   outline-offset: 3px;
+}
+/* Step 2.15: fields as everywhere in VOIDEX: no violet frame on focus, the caret shows where you type;
+   the row a field is in lightens a little, so the focus is still visible. */
+.vx-clock :is(input, textarea):is(:focus, :focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+.vx-clock :is(input, textarea) {
+  caret-color: var(--primary);
+}
+.vx-clock .vc-form-row:focus-within {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+/* The drums keep a quiet keyboard focus (no frame on a tap). */
+.vx-clock .vc-wheel:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
 }
 .vc-icon {
   width: 23px;
@@ -193,43 +209,15 @@
   padding: 4px 32px 36px;
 }
 
-/* ---- phone bottom navigation (above the gesture bar) ------------------- */
-.vc-bottom-nav {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
-  flex-shrink: 0;
-  padding: 6px 8px 6px;
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(18px) saturate(1.4);
+/* ---- phone tab bar: the system glass bar (ui/glass-tab-bar.tsx), floating above the navigation;
+   the page scrolls under it, so it keeps room at its end. */
+.vc-phone .vc-content {
+  padding-bottom: 92px;
+  scroll-padding-bottom: 92px;
 }
-.vc-bottom-item {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 6px 2px 4px;
-  border-radius: 14px;
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 10.5px;
-  font-weight: 500;
-  transition: color 0.2s, background 0.2s;
-}
-.vc-bottom-item span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.vc-bottom-item.selected {
-  color: var(--vc-accent-text);
-  background: var(--vc-tint);
-}
-.vc-bottom-item.selected .vc-icon {
-  stroke-width: 1.9;
+.vc-phone [data-testid="clock-bottom-nav"] .vc-icon {
+  width: 22px;
+  height: 22px;
 }
 
 /* ---- heroes ----------------------------------------------------------- */
@@ -697,9 +685,10 @@
   top: 88px;
   height: 44px;
   z-index: -1;
-  border: 1px solid var(--vc-line);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  /* Step 2.15: no outline around the chosen value: a soft band only; the value itself is darker. */
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   pointer-events: none;
 }
 .vc-alarm-wheels {
@@ -720,10 +709,11 @@
   height: 220px;
   overflow-x: hidden;
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
+  /* Step 2.15: the drum turns by the pointer itself (packages/clock wheels.ts: drag, momentum, mouse wheel)
+     and snaps in code; no native snap, which would fight the glide. */
   scrollbar-width: none;
   overscroll-behavior-y: contain;
-  touch-action: pan-y;
+  touch-action: none;
   -webkit-overflow-scrolling: touch;
   mask-image: linear-gradient(to bottom, transparent, #000 23%, #000 77%, transparent);
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 23%, #000 77%, transparent);
@@ -747,7 +737,6 @@
   border-radius: 0;
   background: none;
   line-height: 44px;
-  scroll-snap-align: center;
   color: var(--text-secondary);
   font-size: 30px;
   font-weight: 380;
@@ -765,8 +754,8 @@
 }
 .vc-wheel .wheel-option.selected {
   opacity: 1;
-  color: var(--vc-accent-text);
-  font-weight: 520;
+  color: var(--text);
+  font-weight: 560;
 }
 .vc-wheel-label {
   display: block;
@@ -875,6 +864,17 @@
 .vc-round:hover {
   background: var(--vc-tint);
 }
+/* Step 2.15: secondary round buttons (Сброс, ×) and the round icon buttons (+, сброс таймера): plain grey circles, no outline. */
+.vc-round.secondary,
+.vc-icon-button:not(.primary) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  color: var(--text);
+}
+.vc-round.secondary:hover,
+.vc-icon-button:not(.primary):hover {
+  background: color-mix(in srgb, var(--text) 11%, transparent);
+}
 .vc-round.primary {
   border-color: transparent;
   background: var(--vc-gradient);
@@ -887,14 +887,22 @@
 }
 
 /* ---- timers ----------------------------------------------------------- */
+/* Step 2.15: on a PC the timer setup sits in the middle of the window (alone, or with its lists beside it). */
 .vc-timers-wide {
   display: grid;
-  grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 440px) minmax(0, 560px);
+  justify-content: center;
   align-items: start;
   gap: 32px;
 }
 .vc-timer-composer {
   min-width: 0;
+}
+.vc-desktop .vc-timers:not(.vc-timers-wide) .vc-timer-composer,
+.vc-desktop .vc-timers:not(.vc-timers-wide) .vc-timer-lists {
+  width: 100%;
+  max-width: 460px;
+  margin-inline: auto;
 }
 .vc-timer-lists {
   display: flex;

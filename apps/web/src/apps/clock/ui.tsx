@@ -18,6 +18,17 @@ export function useNow(ms: number, active = true) {
   return now;
 }
 
+/** Whether the browser tab is visible (a hidden tab is "in the background" too). */
+export function usePageVisible() {
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
+  useEffect(() => {
+    const h = () => setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", h);
+    return () => document.removeEventListener("visibilitychange", h);
+  }, []);
+  return visible;
+}
+
 /**
  * A number drum (h / m / s). The markup is React's; the scrolling, snapping,
  * cycling and keys are the ported Voidex-Clock controller. `onChange` comes

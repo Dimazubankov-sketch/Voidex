@@ -29,6 +29,7 @@ export interface WheelElement {
   addEventListener(type: string, fn: (event: never) => void, options?: AddEventListenerOptions | boolean): void;
   removeEventListener?(type: string, fn: (event: never) => void): void;
   scrollTo(options: { top: number; behavior?: ScrollBehavior | "instant" }): void;
+  setPointerCapture?(id: number): void;
 }
 export interface WheelOption {
   style: { setProperty(name: string, value: string): void; visibility?: string };
@@ -50,6 +51,12 @@ interface WheelState {
   target: number | null;
   timer: ReturnType<typeof setTimeout> | null;
   listeners: [string, (event: never) => void][];
+  /** Step 2.15: a finger / mouse dragging the drum itself (no native scroll), its recent positions. */
+  drag: { id: number; y: number; top: number; moved: boolean; samples: { y: number; t: number }[] } | null;
+  /** The momentum spin after a flick (animation frame id). */
+  spin: number | null;
+  /** Mouse-wheel travel not yet turned into steps. */
+  wheelAcc: number;
 }
 
 const wheelStates = new WeakMap<WheelElement, WheelState>();
@@ -122,12 +129,103 @@ function settle(el: WheelElement, state: WheelState) {
   decorate(el, state);
 }
 
+/** Rows a flick can travel at most, and the time constant of its glide (ms). */
+const FLING_ROWS_MAX = 14;
+const FLING_TAU = 300;
+/** Release speed (px / ms) below which a drag just snaps to its row. */
+const FLING_MIN = 0.25;
+
+const raf = (fn: (t: number) => void): number =>
+  typeof globalThis.requestAnimationFrame === "function" ? globalThis.requestAnimationFrame(fn) : (setTimeout(() => fn(Date.now()), 16) as unknown as number);
+const cancelRaf = (id: number) => (typeof globalThis.cancelAnimationFrame === "function" ? globalThis.cancelAnimationFrame(id) : clearTimeout(id as never));
+
+function stopSpin(state: WheelState) {
+  if (state.spin !== null) cancelRaf(state.spin);
+  state.spin = null;
+}
+
+/**
+ * Keeps a position (and the pending target) inside the middle copy of the
+ * range: a jump of exactly one copy is invisible (the same numbers), so the
+ * drum never reaches the blank padding at either end, however far it turns.
+ */
+function recentre(el: WheelElement, state: WheelState, extra = 0) {
+  const span = state.count * ROW_HEIGHT;
+  const top = el.scrollTop + extra;
+  let shift = 0;
+  if (top < span * 0.5) shift = span;
+  else if (top > span * 2.5 - ROW_HEIGHT) shift = -span;
+  if (!shift) return 0;
+  el.scrollTo({ top: el.scrollTop + shift, behavior: "instant" });
+  if (state.target !== null) state.target += shift / ROW_HEIGHT;
+  if (state.drag) state.drag.top += shift;
+  return shift;
+}
+
+/**
+ * A flick: the drum keeps turning for a moment, longer the faster the flick
+ * (a short move is a short turn), then comes to rest exactly on a row. Each
+ * row it passes is a real step (the tick sound, the change).
+ */
+function fling(el: WheelElement, state: WheelState, velocity: number) {
+  stopSpin(state);
+  if (reduced() || Math.abs(velocity) < FLING_MIN) {
+    state.touching = false;
+    move(el, state, Math.round(el.scrollTop / ROW_HEIGHT));
+    return;
+  }
+  const travel = Math.max(-FLING_ROWS_MAX * ROW_HEIGHT, Math.min(FLING_ROWS_MAX * ROW_HEIGHT, velocity * FLING_TAU));
+  // Land on a row, inside the middle copy (the same numbers one copy away).
+  recentre(el, state, travel);
+  const from = el.scrollTop;
+  const to = Math.round((from + travel) / ROW_HEIGHT) * ROW_HEIGHT;
+  const rows = Math.abs(to - from) / ROW_HEIGHT;
+  const duration = Math.max(280, Math.min(950, 240 + rows * 52));
+  const start = Date.now();
+  state.touching = true;
+  state.target = to / ROW_HEIGHT;
+  const frame = () => {
+    if (!state.active) return;
+    const k = Math.min(1, (Date.now() - start) / duration);
+    const eased = 1 - (1 - k) ** 3;
+    el.scrollTo({ top: from + (to - from) * eased, behavior: "instant" });
+    emit(el, state);
+    decorate(el, state);
+    if (k < 1) {
+      state.spin = raf(frame);
+      return;
+    }
+    state.spin = null;
+    state.touching = false;
+    settle(el, state);
+  };
+  state.spin = raf(frame);
+}
+
 function later(state: WheelState, fn: () => void, ms: number) {
   if (state.timer) clearTimeout(state.timer);
   state.timer = setTimeout(fn, ms);
 }
 
+/**
+ * `n` rows on from where the drum is going (keys, the mouse wheel): fast
+ * repeats add up. Past the middle copy the drum is moved one copy back first
+ * (the same numbers), so it turns on endlessly instead of stopping at the end.
+ */
+function step(el: WheelElement, state: WheelState, n: number) {
+  const current = state.target ?? Math.round(el.scrollTop / ROW_HEIGHT);
+  let next = current + n;
+  const c = state.count;
+  if (next < c * 0.5 || next > c * 2.5) {
+    const shift = next < c * 0.5 ? c : -c;
+    el.scrollTo({ top: el.scrollTop + shift * ROW_HEIGHT, behavior: "instant" });
+    next += shift;
+  }
+  move(el, state, next);
+}
+
 function move(el: WheelElement, state: WheelState, index: number) {
+  stopSpin(state);
   state.target = index;
   el.scrollTo({ top: index * ROW_HEIGHT, behavior: reduced() ? "instant" : "smooth" });
   later(state, () => settle(el, state), 180);
@@ -147,6 +245,9 @@ export function mountWheel(el: WheelElement, onChange: WheelChange): () => void 
       target: null,
       timer: null,
       listeners: [],
+      drag: null,
+      spin: null,
+      wheelAcc: 0,
     };
     wheelStates.set(el, state);
     const on = (type: string, fn: (event: never) => void, options?: AddEventListenerOptions) => {
@@ -166,35 +267,94 @@ export function mountWheel(el: WheelElement, onChange: WheelChange): () => void 
       { passive: true },
     );
     on("scrollend", () => settle(el, state));
-    on("pointerdown", () => {
+    /*
+     * Step 2.15: the drum is turned by the pointer itself (finger or mouse),
+     * not by the browser's scroll: it follows the finger 1:1, a flick spins
+     * on (momentum), and it recentres on the way so it is endless both ways.
+     */
+    on("pointerdown", (event: { pointerId: number; clientY: number; button?: number; timeStamp?: number }) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      stopSpin(state);
       state.touching = true;
       state.target = null;
       if (state.timer) clearTimeout(state.timer);
+      state.drag = { id: event.pointerId, y: event.clientY, top: el.scrollTop, moved: false, samples: [{ y: event.clientY, t: Date.now() }] };
     });
-    const release = () => {
-      state.touching = false;
-      later(state, () => settle(el, state), 180);
+    on("pointermove", (event: { pointerId: number; clientY: number; preventDefault?(): void }) => {
+      const d = state.drag;
+      if (!d || d.id !== event.pointerId) return;
+      if (!d.moved) {
+        if (Math.abs(event.clientY - d.y) < 4) return;
+        d.moved = true;
+        // Only a real drag takes the pointer (a tap on a row stays a click on that row).
+        try {
+          el.setPointerCapture?.(event.pointerId);
+        } catch {
+          /* a synthetic pointer */
+        }
+      }
+      el.scrollTo({ top: d.top - (event.clientY - d.y), behavior: "instant" });
+      recentre(el, state);
+      const now = Date.now();
+      d.samples.push({ y: event.clientY, t: now });
+      while (d.samples.length > 2 && now - d.samples[0]!.t > 90) d.samples.shift();
+    });
+    const release = (event?: { pointerId?: number; type?: string }) => {
+      const d = state.drag;
+      if (d && event?.pointerId !== undefined && d.id !== event.pointerId) return;
+      state.drag = null;
+      if (!d || !d.moved) {
+        state.touching = false;
+        later(state, () => settle(el, state), 180);
+        return;
+      }
+      const first = d.samples[0]!;
+      const last = d.samples[d.samples.length - 1]!;
+      const dt = Math.max(1, last.t - first.t);
+      // A finger held still before lifting is no flick.
+      const fresh = Date.now() - last.t < 60;
+      const velocity = fresh && event?.type !== "pointercancel" ? -(last.y - first.y) / dt : 0;
+      fling(el, state, velocity);
     };
     on("pointerup", release);
     on("pointercancel", release);
-    on("lostpointercapture", release);
+    on("lostpointercapture", (event: { pointerId: number }) => state.drag && release(event));
+    // PC: the mouse wheel turns the drum row by row (a notch = one step; a trackpad adds up).
+    on(
+      "wheel",
+      (event: { deltaY: number; deltaMode?: number; preventDefault(): void }) => {
+        event.preventDefault();
+        const px = event.deltaY * (event.deltaMode === 1 ? ROW_HEIGHT : event.deltaMode === 2 ? ROW_HEIGHT * 5 : 1);
+        let steps: number;
+        if (Math.abs(px) >= 50) {
+          // A mouse notch: exactly one step.
+          steps = Math.sign(px);
+          state.wheelAcc = 0;
+        } else {
+          state.wheelAcc += px;
+          steps = Math.trunc(state.wheelAcc / ROW_HEIGHT);
+          state.wheelAcc -= steps * ROW_HEIGHT;
+        }
+        if (!steps) return;
+        step(el, state, steps);
+      },
+      { passive: false },
+    );
     on("click", (event: { target?: { closest?: (s: string) => { dataset: Record<string, string | undefined> } | null } }) => {
       const option = event.target?.closest?.("[data-wheel-option]");
       if (option) move(el, state, Number(option.dataset.wheelOption));
     });
     on("keydown", (event: { key: string; preventDefault(): void }) => {
       // Keys pressed faster than the smooth snap step on from where the drum is going, not where it is.
-      const current = state.target ?? Math.round(el.scrollTop / ROW_HEIGHT);
-      let next: number;
-      if (event.key === "ArrowDown") next = current + 1;
-      else if (event.key === "ArrowUp") next = current - 1;
-      else if (event.key === "PageDown") next = current + 10;
-      else if (event.key === "PageUp") next = current - 10;
-      else if (event.key === "Home") next = wheelPosition(0, state.count);
-      else if (event.key === "End") next = wheelPosition(state.count - 1, state.count);
-      else return;
+      if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        move(el, state, wheelPosition(event.key === "Home" ? 0 : state.count - 1, state.count));
+        return;
+      }
+      const n = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : event.key === "PageDown" ? 10 : event.key === "PageUp" ? -10 : 0;
+      if (!n) return;
       event.preventDefault();
-      move(el, state, Math.max(0, Math.min(state.count * 3 - 1, next)));
+      step(el, state, n);
     });
   }
   const state = wheelStates.get(el)!;
@@ -218,6 +378,7 @@ export function setWheelValue(el: WheelElement, value: number) {
   const v = wrapValue(value, state.count);
   // The drum's own value coming back (a step it reported): nothing to do, and a running snap is left alone.
   if (v === state.value) return;
+  stopSpin(state);
   state.value = v;
   state.target = null;
   if (state.timer) clearTimeout(state.timer);
@@ -232,6 +393,12 @@ export function flushWheel(el: WheelElement) {
   const state = wheelStates.get(el);
   if (!state) return;
   if (state.timer) clearTimeout(state.timer);
+  // A spin in progress lands now, on the row it was going to.
+  if (state.spin !== null) {
+    stopSpin(state);
+    state.touching = false;
+  }
+  state.drag = null;
   if (state.target !== null) el.scrollTo({ top: state.target * ROW_HEIGHT, behavior: "instant" });
   emit(el, state);
   settle(el, state);
@@ -242,6 +409,7 @@ export function unmountWheel(el: WheelElement) {
   if (!state) return;
   state.active = false;
   if (state.timer) clearTimeout(state.timer);
+  stopSpin(state);
   for (const [type, fn] of state.listeners) el.removeEventListener?.(type, fn);
   wheelStates.delete(el);
 }

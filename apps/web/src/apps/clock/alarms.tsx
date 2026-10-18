@@ -159,10 +159,7 @@ function AlarmForm({ initial, onClose }: { initial: Alarm; onClose: () => void }
       <SoundPicker
         value={draft.sound}
         onBack={() => setPage("form")}
-        onPick={(id) => {
-          set({ sound: id });
-          setPage("form");
-        }}
+        onPick={(id) => set({ sound: id })}
       />
     );
 

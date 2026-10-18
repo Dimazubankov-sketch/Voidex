@@ -198,7 +198,8 @@ export function normalizeState(saved: unknown): ClockState {
 
 /** The editor's starting point for a new alarm. It is a draft: nothing is on until it is saved. */
 export function newAlarmDraft(): Alarm {
-  return { id: newId(), time: "07:00", name: "", days: [1, 2, 3, 4, 5], enabled: false, sound: DEFAULT_SOUND, snooze: true, interval: 9, nextAt: null };
+  // Step 2.15: no day chosen = rings once, at the next such time (today or tomorrow); days make it repeat.
+  return { id: newId(), time: "07:00", name: "", days: [], enabled: false, sound: DEFAULT_SOUND, snooze: true, interval: 9, nextAt: null };
 }
 
 /** A saved alarm is on and scheduled. Throws when the time cannot ring. */
