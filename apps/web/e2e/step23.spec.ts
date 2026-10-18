@@ -235,10 +235,11 @@ test("phone: brush → View toggles in one tap; the Calculator widget works; the
   for (const k of ["7", "÷", "0", "="]) await w.getByTestId(`calc-key-${k}`).click();
   await expect(w.getByTestId("calc-widget-display")).toHaveText(/Ошибка/);
 
-  // Move Vibex to an empty cell lower on the page (edit mode first: long press on free space of the page).
+  // Move Vibex to an empty cell lower on the page (edit mode first: long press on free space of the page,
+  // bottom right: since Step 2.14 the ninth app, Clock, fills the bottom-left cell).
   const page0 = page.getByTestId("home-page-0");
   const p = (await page0.boundingBox())!;
-  await page.mouse.move(p.x + 30, p.y + p.height - 30);
+  await page.mouse.move(p.x + p.width - 30, p.y + p.height - 30);
   await page.mouse.down();
   await page.waitForTimeout(650);
   await page.mouse.up();

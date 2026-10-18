@@ -196,6 +196,7 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
       aria-label={win.appId}
       data-testid={`window-${win.appId}`}
       data-state={minimized ? "hidden" : "open"}
+      data-window-state={win.state}
       className={cx(
         // Step 2.8: .vx-app carries the account's «Вид приложений» (tokens and background).
         "vx-app absolute left-0 top-0 flex flex-col overflow-hidden",

@@ -330,8 +330,8 @@ test("responsive: no horizontal overflow at phone, tablet and PC widths, in the 
     if (!(await clock(page).isVisible())) await openClock(page);
     if (!isMobile(page)) {
       // A maximised window: the whole width of the screen for Clock (double-click on its title bar).
-      const box = (await page.locator('[data-testid="window-clock"]').boundingBox())!;
-      if (box.width < w - 80) await page.locator(".vc-titlebar").dblclick({ position: { x: 260, y: 20 } });
+      if ((await page.locator('[data-testid="window-clock"]').getAttribute("data-window-state")) !== "maximized") await page.locator(".vc-titlebar").dblclick({ position: { x: 260, y: 20 } });
+      await expect(page.locator('[data-testid="window-clock"]')).toHaveAttribute("data-window-state", "maximized");
       await expect.poll(async () => (await page.locator('[data-testid="window-clock"]').boundingBox())!.width).toBeGreaterThan(w - 80);
     }
     for (const tab of ["world", "alarm", "stopwatch", "timers"]) {

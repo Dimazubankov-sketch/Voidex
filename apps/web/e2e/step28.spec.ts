@@ -108,7 +108,7 @@ test("Settings → Apps (alphabetical) with per-app settings, and Voidex Storage
   await launch(page, "settings");
   await page.getByTestId("settings-nav-apps").last().click();
   const rows = page.getByTestId("settings-apps").last().locator('[data-testid^="settings-app-"]');
-  await expect(rows).toHaveCount(8);
+  await expect(rows).toHaveCount(9);
   const names = await rows.allInnerTexts();
   const sorted = [...names].sort((x, y) => x.localeCompare(y, "ru"));
   expect(names).toEqual(sorted);
@@ -131,7 +131,7 @@ test("Settings → Apps (alphabetical) with per-app settings, and Voidex Storage
   await section(page, "storage");
   await expect(page.getByTestId("settings-storage").last()).toBeVisible();
   await expect(page.getByTestId("storage-used").last()).toContainText(/Используется .+ из |Браузер не сообщает объём/);
-  await expect(page.getByTestId("settings-storage").last().locator('[data-testid^="storage-app-"]')).toHaveCount(8);
+  await expect(page.getByTestId("settings-storage").last().locator('[data-testid^="storage-app-"]')).toHaveCount(9);
   await noHorizontalOverflow(page);
 });
 
