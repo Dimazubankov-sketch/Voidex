@@ -1543,4 +1543,7 @@ export const ja: Record<MessageKey, string> = {
   "store.app.clock.f1": "モスクワとの時差つき世界時計",
   "store.app.clock.f2": "曜日・13 のサウンド・スヌーズ付きアラーム",
   "store.app.clock.f3": "ストップウォッチと複数の同時タイマー",
+  "widgets.clock": "時計",
+  "widgets.clockHint": "現在時刻を示す大きなアナログ時計",
+  "widgets.clockNow": "時計：{time}。時計を開く",
 };

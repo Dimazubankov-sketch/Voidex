@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
 import { motion } from "motion/react";
 import { RiAddLine, RiCheckLine, RiSubtractLine } from "@remixicon/react";
 import {
@@ -21,7 +21,8 @@ import { useT, type MessageKey } from "@/lib/i18n";
 import { Button } from "@/ui/controls";
 import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
-import { CalculatorGlyph } from "@/brand/brand";
+import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
+import { cityClock, localZone } from "@voidex/clock";
 import { desktopGeometry } from "./desktop-geometry";
 import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
@@ -90,6 +91,71 @@ function CalculatorWidget({ preview }: { preview?: boolean }) {
   );
 }
 
+/** The current time, re-rendered on every new second (aligned to the clock, paused while the tab is hidden). */
+function useSecond(active: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) return;
+    let id = 0;
+    const tick = () => {
+      setNow(Date.now());
+      id = window.setTimeout(tick, 1000 - (Date.now() % 1000) + 5);
+    };
+    const onVisible = () => document.visibilityState === "visible" && setNow(Date.now());
+    tick();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [active]);
+  return now;
+}
+
+/**
+ * Step 2.14: Clock widget (2 × 2): a large analog clock of this device's
+ * time, in the system's colours (light and dark), no logo. A tap opens
+ * Clock on the world clock.
+ */
+function ClockWidget({ preview }: { preview?: boolean }) {
+  const t = useT();
+  const now = useSecond(true);
+  const d = new Date(now);
+  const s = d.getSeconds();
+  const m = d.getMinutes() + s / 60;
+  const h = (d.getHours() % 12) + m / 60;
+  const label = t("widgets.clockNow", { time: cityClock(localZone(), now) });
+  const hand = (deg: number, len: number, width: number, cls: string, tail = 0) => (
+    <line x1={100} y1={100 + tail} x2={100} y2={100 - len} strokeWidth={width} strokeLinecap="round" className={cls} transform={`rotate(${deg} 100 100)`} />
+  );
+  return (
+    <button
+      type="button"
+      tabIndex={preview ? -1 : 0}
+      onClick={(e) => openApp("clock", e.currentTarget, { tab: "world" })}
+      className={cx("flex size-full items-center justify-center rounded-[24px] p-[7%]", preview && "pointer-events-none")}
+      aria-label={label}
+      title={label}
+      data-testid="clock-widget"
+      data-time={cityClock(localZone(), now)}
+    >
+      <svg viewBox="0 0 200 200" className="size-full max-h-full drop-shadow-[0_6px_14px_rgba(20,16,50,0.16)]" aria-hidden>
+        <circle cx={100} cy={100} r={98} className="fill-[var(--surface)]" />
+        {Array.from({ length: 12 }, (_, i) => (
+          <line key={i} x1={100} y1={13} x2={100} y2={i % 3 === 0 ? 33 : 28} strokeWidth={i % 3 === 0 ? 6 : 4.5} strokeLinecap="round" className="stroke-[color-mix(in_srgb,var(--text)_70%,transparent)]" transform={`rotate(${i * 30} 100 100)`} />
+        ))}
+        {hand(h * 30, 46, 7, "stroke-[var(--text)]")}
+        {hand(m * 6, 70, 5.5, "stroke-[var(--text)]")}
+        <g data-testid="clock-widget-second" data-angle={s * 6}>
+          {hand(s * 6, 78, 2, "stroke-[var(--primary)]", 16)}
+        </g>
+        <circle cx={100} cy={100} r={6} className="fill-[var(--text)]" />
+        <circle cx={100} cy={100} r={3} className="fill-[var(--primary)]" />
+      </svg>
+    </button>
+  );
+}
+
 export const WIDGETS: WidgetDef[] = [
   {
     type: "calculator",
@@ -98,6 +164,14 @@ export const WIDGETS: WidgetDef[] = [
     keywords: "calculator calc math калькулятор счёт",
     Icon: ({ className }) => <CalculatorGlyph className={className} />,
     Body: CalculatorWidget,
+  },
+  {
+    type: "clock",
+    title: "widgets.clock",
+    description: "widgets.clockHint",
+    keywords: "clock time analog watch часы время циферблат",
+    Icon: ({ className }) => <ClockGlyph className={className} />,
+    Body: ClockWidget,
   },
 ];
 

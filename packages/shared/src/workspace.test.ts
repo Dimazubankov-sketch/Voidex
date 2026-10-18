@@ -24,6 +24,8 @@ import {
   showApp,
   placeItem,
   addWidget,
+  WIDGET_TYPES,
+  WIDGET_CELLS,
   moveWidget,
   removeWidget,
   placeInCell,
@@ -484,5 +486,21 @@ describe("Step 2.9: desktop logo size", () => {
     expect(GLYPH_SCALE_BOX.m).toBeLessThan(GLYPH_SCALE_BOX.l);
     expect(GLYPH_SCALE_BOX.l).toBeLessThan(0.8);
     expect(GLYPH_SCALE_BOX.m).toBe(0.52);
+  });
+});
+
+describe("Step 2.14: Clock widget", () => {
+  const ALL: AppId[] = ["mail", "settings", "clock"];
+  it("is a 2 x 2 system widget kept by the layout on both surfaces", () => {
+    expect(WIDGET_TYPES).toContain("clock");
+    expect(WIDGET_CELLS.clock).toEqual({ w: 2, h: 2 });
+    let l = normalizeLayout(null, ALL);
+    l = addWidget(l, "clock", { surface: "desktop", space: l.desktop.spaces[0]!.id }, "w_clock01");
+    l = addWidget(l, "clock", { surface: "mobile", page: 0 }, "w_clock02");
+    const n = normalizeLayout(l, ALL);
+    expect(n.widgets.map((w) => [w.id, w.type, w.surface])).toEqual([
+      ["w_clock01", "clock", "desktop"],
+      ["w_clock02", "clock", "mobile"],
+    ]);
   });
 });

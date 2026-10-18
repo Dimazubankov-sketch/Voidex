@@ -63,6 +63,18 @@ only). Preview: one play per tap, the same sound cannot restart while it
 plays, another sound stops it, leaving the picker stops it. The tick plays
 only on a real step of a drum, at most every 28 ms.
 
+## Widget
+
+`clock` in the system widget catalogue (`WIDGET_TYPES` / `WIDGET_CELLS` in
+`packages/shared/src/workspace.ts`, the body in `apps/web/src/os/home/widgets.tsx`):
+a large analog clock taking a 2 x 2 block (the place of four icons), like the
+Calculator widget. It is added from Widgets in the edit mode of the home
+screen (phone and PC), stored in the synced workspace layout, moved and removed
+like any widget. It shows this device's time, re-rendered on every second
+(aligned to the clock, refreshed when the tab returns); the face, ticks and
+hands use the theme tokens (light and dark), the second hand the accent. No
+logo inside. A tap opens Clock on the world clock.
+
 ## Known limits
 
 - No background alarms in the browser: VOIDEX has to be open on the device.

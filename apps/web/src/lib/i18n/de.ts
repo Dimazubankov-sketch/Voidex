@@ -1543,4 +1543,7 @@ export const de: Record<MessageKey, string> = {
   "store.app.clock.f1": "Weltzeit mit Abstand zu Moskau",
   "store.app.clock.f2": "Wecker mit Tagen, 13 Tönen und Schlummern",
   "store.app.clock.f3": "Stoppuhr und mehrere Timer gleichzeitig",
+  "widgets.clock": "Uhr",
+  "widgets.clockHint": "Eine große analoge Uhr mit der aktuellen Zeit",
+  "widgets.clockNow": "Uhr: {time}. Uhr öffnen",
 };

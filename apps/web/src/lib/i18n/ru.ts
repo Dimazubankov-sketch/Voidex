@@ -1558,4 +1558,7 @@ export const ru: Record<MessageKey, string> = {
   "store.app.clock.f1": "Мировое время с разницей к Москве",
   "store.app.clock.f2": "Будильники с днями, 13 мелодиями и повтором",
   "store.app.clock.f3": "Секундомер и несколько таймеров сразу",
+  "widgets.clock": "Часы",
+  "widgets.clockHint": "Крупные аналоговые часы с текущим временем",
+  "widgets.clockNow": "Часы: {time}. Открыть Часы",
 };

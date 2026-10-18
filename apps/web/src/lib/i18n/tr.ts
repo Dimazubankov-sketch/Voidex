@@ -1543,4 +1543,7 @@ export const tr: Record<MessageKey, string> = {
   "store.app.clock.f1": "Moskova farkıyla dünya saati",
   "store.app.clock.f2": "Günler, 13 ses ve ertelemeli alarmlar",
   "store.app.clock.f3": "Kronometre ve aynı anda birkaç zamanlayıcı",
+  "widgets.clock": "Saat",
+  "widgets.clockHint": "Şu anki saati gösteren büyük analog saat",
+  "widgets.clockNow": "Saat: {time}. Saat'i aç",
 };

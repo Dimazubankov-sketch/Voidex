@@ -1543,4 +1543,7 @@ export const es: Record<MessageKey, string> = {
   "store.app.clock.f1": "Hora mundial con la diferencia con Moscú",
   "store.app.clock.f2": "Alarmas con días, 13 sonidos y repetición",
   "store.app.clock.f3": "Cronómetro y varios temporizadores a la vez",
+  "widgets.clock": "Reloj",
+  "widgets.clockHint": "Un gran reloj analógico con la hora actual",
+  "widgets.clockNow": "Reloj: {time}. Abrir Reloj",
 };

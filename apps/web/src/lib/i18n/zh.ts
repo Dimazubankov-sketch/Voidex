@@ -1543,4 +1543,7 @@ export const zh: Record<MessageKey, string> = {
   "store.app.clock.f1": "显示与莫斯科时差的世界时钟",
   "store.app.clock.f2": "可设星期、13 种铃声与稍后提醒的闹钟",
   "store.app.clock.f3": "秒表与同时运行的多个计时器",
+  "widgets.clock": "时钟",
+  "widgets.clockHint": "显示当前时间的大号模拟时钟",
+  "widgets.clockNow": "时钟：{time}。打开时钟",
 };

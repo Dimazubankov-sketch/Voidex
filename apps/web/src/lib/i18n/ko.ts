@@ -1543,4 +1543,7 @@ export const ko: Record<MessageKey, string> = {
   "store.app.clock.f1": "모스크바와의 시차가 있는 세계 시계",
   "store.app.clock.f2": "요일, 13가지 사운드, 다시 알림이 있는 알람",
   "store.app.clock.f3": "스톱워치와 동시에 여러 타이머",
+  "widgets.clock": "시계",
+  "widgets.clockHint": "현재 시간을 보여 주는 큰 아날로그 시계",
+  "widgets.clockNow": "시계: {time}. 시계 열기",
 };

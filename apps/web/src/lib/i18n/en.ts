@@ -1574,6 +1574,9 @@ export const en = {
   "store.app.clock.f1": "World clock with the difference from Moscow",
   "store.app.clock.f2": "Alarms with days, 13 sounds and snooze",
   "store.app.clock.f3": "Stopwatch and several timers at once",
+  "widgets.clock": "Clock",
+  "widgets.clockHint": "A large analog clock with the time right now",
+  "widgets.clockNow": "Clock: {time}. Open Clock",
 } as const;
 
 

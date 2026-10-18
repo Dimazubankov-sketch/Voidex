@@ -84,9 +84,10 @@ export type GlassLevel = (typeof GLASS_LEVELS)[number];
  * Step 2.3: the "desktops" (Workspaces) widget was removed; stored ones are
  * dropped by normalizeLayout. Each widget covers a block of grid cells.
  */
-export const WIDGET_TYPES = ["calculator"] as const;
+export const WIDGET_TYPES = ["calculator", "clock"] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
-export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 } };
+/** Step 2.14: Clock, large analog clock, the place of four icons (2 × 2). */
+export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 }, clock: { w: 2, h: 2 } };
 /** Background of the PC system bar (top): real glass, or none. */
 export const SYSTEM_BAR_STYLES = ["glass", "off"] as const;
 export type SystemBarStyle = (typeof SYSTEM_BAR_STYLES)[number];

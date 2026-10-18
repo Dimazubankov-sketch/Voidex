@@ -54,10 +54,10 @@ export function rectOf(el: Element | null | undefined): Rect | null {
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
 
-export function openApp(id: AppId, from?: Element | null) {
+export function openApp(id: AppId, from?: Element | null, params?: Record<string, unknown>) {
   useHomeUi.getState().setLauncherOpen(false);
   useHomeUi.getState().setEditing(false);
-  useWM.getState().open(id, { origin: rectOf(from?.querySelector("[data-tile]") ?? from) });
+  useWM.getState().open(id, { origin: rectOf(from?.querySelector("[data-tile]") ?? from), ...(params ? { params } : {}) });
 }
 
 /** Step 2.5.1: wallpapers are chosen in one place — Settings → Wallpapers, on the given tab. */

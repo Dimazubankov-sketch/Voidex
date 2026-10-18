@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { apiAs, openApp, phoneHome, signUpViaApi } from "./helpers";
+import { addWidget, normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
+import { apiAs, openApp, phoneHome, reloadUnlocked, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.14: Clock, a native built-in VOIDEX app (no iframe). Its logo is a
@@ -345,4 +346,78 @@ test("responsive: no horizontal overflow at phone, tablet and PC widths, in the 
   await page.evaluate(() => document.documentElement.setAttribute("data-app-look", "dark"));
   const bg = await clock(page).evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(bg).not.toBe("rgb(255, 255, 255)");
+});
+
+/** Places widgets through the account's layout (the same call the widgets panel makes). */
+async function placeWidgets(page: Page, types: ("clock" | "calculator")[]) {
+  const me = (await apiAs(page, "GET", "/api/me")).body as { preferences: { workspace: { layout?: WorkspaceLayout } } };
+  const apps = ((await apiAs(page, "GET", "/api/apps")).body as { id: string }[]).map((a) => a.id) as never[];
+  let l = normalizeLayout(me.preferences.workspace.layout ?? null, apps);
+  types.forEach((type, i) => {
+    l = addWidget(l, type, isMobile(page) ? { surface: "mobile", page: 0, cell: { c: i * 2, r: 0 } } : { surface: "desktop", space: l.desktop.spaces[0]!.id, cell: { c: i * 2, r: 0 } }, `w_${type}0${i}x`);
+  });
+  expect((await apiAs(page, "PATCH", "/api/preferences", { workspace: { layout: l } })).status).toBe(200);
+  await reloadUnlocked(page);
+}
+
+test("Clock widget (phone): in the widget catalogue, added from the panel onto the home screen", async ({ page }) => {
+  test.skip(!isMobile(page), "phone path to the panel");
+  await signUpViaApi(page, "Виджет", "Часов");
+  const pg = (await page.getByTestId("home-page-0").boundingBox())!;
+  await page.mouse.move(pg.x + 30, pg.y + pg.height - 30);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await page.getByTestId("home-appearance").click();
+  await page.getByTestId("brush-widgets").click();
+  await page.getByTestId("widgets-search").fill("часы");
+  const card = page.getByTestId("widget-card-clock");
+  await expect(card).toBeVisible();
+  await expect(card.getByTestId("clock-widget")).toBeVisible();
+  await page.getByTestId("widget-add-clock").click();
+  await page.keyboard.press("Escape");
+  await page.getByTestId("home-done").click();
+  await expect(page.getByTestId("home-page-0").getByTestId("widget-clock")).toBeVisible();
+  const layout = ((await apiAs(page, "GET", "/api/me")).body as { preferences: { workspace: { layout: WorkspaceLayout } } }).preferences.workspace.layout;
+  expect(layout.widgets.filter((w) => w.type === "clock")).toHaveLength(1);
+});
+
+test("Clock widget: 2 x 2 like the Calculator widget, the time of now, ticking, no logo, opens Clock; light and dark", async ({ page }) => {
+  await signUpViaApi(page, "Время", "Виджета");
+  await placeWidgets(page, ["clock", "calculator"]);
+  const w = page.getByTestId("widget-clock");
+  const calc = page.getByTestId("widget-calculator");
+  await expect(w).toBeVisible();
+  await expect(calc).toBeVisible();
+  // The place of four icons: the same 2 x 2 block as the Calculator widget, square.
+  const a = (await w.boundingBox())!;
+  const b = (await calc.boundingBox())!;
+  expect(Math.abs(a.width - b.width)).toBeLessThan(2);
+  expect(Math.abs(a.height - b.height)).toBeLessThan(2);
+  // On a phone the 2 x 2 block is square (PC grid cells are wider than tall, the dial stays round inside).
+  if (isMobile(page)) expect(Math.abs(a.width - a.height)).toBeLessThan(a.width * 0.15);
+  // An icon tile is about a quarter of it.
+  const tile = (await page.locator('[data-testid="app-mail"] [data-tile]').first().boundingBox())!;
+  expect(a.width).toBeGreaterThan(tile.width * 1.7);
+  // No logo inside.
+  await expect(w.locator('[data-logo], img, image')).toHaveCount(0);
+  // The time of now on this device, and the second hand moves.
+  const label = await w.getByTestId("clock-widget").getAttribute("data-time");
+  const local = await page.evaluate(() => new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(Date.now()));
+  expect([local]).toContain(label);
+  const sec = w.getByTestId("clock-widget-second");
+  const first = await sec.getAttribute("data-angle");
+  await expect.poll(() => sec.getAttribute("data-angle"), { timeout: 4000 }).not.toBe(first);
+  // Its colours come from the theme: a light face, then a dark one.
+  const face = () => w.locator("svg circle").first().evaluate((el) => getComputedStyle(el).fill);
+  const light = await face();
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  const dark = await face();
+  expect(dark).not.toBe(light);
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+  await page.screenshot({ path: test.info().outputPath("clock-widget.png") });
+  // A tap opens Clock on the world clock.
+  await w.getByTestId("clock-widget").click();
+  await expect(page.locator('[data-testid="window-clock"][data-state="open"]')).toBeVisible();
+  await expect(clock(page)).toHaveAttribute("data-tab", "world");
 });
