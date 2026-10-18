@@ -1535,4 +1535,12 @@ export const zh: Record<MessageKey, string> = {
   "notes.book.pageN": "第 {n} 页",
   "notes.book.toFiles": "保存到文件 (.book)",
   "notes.book.savedToFiles": "已保存到文件",
+  "notifications.clock.alarm": "闹钟",
+  "notifications.clock.timer": "计时结束",
+  "store.app.clock.subtitle": "世界时钟、闹钟与计时器",
+  "store.app.clock.desc": "显示与莫斯科时差的世界城市、可设星期、铃声与稍后提醒的闹钟、秒表以及同时运行的多个计时器。时间在顺滑的滚轮上选择，13 种铃声直接在设备上播放。",
+  "store.app.clock.news": "时钟登陆 VOIDEX：世界时钟、闹钟、秒表和计时器。",
+  "store.app.clock.f1": "显示与莫斯科时差的世界时钟",
+  "store.app.clock.f2": "可设星期、13 种铃声与稍后提醒的闹钟",
+  "store.app.clock.f3": "秒表与同时运行的多个计时器",
 };

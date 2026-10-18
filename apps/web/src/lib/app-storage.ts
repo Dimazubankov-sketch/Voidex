@@ -2,6 +2,7 @@ import type { AppId } from "@voidex/shared";
 import { queryClient } from "@/lib/query";
 import { sessionFiles, sessionMedia } from "@/os/cloud/session";
 import { requestClose, useWM } from "@/os/window-manager";
+import { clockBytes } from "@/apps/clock/runtime";
 
 /**
  * Step 2.8: «Хранилище Voidex», the storage of this device (not ViCloud).
@@ -20,6 +21,7 @@ const QUERY_ROOTS: Record<AppId, string[]> = {
   calculator: [],
   files: [],
   media: [],
+  clock: [],
   store: ["store"],
 };
 
@@ -41,7 +43,8 @@ function cacheBytes(id: AppId): number {
 
 /** Bytes an app keeps on this device right now. */
 export function appBytes(id: AppId): number {
-  const own = id === "files" ? sessionFiles().bytes() : id === "media" ? sessionMedia().bytes() : 0;
+  // Step 2.14: Clock keeps its alarms, timers and cities on the device (counted from what is saved).
+  const own = id === "files" ? sessionFiles().bytes() : id === "media" ? sessionMedia().bytes() : id === "clock" ? clockBytes() : 0;
   return own + cacheBytes(id);
 }
 
@@ -66,7 +69,9 @@ export const canOffload = (id: AppId) => id !== "settings";
 /**
  * Offload: close the app's windows (asking about unsaved work, as a normal
  * close does) and drop its cached data on this device. Documents and
- * messages stay on the server; Files and Media keep this session's files.
+ * messages stay on the server; Files and Media keep this session's files;
+ * Clock keeps its alarms and timers (they are the person's data, not a cache)
+ * and they still ring.
  * Resolves false if the person kept a window open.
  */
 export async function offloadApp(id: AppId): Promise<boolean> {

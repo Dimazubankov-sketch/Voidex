@@ -1535,4 +1535,12 @@ export const tr: Record<MessageKey, string> = {
   "notes.book.pageN": "Sayfa {n}",
   "notes.book.toFiles": "Dosyalar’a kaydet (.book)",
   "notes.book.savedToFiles": "Dosyalar’a kaydedildi",
+  "notifications.clock.alarm": "Alarm",
+  "notifications.clock.timer": "Zamanlayıcı bitti",
+  "store.app.clock.subtitle": "Dünya saati, alarmlar ve zamanlayıcılar",
+  "store.app.clock.desc": "Moskova ile farkıyla dünya şehirleri, günleri, sesleri ve ertelemesiyle alarmlar, kronometre ve aynı anda birkaç zamanlayıcı. Saat akıcı tamburlarla seçilir; 13 ses doğrudan cihazda çalar.",
+  "store.app.clock.news": "Saat VOIDEX'te: dünya saati, alarmlar, kronometre ve zamanlayıcılar.",
+  "store.app.clock.f1": "Moskova farkıyla dünya saati",
+  "store.app.clock.f2": "Günler, 13 ses ve ertelemeli alarmlar",
+  "store.app.clock.f3": "Kronometre ve aynı anda birkaç zamanlayıcı",
 };

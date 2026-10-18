@@ -1535,4 +1535,12 @@ export const de: Record<MessageKey, string> = {
   "notes.book.pageN": "Seite {n}",
   "notes.book.toFiles": "In Dateien sichern (.book)",
   "notes.book.savedToFiles": "In Dateien gesichert",
+  "notifications.clock.alarm": "Wecker",
+  "notifications.clock.timer": "Timer abgelaufen",
+  "store.app.clock.subtitle": "Weltzeit, Wecker und Timer",
+  "store.app.clock.desc": "Städte der Welt mit ihrem Abstand zu Moskau, Wecker mit Wochentagen, Tönen und Schlummern, eine Stoppuhr und mehrere Timer gleichzeitig. Die Zeit stellen Sie an weichen Walzen ein; 13 Töne spielen direkt auf dem Gerät.",
+  "store.app.clock.news": "Die Uhr kommt zu VOIDEX: Weltzeit, Wecker, Stoppuhr und Timer.",
+  "store.app.clock.f1": "Weltzeit mit Abstand zu Moskau",
+  "store.app.clock.f2": "Wecker mit Tagen, 13 Tönen und Schlummern",
+  "store.app.clock.f3": "Stoppuhr und mehrere Timer gleichzeitig",
 };

@@ -1535,4 +1535,12 @@ export const ko: Record<MessageKey, string> = {
   "notes.book.pageN": "{n}페이지",
   "notes.book.toFiles": "파일에 저장 (.book)",
   "notes.book.savedToFiles": "파일에 저장됨",
+  "notifications.clock.alarm": "알람",
+  "notifications.clock.timer": "타이머 종료",
+  "store.app.clock.subtitle": "세계 시계, 알람, 타이머",
+  "store.app.clock.desc": "모스크바와의 시차가 표시되는 세계 도시, 요일·사운드·다시 알림이 있는 알람, 스톱워치, 동시에 여러 타이머. 부드러운 드럼으로 시간을 고르고 13가지 사운드가 기기에서 재생됩니다.",
+  "store.app.clock.news": "VOIDEX에 시계 등장: 세계 시계, 알람, 스톱워치, 타이머.",
+  "store.app.clock.f1": "모스크바와의 시차가 있는 세계 시계",
+  "store.app.clock.f2": "요일, 13가지 사운드, 다시 알림이 있는 알람",
+  "store.app.clock.f3": "스톱워치와 동시에 여러 타이머",
 };

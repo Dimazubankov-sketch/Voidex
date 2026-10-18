@@ -83,6 +83,9 @@ importers:
       '@voidex/calculator':
         specifier: workspace:*
         version: link:../../packages/calculator
+      '@voidex/clock':
+        specifier: workspace:*
+        version: link:../../packages/clock
       '@voidex/files':
         specifier: workspace:*
         version: link:../../packages/files
@@ -153,6 +156,12 @@ importers:
       tesseract.js:
         specifier: 6.0.1
         version: 6.0.1
+
+  packages/clock:
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   packages/files:
     dependencies:

@@ -13,7 +13,7 @@ import { apiAs, reloadUnlocked, signUpViaApi } from "../../e2e/helpers";
  */
 
 const OUT = new URL("../../public/store/screens/", import.meta.url).pathname;
-type Id = "vibex" | "mail" | "notes" | "calculator" | "files" | "media";
+type Id = "vibex" | "mail" | "notes" | "calculator" | "files" | "media" | "clock";
 
 async function phone(browser: Browser) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, locale: "ru-RU" });
@@ -302,4 +302,57 @@ test("Appex Store screenshots: desktop", async ({ browser }) => {
   const { a, chatId, home } = await setup(browser, desktop);
   await scenes(a, chatId, home);
   await a.context().close();
+});
+
+/**
+ * Step 2.14: Clock (World clock, Alarms, Timers). Its state lives on the
+ * device, so the scene is laid there: a few cities, three alarms and two
+ * running timers of a made-up morning. Run alone with --grep Clock.
+ */
+async function clockScenes(browser: Browser, make: (b: Browser) => Promise<Page>) {
+  const a = await make(browser);
+  await signUpViaApi(a, "Алина", "Время");
+  const me = (await apiAs(a, "GET", "/api/me")).body as { id: string };
+  const now = Date.now();
+  const state = {
+    version: 1,
+    cities: ["Europe/Moscow", "Europe/London", "America/New_York", "Asia/Tokyo", "Asia/Dubai", "Europe/Kaliningrad"],
+    alarms: [
+      { id: "a1", time: "06:45", name: "Пробежка", days: [1, 3, 5], enabled: true, sound: "alarm-rising", snooze: true, interval: 5, nextAt: null },
+      { id: "a2", time: "07:30", name: "Подъём", days: [1, 2, 3, 4, 5], enabled: true, sound: "reference-alert-b", snooze: true, interval: 9, nextAt: null },
+      { id: "a3", time: "10:00", name: "Выходной", days: [0, 6], enabled: false, sound: "alarm-marimba", snooze: false, interval: 9, nextAt: null },
+    ],
+    timers: [
+      { id: "t1", name: "Паста", sound: "alarm-bells", duration: 600000, remaining: 600000, endsAt: now + 7 * 60000 + 12000, running: true },
+      { id: "t2", name: "Фокус", sound: "reference-alert-b", duration: 1500000, remaining: 912000, endsAt: 0, running: false },
+    ],
+    history: [
+      { name: "Чай", sound: "alarm-drop", duration: 180000 },
+      { name: "Фокус", sound: "reference-alert-b", duration: 1500000 },
+    ],
+    snoozes: [],
+    stopwatch: { elapsed: 0, running: false, startedAt: 0 },
+    timerSetup: { hours: 0, minutes: 10, seconds: 0, name: "", sound: "reference-alert-b" },
+  };
+  await a.evaluate(({ key, value }) => localStorage.setItem(key, value), { key: `voidex-clock-v1:${me.id}`, value: JSON.stringify(state) });
+  await reloadUnlocked(a);
+  await hidePopups(a);
+  await open(a, "clock");
+  await maximize(a, "clock");
+  await snap(a, "clock", 1);
+  await a.getByTestId("clock-tab-alarm").last().click();
+  await a.waitForTimeout(700);
+  await snap(a, "clock", 2);
+  await a.getByTestId("clock-tab-timers").last().click();
+  await a.waitForTimeout(900);
+  await snap(a, "clock", 3);
+  await a.context().close();
+}
+
+test("Appex Store screenshots: Clock phone", async ({ browser }) => {
+  await clockScenes(browser, phone);
+});
+
+test("Appex Store screenshots: Clock desktop", async ({ browser }) => {
+  await clockScenes(browser, desktop);
 });

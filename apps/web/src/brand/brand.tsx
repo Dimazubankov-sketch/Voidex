@@ -114,6 +114,8 @@ export const ICON_OPTICAL_SCALE = {
   files: 0.94,
   media: 0.91,
   store: 1.1,
+  // Step 2.14: an open ring with gaps and two thin hands (about 45% of its box): drawn like the Store's mark.
+  clock: 1.1,
   desktops: 1.05,
 } as const;
 
@@ -154,6 +156,11 @@ export function MediaGlyph({ className }: { className?: string }) {
 /** Appex Store (Step 2.11): the mark delivered with the Store, cut out of its tile without redrawing. */
 export function StoreGlyph({ className }: { className?: string }) {
   return <TrimmedLogo src="/brand/app-store.png" className={className} optical={ICON_OPTICAL_SCALE.store} />;
+}
+
+/** Step 2.14: Clock. A system icon only: never drawn inside the Clock app itself. */
+export function ClockGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-clock.png" className={className} optical={ICON_OPTICAL_SCALE.clock} />;
 }
 
 /** Share of the tile the logo's content box fills — the same for every app. */

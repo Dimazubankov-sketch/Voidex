@@ -1535,4 +1535,12 @@ export const fr: Record<MessageKey, string> = {
   "notes.book.pageN": "Page {n}",
   "notes.book.toFiles": "Enregistrer dans Fichiers (.book)",
   "notes.book.savedToFiles": "Enregistré dans Fichiers",
+  "notifications.clock.alarm": "Alarme",
+  "notifications.clock.timer": "Minuteur terminé",
+  "store.app.clock.subtitle": "Heure mondiale, alarmes et minuteurs",
+  "store.app.clock.desc": "Les villes du monde avec leur écart avec Moscou, des alarmes avec jours, sonneries et répétition, un chronomètre et plusieurs minuteurs à la fois. L'heure se règle sur des molettes fluides ; 13 sonneries jouent sur l'appareil.",
+  "store.app.clock.news": "L'Horloge arrive dans VOIDEX : heure mondiale, alarmes, chronomètre et minuteurs.",
+  "store.app.clock.f1": "Heure mondiale avec l'écart avec Moscou",
+  "store.app.clock.f2": "Alarmes avec jours, 13 sonneries et répétition",
+  "store.app.clock.f3": "Chronomètre et plusieurs minuteurs à la fois",
 };

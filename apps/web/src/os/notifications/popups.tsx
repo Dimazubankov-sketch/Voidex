@@ -12,6 +12,7 @@ import { useSession } from "@/lib/session";
 import { foregroundId, useWM } from "../window-manager";
 import { RENDERERS, timeLabel } from "./center";
 import { notificationActions } from "./store";
+import { clockDeviceId } from "@/apps/clock/device";
 
 /**
  * Step 2.11: system pop-up notifications (VOIDEX's own banners), built from
@@ -102,6 +103,8 @@ export function popupNotification(n: NotificationDto, opts: { onScreen?: boolean
   // Step 2.12: no banner (and no chime) over the app it comes from while that app is in front: the app shows
   // it itself (badges, lists); the Notification Center still keeps it. Other apps' banners still show.
   if (n.app !== "system" && activeApp() === n.app) return;
+  // Step 2.14: a Clock ring pops up only on the device it rang on (the other devices just list it).
+  if (n.app === "clock" && n.target.device && n.target.device !== clockDeviceId()) return;
   if (prefs?.notifications.newMailBanner !== false) {
     const max = window.matchMedia?.("(min-width: 900px)").matches ? 3 : 1;
     usePopups.getState().push(n, max);

@@ -20,6 +20,13 @@ export const NOTIFICATION_SOURCES = {
   system: ["system.update"],
   /** Step 2.12: Appex Store: an update is available (target.kind "available") or was installed by itself ("updated"). */
   store: ["store.update"],
+  /**
+   * Step 2.14: Clock: an alarm or a timer rang on one of the person's devices
+   * (target: kind "alarm" | "timer", id, device). Posted by that device itself:
+   * alarms and timers live on the device, the ring becomes an entry of the
+   * Notification Center like any other.
+   */
+  clock: ["clock.alarm", "clock.timer"],
 } as const;
 
 export type NotificationApp = keyof typeof NOTIFICATION_SOURCES;
@@ -70,3 +77,17 @@ export const SystemNotificationSchema = z.object({
   /** Optional version label shown with the update. */
   version: z.string().trim().max(40).optional(),
 });
+
+/** Step 2.14: what a device posts when one of its alarms or timers rings. */
+export const ClockNotificationSchema = z.object({
+  type: z.enum(["clock.alarm", "clock.timer"]),
+  /** The alarm's or timer's name (the app's default name when it has none). */
+  title: z.string().trim().min(1).max(80),
+  /** The time it rang at, e.g. "07:00". */
+  body: z.string().trim().max(120).default(""),
+  /** The alarm / timer id on that device (a tap opens it). */
+  id: z.string().trim().min(1).max(80),
+  /** The device that rang (only that device shows the pop-up). */
+  device: z.string().trim().min(1).max(80),
+});
+export type ClockNotificationInput = z.infer<typeof ClockNotificationSchema>;

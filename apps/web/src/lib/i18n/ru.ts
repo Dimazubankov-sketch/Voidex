@@ -1550,4 +1550,12 @@ export const ru: Record<MessageKey, string> = {
   "notes.book.pageN": "Страница {n}",
   "notes.book.toFiles": "Сохранить в Файлы (.book)",
   "notes.book.savedToFiles": "Сохранено в Файлы",
+  "notifications.clock.alarm": "Будильник",
+  "notifications.clock.timer": "Таймер завершён",
+  "store.app.clock.subtitle": "Мировое время, будильники и таймеры",
+  "store.app.clock.desc": "Города мира с разницей к Москве, будильники с днями недели, мелодиями и повтором сигнала, секундомер и несколько таймеров сразу. Время выбирается на плавных барабанах, 13 мелодий звучат прямо на устройстве.",
+  "store.app.clock.news": "Часы в VOIDEX: мировое время, будильники, секундомер и таймеры.",
+  "store.app.clock.f1": "Мировое время с разницей к Москве",
+  "store.app.clock.f2": "Будильники с днями, 13 мелодиями и повтором",
+  "store.app.clock.f3": "Секундомер и несколько таймеров сразу",
 };

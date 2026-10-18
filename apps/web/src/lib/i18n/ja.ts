@@ -1535,4 +1535,12 @@ export const ja: Record<MessageKey, string> = {
   "notes.book.pageN": "{n} ページ",
   "notes.book.toFiles": "ファイルに保存 (.book)",
   "notes.book.savedToFiles": "ファイルに保存しました",
+  "notifications.clock.alarm": "アラーム",
+  "notifications.clock.timer": "タイマー終了",
+  "store.app.clock.subtitle": "世界時計、アラーム、タイマー",
+  "store.app.clock.desc": "モスクワとの時差がわかる世界の都市、曜日・サウンド・スヌーズ付きのアラーム、ストップウォッチ、複数の同時タイマー。時刻はなめらかなドラムで選び、13 のサウンドは端末で再生されます。",
+  "store.app.clock.news": "VOIDEX に時計が登場：世界時計、アラーム、ストップウォッチ、タイマー。",
+  "store.app.clock.f1": "モスクワとの時差つき世界時計",
+  "store.app.clock.f2": "曜日・13 のサウンド・スヌーズ付きアラーム",
+  "store.app.clock.f3": "ストップウォッチと複数の同時タイマー",
 };

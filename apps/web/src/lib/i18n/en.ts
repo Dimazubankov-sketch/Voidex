@@ -1566,6 +1566,14 @@ export const en = {
   "notes.book.pageN": "Page {n}",
   "notes.book.toFiles": "Save to Files (.book)",
   "notes.book.savedToFiles": "Saved to Files",
+  "notifications.clock.alarm": "Alarm",
+  "notifications.clock.timer": "Timer finished",
+  "store.app.clock.subtitle": "World clock, alarms and timers",
+  "store.app.clock.desc": "Cities around the world with their difference from Moscow, alarms with days, sounds and snooze, a stopwatch and several timers at once. Set the time on smooth drums; 13 sounds play right on the device.",
+  "store.app.clock.news": "Clock arrives in VOIDEX: world clock, alarms, stopwatch and timers.",
+  "store.app.clock.f1": "World clock with the difference from Moscow",
+  "store.app.clock.f2": "Alarms with days, 13 sounds and snooze",
+  "store.app.clock.f3": "Stopwatch and several timers at once",
 } as const;
 
 

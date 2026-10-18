@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { RiCheckDoubleLine, RiCloseLine, RiDeleteBin6Line, RiNotification3Line } from "@remixicon/react";
 import { APP_REGISTRY, type NotificationDto } from "@voidex/shared";
-import { Avatar, MailGlyph, StoreGlyph, VibexGlyph, VoidexMark } from "@/brand/brand";
+import { Avatar, ClockGlyph, MailGlyph, StoreGlyph, VibexGlyph, VoidexMark } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, useLanguage, useT, type MessageKey, type TFunction } from "@/lib/i18n";
@@ -69,6 +69,13 @@ export const RENDERERS: Record<NotificationDto["app"], Renderer> = {
     appName: () => "Appex Store",
     action: (n, t) => t(n.target.kind === "updated" ? "notifications.store.updated" : "notifications.store.available", { version: n.target.version ?? n.body }),
     open: () => useWM.getState().open("store", { params: { page: "updates" } }),
+  },
+  // Step 2.14: Clock: an alarm or a timer rang. A tap opens Clock on that alarm / timer.
+  clock: {
+    Icon: ClockGlyph,
+    appName: (lang) => APP_REGISTRY.clock.name[lang as "en"] ?? "Clock",
+    action: (n, t) => t(n.type === "clock.timer" ? "notifications.clock.timer" : "notifications.clock.alarm"),
+    open: (n) => useWM.getState().open("clock", { params: { tab: n.target.kind === "timer" ? "timers" : "alarm", focus: n.target.id } }),
   },
 };
 

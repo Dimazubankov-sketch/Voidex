@@ -15,6 +15,7 @@ COPY packages/calculator/package.json packages/calculator/
 COPY packages/notes/package.json packages/notes/
 COPY packages/files/package.json packages/files/
 COPY packages/media/package.json packages/media/
+COPY packages/clock/package.json packages/clock/
 RUN pnpm install --frozen-lockfile
 COPY apps ./apps
 COPY packages ./packages

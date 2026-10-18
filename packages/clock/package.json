@@ -1,0 +1,17 @@
+{
+  "name": "@voidex/clock",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "VOIDEX Clock: the Voidex-Clock app ported to TypeScript (engine, wheels, swipe rows, state model, scheduler and storage adapters, local alarm sounds). The React UI lives in apps/web/src/apps/clock.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/*.test.ts"
+  }
+}

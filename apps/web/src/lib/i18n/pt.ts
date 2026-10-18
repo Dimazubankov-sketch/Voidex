@@ -1535,4 +1535,12 @@ export const pt: Record<MessageKey, string> = {
   "notes.book.pageN": "Página {n}",
   "notes.book.toFiles": "Salvar em Arquivos (.book)",
   "notes.book.savedToFiles": "Salvo em Arquivos",
+  "notifications.clock.alarm": "Alarme",
+  "notifications.clock.timer": "Timer concluído",
+  "store.app.clock.subtitle": "Hora mundial, alarmes e timers",
+  "store.app.clock.desc": "Cidades do mundo com a diferença para Moscou, alarmes com dias, sons e soneca, cronômetro e vários timers ao mesmo tempo. A hora é escolhida em tambores suaves; 13 sons tocam no próprio aparelho.",
+  "store.app.clock.news": "O Relógio chega ao VOIDEX: hora mundial, alarmes, cronômetro e timers.",
+  "store.app.clock.f1": "Hora mundial com a diferença para Moscou",
+  "store.app.clock.f2": "Alarmes com dias, 13 sons e soneca",
+  "store.app.clock.f3": "Cronômetro e vários timers ao mesmo tempo",
 };

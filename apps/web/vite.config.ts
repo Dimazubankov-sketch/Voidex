@@ -17,5 +17,11 @@ export default defineConfig({
     port: 5173,
     proxy: { "/api": { target: "http://localhost:4000", changeOrigin: false } },
   },
-  build: { target: "es2022", sourcemap: true },
+  build: {
+    target: "es2022",
+    sourcemap: true,
+    // Step 2.14: Clock fetches its sounds; the CSP allows fetch from 'self' and blob:, not data:, so a small WAV
+    // (the wheel tick) must stay a file instead of being inlined as a data: URL.
+    assetsInlineLimit: (file) => (file.endsWith(".wav") ? false : undefined),
+  },
 });

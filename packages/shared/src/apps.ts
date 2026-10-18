@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media" | "store";
+export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media" | "clock" | "store";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -277,6 +277,44 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
     },
     window: { defaultWidth: 1120, defaultHeight: 760, minWidth: 380, minHeight: 500, singleton: true },
   },
+  clock: {
+    id: "clock",
+    // Step 2.14: Voidex Clock (world clock, alarms, stopwatch, timers), ported natively from Voidex-Clock.
+    name: { en: "Clock", ru: "Часы", es: "Reloj", de: "Uhr", fr: "Horloge", pt: "Relógio", zh: "时钟", ja: "時計", ko: "시계", tr: "Saat" },
+    caption: {
+      en: "Alarms & timers",
+      ru: "Будильники и таймеры",
+      es: "Alarmas y temporizadores",
+      de: "Wecker & Timer",
+      fr: "Alarmes et minuteurs",
+      pt: "Alarmes e timers",
+      zh: "闹钟与计时器",
+      ja: "アラームとタイマー",
+      ko: "알람 및 타이머",
+      tr: "Alarmlar ve zamanlayıcılar",
+    },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    // Alarms and timers live on the device; a ring is also a notification of the account.
+    permissions: ["notifications.post"],
+    status: "available",
+    category: "tools",
+    keywords: {
+      en: ["clock", "alarm", "timer", "stopwatch", "world clock", "time zones", "wake up"],
+      ru: ["часы", "будильник", "таймер", "секундомер", "мировое время", "часовые пояса", "время"],
+      es: ["reloj", "alarma", "temporizador", "cronómetro", "hora mundial", "zonas horarias"],
+      de: ["Uhr", "Wecker", "Timer", "Stoppuhr", "Weltzeit", "Zeitzonen"],
+      fr: ["horloge", "alarme", "minuteur", "chronomètre", "heure mondiale", "fuseaux horaires"],
+      pt: ["relógio", "alarme", "timer", "cronômetro", "fuso horário", "despertador"],
+      zh: ["时钟", "闹钟", "计时器", "秒表", "世界时钟", "时区"],
+      ja: ["時計", "アラーム", "タイマー", "ストップウォッチ", "世界時計", "タイムゾーン"],
+      ko: ["시계", "알람", "타이머", "스톱워치", "세계 시계", "시간대"],
+      tr: ["saat", "alarm", "zamanlayıcı", "kronometre", "dünya saati", "saat dilimleri"],
+    },
+    window: { defaultWidth: 1120, defaultHeight: 760, minWidth: 360, minHeight: 560, singleton: true },
+  },
   store: {
     id: "store",
     // Step 2.11: Appex Store, the catalog of the registry (install, open, update, reviews).
@@ -332,6 +370,7 @@ export const APP_RELEASES: Record<AppId, AppRelease[]> = {
   notes: [{ version: "1.0.0", date: "2026-10-04" }],
   files: [{ version: "1.0.0", date: "2026-10-06" }],
   media: [{ version: "1.0.0", date: "2026-10-06" }],
+  clock: [{ version: "1.0.0", date: "2026-10-18" }],
   store: [{ version: "1.0.0", date: "2026-10-13" }],
 };
 

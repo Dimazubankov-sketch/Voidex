@@ -12,7 +12,7 @@ import { apiAs as api, reloadUnlocked, signUpViaApi } from "./helpers";
 
 const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) < 700;
 const DB = process.env.DATABASE_URL ?? "postgres://voidex:voidex@localhost:5432/voidex";
-const CATALOG = ["calculator", "files", "mail", "media", "notes", "vibex"];
+const CATALOG = ["calculator", "clock", "files", "mail", "media", "notes", "vibex"];
 
 /** As after a VOIDEX release: this account still has an older version of the app recorded. */
 function olderVersion(userId: string, appId: string) {
