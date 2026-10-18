@@ -115,10 +115,13 @@ test("feed: no search button in the Main header; «Рекомендации | П
   const me = await signUpViaApi(page, "Лента", "Режимов");
   const friendPage = await newPage(browser, isMobile(page));
   const friend = await signUpViaApi(friendPage, "Друг", "Подписка");
-  const caption = `Фото дня ${Date.now().toString(36)}`;
+  const tag = Date.now().toString(36);
+  const caption = `Фото дня ${tag}`;
+  const friendText = `Пост друга ${tag}`;
+  const plainText = `Просто текст ${tag}`;
   await api(page, "POST", "/api/vibex/posts", { text: caption, mediaIds: [await photo(page)] });
-  await api(page, "POST", "/api/vibex/posts", { text: "Просто текст" });
-  await api(friendPage, "POST", "/api/vibex/posts", { text: "Пост друга" });
+  await api(page, "POST", "/api/vibex/posts", { text: plainText });
+  await api(friendPage, "POST", "/api/vibex/posts", { text: friendText });
   await launchVibex(page);
   if (!isMobile(page)) await page.getByTestId("vibex-nav-feed").last().click();
   await expect(page.getByTestId("vibex-feed")).toBeVisible();
@@ -131,12 +134,12 @@ test("feed: no search button in the Main header; «Рекомендации | П
   // Главная has only posts: the media post is a post card too (publications are in profiles only).
   await expect(page.getByTestId("publication-item")).toHaveCount(0);
   await expect(page.getByTestId("post-card").filter({ hasText: caption })).toHaveCount(1);
-  await expect(page.getByTestId("post-card").filter({ hasText: "Пост друга" })).toHaveCount(1);
+  await expect(page.getByTestId("post-card").filter({ hasText: friendText })).toHaveCount(1);
   // «Подписки»: nobody followed yet → nothing of anybody else.
   await mode.getByTestId("feed-mode-following").click();
   await expect(mode).toHaveAttribute("data-mode", "following");
   await expect(page.getByTestId("feed-following-empty")).toBeVisible();
-  await expect(page.getByTestId("post-card").filter({ hasText: "Пост друга" })).toHaveCount(0);
+  await expect(page.getByTestId("post-card").filter({ hasText: friendText })).toHaveCount(0);
   await expect.poll(async () => (await api(page, "GET", "/api/vibex/settings")).body.feed?.mode).toBe("following");
   // Follow the friend: their post appears there, the person's own posts don't.
   await api(page, "POST", `/api/vibex/people/${friend.id}/follow`);
@@ -144,10 +147,10 @@ test("feed: no search button in the Main header; «Рекомендации | П
   await launchVibex(page);
   if (!isMobile(page)) await page.getByTestId("vibex-nav-feed").last().click();
   await expect(page.getByTestId("feed-mode").filter({ visible: true }).first()).toHaveAttribute("data-mode", "following");
-  await expect(page.getByTestId("post-card").filter({ hasText: "Пост друга" })).toHaveCount(1);
-  await expect(page.getByTestId("post-card").filter({ hasText: "Просто текст" })).toHaveCount(0);
+  await expect(page.getByTestId("post-card").filter({ hasText: friendText })).toHaveCount(1);
+  await expect(page.getByTestId("post-card").filter({ hasText: plainText })).toHaveCount(0);
   await page.getByTestId("feed-mode").filter({ visible: true }).first().getByTestId("feed-mode-recommended").click();
-  await expect(page.getByTestId("post-card").filter({ hasText: "Просто текст" })).toHaveCount(1);
+  await expect(page.getByTestId("post-card").filter({ hasText: plainText })).toHaveCount(1);
   expect(me.id).toBeTruthy();
   await friendPage.context().close();
 });
