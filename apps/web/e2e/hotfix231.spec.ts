@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { newPage, openApp, phoneHome, signUpViaApi } from "./helpers";
+import { newPage, openApp, phoneHome, homeSwitcher, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.3.1 hotfix: the Vibex post action row stays inside its card at any
@@ -94,7 +94,7 @@ test("phone app switcher: only the app cards — no “Desktops” button, no pa
     await phoneHome(page);
     await expect(page.getByTestId("home")).toBeVisible();
   }
-  await page.getByTestId("mobile-switcher").click();
+  await homeSwitcher(page);
   const sw = page.getByTestId("app-switcher");
   await expect(sw).toBeVisible();
   await expect(sw.getByTestId(/^switcher-card-/)).toHaveCount(2);

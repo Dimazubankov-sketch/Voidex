@@ -327,7 +327,11 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
       // The whole block stays on the page / desktop (never past the last row or the last column).
       const sz = WIDGET_CELLS[widget.type as WidgetType];
-      const maxRows = Number(grid.dataset.maxRows) || Infinity;
+      // Phone: only the rows that fit on the page (in edit mode the grid offers one more row below it).
+      const gr = grid.getBoundingClientRect();
+      const gy = Number(grid.dataset.gapY) || 0;
+      const fitRows = Math.max(sz.h, Math.floor((area.bottom - gr.top + gy) / (rh + gy)));
+      const maxRows = Math.min(Number(grid.dataset.maxRows) || Infinity, fitRows);
       const cols = Number(grid.dataset.cols) || sz.w;
       const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
       const current = el.parentElement?.dataset.cell;

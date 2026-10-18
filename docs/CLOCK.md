@@ -22,8 +22,8 @@ into the monorepo: no iframe, no page or server of its own.
   glow cut away), `ClockGlyph` with optical factor 1.1. It is a system icon
   only: desktop, dock, launcher, switcher, Settings → Applications, Appex
   Store, notifications. The Clock UI never draws it (an e2e test checks).
-- **Look**: every colour comes from the semantic tokens, so «Вид приложений»
-  (Media, Notes, Mail, dark) and the dark theme apply.
+- **Look**: every colour comes from the semantic tokens, so the theme (light,
+  dark, system) applies.
 - **Layout**: phone (or a window narrower than 720 px): sections at the
   bottom, above the gesture bar. PC: a sidebar and wide panels; Ctrl/Cmd + 1..4
   switch sections, arrows move in the sidebar.
@@ -81,3 +81,21 @@ logo inside. A tap opens Clock on the world clock.
 - Alarms and timers are per device; other devices only see the notification.
 - Alert B is a third-party reference recording kept from the Soundlab export
   (see `assets/sounds.json`, field `rights`).
+
+## Step 2.15
+- **Tab bar** (phone): the system glass tab bar shared with Vibex (`ui/glass-tab-bar.tsx`);
+  a swipe along it moves the capsule and chooses the tab under it.
+- **Drums** (`wheels.ts`): turned by the pointer itself (no native scroll snap). A drag follows
+  the finger 1:1; a flick spins on, further the faster it was (at most 14 rows, under a second)
+  and rests exactly on a row; the mouse wheel steps one row per notch (a trackpad adds up);
+  keys and the wheel turn on endlessly (58, 59, 00, 01 … and back). The chosen value is darker
+  text on a soft band, no outline.
+- **Sound preview**: choosing a melody plays it (the list stays open); the same one is not
+  started over itself; another one stops it; a preview that could not be heard never blocks the
+  next tap.
+- **Rings**: a centred overlay over any app (the rest blurred), Stop and, for alarms, Snooze;
+  no «Включить звук»: the sound starts by itself (the first tap anywhere unlocks it; it is
+  retried while the page may not yet play sound).
+- **Stopwatch** ticks quietly while it runs and Clock is in front; it stops in the background.
+- **New alarms** have no day chosen: they ring once at the next such time (today or tomorrow).
+- Timer setup centred on a PC; grey round Сброс / + / × buttons; fields without a focus frame.

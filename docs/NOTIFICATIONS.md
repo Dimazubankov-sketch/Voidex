@@ -103,3 +103,13 @@ notifications turned off in Settings → Apps: no pop-up.
   controls.
 - The Mail logo everywhere is the new violet envelope (`/brand/app-mail.png`, one
   asset through `MailGlyph`).
+
+## Step 2.15 (the reference video)
+- **Grouped by app**: one source, one group, ordered by its newest notification. A single
+  notification is just its card. Several: the newest card with the others stacked under it and
+  «Ещё N»; a tap opens the group (the app's name, «Показать меньше», a clear for the group).
+- **Clearing**: one notification (its ×, or a swipe on the phone), a group, or everything; a
+  group and everything take a second tap (the button turns into «Очистить»). Server actions are
+  the existing ones (delete one, delete all), so the events stay the same.
+- **Scroll**: the list scrolls inside the panel; the phone shows the time and the date above it.
+- **Glass**: the system glass token (as the Vibex tab bar), light and dark.

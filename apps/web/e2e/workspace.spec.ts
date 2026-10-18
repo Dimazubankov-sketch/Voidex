@@ -104,11 +104,19 @@ test("phone home screen: edit mode, remove & restore, pages, folders, search, wa
   await expect(page.getByTestId("app-settings")).toHaveCount(0);
   await page.getByTestId("home-done").click();
   await expect(home).not.toHaveAttribute("data-editing", "true");
-  await page.getByTestId("launcher-button").click();
-  await expect(page.getByTestId("launcher-settings")).toBeVisible();
-  await page.getByTestId("launcher-add-settings").click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("launcher")).toHaveCount(0);
+  // Step 2.15: no nine-dot launcher; the pull-down search lists every app, and a removed one is put back with "+".
+  await expect(page.getByTestId("launcher-button")).toHaveCount(0);
+  await phoneGesture(page, async () => {
+    await finger.down({ x: box.x + box.width / 2, y: box.y + 40 });
+    await finger.moveTo({ x: box.x + box.width / 2, y: box.y + 40 }, { x: box.x + box.width / 2, y: box.y + 200 }, 6);
+    await finger.up();
+    await expect(page.getByTestId("home-search-overlay")).toBeVisible({ timeout: 3000 });
+  });
+  await expect(page.getByTestId("search-result-settings")).toBeVisible();
+  await expect(page.getByTestId("search-add-mail")).toHaveCount(0); // only removed apps have "+"
+  await page.getByTestId("search-add-settings").click();
+  await expect(page.getByTestId("search-add-settings")).toHaveCount(0);
+  await page.getByTestId("home-search-cancel").click();
   await expect(page.getByTestId("app-settings")).toBeVisible();
 
   // Long press on an app → the phone menu: exactly remove / create folder / add to folder.
@@ -205,16 +213,14 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   test.skip(isMobile(page), "PC mouse");
   await signUpViaApi(page, "Лев", "Ма");
 
-  // Right click → Rename the icon (the app keeps its name elsewhere).
+  // Right click → the icon's menu. Step 2.15: built-in apps can't be renamed (their names come from the registry).
   await page.getByTestId("app-mail").click({ button: "right" });
-  for (const id of ["open", "remove", "create-folder", "add-to-folder", "rename"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
+  for (const id of ["open", "remove", "create-folder", "add-to-folder"]) await expect(page.getByTestId(`menu-${id}`)).toBeVisible();
+  await expect(page.getByTestId("menu-rename")).toHaveCount(0);
   // Step 2.5.1: categories come from the app itself — no manual reassignment.
   await expect(page.getByTestId("menu-category")).toHaveCount(0);
-  await page.getByTestId("menu-rename").click();
-  await page.getByTestId("rename-input").fill("Письма");
-  await page.getByTestId("rename-save").click();
-  await expect(page.getByTestId("app-mail")).toHaveAccessibleName("Письма");
-  await expect(page.getByTestId("rename-sheet")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("app-mail")).toHaveAccessibleName("Почта VoidOps");
 
   // Drag Settings onto Mail and hold → a folder.
   const a = await center(page.getByTestId("app-settings").locator("[data-tile]"));
@@ -258,7 +264,9 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await page.getByTestId("menu-new-space").click();
   await expect(space).toHaveAttribute("data-space", "2");
   await expect(folder).toHaveCount(0);
-  await page.getByTestId("launcher-button").click();
+  // Step 2.15: the nine-dot button is gone; «Все приложения» in the desktop menu lists every app.
+  await page.mouse.click(60, 500, { button: "right" });
+  await page.getByTestId("menu-all-apps").click();
   await page.getByTestId("launcher-settings").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
   // With windows open, Ctrl+Alt+← / → switches desktops.
@@ -304,7 +312,7 @@ test("PC home screen: right-click menu, drag to make a folder, search, virtual d
   await expect(page.getByTestId("dock-space-2")).toBeVisible();
 });
 
-test("Settings → Desktop: scale (PC) / icons per row (phone); wallpaper and glass live elsewhere; no label colour / size", async ({ page }) => {
+test("Settings → Desktop: scale (PC) / navigation (phone, always 4 icons per row); wallpaper and glass live elsewhere; no label colour / size", async ({ page }) => {
   await signUpViaApi(page, "Ира", "Ву");
   await page.getByTestId("app-settings").click();
   await page.getByTestId("settings-nav-desktop").click();
@@ -314,10 +322,10 @@ test("Settings → Desktop: scale (PC) / icons per row (phone); wallpaper and gl
   await expect(page.getByTestId("label-color")).toHaveCount(0);
   for (const id of ["personal", "security", "password", "phone", "email", "devices"]) await expect(page.getByTestId(`settings-nav-${id}`)).toHaveCount(0);
   if (isMobile(page)) {
-    // Phones scale by icons per row only — no second scale control.
+    // Step 2.15: phones always have four icons per row: no choice, and no PC scale either.
     await expect(page.getByTestId("scale")).toHaveCount(0);
-    await page.getByTestId("phone-columns-4").click();
-    await expect(page.getByTestId("phone-columns-4")).toHaveAttribute("aria-checked", "true");
+    await expect(page.getByTestId("phone-columns")).toHaveCount(0);
+    await expect(page.getByTestId("phone-nav-bar")).toHaveAttribute("aria-checked", "true");
   } else {
     await expect(page.getByTestId("phone-columns")).toHaveCount(0);
     await page.getByTestId("scale-compact").click();

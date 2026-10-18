@@ -123,7 +123,7 @@ test("change password in Settings", async ({ page }) => {
   await expect(page.getByText("Пароль изменён")).toBeVisible();
 });
 
-test("window system: open, minimize (PC: [...] menu, phone: gesture bar), reopen from launcher", async ({ page }) => {
+test("window system: open, minimize (PC: [...] menu, phone: gesture bar), reopen from its icon", async ({ page }) => {
   await signUpViaApi(page, "Ян", "Ким");
   await openApp(page, "settings");
   const isMobile = (page.viewportSize()?.width ?? 1000) < 900;
@@ -140,7 +140,9 @@ test("window system: open, minimize (PC: [...] menu, phone: gesture bar), reopen
     await phoneHome(page);
   }
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
-  await page.getByTestId("launcher-button").click();
-  await page.getByTestId("launcher-settings").click();
+  // Step 2.15: there is no nine-dot launcher any more; the app's icon brings the same window back.
+  await expect(page.getByTestId("launcher-button")).toHaveCount(0);
+  await page.getByTestId("app-settings").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
+  await expect(page.locator('[data-testid="window-settings"]')).toHaveCount(1);
 });

@@ -9,8 +9,8 @@ JSONB — no new table). Schema, limits and every edit are pure functions in
 ```
 Workspace layout (per account, synced)
  ├── folders      shared by phone and PC — an app in a folder is in it everywhere
- ├── hidden       apps removed from the desktop (still installed, still in the 9-dot menu)
- ├── mobile       pages (max 3) of top-level items, 3 or 4 icons per row
+ ├── hidden       apps removed from the desktop (still installed; put back from the search "+" or «Все приложения»)
+ ├── mobile       pages (max 3) of top-level items, always 4 icons per row (Step 2.15)
  ├── desktop      virtual desktops (max 6) with their icons; columns 3–8, scale (density),
  │                view grid | categories, order manual | by name, arrange grid | free
  │                (+ positions), dock (pinned apps), dockDesktops, dockScale s|m|l
@@ -60,14 +60,15 @@ Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC 
 
 | File | What |
 | --- | --- |
-| `os/home/home-screen.tsx` | the home screen: header (clock / brush / ✓ / … / 9 dots), phone pager, PC grid & categories, desktop tabs |
+| `os/home/home-screen.tsx` | the home screen (the whole screen since Step 2.15): header (clock / brush / ✓), phone pager, PC grid & categories |
 | `os/home/gestures.ts` | one pointer engine for touch and mouse: long press, drag & drop, folders, page edges, pull-down search, right click |
 | `os/home/icons.tsx` | app / folder icons, wiggle, edit badges, drag ghost |
 | `os/home/folder-overlay.tsx` | open folder: rename, reorder, drag out |
 | `os/home/context-menu.tsx` | right-click / long-press menus with sub-menus |
 | `os/home/appearance-panel.tsx` | wallpaper, text, arrangement, view — used by the brush and by Settings → Рабочий стол |
 | `os/home/dock.tsx` | PC bottom bar: search + dock (magnification, drag, Desktops menu) |
-| `os/home/launcher.tsx` | 9-dot menu: all apps, search, add hidden apps back, system actions |
+| `os/home/launcher.tsx` | «Все приложения» (PC desktop menu): all apps, search, add hidden apps back, system actions |
+| `os/phone-nav.tsx` | Step 2.15: phone navigation: back / home / open apps buttons, the home gesture bar, `systemBack` and `onSystemBack` |
 | `os/home/search.tsx` | app search (name, own label, aliases, caption, category); PC bottom bar, phone pull-down |
 | `os/home/layout.ts` | reading the layout and saving edits |
 | `os/system-actions.ts` | registry of system actions (none yet — see below) |
@@ -89,7 +90,7 @@ Windows (device-local, localStorage `vx.wm.<userId>`): open apps, sizes, the PC 
 
 ## System actions — Screenshot (planned, not implemented)
 
-The 9-dot menu has a place for OS actions (`os/system-actions.ts`). An action appears only
+«Все приложения» has a place for OS actions (`os/system-actions.ts`). An action appears only
 when it really works. The planned Screenshot action captures the VOIDEX screen and saves it to
 the user's **VOIDEX Cloud** (not the device gallery). It needs the Cloud app and its storage
 API, which don't exist yet, so nothing is shown and nothing is uploaded today. When Cloud
@@ -338,3 +339,44 @@ purpose with its own quota).
 - Phone app switcher: the background between the cards is blurred as soon as the
   switcher opens (one compositor layer, `SwitcherBackdrop`); it does not ramp with the
   finger, the cards are never blurred, and going home removes it.
+
+## Step 2.15
+
+* **The whole screen.** The home screen is no longer an inset card: the wallpaper fills the
+  screen (under the PC system bar, which is glass); icons, the dock and the phone navigation
+  keep clear of the system areas. The PC dock sits 8 px above the bottom edge.
+* **Phone: always 4 icons per row** (`MOBILE_COLUMNS`); stored 3-column layouts read as 4
+  (their cells still fit, nothing moves). The setting is gone.
+* **Phone navigation** (`appearance.phoneNav`, Settings → Рабочий стол → Навигация):
+  «Полоской» (default: the gesture bar in apps and on the home screen, where a swipe up opens
+  the app switcher; the round switcher button is gone) or «Кнопками» (back / home / open apps).
+  Back closes the top layer (Notification Center, switcher, a sheet or dialog on screen), then
+  lets the foreground app go one step back (`voidex:back`, e.g. Settings goes up a page),
+  and at the app's first screen goes home.
+* **PC dock search** (`appearance.dockSearch`, default on): off, the dock holds only its apps,
+  centred.
+* **No nine-dot button** (phone header, PC system bar). Apps: the search (phone pull-down lists
+  every app; a removed one has "+"), the PC dock search, and «Все приложения» in the PC desktop
+  menu. Minimized PC windows fly into their dock icon.
+* **«Добавить виджет»** (brush menu on the phone, right click on the PC): the catalogue
+  (search, preview, widget name, the app it comes from), then the widget's page (large preview,
+  its options when it has any, «Добавить виджет»). Phone: `freeBlock` puts it in the first free
+  place from the top of the current page (icons never move for it); PC: the free block nearest
+  to where the menu was opened.
+* **Widget drag**: the widget follows the pointer (no hopping between cells; the wiggle is its
+  own layer), stays inside the page / desktop area (never under the dock or the navigation),
+  snaps to a cell on release with a short glide. Phone: holding it at the side of the screen
+  carries it to the next (or a new) page. `normalizeLayout` keeps a page whose only content is a
+  widget (it used to drop "empty" pages and their widgets with them).
+* **PC multi-select**: Ctrl / Cmd + click, or a selection frame drawn on free space; the selected
+  icons are highlighted and dragged as a group (`placeGroup`: each keeps its offset, takes its own
+  free cell, nothing else moves). Esc or a click on free space ends the selection.
+* **No renaming of built-in apps**: labels come from the registry in the interface language
+  (`names` stored earlier stay in the data, unused).
+* **One theme** (Settings → Personalization: light / dark / system) for the desktop, the dock,
+  the system bar, the Notification Center, menus and every app. «Вид приложений» is gone:
+  light apps are white, dark ones dark; an account that had chosen the dark app look gets the
+  dark theme (`normalizeAppearance`). The built-in wallpapers have night versions.
+* **One glass token**: `--glass-*` is the material of the Vibex tab bar (mostly white, the app
+  or wallpaper only just visible through it, blur 18 px); the dock, the system bar, the
+  Notification Center, menus and the Vibex / Clock tab bars all use it.

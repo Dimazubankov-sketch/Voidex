@@ -113,7 +113,7 @@ external recipients are refused.
 
 * **Workspace** — grey desk, white home surface with installed apps (concept
   IMG_6616 without bottom navigation, user button or "Recents"); top-right `[...]`
-  system menu and the 9-dot launcher.
+  system menu (Step 2.15: no 9-dot launcher; apps are found in the search and «Все приложения»).
 * **Window manager** (`os/window-manager.ts`) — one model, two presentations:
   desktop windows (move, resize, maximize, minimize, z-order, open from icon,
   minimize to launcher) and mobile multitasking (one foreground app, home

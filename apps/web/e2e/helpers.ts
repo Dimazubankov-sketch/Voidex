@@ -173,6 +173,30 @@ export async function settingsRoot(page: Page) {
 }
 
 /** Phone (Step 2.7: no window "…"): swipe up on the gesture bar of the app in front → home. */
+/**
+ * Step 2.15: on the phone home screen the app switcher opens with a swipe up on
+ * the bottom bar (the round switcher button is gone).
+ */
+export async function homeSwitcher(page: Page) {
+  const box = (await page.getByTestId("home-gesture-bar").boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(x, y - i * 15);
+  await page.mouse.up();
+  await expect(page.getByTestId("app-switcher")).toBeVisible();
+}
+
+/** Step 2.15: «Добавить виджет»: the catalogue first, then the widget's page with its own «Добавить виджет». */
+export async function addWidgetFromPicker(page: Page, type: "calculator" | "clock") {
+  await expect(page.getByTestId("widgets-panel")).toBeVisible();
+  await page.getByTestId(`widget-card-${type}`).click();
+  await expect(page.getByTestId(`widget-config-${type}`)).toBeVisible();
+  await page.getByTestId(`widget-add-${type}`).click();
+  await expect(page.getByTestId("widgets-panel")).toHaveCount(0);
+}
+
 export async function phoneHome(page: Page) {
   await page.waitForTimeout(600); // the window finishes opening
   const box = (await page.locator('section[data-state="open"] [data-testid="home-indicator"]').boundingBox())!;

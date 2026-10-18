@@ -271,7 +271,10 @@ test("phone Notification Center: opens full screen; swipe a card to delete it", 
   await drag({ x: w / 2, y: 2 }, 0, 420);
   const nc = page.getByTestId("notification-center");
   await expect(nc).toBeVisible();
-  await expect(page.getByTestId("notification")).toHaveCount(2);
+  // Step 2.15: two notifications of one app are one group: the newest on top, the other stacked under it.
+  const group = nc.getByTestId("notification-group");
+  await expect(group).toHaveAttribute("data-count", "2");
+  await expect(page.getByTestId("notification")).toHaveCount(1);
   // Step 2.7: the phone center is always full screen (no half state).
   await page.waitForTimeout(700); // the sheet finishes sliding in
   await expect(nc).toHaveAttribute("data-full", "true");
@@ -281,5 +284,6 @@ test("phone Notification Center: opens full screen; swipe a card to delete it", 
   const card = (await page.getByTestId("notification").first().boundingBox())!;
   await drag({ x: card.x + 40, y: card.y + card.height / 2 }, 240, 0);
   await expect(page.getByTestId("notification")).toHaveCount(1);
+  await expect(nc.getByTestId("notification-group")).toHaveCount(0); // one left: a plain card again
   await expect.poll(async () => (await api(page, "GET", "/api/notifications")).body.items.length).toBe(1);
 });

@@ -135,24 +135,22 @@ test("Settings → Apps (alphabetical) with per-app settings, and Voidex Storage
   await noHorizontalOverflow(page);
 });
 
-test("«Вид приложений»: one look for every app window, saved with the account", async ({ page }) => {
+test("Step 2.15: no «Вид приложений»: the theme alone decides; light apps are white, dark apps dark, saved with the account", async ({ page }) => {
   await signUpViaApi(page, "Лена", "Видова");
-  await expect(page.locator("html")).toHaveAttribute("data-app-look", "media");
+  await expect(page.locator("html")).not.toHaveAttribute("data-app-look", /.+/);
   await launch(page, "settings");
   await section(page, "personalization");
-  await expect(page.getByTestId("app-look").last().getByRole("radio")).toHaveCount(4);
+  await expect(page.getByTestId("app-look")).toHaveCount(0);
+  await expect(page.getByTestId("theme").last().getByRole("radio")).toHaveCount(3);
   // The element that carries the look: the window itself on PC; on phones (Step 2.9) the inner layer that follows the gesture bar.
   const bg = (id: AppId) =>
     page.locator(`[data-testid="window-${id}"]`).evaluate((el) => getComputedStyle(el.classList.contains("vx-app") ? el : el.querySelector(".vx-app")!).backgroundColor);
-  await page.getByTestId("app-look-notes").last().click();
-  await expect(page.locator("html")).toHaveAttribute("data-app-look", "notes");
-  await expect.poll(() => bg("settings")).toBe("rgb(236, 236, 237)");
-  await page.getByTestId("app-look-mail").last().click();
   await expect.poll(() => bg("settings")).toBe("rgb(255, 255, 255)");
-  await page.getByTestId("app-look-dark").last().click();
+  await page.getByTestId("theme-dark").last().click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => bg("settings")).toBe("rgb(18, 18, 24)");
-  await expect.poll(async () => (await api(page, "GET", "/api/me")).body.preferences.workspace.layout?.appearance.appLook).toBe("dark");
-  // Another app follows the same look: its text turns light.
+  await expect.poll(async () => (await api(page, "GET", "/api/me")).body.preferences.workspace.layout?.appearance.theme).toBe("dark");
+  // Another app follows the same theme: its text turns light.
   if (isMobile(page)) await phoneHome(page);
   await launch(page, "calculator");
   await expect.poll(() => bg("calculator")).toBe("rgb(18, 18, 24)");
@@ -160,6 +158,9 @@ test("«Вид приложений»: one look for every app window, saved with
     .locator('[data-testid="window-calculator"]')
     .evaluate((el) => getComputedStyle(el.classList.contains("vx-app") ? el : el.querySelector(".vx-app")!).getPropertyValue("--text").trim());
   expect(text).toBe("#ededf3");
+  // The desktop and the system glass are dark too.
+  const glass = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--glass-bg").trim());
+  expect(glass).toBe("rgba(30, 30, 40, 0.72)");
 });
 
 test("Calculator: no History / help buttons; the mode switch slides", async ({ page }) => {

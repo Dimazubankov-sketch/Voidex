@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openApp, reloadUnlocked, signUpViaApi } from "./helpers";
+import { newPage, openApp, reloadUnlocked, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.13 — Vibex: the floating phone tab bar with one gliding capsule,
@@ -111,36 +111,45 @@ test("deep link at 320 px: a shared post opens in Vibex, the capsule sits on its
   await expect.poll(async () => capsuleOn(page, (await page.getByTestId("vibex-tabbar").getAttribute("data-active"))!)).toBe(true);
 });
 
-test("feed: no search button in the Main header; «Публикации | Посты» switch is kept across reloads; publications are media first", async ({ page }) => {
-  await signUpViaApi(page, "Лента", "Режимов");
+test("feed: no search button in the Main header; «Рекомендации | Подписки» (posts only) is kept across reloads; Подписки shows only followed people", async ({ page, browser }) => {
+  const me = await signUpViaApi(page, "Лента", "Режимов");
+  const friendPage = await newPage(browser, isMobile(page));
+  const friend = await signUpViaApi(friendPage, "Друг", "Подписка");
   const caption = `Фото дня ${Date.now().toString(36)}`;
   await api(page, "POST", "/api/vibex/posts", { text: caption, mediaIds: [await photo(page)] });
   await api(page, "POST", "/api/vibex/posts", { text: "Просто текст" });
+  await api(friendPage, "POST", "/api/vibex/posts", { text: "Пост друга" });
   await launchVibex(page);
   if (!isMobile(page)) await page.getByTestId("vibex-nav-feed").last().click();
   await expect(page.getByTestId("vibex-feed")).toBeVisible();
   // The Main header has no search button (search lives in its own tab).
   await expect(page.getByTestId("vibex-search").filter({ visible: true })).toHaveCount(0);
   const mode = page.getByTestId("feed-mode").filter({ visible: true }).first();
-  await expect(mode).toHaveAttribute("data-mode", "posts");
-  await expect(page.getByTestId("post-card").first()).toBeVisible();
-  await mode.getByTestId("feed-mode-publications").click();
-  await expect(mode).toHaveAttribute("data-mode", "publications");
-  // Publications: only posts with media, media first, the caption under it, no card.
-  const items = page.getByTestId("publication-item").filter({ hasText: caption });
-  await expect(items).toHaveCount(1);
-  await expect(page.getByTestId("publication-item").filter({ hasText: "Просто текст" })).toHaveCount(0);
-  await expect(items.first().getByTestId("publication-media")).toBeVisible();
-  await expect(items.first().getByTestId("publication-caption")).toContainText(caption);
-  await expect(items.first().getByTestId("publication-like")).toBeVisible();
-  // Kept in the person's settings.
-  await expect.poll(async () => (await api(page, "GET", "/api/vibex/settings")).body.feed?.mode).toBe("publications");
+  await expect(mode).toHaveAttribute("data-mode", "recommended");
+  await expect(mode.getByTestId("feed-mode-recommended")).toHaveText("Рекомендации");
+  await expect(mode.getByTestId("feed-mode-following")).toHaveText("Подписки");
+  // Главная has only posts: the media post is a post card too (publications are in profiles only).
+  await expect(page.getByTestId("publication-item")).toHaveCount(0);
+  await expect(page.getByTestId("post-card").filter({ hasText: caption })).toHaveCount(1);
+  await expect(page.getByTestId("post-card").filter({ hasText: "Пост друга" })).toHaveCount(1);
+  // «Подписки»: nobody followed yet → nothing of anybody else.
+  await mode.getByTestId("feed-mode-following").click();
+  await expect(mode).toHaveAttribute("data-mode", "following");
+  await expect(page.getByTestId("feed-following-empty")).toBeVisible();
+  await expect(page.getByTestId("post-card").filter({ hasText: "Пост друга" })).toHaveCount(0);
+  await expect.poll(async () => (await api(page, "GET", "/api/vibex/settings")).body.feed?.mode).toBe("following");
+  // Follow the friend: their post appears there, the person's own posts don't.
+  await api(page, "POST", `/api/vibex/people/${friend.id}/follow`);
   await reloadUnlocked(page);
   await launchVibex(page);
   if (!isMobile(page)) await page.getByTestId("vibex-nav-feed").last().click();
-  await expect(page.getByTestId("feed-mode").filter({ visible: true }).first()).toHaveAttribute("data-mode", "publications");
-  await page.getByTestId("feed-mode").filter({ visible: true }).first().getByTestId("feed-mode-posts").click();
-  await expect(page.getByTestId("post-card").first()).toBeVisible();
+  await expect(page.getByTestId("feed-mode").filter({ visible: true }).first()).toHaveAttribute("data-mode", "following");
+  await expect(page.getByTestId("post-card").filter({ hasText: "Пост друга" })).toHaveCount(1);
+  await expect(page.getByTestId("post-card").filter({ hasText: "Просто текст" })).toHaveCount(0);
+  await page.getByTestId("feed-mode").filter({ visible: true }).first().getByTestId("feed-mode-recommended").click();
+  await expect(page.getByTestId("post-card").filter({ hasText: "Просто текст" })).toHaveCount(1);
+  expect(me.id).toBeTruthy();
+  await friendPage.context().close();
 });
 
 test("phone feed: the top bar hides while scrolling down and comes back on scrolling up", async ({ page }) => {

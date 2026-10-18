@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { addWidget, normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { apiAs, openApp, phoneHome, reloadUnlocked, signUpViaApi } from "./helpers";
+import { addWidgetFromPicker, apiAs, openApp, phoneHome, reloadUnlocked, signUpViaApi } from "./helpers";
 
 /**
  * Step 2.14: Clock, a native built-in VOIDEX app (no iframe). Its logo is a
@@ -154,8 +154,9 @@ test("alarms: no made-up alarm; a new one is set on the drums, saved on, toggled
   await page.keyboard.press("ArrowUp");
   await expect(minutes).toHaveAttribute("aria-valuenow", "58");
   await expect(hours).toHaveAttribute("aria-valuenow", "9");
-  // Days: only Saturday.
-  for (const d of ["1", "2", "3", "4", "5"]) await editor.locator(`[data-testid="clock-day"][data-day="${d}"]`).click();
+  // Step 2.15: a new alarm has no day chosen (it rings once); days make it repeat: only Saturday.
+  await expect(editor.getByTestId("clock-repeat-label")).toHaveText("Один раз");
+  await expect(editor.locator('[data-testid="clock-day"][aria-pressed="true"]')).toHaveCount(0);
   await editor.locator('[data-testid="clock-day"][data-day="6"]').click();
   await expect(editor.getByTestId("clock-repeat-label")).toHaveText("Сб");
   await editor.getByTestId("clock-alarm-name").fill("Пробежка");
@@ -204,8 +205,16 @@ test("alarm editor: the sound picker previews once per tap, a second tap on the 
   await bells.getByTestId("clock-sound-preview").click();
   await expect(bells.getByTestId("clock-sound-preview")).toBeDisabled();
   await expect(sonar.getByTestId("clock-sound-preview")).toBeEnabled();
-  // Choosing stops the preview and goes back to the form.
+  // Step 2.15: choosing a melody plays it (the previous preview stops) and keeps the list open; back shows the choice.
+  const drop = picker.locator('[data-testid="clock-sound-row"][data-sound="alarm-drop"]');
+  await drop.getByTestId("clock-sound-choose").click();
+  await expect(drop).toHaveClass(/chosen/);
+  await expect(drop.getByTestId("clock-sound-preview")).toBeDisabled();
+  await expect(bells.getByTestId("clock-sound-preview")).toBeEnabled();
   await bells.getByTestId("clock-sound-choose").click();
+  await expect(bells).toHaveClass(/chosen/);
+  await expect(picker.getByTestId("clock-sound-featured")).toHaveText("Колокола");
+  await page.getByTestId("clock-sheet-back").click();
   await expect(page.getByTestId("clock-alarm-sound")).toContainText("Колокола");
   // Back to the list, preview, then leave: nothing keeps playing (every preview button enabled again on return).
   await page.getByTestId("clock-alarm-sound").click();
@@ -270,9 +279,14 @@ test("timers: the drums are the page (no +, no presets); a short timer pauses, r
   await expect(ring).toHaveAttribute("data-kind", "timer");
   await expect(page.getByTestId("clock-ring-name")).toHaveText("Чай");
   await expect(page.getByRole("alertdialog")).toBeVisible();
-  // Never silent: either the sound plays or «Включить звук» is offered.
-  const soundOn = await ring.getAttribute("data-sound-on");
-  if (soundOn !== "true") await expect(page.getByTestId("clock-ring-enable")).toBeVisible();
+  // Step 2.15: no «Включить звук» in the UX: the sound starts by itself (the start tap unlocked it).
+  await expect(page.getByTestId("clock-ring-enable")).toHaveCount(0);
+  await expect(ring).toHaveAttribute("data-sound-on", "true", { timeout: 5000 });
+  // A system overlay in the middle of the screen, over whatever is open (Clock does not open full screen).
+  const vp = page.viewportSize()!;
+  const card = (await page.getByRole("alertdialog").boundingBox())!;
+  expect(Math.abs(card.x + card.width / 2 - vp.width / 2)).toBeLessThan(4);
+  expect(Math.abs(card.y + card.height / 2 - vp.height / 2)).toBeLessThan(40);
   // A timer has no snooze.
   await expect(page.getByTestId("clock-ring-snooze")).toHaveCount(0);
   await page.getByTestId("clock-ring-stop").click();
@@ -342,8 +356,8 @@ test("responsive: no horizontal overflow at phone, tablet and PC widths, in the 
       expect(o.over, `${w}px ${tab}`).toEqual([]);
     }
   }
-  // The dark look: the app background follows the tokens (no white page).
-  await page.evaluate(() => document.documentElement.setAttribute("data-app-look", "dark"));
+  // The dark theme: the app background follows the tokens (no white page).
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   const bg = await clock(page).evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(bg).not.toBe("rgb(255, 255, 255)");
 });
@@ -374,8 +388,7 @@ test("Clock widget (phone): in the widget catalogue, added from the panel onto t
   const card = page.getByTestId("widget-card-clock");
   await expect(card).toBeVisible();
   await expect(card.getByTestId("clock-widget")).toBeVisible();
-  await page.getByTestId("widget-add-clock").click();
-  await page.keyboard.press("Escape");
+  await addWidgetFromPicker(page, "clock");
   await page.getByTestId("home-done").click();
   await expect(page.getByTestId("home-page-0").getByTestId("widget-clock")).toBeVisible();
   const layout = ((await apiAs(page, "GET", "/api/me")).body as { preferences: { workspace: { layout: WorkspaceLayout } } }).preferences.workspace.layout;

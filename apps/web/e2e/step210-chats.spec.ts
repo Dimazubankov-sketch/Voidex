@@ -80,7 +80,7 @@ test("the pencil makes a group: members (search), name, create", async ({ page, 
   await bp.context().close();
 });
 
-test("chat cards: separate rounded cards with gaps, a background of their own, no border; light and dark", async ({ page, browser }) => {
+test("chat cards: separate rounded cards with gaps, on the app's own background (as Главная, Профиль), set apart by a shadow, no border; light and dark", async ({ page, browser }) => {
   const a = await signUpViaApi(page, "Карточка", "Чата");
   const bp = await newPage(browser, isMobile(page));
   const b = await signUpViaApi(bp, "Борис", "Первый");
@@ -105,24 +105,25 @@ test("chat cards: separate rounded cards with gaps, a background of their own, n
           if (ps.backgroundImage !== "none") bg = "gradient";
           else if (ps.backgroundColor !== "rgba(0, 0, 0, 0)") bg = ps.backgroundColor;
         }
-        return { card: cs.backgroundColor, app: bg, border: cs.borderTopWidth, radius: parseFloat(cs.borderTopLeftRadius), top: r.top, bottom: r.bottom };
+        const app = getComputedStyle(el.closest(".vx-app")!);
+        return { card: cs.backgroundColor, lies: bg, app: app.backgroundColor, shadow: cs.boxShadow, border: cs.borderTopWidth, radius: parseFloat(cs.borderTopLeftRadius), top: r.top, bottom: r.bottom };
       }),
     );
   const light = await look();
   for (const r of light) {
-    expect(r.card).not.toBe(r.app);
+    // Step 2.15: the list lies on the app's background, the same as Главная and Профиль.
+    expect(r.lies).toBe(r.app);
     expect(r.card).not.toBe("rgba(0, 0, 0, 0)");
+    expect(r.shadow).not.toBe("none");
     expect(r.border).toBe("0px");
     expect(r.radius).toBeGreaterThanOrEqual(16);
   }
   expect(light[1]!.top - light[0]!.bottom).toBeGreaterThanOrEqual(4);
-  // Every app look (the account's «Вид приложений»): the card always differs from what it lies on.
-  for (const lookName of ["media", "notes", "mail", "dark"]) {
-    await page.evaluate((v) => document.documentElement.setAttribute("data-app-look", v), lookName);
-    // The card's colour has a transition: wait until it has settled (a slow runner takes longer).
-    if (lookName === "dark") await expect.poll(async () => (await look())[0]!.card, { timeout: 5000 }).toBe("rgb(34, 34, 44)");
-    else await page.waitForTimeout(450);
-    await expect.poll(async () => { const l = await look(); return l[0]!.card !== l[0]!.app; }, { timeout: 5000 }).toBe(true);
+  // Light and dark theme (Step 2.15: one theme for everything): the same background as the app, a card with its shadow.
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((v) => document.documentElement.setAttribute("data-theme", v), theme);
+    if (theme === "dark") await expect.poll(async () => (await look())[0]!.card, { timeout: 5000 }).toBe("rgb(34, 34, 44)");
+    await expect.poll(async () => { const l = await look(); return l[0]!.lies === l[0]!.app && l[0]!.shadow !== "none"; }, { timeout: 5000 }).toBe(true);
   }
   await bp.context().close();
   await cp.context().close();

@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { normalizeLayout, type WorkspaceLayout } from "@voidex/shared";
-import { newPage, openApp, recordVoice, signUpViaApi, reloadUnlocked, openVibexMenu } from "./helpers";
+import { addWidgetFromPicker, newPage, openApp, recordVoice, signUpViaApi, reloadUnlocked, openVibexMenu } from "./helpers";
 
 /**
  * Step 2.3: one VOIDEX identity for every app, the Notification Center (phone
@@ -147,7 +147,10 @@ test("PC: the bell opens the right panel between the system bar and the dock; a 
   await page.getByTestId("bell").click();
   await page.getByTestId("notifications-read-all").click();
   await expect(page.getByTestId("bell-badge")).toHaveCount(0);
+  // Step 2.15: clearing everything takes a second tap («Очистить»), as in the reference.
   await page.getByTestId("notifications-clear-all").click();
+  await expect(page.getByTestId("notifications-empty")).toHaveCount(0);
+  await page.getByTestId("notifications-clear-all-confirm").click();
   await expect(page.getByTestId("notifications-empty")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("notification-center")).toHaveCount(0);
@@ -224,8 +227,7 @@ test("phone: brush → View toggles in one tap; the Calculator widget works; the
   // Widgets → Calculator (2×2), working keys.
   await page.getByTestId("brush-widgets").click();
   await expect(page.getByTestId("widget-card-desktops")).toHaveCount(0);
-  await page.getByTestId("widget-add-calculator").click();
-  await page.keyboard.press("Escape");
+  await addWidgetFromPicker(page, "calculator");
   const w = page.getByTestId("widget-calculator");
   await expect(w).toBeVisible();
   await page.getByTestId("home-done").click();

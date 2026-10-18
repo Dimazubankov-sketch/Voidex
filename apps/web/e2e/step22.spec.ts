@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { phoneHome, reloadUnlocked, signUpViaApi } from "./helpers";
+import { addWidgetFromPicker, homeSwitcher, phoneHome, reloadUnlocked, signUpViaApi } from "./helpers";
 
 /** Step 2.2 regressions: dock, view switching, window geometry, dock vs windows, phone brush / widgets. */
 
@@ -223,7 +223,7 @@ test("windows: a resized window reopens at its standard size; a maximized one re
   expect(Math.round(again.width)).toBe(Math.round(initial.width));
 });
 
-test("phone: long press → brush → Widgets: add the Calculator widget; round button opens the app switcher; app menu says Minimize", async ({ page }) => {
+test("phone: long press → brush → «Добавить виджет»: add the Calculator widget; a swipe up on the home bar opens the app switcher; app menu says Minimize", async ({ page }) => {
   test.skip(!isMobile(page), "phone");
   await signUpViaApi(page, "Мира", "Моб");
   const box = (await page.getByTestId("home-page-0").boundingBox())!;
@@ -239,17 +239,16 @@ test("phone: long press → brush → Widgets: add the Calculator widget; round 
   await page.getByTestId("widgets-search").fill("");
   // Step 2.3: the Workspaces widget no longer exists.
   await expect(page.getByTestId("widget-card-desktops")).toHaveCount(0);
-  await page.getByTestId("widget-add-calculator").click();
-  await page.keyboard.press("Escape");
+  await addWidgetFromPicker(page, "calculator");
   await page.getByTestId("home-done").click();
   await expect(page.getByTestId("home-page-0").getByTestId("widget-calculator")).toBeVisible();
 
-  // The round glass button at the bottom (not part of the icon grid) opens the app switcher.
-  const btn = page.getByTestId("mobile-switcher");
-  await expect(btn).toBeVisible();
-  expect(await btn.evaluate((el) => !!el.closest("[data-home-container]"))).toBe(false);
-  await btn.click();
-  await expect(page.getByTestId("app-switcher")).toBeVisible();
+  // Step 2.15: no round button; the gesture bar at the bottom (not part of the icon grid) opens the app switcher.
+  await expect(page.getByTestId("mobile-switcher")).toHaveCount(0);
+  const bar = page.getByTestId("home-gesture-bar");
+  await expect(bar).toBeVisible();
+  expect(await bar.evaluate((el) => !!el.closest("[data-home-container]"))).toBe(false);
+  await homeSwitcher(page);
   await expect(page.getByTestId("switcher-empty")).toBeVisible();
   // Step 2.3.1: only the cards — no "Desktops" button, no pages menu from here.
   await expect(page.getByTestId("switcher-pages")).toHaveCount(0);
@@ -262,7 +261,7 @@ test("phone: long press → brush → Widgets: add the Calculator widget; round 
   await reloadUnlocked(page);
   await expect(page.getByTestId("home-page-0").getByTestId("widget-calculator")).toBeVisible();
 
-  // Inside an app the round button is not there; no system "…" on phones (Step 2.7): the gesture bar goes home.
+  // Inside an app: no system "…" on phones (Step 2.7): the gesture bar goes home.
   await page.getByTestId("app-settings").click();
   await expect(page.locator('[data-testid="window-settings"][data-state="open"]')).toBeVisible();
   await expect(page.getByTestId("mobile-switcher")).toHaveCount(0);
@@ -271,7 +270,7 @@ test("phone: long press → brush → Widgets: add the Calculator widget; round 
   await expect(page.locator('[data-testid="window-settings"][data-state="hidden"]')).toBeAttached();
   await expect(page.getByTestId("home")).toBeVisible();
   // With an app open, the switcher shows its card.
-  await page.getByTestId("mobile-switcher").click();
+  await homeSwitcher(page);
   await expect(page.getByTestId("switcher-card-settings")).toBeVisible();
 });
 
@@ -280,8 +279,7 @@ test("PC: widgets panel from the right-click menu; the Calculator widget sits in
   await signUpViaApi(page, "Пётр", "Вид");
   await desktopMenu(page);
   await page.getByTestId("menu-widgets").click();
-  await page.getByTestId("widget-add-calculator").click();
-  await page.keyboard.press("Escape");
+  await addWidgetFromPicker(page, "calculator");
   const widget = page.getByTestId("desktop-grid").getByTestId("widget-calculator");
   await expect(widget).toBeVisible();
   // 2×2 cells: as wide as two cells (Step 2.5.1: minus a small inset; cells span the whole screen).

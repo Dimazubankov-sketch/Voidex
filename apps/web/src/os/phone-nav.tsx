@@ -18,6 +18,15 @@ import { foregroundId, useWM } from "./window-manager";
 export const BACK_EVENT = "voidex:back";
 export type BackEventDetail = { windowId: string };
 
+/** A dialog / menu that is on screen now (not one kept mounted out of sight, like the closed Notification Center). */
+function openDialog(): boolean {
+  return [...document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"], [role="menu"]')].some((el) => {
+    if (el.closest('[aria-hidden="true"]')) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
+  });
+}
+
 /** Closes the top system layer (or dialog) if there is one. */
 function closeTopLayer(): boolean {
   const nc = useNotificationCenter.getState();
@@ -37,8 +46,8 @@ function closeTopLayer(): boolean {
   if (ui.brushOpen) return ui.setBrushOpen(false), true;
   if (ui.launcherOpen) return ui.setLauncherOpen(false), true;
   if (ui.openFolder) return ui.setOpenFolder(null), true;
-  // A sheet or dialog (shell or app): they all close on Escape.
-  if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) {
+  // A sheet or dialog (shell or app) that is really on screen: they all close on Escape.
+  if (openDialog()) {
     const target = (document.activeElement as HTMLElement | null) ?? document.body;
     target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
     return true;

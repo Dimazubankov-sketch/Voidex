@@ -494,3 +494,12 @@ Long press (phones) or right click (PC) opens the actions. The chat dims and the
   at the tapped one; photos at their own aspect with pinch zoom (fit to 4x, pan while
   zoomed, double tap 1x / 2x, reset when closed), videos with controls that pause out
   of view. Back (or Esc) returns to the grid where it was.
+
+## Step 2.15
+- **Главная** has only posts, in two tabs: «Рекомендации» (posts picked for the person; for
+  now everyone's they may see, newest first: ranking by interests and ads will go here) and
+  «Подписки» (`GET /api/vibex/feed?mode=following`: only the posts and reposts of people they
+  follow). The tab is kept in the Vibex settings (`feed.mode`); stored Step 2.13 values read as
+  «Рекомендации». Publications are shown only in profiles; their data is unchanged.
+- **Чаты** lie on the app background like Главная and Профиль; the cards stand out by a shadow.
+- The phone tab bar is the system glass tab bar and can be swiped.
