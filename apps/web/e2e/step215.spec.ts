@@ -104,8 +104,13 @@ test("PC dock: the search can be turned off; the apps stay centred as if it neve
   const dock = (await page.getByTestId("dock").boundingBox())!;
   expect(Math.abs(dock.x + dock.width / 2 - vp.width / 2)).toBeLessThanOrEqual(2);
   // The first item is an app now (no field before it), with the dock's own padding only.
-  const firstApp = (await page.locator("[data-dock-app]").first().boundingBox())!;
-  expect(firstApp.x - dock.x).toBeLessThan(20);
+  // (The dock apps glide into place, so wait for them to settle.)
+  await expect
+    .poll(async () => {
+      const d = (await page.getByTestId("dock").boundingBox())!;
+      return (await page.locator("[data-dock-app]").first().boundingBox())!.x - d.x;
+    })
+    .toBeLessThan(20);
   await expect.poll(async () => (await storedLayout(page))?.appearance.dockSearch).toBe(false);
 });
 

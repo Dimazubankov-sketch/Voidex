@@ -57,6 +57,8 @@ interface WheelState {
   spin: number | null;
   /** Mouse-wheel travel not yet turned into steps. */
   wheelAcc: number;
+  /** Values this drum reported that the app may still hand back (React renders a step after the drum moved on). */
+  echoes: { v: number; t: number }[];
 }
 
 const wheelStates = new WeakMap<WheelElement, WheelState>();
@@ -80,6 +82,8 @@ function emit(el: WheelElement, state: WheelState) {
   el.setAttribute("aria-valuenow", String(value));
   if (state.value !== value) {
     state.value = value;
+    state.echoes.push({ v: value, t: Date.now() });
+    if (state.echoes.length > 8) state.echoes.shift();
     state.change(el.dataset.wheel ?? "", value);
   }
 }
@@ -248,6 +252,7 @@ export function mountWheel(el: WheelElement, onChange: WheelChange): () => void 
       drag: null,
       spin: null,
       wheelAcc: 0,
+      echoes: [],
     };
     wheelStates.set(el, state);
     const on = (type: string, fn: (event: never) => void, options?: AddEventListenerOptions) => {
@@ -377,7 +382,19 @@ export function setWheelValue(el: WheelElement, value: number) {
   if (!state) return;
   const v = wrapValue(value, state.count);
   // The drum's own value coming back (a step it reported): nothing to do, and a running snap is left alone.
-  if (v === state.value) return;
+  if (v === state.value) {
+    // The app caught up with the drum: earlier reports can't come back any more.
+    state.echoes = [];
+    return;
+  }
+  // An older value it reported, arriving late while the drum already went on (fast keys): not a reset.
+  const now = Date.now();
+  state.echoes = state.echoes.filter((e) => now - e.t < 1500);
+  const echo = state.echoes.findIndex((e) => e.v === v);
+  if (echo >= 0) {
+    state.echoes.splice(0, echo + 1);
+    return;
+  }
   stopSpin(state);
   state.value = v;
   state.target = null;

@@ -213,3 +213,29 @@ test("endless both ways: 58, 59, 00, 01 … and back 01, 00, 59, 58, never stopp
   assert.ok(w.el.scrollTop >= 60 * ROW_HEIGHT && w.el.scrollTop < 120 * ROW_HEIGHT);
   unmountWheels(w.root);
 });
+
+test("Step 2.15: a late echo of a value the drum already passed does not pull it back (fast keys); a real reset still works", () => {
+  const w = wheel(0, 60, "seconds");
+  const changes: number[] = [];
+  mountWheels(w.root, (_k, v) => changes.push(v));
+  const down = () => {
+    w.handlers.keydown!({ key: "ArrowDown", preventDefault() {} });
+    w.handlers.scrollend!();
+  };
+  down();
+  down();
+  assert.deepEqual(changes, [1, 2]);
+  // The app renders the first report only now.
+  setWheelValue(w.el as never, 1);
+  assert.equal(w.el.dataset.value, "2");
+  assert.equal(w.el.scrollTop, wheelPosition(2, 60) * ROW_HEIGHT);
+  down();
+  setWheelValue(w.el as never, 2);
+  setWheelValue(w.el as never, 3);
+  assert.equal(w.el.dataset.value, "3");
+  // Caught up: a reset to 0 is applied.
+  setWheelValue(w.el as never, 0);
+  assert.equal(w.el.dataset.value, "0");
+  assert.equal(w.el.scrollTop, wheelPosition(0, 60) * ROW_HEIGHT);
+  unmountWheels(w.root);
+});

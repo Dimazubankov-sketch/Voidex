@@ -224,8 +224,8 @@ export function HomeScreen({
       )}
 
       {ff === "desktop" && ready && (
-        // Room for the dock (rendered above windows by the workspace).
-        <div className="shrink-0" style={{ height: dockZone(layout.desktop.dockScale) - 14 }} aria-hidden />
+        // Room for the dock (rendered above windows by the workspace); the desktop starts at the screen edge now.
+        <div className="shrink-0" style={{ height: dockZone(layout.desktop.dockScale) }} aria-hidden />
       )}
       {/* Step 2.15: the phone's system navigation (gesture bar or buttons); the round switcher button is gone. */}
       {ff === "mobile" && <HomeNav />}
