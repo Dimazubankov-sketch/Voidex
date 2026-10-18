@@ -1591,6 +1591,9 @@ export const en = {
   "notifications.showLess": "Show less",
   "notifications.clearGroup": "Clear {app} notifications",
   "notifications.clearConfirm": "Clear",
+  "widgets.full": "The desktop has the most widgets it can hold.",
+  "widgets.calculatorName": "Mini calculator",
+  "widgets.clockName": "Analog clock",
 } as const;
 
 

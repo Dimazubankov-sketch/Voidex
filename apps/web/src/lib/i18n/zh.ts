@@ -1560,4 +1560,7 @@ export const zh: Record<MessageKey, string> = {
   "notifications.showLess": "收起",
   "notifications.clearGroup": "清除 {app} 的通知",
   "notifications.clearConfirm": "清除",
+  "widgets.full": "桌面上的小组件已达上限。",
+  "widgets.calculatorName": "迷你计算器",
+  "widgets.clockName": "模拟时钟",
 };

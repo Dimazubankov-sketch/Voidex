@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
-import { motion } from "motion/react";
-import { RiAddLine, RiCheckLine, RiSubtractLine } from "@remixicon/react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
+import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
+import { RiAddCircleFill, RiArrowLeftSLine, RiCloseLine, RiSubtractLine } from "@remixicon/react";
 import {
+  APP_REGISTRY,
+  MOBILE_PAGES_MAX,
   WIDGETS_MAX,
   WIDGET_CELLS,
   addWidget,
+  freeBlock,
+  moveWidget,
+  type AppId,
   display,
   emptyCalc,
   placeInCell,
@@ -16,9 +21,9 @@ import {
   type WorkspaceLayout,
 } from "@voidex/shared";
 import { cx } from "@/lib/cx";
-import { useFormFactor } from "@/lib/form-factor";
-import { useT, type MessageKey } from "@/lib/i18n";
-import { Button } from "@/ui/controls";
+import { getFormFactor, useFormFactor } from "@/lib/form-factor";
+import { useLanguage, useT, type MessageKey } from "@/lib/i18n";
+import { Button, IconButton } from "@/ui/controls";
 import { Sheet } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
@@ -26,7 +31,7 @@ import { cityClock, localZone } from "@voidex/clock";
 import { desktopGeometry } from "./desktop-geometry";
 import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
-import { updateLayout, useWorkspaceLayout } from "./layout";
+import { currentLayout, updateLayout, useWorkspaceLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
 import { VoidexSearchField } from "@/ui/search-field";
 
@@ -42,7 +47,11 @@ import { VoidexSearchField } from "@/ui/search-field";
 
 interface WidgetDef {
   type: WidgetType;
+  /** The app the widget comes from (its name and icon in the catalogue). */
+  app: AppId;
   title: MessageKey;
+  /** Step 2.15: the widget's own name under its app («Аналоговые часы»). */
+  name: MessageKey;
   description: MessageKey;
   keywords: string;
   Icon: ComponentType<{ className?: string }>;
@@ -159,7 +168,9 @@ function ClockWidget({ preview }: { preview?: boolean }) {
 export const WIDGETS: WidgetDef[] = [
   {
     type: "calculator",
+    app: "calculator",
     title: "widgets.calculator",
+    name: "widgets.calculatorName",
     description: "widgets.calculatorHint",
     keywords: "calculator calc math калькулятор счёт",
     Icon: ({ className }) => <CalculatorGlyph className={className} />,
@@ -167,7 +178,9 @@ export const WIDGETS: WidgetDef[] = [
   },
   {
     type: "clock",
+    app: "clock",
     title: "widgets.clock",
+    name: "widgets.clockName",
     description: "widgets.clockHint",
     keywords: "clock time analog watch часы время циферблат",
     Icon: ({ className }) => <ClockGlyph className={className} />,
@@ -198,58 +211,155 @@ function RemoveBadge({ onRemove }: { onRemove: () => void }) {
   );
 }
 
+/** Phone: holding a dragged widget this close to the side of the screen carries it to the next page. */
+const EDGE = 26;
+const EDGE_HOLD_MS = 600;
+
 /**
- * One placed widget in its grid cells: glass card. In edit mode it wiggles,
- * is removed with the badge and dragged to another cell (drop highlights the cell).
+ * One placed widget in its grid cells: glass card. In edit mode it wiggles
+ * and is removed with the badge. Step 2.15: dragging is free (the widget
+ * follows the finger / mouse, no hopping between cells); it stays inside the
+ * home area (never under the dock or the navigation, never past the bottom);
+ * it snaps to the nearest cell when it is let go, gliding into place. On the
+ * phone, holding it at the side of the screen carries it to the next (or a
+ * new) page, where it takes the first free place; a page with a widget is
+ * kept even when it has no icons.
  */
 export function GridWidget({ widget, size, editing }: { widget: Widget; size: { w: number; h: number }; editing: boolean }) {
   const def = defOf(widget.type);
   const ref = useRef<HTMLDivElement>(null);
-  const [offset, setOffset] = useState<{ x: number; y: number } | null>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const [dragging, setDragging] = useState(false);
+  /** After a drop: the rect it was let go at, and the cell it was sent to (the glide starts once it is there). */
+  const snap = useRef<{ from: DOMRect; cell: string } | null>(null);
+
+  // FLIP: once the widget is in its new cell, start from where it was let go and glide to 0.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const s = snap.current;
+    if (!el || !s) return;
+    const cellNow = el.parentElement?.dataset.cell;
+    if (cellNow !== s.cell) return;
+    snap.current = null;
+    const now = el.getBoundingClientRect();
+    const natural = { left: now.left - x.get(), top: now.top - y.get() };
+    x.set(s.from.left - natural.left);
+    y.set(s.from.top - natural.top);
+    void animate(x, 0, { type: "spring", stiffness: 520, damping: 42 });
+    void animate(y, 0, { type: "spring", stiffness: 520, damping: 42 });
+  });
+
   if (!def) return null;
 
   const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!editing || e.button !== 0) return;
     e.stopPropagation();
-    const grid = ref.current?.closest<HTMLElement>("[data-home-grid]");
-    if (!grid) return;
-    const start = { x: e.clientX, y: e.clientY };
-    const box = ref.current!.getBoundingClientRect();
-    // Grab point → the widget's top-left cell follows the pointer.
-    const grab = { x: e.clientX - box.left, y: e.clientY - box.top };
-    let target: { c: number; r: number } | null = null;
+    const el = ref.current;
+    const grid = el?.closest<HTMLElement>("[data-home-grid]");
+    const host = el?.closest<HTMLElement>("[data-grid-host]") ?? grid;
+    if (!el || !grid || !host) return;
+    x.stop();
+    y.stop();
+    const start = { x: e.clientX - x.get(), y: e.clientY - y.get() };
+    const box0 = el.getBoundingClientRect();
+    const natural = { left: box0.left - x.get(), top: box0.top - y.get(), w: box0.width, h: box0.height };
+    const area = host.getBoundingClientRect();
     const ui = useHomeUi.getState;
-    const move = (ev: PointerEvent) => {
-      setOffset({ x: ev.clientX - start.x, y: ev.clientY - start.y });
-      const cell = cellAt(grid, ev.clientX - grab.x + 20, ev.clientY - grab.y + 20);
-      target = cell;
-      ui().setDrag({ item: { kind: "app", id: "settings" }, size: 0, cell: { grid: grid.dataset.homeGrid!, ...cell }, widget: widget.id });
-    };
-    const end = (ev: PointerEvent) => {
+    const mobile = getFormFactor() === "mobile";
+    let edgeTimer: number | undefined;
+    let edgeDir = 0;
+    setDragging(true);
+    ui().setDrag({ item: { kind: "app", id: "settings" }, size: 0, widget: widget.id });
+
+    const clampX = (dx: number) => Math.max(area.left - natural.left, Math.min(area.right - natural.w - natural.left, dx));
+    const clampY = (dy: number) => Math.max(area.top - natural.top, Math.min(area.bottom - natural.h - natural.top, dy));
+    const finish = () => {
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      setOffset(null);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.clearTimeout(edgeTimer);
+      setDragging(false);
       ui().setDrag(null);
-      const place = placeOfGrid(grid.dataset.homeGrid!);
-      if (ev.type === "pointerup" && target && place) {
-        const cell = target;
-        updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, cell, desktopGeometry()));
+    };
+    const settleBack = () => {
+      void animate(x, 0, { type: "spring", stiffness: 520, damping: 42 });
+      void animate(y, 0, { type: "spring", stiffness: 520, damping: 42 });
+    };
+    /** Phone: carry the widget to the page beside this one (a new one past the last). */
+    const toPage = (dir: -1 | 1) => {
+      finish();
+      const l = currentLayout();
+      const from = Number(widget.container);
+      let to = from + dir;
+      if (to < 0) return settleBack();
+      const create = to >= l.mobile.pages.length;
+      if (create && l.mobile.pages.length >= MOBILE_PAGES_MAX) return settleBack();
+      if (create) to = l.mobile.pages.length;
+      updateLayout((cur) => {
+        const n = create ? { ...cur, mobile: { ...cur.mobile, pages: [...cur.mobile.pages, []] } } : cur;
+        const moved = moveWidget(n, widget.id, { container: String(to) });
+        const cell = freeBlock(moved, { surface: "mobile", page: to }, WIDGET_CELLS[widget.type as WidgetType]) ?? { c: 0, r: 0 };
+        return placeInCell(moved, widgetKey(widget.id), { surface: "mobile", page: to }, cell);
+      });
+      x.set(0);
+      y.set(0);
+      ui().setMobilePage(to);
+    };
+    const move = (ev: PointerEvent) => {
+      x.set(clampX(ev.clientX - start.x));
+      y.set(clampY(ev.clientY - start.y));
+      if (!mobile) return;
+      const dir = ev.clientX < area.left + EDGE ? -1 : ev.clientX > area.right - EDGE ? 1 : 0;
+      if (dir !== edgeDir) {
+        edgeDir = dir;
+        window.clearTimeout(edgeTimer);
+        if (dir) edgeTimer = window.setTimeout(() => toPage(dir as -1 | 1), EDGE_HOLD_MS);
       }
     };
+    const up = () => {
+      finish();
+      const place = placeOfGrid(grid.dataset.homeGrid!);
+      const box = el.getBoundingClientRect();
+      // The cell under the widget's top-left cell (its centre), not under the finger.
+      const cw = Number(grid.dataset.cellW) || box.width;
+      const rh = Number(grid.dataset.rowH) || box.height;
+      const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
+      // The whole block stays on the page / desktop (never past the last row or the last column).
+      const sz = WIDGET_CELLS[widget.type as WidgetType];
+      const maxRows = Number(grid.dataset.maxRows) || Infinity;
+      const cols = Number(grid.dataset.cols) || sz.w;
+      const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
+      const current = el.parentElement?.dataset.cell;
+      if (!place || current === `${target.c},${target.r}`) return settleBack();
+      snap.current = { from: box, cell: `${target.c},${target.r}` };
+      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, desktopGeometry()));
+      // The cell was refused (an icon never pushes a widget away, a full area…): glide back.
+      window.setTimeout(() => {
+        if (snap.current) {
+          snap.current = null;
+          settleBack();
+        }
+      }, 400);
+    };
+    const cancel = () => {
+      finish();
+      settleBack();
+    };
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
   };
 
   return (
-    <div
+    <motion.div
       ref={ref}
-      className={cx("vx-glass relative rounded-[24px]", editing && "vx-wiggle cursor-grab touch-none", offset && "z-30 opacity-90")}
-      style={{ width: size.w, height: size.h, transform: offset ? `translate(${offset.x}px, ${offset.y}px)` : undefined }}
+      className={cx("relative rounded-[24px]", editing && "cursor-grab touch-none", dragging && "z-30 cursor-grabbing")}
+      style={{ width: size.w, height: size.h, x, y }}
       data-no-home-gesture
       data-system-ui
       data-widget={widget.id}
+      data-dragging={dragging || undefined}
       data-testid={`widget-${widget.type}`}
       onPointerDown={startDrag}
       onContextMenu={(e) => {
@@ -258,11 +368,14 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
         useHomeUi.getState().openMenu({ x: e.clientX, y: e.clientY, target: { kind: "widget", id: widget.id } });
       }}
     >
-      {editing && <RemoveBadge onRemove={() => updateLayout((l) => removeWidget(l, widget.id))} />}
-      <div className={cx("h-full", editing && "pointer-events-none")}>
-        <def.Body />
+      {/* The wiggle is its own layer: the drag moves the outer one, so the two never fight over the transform. */}
+      <div className={cx("vx-glass relative size-full rounded-[24px]", editing && !dragging && "vx-wiggle", dragging && "scale-[1.03] shadow-float transition-transform")}>
+        {editing && !dragging && <RemoveBadge onRemove={() => updateLayout((l) => removeWidget(l, widget.id))} />}
+        <div className={cx("h-full", editing && "pointer-events-none")}>
+          <def.Body />
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -280,84 +393,154 @@ export function WidgetStrip({ layout, surface, container, editing }: { layout: W
   );
 }
 
-/** Brush → Widgets: the catalogue (search, cards, add) and the widgets already placed. */
+/** The preview of a widget at its home-screen proportions (scaled to `size` px). */
+function WidgetPreview({ def, size }: { def: WidgetDef; size: number }) {
+  const base = 232;
+  const k = size / base;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }} data-system-ui aria-hidden>
+      <div className="vx-glass absolute left-0 top-0 origin-top-left rounded-[26px]" style={{ width: base, height: base, transform: `scale(${k})` }}>
+        <def.Body preview />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * «Добавить виджет» (Step 2.15, the references): first the catalogue (search,
+ * a preview of every widget, its name and the app it comes from), then the
+ * chosen widget's page: a large preview, its options when it has any, and
+ * «Добавить виджет». Phone: it lands in the first free place from the top of
+ * the current page; PC: next to where the desktop menu was opened.
+ */
 export function WidgetsPanel() {
   const t = useT();
+  const lang = useLanguage();
   const ff = useFormFactor();
   const open = useHomeUi((s) => s.widgetsOpen);
+  const at = useHomeUi((s) => s.widgetsAt);
   const setOpen = useHomeUi((s) => s.setWidgetsOpen);
   const { layout } = useWorkspaceLayout();
   const space = useWM((s) => s.space);
   const page = useHomeUi((s) => s.mobilePage);
   const [q, setQ] = useState("");
-  const surface = ff === "desktop" ? "desktop" : "mobile";
-  const here = ff === "desktop" ? space : String(Math.min(page, layout.mobile.pages.length - 1));
-  const placed = layout.widgets.filter((w) => w.surface === surface && defOf(w.type));
+  const [chosen, setChosen] = useState<WidgetType | null>(null);
   const full = layout.widgets.length >= WIDGETS_MAX;
+  useEffect(() => {
+    if (!open) {
+      setChosen(null);
+      setQ("");
+    }
+  }, [open]);
   const shown = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return WIDGETS.filter((w) => !query || `${t(w.title)} ${t(w.description)} ${w.keywords}`.toLowerCase().includes(query));
-  }, [q, t]);
+    return WIDGETS.filter((w) => !query || `${t(w.title)} ${t(w.name)} ${t(w.description)} ${APP_REGISTRY[w.app].name[lang]} ${w.keywords}`.toLowerCase().includes(query));
+  }, [q, t, lang]);
+  const def = chosen ? defOf(chosen) : undefined;
 
   const add = (type: WidgetType) => {
-    updateLayout((l) => (surface === "desktop" ? addWidget(l, type, { surface: "desktop", space }) : addWidget(l, type, { surface: "mobile", page: Number(here) })));
+    const size = WIDGET_CELLS[type];
+    if (ff === "desktop") {
+      const place = { surface: "desktop" as const, space };
+      const grid = document.querySelector<HTMLElement>(`[data-home-grid="desktop:${space}"]`);
+      const point = at && grid ? cellAt(grid, at.x, at.y) : undefined;
+      const near = point ? { c: Math.max(0, point.c - Math.floor((size.w - 1) / 2)), r: Math.max(0, point.r - Math.floor((size.h - 1) / 2)) } : undefined;
+      updateLayout((l) => {
+        const cell = freeBlock(l, place, size, near, desktopGeometry()) ?? undefined;
+        return addWidget(l, type, { surface: "desktop", space, cell });
+      });
+    } else {
+      const p = Math.min(page, layout.mobile.pages.length - 1);
+      updateLayout((l) => addWidget(l, type, { surface: "mobile", page: p, cell: freeBlock(l, { surface: "mobile", page: p }, size) ?? undefined }));
+    }
+    setOpen(false);
   };
 
   return (
-    <Sheet open={open} onClose={() => setOpen(false)} title={t("widgets.title")} width={ff === "desktop" ? 520 : 480} testId="widgets-panel">
-      <div className="space-y-5">
-        <VoidexSearchField value={q} onChange={setQ} placeholder={t("widgets.search")} aria-label={t("widgets.search")} testId="widgets-search" />
-
-        <div className="grid gap-3" data-testid="widgets-catalog">
-          {shown.map((def) => {
-            const count = placed.filter((w) => w.type === def.type && w.container === here).length;
-            return (
-              <div key={def.type} className="overflow-hidden rounded-[22px] border border-border bg-surface" data-testid={`widget-card-${def.type}`}>
-                <div className="flex justify-center bg-surface-secondary/70 p-3" data-system-ui aria-hidden>
-                  <div className="vx-glass rounded-[22px]" style={{ width: 220, height: 236 }}>
-                    <def.Body preview />
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-4">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-surface-secondary text-text-secondary">
-                    <def.Icon className="size-6" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold">{t(def.title)}</span>
-                    <span className="block text-[13px] text-text-secondary">{t(def.description)}</span>
-                  </span>
-                  <Button size="sm" onClick={() => add(def.type)} disabled={full} data-testid={`widget-add-${def.type}`}>
-                    {count ? <RiCheckLine className="size-4" /> : <RiAddLine className="size-4" />}
-                    {t("widgets.add")}
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-          {!shown.length && <p className="px-1 text-[14px] text-text-secondary">{t("widgets.nothing")}</p>}
-        </div>
-
-        {placed.length > 0 && (
-          <section>
-            <h3 className="mb-2 text-[13px] font-medium uppercase tracking-wide text-text-tertiary">{t("widgets.placed")}</h3>
-            <div className="overflow-hidden rounded-[20px] border border-border bg-surface">
-              {placed.map((w) => {
-                const def = defOf(w.type)!;
-                return (
-                  <motion.div layout key={w.id} className="flex h-14 items-center gap-3 px-4 [&:not(:last-child)]:border-b" data-testid={`widget-placed-${w.id}`}>
-                    <def.Icon className="size-6" />
-                    <span className="min-w-0 flex-1 truncate text-[15px]">{t(def.title)}</span>
-                    <Button variant="ghost" size="sm" onClick={() => updateLayout((l) => removeWidget(l, w.id))} data-testid="widget-placed-remove">
-                      {t("widgets.remove")}
-                    </Button>
-                  </motion.div>
-                );
-              })}
+    <Sheet open={open} onClose={() => setOpen(false)} width={ff === "desktop" ? 560 : 480} testId="widgets-panel">
+      <AnimatePresence mode="wait" initial={false}>
+        {!def ? (
+          <motion.div key="list" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.18 }} className="space-y-4" data-testid="widgets-list">
+            <div className="flex items-center gap-2">
+              <h2 className="flex-1 text-[19px] font-semibold tracking-tight">{t("widgets.add")}</h2>
+              <IconButton label={t("common.close")} onClick={() => setOpen(false)} size="sm" data-testid="widgets-close">
+                <RiCloseLine className="size-5" />
+              </IconButton>
             </div>
-            <p className="mt-2 text-[12px] text-text-tertiary">{t("widgets.moveHint")}</p>
-          </section>
+            <VoidexSearchField value={q} onChange={setQ} placeholder={t("widgets.search")} aria-label={t("widgets.search")} testId="widgets-search" />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-5" data-testid="widgets-catalog">
+              {shown.map((d) => (
+                // A div: the preview inside has buttons of its own (a button can't hold buttons).
+                <div
+                  key={d.type}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setChosen(d.type)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    setChosen(d.type);
+                  }}
+                  aria-label={`${APP_REGISTRY[d.app].name[lang]}: ${t(d.name)}`}
+                  className="pressable flex flex-col items-center gap-2 rounded-[24px] p-1 text-center outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  data-testid={`widget-card-${d.type}`}
+                >
+                  <span className="flex aspect-square w-full items-center justify-center rounded-[26px] bg-surface-secondary/70 p-[8%]">
+                    <ResponsivePreview def={d} />
+                  </span>
+                  <span className="block">
+                    <span className="block text-[14.5px] font-semibold leading-tight text-text">{APP_REGISTRY[d.app].name[lang]}</span>
+                    <span className="block text-[12.5px] text-text-secondary">{t(d.name)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+            {!shown.length && <p className="px-1 text-[14px] text-text-secondary">{t("widgets.nothing")}</p>}
+          </motion.div>
+        ) : (
+          <motion.div key={`cfg-${def.type}`} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={{ duration: 0.18 }} className="flex flex-col" data-testid={`widget-config-${def.type}`}>
+            <div className="flex items-center gap-2">
+              <IconButton label={t("common.back")} onClick={() => setChosen(null)} size="sm" data-testid="widget-config-back">
+                <RiArrowLeftSLine className="size-5" />
+              </IconButton>
+              <span className="flex size-7 items-center justify-center rounded-[9px] bg-surface shadow-tile">
+                <def.Icon className="size-[18px]" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{APP_REGISTRY[def.app].name[lang]}</span>
+              <IconButton label={t("common.close")} onClick={() => setOpen(false)} size="sm" data-testid="widgets-close">
+                <RiCloseLine className="size-5" />
+              </IconButton>
+            </div>
+            <h2 className="mt-4 text-center text-[24px] font-bold tracking-tight">{t(def.name)}</h2>
+            <p className="mx-auto mt-1 max-w-[340px] text-center text-[14px] text-text-secondary">{t(def.description)}</p>
+            <div className="flex justify-center py-8" data-testid="widget-config-preview">
+              <div className="rounded-[30px] shadow-[0_18px_40px_-18px_rgba(40,28,110,0.45)]">
+                <WidgetPreview def={def} size={ff === "desktop" ? 232 : 220} />
+              </div>
+            </div>
+            <Button className="h-12 w-full rounded-full text-[16px]" onClick={() => add(def.type)} disabled={full} data-testid={`widget-add-${def.type}`}>
+              <RiAddCircleFill className="size-5" />
+              {t("widgets.add")}
+            </Button>
+            {full && <p className="mt-2 text-center text-[12.5px] text-text-tertiary">{t("widgets.full")}</p>}
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
     </Sheet>
   );
+}
+
+/** A catalogue preview that fills its square, whatever the column width. */
+function ResponsivePreview({ def }: { def: WidgetDef }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [size, setSize] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize(el.clientWidth));
+    ro.observe(el);
+    setSize(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  return <span ref={ref} className="block size-full">{size > 0 && <WidgetPreview def={def} size={size} />}</span>;
 }

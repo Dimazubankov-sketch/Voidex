@@ -1575,4 +1575,7 @@ export const ru: Record<MessageKey, string> = {
   "notifications.showLess": "Показать меньше",
   "notifications.clearGroup": "Очистить уведомления {app}",
   "notifications.clearConfirm": "Очистить",
+  "widgets.full": "На рабочем столе уже максимум виджетов.",
+  "widgets.calculatorName": "Мини-калькулятор",
+  "widgets.clockName": "Аналоговые часы",
 };

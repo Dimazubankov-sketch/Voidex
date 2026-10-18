@@ -974,3 +974,120 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
   }
   return n;
 }
+
+// ---------------------------------------------------------------------------
+// Step 2.15: where a new widget goes, and moving several icons at once.
+
+/**
+ * A free block of `size` cells on a page / desktop where nothing has to move.
+ * Without `near`: the first one from the top (reading order). With `near`:
+ * the one closest to that cell (PC: where the desktop menu was opened).
+ * Phone pages grow downwards, so there is always one; a full PC desktop: null.
+ */
+export function freeBlock(l: WorkspaceLayout, place: Place, size: { w: number; h: number }, near?: Cell, geometry?: GridGeometry): Cell | null {
+  const g = place.surface === "desktop" ? geometry : undefined;
+  const cols = Math.max(1, g ? g.cols : columnsOf(l, place.surface));
+  const placed = placementOf(l, place, g);
+  const taken = new Set<string>();
+  let used = 0;
+  for (const p of placed.values()) {
+    used = Math.max(used, p.r + p.h);
+    for (let y = p.r; y < p.r + p.h; y++) for (let x = p.c; x < p.c + p.w; x++) taken.add(`${x},${y}`);
+  }
+  const w = Math.min(size.w, cols);
+  const rows = g ? g.rows : used + size.h;
+  const free = (c: number, r: number) => {
+    for (let y = r; y < r + size.h; y++) for (let x = c; x < c + w; x++) if (taken.has(`${x},${y}`)) return false;
+    return true;
+  };
+  let best: Cell | null = null;
+  let dist = Infinity;
+  for (let r = 0; r + size.h <= rows; r++)
+    for (let c = 0; c + w <= cols; c++) {
+      if (!free(c, r)) continue;
+      if (!near) return { c, r };
+      const d = (c - near.c) ** 2 + (r - near.r) ** 2;
+      if (d < dist) {
+        dist = d;
+        best = { c, r };
+      }
+    }
+  return best;
+}
+
+/**
+ * Drops several icons together (PC multi-select): `anchor` goes to `cell`,
+ * the others keep their offsets from it. Each one takes its own free cell
+ * (the nearest one when its place is taken or outside the area); icons that
+ * are not part of the group and widgets never move. Icons from another
+ * desktop are carried to this one.
+ */
+export function placeGroup(l: WorkspaceLayout, keys: string[], anchor: string, to: Place, cell: Cell, geometry?: GridGeometry): WorkspaceLayout {
+  const group = [anchor, ...keys.filter((k) => k !== anchor && !k.startsWith("widget:"))];
+  const n = clone(l);
+  const g = to.surface === "desktop" ? geometry : undefined;
+  const cols = Math.max(1, g ? g.cols : columnsOf(n, to.surface));
+  const froms = new Map<string, Place>();
+  for (const k of group) {
+    const p = containerKeyOf(n, to.surface, k);
+    if (p) froms.set(k, p);
+  }
+  if (!froms.has(anchor)) return l;
+  // Where everything is now, frozen (so only the group moves).
+  const pinned = new Set<string>();
+  for (const p of [...froms.values(), to]) {
+    const id = JSON.stringify(p);
+    if (pinned.has(id)) continue;
+    pinned.add(id);
+    pin(n, p, g);
+  }
+  const cells = cellsOf(n, to.surface);
+  const old = new Map(group.map((k) => [k, cells[k] ? { ...cells[k]! } : { c: 0, r: 0 }]));
+  const a = old.get(anchor)!;
+  // Carry icons from other containers here.
+  for (const k of group) {
+    const from = froms.get(k);
+    if (!from || JSON.stringify(from) === JSON.stringify(to)) continue;
+    const src = containerOf(n, from);
+    const item = src?.find((i) => itemKey(i) === k);
+    if (!src || !item) continue;
+    src.splice(src.indexOf(item), 1);
+    containerOf(n, to)?.push(item);
+  }
+  // Cells taken by everything else on the target.
+  const others = placementOf(n, to, g);
+  const taken = new Set<string>();
+  for (const [k, p] of others) {
+    if (group.includes(k)) continue;
+    for (let y = p.r; y < p.r + p.h; y++) for (let x = p.c; x < p.c + p.w; x++) taken.add(`${x},${y}`);
+  }
+  const maxRows = g ? g.rows : Infinity;
+  const fits = (c: number, r: number) => c >= 0 && r >= 0 && c < cols && r < maxRows && !taken.has(`${c},${r}`);
+  const nearest = (c0: number, r0: number) => {
+    let best: Cell | null = null;
+    let dist = Infinity;
+    const rowsLimit = Number.isFinite(maxRows) ? maxRows : Math.max(r0 + 2, ...[...taken].map((s) => Number(s.split(",")[1]) + 2), group.length + 2);
+    for (let r = 0; r < rowsLimit; r++)
+      for (let c = 0; c < cols; c++) {
+        if (!fits(c, r)) continue;
+        const d = (c - c0) ** 2 + (r - r0) ** 2;
+        if (d < dist) {
+          dist = d;
+          best = { c, r };
+        }
+      }
+    return best;
+  };
+  for (const k of group) {
+    const o = old.get(k)!;
+    const want = { c: cell.c + (o.c - a.c), r: cell.r + (o.r - a.r) };
+    const at = fits(want.c, want.r) ? want : nearest(Math.max(0, Math.min(cols - 1, want.c)), Math.max(0, want.r));
+    if (!at) {
+      delete cells[k];
+      continue;
+    }
+    cells[k] = at;
+    taken.add(`${at.c},${at.r}`);
+  }
+  return n;
+}

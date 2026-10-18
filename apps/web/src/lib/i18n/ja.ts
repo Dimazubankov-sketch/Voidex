@@ -1560,4 +1560,7 @@ export const ja: Record<MessageKey, string> = {
   "notifications.showLess": "表示を減らす",
   "notifications.clearGroup": "{app} の通知を消去",
   "notifications.clearConfirm": "消去",
+  "widgets.full": "デスクトップのウィジェット数が上限に達しています。",
+  "widgets.calculatorName": "ミニ電卓",
+  "widgets.clockName": "アナログ時計",
 };

@@ -140,7 +140,7 @@ export function BrushMenu({ anchor, layout }: { anchor: RefObject<HTMLElement | 
               </span>
               <RiArrowUpDownLine className="text-text-tertiary" />
             </button>
-            <Row icon={<RiApps2Line />} label={t("widgets.title")} onClick={() => ui().setWidgetsOpen(true)} testId="brush-widgets" />
+            <Row icon={<RiApps2Line />} label={t("widgets.add")} onClick={() => ui().setWidgetsOpen(true)} testId="brush-widgets" />
           </motion.div>
         )}
       </AnimatePresence>

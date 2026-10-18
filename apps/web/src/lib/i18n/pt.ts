@@ -1560,4 +1560,7 @@ export const pt: Record<MessageKey, string> = {
   "notifications.showLess": "Mostrar menos",
   "notifications.clearGroup": "Limpar notificações de {app}",
   "notifications.clearConfirm": "Limpar",
+  "widgets.full": "A área de trabalho já tem o máximo de widgets.",
+  "widgets.calculatorName": "Minicalculadora",
+  "widgets.clockName": "Relógio analógico",
 };

@@ -47,6 +47,8 @@ export interface DragState {
   cell?: { grid: string; c: number; r: number };
   /** A widget (not an icon) is being dragged: its own card moves, there is no floating copy. */
   widget?: string;
+  /** Step 2.15 (PC): the selected icons moving together with `item` (item keys, `item` included). */
+  group?: string[];
 }
 
 interface HomeUi {
@@ -65,6 +67,13 @@ interface HomeUi {
   widgetsAt: { x: number; y: number } | null;
   launcherOpen: boolean;
   drag: DragState | null;
+  /** Step 2.15 (PC): selected desktop icons (item keys), Ctrl / Cmd + click or a selection frame. */
+  selected: string[];
+  /** The selection frame being drawn with the mouse (viewport px). */
+  marquee: { x0: number; y0: number; x1: number; y1: number } | null;
+  setSelected: (keys: string[]) => void;
+  toggleSelected: (key: string) => void;
+  setMarquee: (m: HomeUi["marquee"]) => void;
   /** Step 2.5: apps marked with "−" in edit mode, waiting for "Удалить". */
   removeSel: AppId[];
   /** Step 2.5: the apps in the two-step delete confirmation (null: closed). */
@@ -104,6 +113,11 @@ export const useHomeUi = create<HomeUi>((set) => ({
   widgetsAt: null,
   launcherOpen: false,
   drag: null,
+  selected: [],
+  marquee: null,
+  setSelected: (selected) => set((st) => (st.selected.length === 0 && selected.length === 0 ? {} : { selected })),
+  toggleSelected: (key) => set((st) => ({ selected: st.selected.includes(key) ? st.selected.filter((k) => k !== key) : [...st.selected, key] })),
+  setMarquee: (marquee) => set({ marquee }),
   removeSel: [],
   removeConfirm: null,
   removeSpaceConfirm: null,

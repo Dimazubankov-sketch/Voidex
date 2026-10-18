@@ -1560,4 +1560,7 @@ export const tr: Record<MessageKey, string> = {
   "notifications.showLess": "Daha az göster",
   "notifications.clearGroup": "{app} bildirimlerini temizle",
   "notifications.clearConfirm": "Temizle",
+  "widgets.full": "Masaüstünde en fazla widget zaten var.",
+  "widgets.calculatorName": "Mini hesap makinesi",
+  "widgets.clockName": "Analog saat",
 };

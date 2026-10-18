@@ -30,6 +30,8 @@ import {
   removeWidget,
   placeInCell,
   placementOf,
+  freeBlock,
+  placeGroup,
   gridPlacement,
   categoryOf,
   type LayoutItem,
@@ -368,12 +370,11 @@ describe("Step 2.7: search background and the Files / Media apps", () => {
     expect(WorkspaceLayoutSchema.safeParse(white).success).toBe(true);
     const bad = normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, searchAppearance: "glass" as "white" } }, ALL);
     expect(bad.appearance.searchAppearance).toBe("system");
-    // Step 2.8: «Вид приложений» — media by default, any of the four kept, anything else back to media.
-    expect(normalizeLayout(old, ALL).appearance.appLook).toBe("media");
-    for (const look of ["media", "notes", "mail", "dark"] as const) {
-      expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, appLook: look } }, ALL).appearance.appLook).toBe(look);
+    // Step 2.15: «Вид приложений» is retired: every stored look reads as the white one; the theme alone decides.
+    expect(normalizeLayout(old, ALL).appearance.appLook).toBe("mail");
+    for (const look of ["media", "notes", "mail", "dark", "neon"] as const) {
+      expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, appLook: look as "dark" } }, ALL).appearance.appLook).toBe("mail");
     }
-    expect(normalizeLayout({ ...defaultLayout(ALL), appearance: { ...DEFAULT_APPEARANCE, appLook: "neon" as "dark" } }, ALL).appearance.appLook).toBe("media");
   });
   it("an existing customized layout gets Files and Media without its dock being rewritten", () => {
     const before: AppId[] = ["mail", "settings", "vibex", "notes"];
@@ -502,5 +503,105 @@ describe("Step 2.14: Clock widget", () => {
       ["w_clock01", "clock", "desktop"],
       ["w_clock02", "clock", "mobile"],
     ]);
+  });
+});
+
+describe("Step 2.15: desktop and widgets", () => {
+  const ALL: AppId[] = ["mail", "settings", "vibex", "notes", "files", "media", "store", "calculator", "clock"];
+  const keys = (l: WorkspaceLayout, place: Parameters<typeof placementOf>[1]) => Object.fromEntries([...placementOf(l, place)].map(([k, p]) => [k, `${p.c},${p.r}`]));
+
+  it("the phone always has four icons per row (older 3-column layouts too)", () => {
+    expect(normalizeLayout(null, ALL).mobile.columns).toBe(4);
+    const old = { ...defaultLayout(ALL), mobile: { ...defaultLayout(ALL).mobile, columns: 3 as const } };
+    expect(normalizeLayout(old, ALL).mobile.columns).toBe(4);
+  });
+
+  it("navigation and dock search: bar and on by default, choices kept, junk reset", () => {
+    const l = normalizeLayout(null, ALL);
+    expect(l.appearance.phoneNav).toBe("bar");
+    expect(l.appearance.dockSearch).toBe(true);
+    const set = normalizeLayout({ ...l, appearance: { ...l.appearance, phoneNav: "buttons", dockSearch: false } }, ALL);
+    expect([set.appearance.phoneNav, set.appearance.dockSearch]).toEqual(["buttons", false]);
+    const junk = normalizeLayout({ ...l, appearance: { ...l.appearance, phoneNav: "dots" as "bar" } }, ALL);
+    expect(junk.appearance.phoneNav).toBe("bar");
+    const older = { ...l, appearance: { wallpaper: { kind: "default" }, captions: true } } as unknown as WorkspaceLayout;
+    expect(normalizeLayout(older, ALL).appearance).toMatchObject({ phoneNav: "bar", dockSearch: true });
+  });
+
+  it("an account that chose the dark app look gets the dark theme (once; the theme can change later)", () => {
+    const l = normalizeLayout(null, ALL);
+    const dark = normalizeLayout({ ...l, appearance: { ...l.appearance, appLook: "dark", theme: "light" } }, ALL);
+    expect(dark.appearance.theme).toBe("dark");
+    expect(normalizeLayout(dark, ALL)).toEqual(dark);
+    const system = normalizeLayout({ ...l, appearance: { ...l.appearance, appLook: "dark", theme: "system" } }, ALL);
+    expect(system.appearance.theme).toBe("system");
+    const back = normalizeLayout({ ...dark, appearance: { ...dark.appearance, theme: "light" } }, ALL);
+    expect(back.appearance.theme).toBe("light");
+  });
+
+  it("a phone page with only a widget is content: it stays, and the widget stays on it", () => {
+    let l = normalizeLayout(null, ALL);
+    // A second page whose only icon then leaves; a widget is put there.
+    l = normalizeLayout(moveItem(l, app("mail"), { surface: "mobile", page: 1 }, 0), ALL);
+    expect(l.mobile.pages).toHaveLength(2);
+    l = addWidget(l, "clock", { surface: "mobile", page: 1 }, "w_clock11");
+    l = normalizeLayout(moveItem(l, app("mail"), { surface: "mobile", page: 0 }, 0), ALL);
+    expect(l.mobile.pages).toHaveLength(2);
+    expect(l.mobile.pages[1]).toEqual([]);
+    expect(l.widgets.find((w) => w.id === "w_clock11")?.container).toBe("1");
+    expect(normalizeLayout(l, ALL)).toEqual(l);
+    // An empty page between them still goes, and the widget follows its page.
+    const gap = { ...l, mobile: { ...l.mobile, pages: [l.mobile.pages[0]!, [], []] }, widgets: l.widgets.map((w) => ({ ...w, container: "2" })) };
+    const n = normalizeLayout(gap, ALL);
+    expect(n.mobile.pages).toHaveLength(2);
+    expect(n.widgets[0]!.container).toBe("1");
+  });
+
+  it("a new widget takes the first free 2 x 2 block from the top; icons don't move", () => {
+    let l = normalizeLayout(null, ALL);
+    const place = { surface: "mobile" as const, page: 0 };
+    const before = keys(l, place);
+    const at = freeBlock(l, place, WIDGET_CELLS.clock)!;
+    // 9 apps on 4 columns: rows 0-1 full, row 2 holds one; the first free 2 x 2 is at column 1 of row 2.
+    expect(at).toEqual({ c: 1, r: 2 });
+    l = addWidget(l, "clock", { surface: "mobile", page: 0, cell: at }, "w_clock12");
+    const after = keys(l, place);
+    for (const [k, v] of Object.entries(before)) expect(after[k]).toBe(v);
+    expect(after["widget:w_clock12"]).toBe("1,2");
+  });
+
+  it("PC: the free block nearest to where the menu was opened; none on a full desktop", () => {
+    const l = normalizeLayout(null, ALL);
+    const place = { surface: "desktop" as const, space: l.desktop.spaces[0]!.id };
+    const g = { cols: 10, rows: 5 };
+    expect(freeBlock(l, place, { w: 2, h: 2 }, { c: 8, r: 3 }, g)).toEqual({ c: 8, r: 3 });
+    expect(freeBlock(l, place, { w: 2, h: 2 }, { c: 0, r: 0 }, g)).toEqual({ c: 0, r: 1 });
+    expect(freeBlock(l, place, { w: 2, h: 2 }, undefined, { cols: 9, rows: 1 })).toBeNull();
+  });
+
+  it("several icons move together, each to its own cell, nothing else moves", () => {
+    const l = normalizeLayout(null, ALL);
+    const place = { surface: "desktop" as const, space: l.desktop.spaces[0]!.id };
+    const g = { cols: 10, rows: 5 };
+    const before = Object.fromEntries([...placementOf(l, place, g)].map(([k, p]) => [k, `${p.c},${p.r}`]));
+    expect(before["app:mail"]).toBe("0,0");
+    expect(before["app:settings"]).toBe("1,0");
+    // mail + settings dragged by mail to (4,3): they keep their offset.
+    const n = placeGroup(l, ["app:mail", "app:settings"], "app:mail", place, { c: 4, r: 3 }, g);
+    const after = Object.fromEntries([...placementOf(n, place, g)].map(([k, p]) => [k, `${p.c},${p.r}`]));
+    expect(after["app:mail"]).toBe("4,3");
+    expect(after["app:settings"]).toBe("5,3");
+    for (const k of Object.keys(before).filter((k) => k !== "app:mail" && k !== "app:settings")) expect(after[k]).toBe(before[k]);
+    // Dropped onto other icons: each one goes to the nearest free cell, never on top of another.
+    const onto = placeGroup(l, ["app:mail", "app:settings"], "app:mail", place, { c: 2, r: 0 }, g);
+    const cells = [...placementOf(onto, place, g).values()].map((p) => `${p.c},${p.r}`);
+    expect(new Set(cells).size).toBe(cells.length);
+    const o = Object.fromEntries([...placementOf(onto, place, g)].map(([k, p]) => [k, `${p.c},${p.r}`]));
+    expect(o["app:vibex"]).toBe(before["app:vibex"]);
+    // At the right edge the group stays inside the area.
+    const edge = placeGroup(l, ["app:mail", "app:settings"], "app:settings", place, { c: 9, r: 4 }, g);
+    const e = Object.fromEntries([...placementOf(edge, place, g)].map(([k, p]) => [k, `${p.c},${p.r}`]));
+    expect(e["app:settings"]).toBe("9,4");
+    expect(e["app:mail"]).toBe("8,4");
   });
 });

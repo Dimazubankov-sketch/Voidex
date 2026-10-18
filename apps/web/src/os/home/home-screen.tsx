@@ -19,7 +19,7 @@ import { useHomeGestures } from "./gestures";
 import { dockZone } from "./dock";
 import { fitGrid, useDesktopGrid } from "./desktop-geometry";
 import { HomeGrid, rowHeight } from "./grid";
-import { DragGhost, HomeItem, type IconMetrics, type LabelStyle } from "./icons";
+import { DragGhost, HomeItem, SelectionFrame, type IconMetrics, type LabelStyle } from "./icons";
 import { Launcher } from "./launcher";
 import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
@@ -144,6 +144,7 @@ export function HomeScreen({
         ui.drag ||
         document.querySelector('[role="dialog"], [role="menu"]');
       if (e.key === "Escape" && ui.brushOpen) ui.setBrushOpen(false);
+      if (e.key === "Escape" && ui.selected.length && !layerOpen) ui.setSelected([]);
       if (e.key === "Escape" && ui.editing && !layerOpen) ui.setEditing(false);
       // PC: Ctrl+Alt+← / → switches desktops.
       if (ff === "desktop" && e.ctrlKey && e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
@@ -237,6 +238,7 @@ export function HomeScreen({
       <RenameSheet layout={layout} />
       {ff === "mobile" && <MobileSearch apps={apps} layout={layout} />}
       <DragGhost layout={layout} />
+      {ff === "desktop" && <SelectionFrame />}
       <RemoveSelectionBar />
       <RemoveAppsConfirm />
       {ff === "desktop" && <RemoveSpaceConfirm layout={layout} />}
@@ -470,6 +472,8 @@ function DesktopHome({ layout, metrics: m, label, editing, dragKey, merge, onOpe
     return () => ro.disconnect();
   }, [host, m.cell, m.gapX, m.gapY, rowH]);
 
+  // Step 2.15: a selection belongs to one desktop.
+  useEffect(() => useHomeUi.getState().setSelected([]), [space]);
   // The desktop this device was on was removed elsewhere: fall back to the first.
   useEffect(() => {
     if (current.id !== space) useWM.getState().setSpace(current.id);

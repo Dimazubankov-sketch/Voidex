@@ -1560,4 +1560,7 @@ export const ko: Record<MessageKey, string> = {
   "notifications.showLess": "간략히 보기",
   "notifications.clearGroup": "{app} 알림 지우기",
   "notifications.clearConfirm": "지우기",
+  "widgets.full": "데스크톱의 위젯 수가 최대입니다.",
+  "widgets.calculatorName": "미니 계산기",
+  "widgets.clockName": "아날로그 시계",
 };

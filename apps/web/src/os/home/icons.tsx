@@ -155,6 +155,10 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
   if (item.kind === "folder" && !folder) return null;
   const name = item.kind === "app" ? appLabel(layout, item.id) : folder!.name || t("home.folder");
   const removeSel = useHomeUi((s) => s.removeSel);
+  // Step 2.15 (PC): selected icons are highlighted; while the group is dragged they leave empty slots.
+  const key = itemKey(item);
+  const selected = useHomeUi((s) => !inFolder && s.selected.includes(key));
+  const inDraggedGroup = useHomeUi((s) => !inFolder && !!s.drag?.group?.includes(key));
   const wiggle: CSSProperties | undefined = editing ? { animationDelay: `${-((index * 137) % 300)}ms` } : undefined;
 
   return (
@@ -171,7 +175,13 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
     >
       <button
         type="button"
-        className={cx("group relative flex flex-col items-center gap-1.5 rounded-3xl py-1 outline-none", placeholder && "opacity-0")}
+        className={cx(
+          "group relative flex flex-col items-center gap-1.5 rounded-3xl py-1 outline-none",
+          (placeholder || inDraggedGroup) && "opacity-0",
+          selected && "vx-selected",
+        )}
+        aria-pressed={selected || undefined}
+        data-selected={selected || undefined}
         style={{ width: metrics.cell }}
         onClick={(e) => onOpen(item, e.currentTarget)}
         onKeyDown={(e) => {
@@ -269,7 +279,13 @@ export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
       style={{ x: ghost.x, y: ghost.y, marginLeft: -drag.size / 2, marginTop: -drag.size / 2 }}
       data-testid="drag-ghost"
     >
-      <div className="scale-110 drop-shadow-2xl">
+      <div className="relative scale-110 drop-shadow-2xl">
+        {drag.group && drag.group.length > 1 && (
+          <span className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white shadow-glow" data-testid="drag-group-count">
+            {drag.group.length}
+          </span>
+        )}
+        {drag.group && drag.group.length > 1 && <span aria-hidden className="absolute inset-0 translate-x-1.5 translate-y-1.5 rounded-[28%] bg-surface/80 shadow-tile" />}
         {drag.item.kind === "app" ? (
           <AppTile size={drag.size}>
             <AppGlyph id={drag.item.id} box={glyphBox(layout.appearance.glyphScale)} />
@@ -279,6 +295,20 @@ export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
         ) : null}
       </div>
     </motion.div>,
+    document.body,
+  );
+}
+
+/** Step 2.15 (PC): the selection frame drawn with the mouse on free desktop space. */
+export function SelectionFrame() {
+  const m = useHomeUi((s) => s.marquee);
+  if (!m) return null;
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[60] rounded-[6px] border border-primary/60 bg-primary/12"
+      style={{ left: Math.min(m.x0, m.x1), top: Math.min(m.y0, m.y1), width: Math.abs(m.x1 - m.x0), height: Math.abs(m.y1 - m.y0) }}
+      data-testid="selection-frame"
+    />,
     document.body,
   );
 }

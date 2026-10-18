@@ -1,5 +1,5 @@
 import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeInCell, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
+import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeGroup, placeInCell, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
 import type { FormFactor } from "@/lib/form-factor";
 import { useWM } from "../window-manager";
 import { desktopGeometry } from "./desktop-geometry";
@@ -43,7 +43,7 @@ export interface GestureOptions {
   onPullDown?: () => void;
 }
 
-type Mode = "pending" | "armed" | "drag" | "swipe" | "pull" | "done";
+type Mode = "pending" | "armed" | "drag" | "swipe" | "pull" | "marquee" | "done";
 
 function haptic() {
   try {
@@ -110,6 +110,15 @@ export function useHomeGestures(opts: GestureOptions) {
     if (!item && !target.closest("[data-home-free]")) return;
 
     const touch = e.pointerType !== "mouse";
+    // Step 2.15 (PC): Ctrl / Cmd + click adds an icon to the selection or takes it out (like Windows).
+    const pcMouse = optsRef.current.ff === "desktop" && !touch;
+    if (pcMouse && item && !inFolder && (e.ctrlKey || e.metaKey)) {
+      suppressClick.current = true;
+      ui().toggleSelected(itemKey(item));
+      return;
+    }
+    // A plain press on an icon outside the selection, or on free space, starts over.
+    if (pcMouse && (!item || !ui().selected.includes(itemKey(item)))) ui().setSelected([]);
     const start = { x: e.clientX, y: e.clientY };
     let last = { x: e.clientX, t: performance.now() };
     let vx = 0;
@@ -146,7 +155,10 @@ export function useHomeGestures(opts: GestureOptions) {
       const tile = (itemEl.querySelector("[data-tile]") ?? itemEl).getBoundingClientRect();
       ghost.x.set(x);
       ghost.y.set(y);
-      ui().setDrag({ item, fromFolder: inFolder, size: tile.width });
+      // Dragging one of several selected icons moves them all.
+      const sel = ui().selected;
+      const group = !inFolder && sel.length > 1 && sel.includes(itemKey(item)) ? sel : undefined;
+      ui().setDrag({ item, fromFolder: inFolder, size: tile.width, group });
       if (!touch) document.body.style.cursor = "grabbing";
     };
 
@@ -245,8 +257,8 @@ export function useHomeGestures(opts: GestureOptions) {
       const cells = find("[data-home-grid]") ?? find("[data-grid-host]")?.querySelector<HTMLElement>("[data-home-grid]") ?? null;
       if (cells) {
         const draggedKey = itemKey(d.item);
-        const over = els.map((el) => el.closest<HTMLElement>("[data-home-item]")).find((el) => el && el.dataset.homeItem !== draggedKey);
-        if (over && d.item.kind === "app") {
+        const over = els.map((el) => el.closest<HTMLElement>("[data-home-item]")).find((el) => el && el.dataset.homeItem !== draggedKey && !d.group?.includes(el.dataset.homeItem!));
+        if (over && d.item.kind === "app" && !d.group) {
           const tile = (over.querySelector("[data-tile]") ?? over).getBoundingClientRect();
           const inset = tile.width * 0.2;
           if (x > tile.left + inset && x < tile.right - inset && y > tile.top + inset && y < tile.bottom - inset) {
@@ -292,10 +304,16 @@ export function useHomeGestures(opts: GestureOptions) {
       const d = ui().drag;
       document.body.style.cursor = "";
       if (d && commit && d.item.kind === "app" && d.overDock !== undefined) {
-        // Pinning adds the app to the dock; its desktop icon stays where it was.
-        const app = d.item.id;
+        // Pinning adds the app to the dock; its desktop icon stays where it was (a group: all its apps).
+        const apps = d.group ? d.group.map(parseItem).flatMap((i) => (i?.kind === "app" ? [i.id] : [])) : [d.item.id];
         const index = d.overDock;
-        updateLayout((l) => pinToDock(l, app, index));
+        updateLayout((l) => apps.reduceRight((acc, app) => pinToDock(acc, app, index), l));
+      } else if (d && commit && d.cell && d.group) {
+        const place = placeOfGrid(d.cell.grid);
+        const cell = { c: d.cell.c, r: d.cell.r };
+        const group = d.group;
+        const anchor = itemKey(d.item);
+        if (place) updateLayout((l) => placeGroup(l, group, anchor, place, cell, desktopGeometry()));
       } else if (d && commit && d.mergeWith && d.item.kind === "app") {
         const target = parseItem(d.mergeWith);
         if (target) mergeInto(d.item.id, target);
@@ -343,6 +361,22 @@ export function useHomeGestures(opts: GestureOptions) {
         case "swipe":
           o.pager?.move(dx);
           return;
+        case "marquee": {
+          ui().setMarquee({ x0: start.x, y0: start.y, x1: ev.clientX, y1: ev.clientY });
+          const l = Math.min(start.x, ev.clientX);
+          const r = Math.max(start.x, ev.clientX);
+          const t = Math.min(start.y, ev.clientY);
+          const b = Math.max(start.y, ev.clientY);
+          const hit = [...document.querySelectorAll<HTMLElement>("[data-testid='desktop-area'] [data-home-item]")]
+            .filter((el) => {
+              const box = (el.querySelector("[data-tile]") ?? el).getBoundingClientRect();
+              return box.right > l && box.left < r && box.bottom > t && box.top < b;
+            })
+            .map((el) => el.dataset.homeItem!);
+          const cur = ui().selected;
+          if (hit.length !== cur.length || hit.some((k, i) => cur[i] !== k)) ui().setSelected(hit);
+          return;
+        }
         case "pull":
           if (dy > 64) {
             mode = "done";
@@ -362,6 +396,12 @@ export function useHomeGestures(opts: GestureOptions) {
       // Moved before the long press.
       if (canPick() && (!touch || ui().editing)) {
         startDrag(ev.clientX, ev.clientY);
+        return;
+      }
+      // PC: a mouse drag on free desktop space draws a selection frame (like Windows).
+      if (pcMouse && !item && !ui().editing && target.closest("[data-testid='desktop-area']")) {
+        mode = "marquee";
+        suppressClick.current = true;
         return;
       }
       if (o.pager && Math.abs(dx) > Math.abs(dy)) {
@@ -387,10 +427,20 @@ export function useHomeGestures(opts: GestureOptions) {
     const up = (ev: PointerEvent) => {
       detach();
       if (mode === "drag") finishDrag(ev.type === "pointerup");
+      else if (mode === "marquee") ui().setMarquee(null);
+      // A plain click on a selected icon opens it and ends the selection.
+      else if (pcMouse && (mode === "pending" || mode === "armed") && item && ui().selected.length) ui().setSelected([]);
       else if (mode === "swipe") optsRef.current.pager?.end(ev.clientX - start.x, vx);
     };
     // Esc during a drag cancels it: the pending drop (dock, cell, folder) is dropped.
     const key = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape" && mode === "marquee") {
+        detach();
+        mode = "done";
+        ui().setMarquee(null);
+        ui().setSelected([]);
+        return;
+      }
       if (ev.key !== "Escape" || mode !== "drag") return;
       ev.stopPropagation();
       detach();
