@@ -36,21 +36,22 @@ function wave({ base, band, a1, a2, edge = "#ffffff", edgeOpacity = 0.55 }: { ba
 </svg>`)} center / cover no-repeat, ${base}`;
 }
 
-export const PRESETS: Record<WallpaperPreset, { css: string; dark: boolean }> = {
+export const PRESETS: Record<WallpaperPreset, { css: string; dark: boolean; night: string }> = {
   // Neutral built-ins
-  white: { css: "#ffffff", dark: false },
+  white: { css: "#ffffff", dark: false, night: "#16161d" },
   aura: {
     css: "radial-gradient(70% 55% at 50% -8%, rgba(150,132,255,0.18) 0%, rgba(150,132,255,0) 72%), radial-gradient(45% 40% at 105% 105%, rgba(176,150,255,0.10) 0%, rgba(176,150,255,0) 70%), #fbfbfe",
     dark: false,
+    night: "radial-gradient(70% 55% at 50% -8%, rgba(127,114,255,0.22) 0%, rgba(127,114,255,0) 72%), radial-gradient(45% 40% at 105% 105%, rgba(150,120,255,0.12) 0%, rgba(150,120,255,0) 70%), #14141b",
   },
-  mist: { css: "#f0f0f3", dark: false },
-  // VOIDEX wave series
-  "wave-light": { css: wave({ base: "#f6f4fc", band: "#ece7fb", a1: "#cbbffb", a2: "#b2a2f6" }), dark: false },
-  "wave-milk": { css: wave({ base: "#faf8f4", band: "#f2efe9", a1: "#ffffff", a2: "#f6f4f0", edge: "#e9e5de", edgeOpacity: 0.6 }), dark: false },
-  "wave-milk-violet": { css: wave({ base: "#f8f6f2", band: "#efebf8", a1: "#e6dffb", a2: "#d7ccf9" }), dark: false },
-  "wave-gray": { css: wave({ base: "#eeeef1", band: "#e6e6ea", a1: "#f8f8fa", a2: "#e9e9ed" }), dark: false },
-  "wave-gray-purple": { css: wave({ base: "#ececef", band: "#e3e3e8", a1: "#ddd6f7", a2: "#cbc0f3" }), dark: false },
-  "wave-milk-gray-purple": { css: wave({ base: "#f8f6f2", band: "#e7e7ec", a1: "#e1d9fa", a2: "#cfc4f6" }), dark: false },
+  mist: { css: "#f0f0f3", dark: false, night: "#18181e" },
+  // VOIDEX wave series (Step 2.15: each with a night version for the dark theme)
+  "wave-light": { css: wave({ base: "#f6f4fc", band: "#ece7fb", a1: "#cbbffb", a2: "#b2a2f6" }), dark: false, night: wave({ base: "#15131d", band: "#1d1a2a", a1: "#3a3070", a2: "#4b3d92", edge: "#a597ff", edgeOpacity: 0.25 }) },
+  "wave-milk": { css: wave({ base: "#faf8f4", band: "#f2efe9", a1: "#ffffff", a2: "#f6f4f0", edge: "#e9e5de", edgeOpacity: 0.6 }), dark: false, night: wave({ base: "#17161a", band: "#1d1c21", a1: "#28272d", a2: "#201f25", edge: "#3a3940", edgeOpacity: 0.5 }) },
+  "wave-milk-violet": { css: wave({ base: "#f8f6f2", band: "#efebf8", a1: "#e6dffb", a2: "#d7ccf9" }), dark: false, night: wave({ base: "#16151b", band: "#1d1a27", a1: "#2d2748", a2: "#382e5e", edge: "#9d8fff", edgeOpacity: 0.22 }) },
+  "wave-gray": { css: wave({ base: "#eeeef1", band: "#e6e6ea", a1: "#f8f8fa", a2: "#e9e9ed" }), dark: false, night: wave({ base: "#17171c", band: "#1d1d23", a1: "#27272e", a2: "#202026", edge: "#3a3a44", edgeOpacity: 0.5 }) },
+  "wave-gray-purple": { css: wave({ base: "#ececef", band: "#e3e3e8", a1: "#ddd6f7", a2: "#cbc0f3" }), dark: false, night: wave({ base: "#16161b", band: "#1d1d24", a1: "#2b2646", a2: "#352c58", edge: "#9d8fff", edgeOpacity: 0.2 }) },
+  "wave-milk-gray-purple": { css: wave({ base: "#f8f6f2", band: "#e7e7ec", a1: "#e1d9fa", a2: "#cfc4f6" }), dark: false, night: wave({ base: "#17161b", band: "#1e1e25", a1: "#2c2748", a2: "#372e5c", edge: "#9d8fff", edgeOpacity: 0.2 }) },
 };
 
 /** What the built-in "VOIDEX" wallpaper looks like (for its swatch). */
@@ -64,15 +65,19 @@ function hexIsDark(hex: string) {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 140;
 }
 
-/** Background for the home surface and whether it is dark (for label contrast). */
-export function wallpaperStyle(w: Wallpaper, imageUrl: string | null | undefined): { style: CSSProperties; dark: boolean; image: boolean } {
+/**
+ * Background for the home surface and whether it is dark (for label contrast).
+ * Step 2.15: with the dark theme (`night`) the built-in wallpapers switch to
+ * their night version, so the desktop is dark too; own colours and pictures stay.
+ */
+export function wallpaperStyle(w: Wallpaper, imageUrl: string | null | undefined, night = false): { style: CSSProperties; dark: boolean; image: boolean } {
   switch (w.kind) {
     case "color":
       return { style: { background: w.color }, dark: hexIsDark(w.color), image: false };
     case "preset": {
       // normalizeLayout maps retired ids; anything else falls back to white.
       const p = PRESETS[w.id as WallpaperPreset] ?? PRESETS.white;
-      return { style: { background: p.css }, dark: p.dark, image: false };
+      return night ? { style: { background: p.night }, dark: true, image: false } : { style: { background: p.css }, dark: p.dark, image: false };
     }
     case "image":
       return {

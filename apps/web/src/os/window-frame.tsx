@@ -10,6 +10,8 @@ import { AppLockGate } from "./app-lock";
 import { WindowContext, type WindowApi } from "./window-context";
 import { barDrag, dragPose, gestureBarAction, rubberUp, slideHints } from "./gesture-bar";
 import { useGesturePeek } from "./gesture-peek";
+import { useWorkspaceLayout } from "./home/layout";
+import { NavButtons } from "./phone-nav";
 import { captureWindow } from "./snapshots";
 import { foregroundId, useWM, type AppWindow, type Rect } from "./window-manager";
 
@@ -17,7 +19,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 const GUTTER = 10;
 
 /** One app window. Desktop: floating, draggable, resizable. Mobile: full-screen card. */
-export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRect: () => Rect | null }) {
+export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRect: (appId: AppWindow["appId"]) => Rect | null }) {
   const ff = useFormFactor();
   const wm = useWM();
   const z = wm.order.indexOf(win.id) + 10;
@@ -172,14 +174,15 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
           <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)]" data-window-content={win.id}>
             {content}
           </div>
-          <HomeIndicator />
+          <PhoneNav />
         </DraggedApp>
       </motion.section>
     );
   }
 
   // desktop
-  const launcher = launcherRect();
+  // Step 2.15: a minimized window goes into its dock icon (the 9-dot menu button is gone).
+  const launcher = minimized && !offSpace ? launcherRect(win.appId) : null;
   // Maximized: the whole area above the dock — the window layer already ends at the dock.
   const rect = maximized ? { x: GUTTER, y: GUTTER, w: bounds.w - GUTTER * 2, h: bounds.h - GUTTER } : win.rect;
   const minimizedTarget = offSpace
@@ -322,6 +325,12 @@ function slideTo(dir: -1 | 1, width: number, dx = 0) {
     }),
   );
   return ok;
+}
+
+/** Step 2.15: the bottom of a phone window: the gesture bar, or the three system buttons. */
+function PhoneNav() {
+  const mode = useWorkspaceLayout().layout.appearance.phoneNav;
+  return mode === "buttons" ? <NavButtons /> : <HomeIndicator />;
 }
 
 /**

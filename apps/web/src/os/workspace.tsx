@@ -24,25 +24,27 @@ import { useNotifications } from "./notifications/store";
 import { SystemBar } from "./system-bar";
 import { foregroundId, useWM, type Rect } from "./window-manager";
 
-function rectOf(el: Element | null): Rect | null {
+/** Step 2.15: where a minimized PC window goes: its dock icon (in window-layer coordinates). */
+function dockRect(appId: string, layerTop: number): Rect | null {
+  const el = document.querySelector(`[data-dock-app="${appId}"], [data-dock-running="${appId}"]`);
   if (!el) return null;
   const r = el.getBoundingClientRect();
-  return { x: r.left, y: r.top, w: r.width, h: r.height };
+  return { x: r.left, y: r.top - layerTop, w: r.width, h: r.height };
 }
 
 /**
  * The VOIDEX workspace — the OS shell. Grey desk, the home screen (icons,
  * folders, widgets, wallpaper — see ./home) and app windows above it. PC: the
  * system bar at the top and the glass dock at the bottom, above every window
- * (windows live between them). Phone: no dock — the round app-switcher button
- * on the home screen and the home indicator. Both: the Notification Center.
+ * (windows live between them). Phone: no dock; the system navigation (gesture
+ * bar or buttons, Step 2.15) on the home screen and in apps. Both: the
+ * Notification Center.
  */
 export function Workspace() {
   const ff = useFormFactor();
   const userId = useSession((s) => s.user!.id);
   const wm = useWM();
   const layer = useRef<HTMLDivElement>(null);
-  const launcherBtn = useRef<HTMLButtonElement>(null);
   const brushBtn = useRef<HTMLButtonElement>(null);
   const [hydrated, setHydrated] = useState(false);
   const { layout } = useWorkspaceLayout();
@@ -131,11 +133,11 @@ export function Workspace() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-background" data-testid="workspace">
-      <HomeScreen receded={anyVisible && ff === "desktop"} hidden={anyVisible && ff === "mobile"} launcherBtn={launcherBtn} brushBtn={brushBtn} />
-      {ff === "desktop" && <SystemBar launcherBtn={launcherBtn} brushBtn={brushBtn} />}
+      <HomeScreen receded={anyVisible && ff === "desktop"} hidden={anyVisible && ff === "mobile"} brushBtn={brushBtn} />
+      {ff === "desktop" && <SystemBar brushBtn={brushBtn} />}
       <div ref={layer} className="pointer-events-none absolute inset-x-0 [&>*]:pointer-events-auto" style={{ zIndex: 20, top, bottom: zone }} data-testid="window-layer">
         {ff === "mobile" && <GesturePeek />}
-        {hydrated && wm.order.map((id) => wm.windows[id] && <WindowFrame key={id} win={wm.windows[id]!} launcherRect={() => rectOf(launcherBtn.current)} />)}
+        {hydrated && wm.order.map((id) => wm.windows[id] && <WindowFrame key={id} win={wm.windows[id]!} launcherRect={(appId) => dockRect(appId, top)} />)}
       </div>
       {ff === "desktop" && <DesktopDock />}
       {ff === "desktop" && <WindowOverview />}

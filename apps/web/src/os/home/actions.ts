@@ -38,9 +38,13 @@ export function appCategory(l: Pick<WorkspaceLayout, "categories">, id: AppId): 
   return categoryOf(l, id, APP_REGISTRY[id].category);
 }
 
-/** Label under an icon: the user's own, else the app's name. */
-export function appLabel(l: Pick<WorkspaceLayout, "names">, id: AppId): string {
-  return l.names?.[id] ?? APP_REGISTRY[id].name[useI18n.getState().language];
+/**
+ * Label under an icon: the app's own name in the interface language. Step
+ * 2.15: built-in apps can't be renamed any more; labels a user set earlier stay
+ * stored in the layout (`names`) but are not shown.
+ */
+export function appLabel(_l: Pick<WorkspaceLayout, "names">, id: AppId): string {
+  return APP_REGISTRY[id].name[useI18n.getState().language];
 }
 
 /** Where new things go on this device right now: the visible phone page or PC desktop. */

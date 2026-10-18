@@ -116,6 +116,11 @@ export type AppLook = (typeof APP_LOOKS)[number];
 export type Theme = (typeof THEMES)[number];
 export const DOCK_SCALES = ["s", "m", "l"] as const;
 export type DockScale = (typeof DOCK_SCALES)[number];
+/** Step 2.15: phone system navigation: the gesture bar, or three buttons (back, home, open apps). */
+export const PHONE_NAV_MODES = ["bar", "buttons"] as const;
+export type PhoneNavMode = (typeof PHONE_NAV_MODES)[number];
+/** Step 2.15: the phone home grid always has four icons per row. */
+export const MOBILE_COLUMNS = 4;
 
 const appId = z.enum(APP_IDS as [AppId, ...AppId[]]);
 const folderId = z.string().regex(/^f_[a-z0-9]{4,24}$/);
@@ -189,10 +194,18 @@ export const AppearanceSchema = z.object({
   syncWallpapers: z.boolean().default(true),
   /** Step 2.7: search fields follow the theme ("system") or stay white. */
   searchAppearance: z.enum(SEARCH_APPEARANCES).default("system"),
-  /** Step 2.8: the look of every app (background, text, cards, fields). */
-  appLook: z.enum(APP_LOOKS).default("media"),
+  /**
+   * Step 2.8: the look of every app. Retired in Step 2.15 (the theme alone
+   * decides: light apps are white, dark ones dark); still accepted in stored
+   * data, normalizeAppearance turns an old "dark" into the dark theme.
+   */
+  appLook: z.enum(APP_LOOKS).default("mail"),
   /** Step 2.9: logo size inside the desktop tiles (the tile itself stays). */
   glyphScale: z.enum(GLYPH_SCALES).default("m"),
+  /** Step 2.15: phone navigation (Settings → Desktop): gesture bar (default) or buttons. */
+  phoneNav: z.enum(PHONE_NAV_MODES).default("bar"),
+  /** Step 2.15: the search field in the PC dock (off: the dock is only its apps, centred). */
+  dockSearch: z.boolean().default(true),
 });
 export type Appearance = z.infer<typeof AppearanceSchema>;
 
@@ -260,7 +273,7 @@ export const WorkspaceLayoutSchema = z.object({
 });
 export type WorkspaceLayout = z.infer<typeof WorkspaceLayoutSchema>;
 
-export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system", appLook: "media", glyphScale: "m" };
+export const DEFAULT_APPEARANCE: Appearance = { wallpaper: { kind: "default" }, labelColor: "auto", labelSize: "m", captions: true, glass: "on", showLabels: true, systemBar: "glass", lockWallpaper: null, dock: "glass", dockSeparators: false, labelTwoLines: false, theme: "light", syncWallpapers: true, searchAppearance: "system", appLook: "mail", glyphScale: "m", phoneNav: "bar", dockSearch: true };
 
 /** Keeps a stored wallpaper renderable: retired presets / gradients map to the current set. */
 export function normalizeWallpaper(w: Wallpaper | undefined): Wallpaper {
@@ -288,11 +301,14 @@ function normalizeAppearance(a: Partial<Appearance> | undefined): Appearance {
     dock: base.dock === "off" ? "off" : "glass",
     dockSeparators: base.dockSeparators === true,
     labelTwoLines: base.labelTwoLines === true,
-    theme: (THEMES as readonly string[]).includes(base.theme) ? base.theme : "light",
+    // Step 2.15: «Вид приложений» is gone; an account that chose the dark app look gets the dark theme.
+    theme: base.appLook === "dark" && base.theme === "light" ? "dark" : (THEMES as readonly string[]).includes(base.theme) ? base.theme : "light",
     syncWallpapers: base.syncWallpapers !== false,
     searchAppearance: base.searchAppearance === "white" ? "white" : "system",
-    appLook: (APP_LOOKS as readonly string[]).includes(base.appLook) ? base.appLook : "media",
+    appLook: "mail",
     glyphScale: (GLYPH_SCALES as readonly string[]).includes(base.glyphScale) ? base.glyphScale : "m",
+    phoneNav: base.phoneNav === "buttons" ? "buttons" : "bar",
+    dockSearch: base.dockSearch !== false,
   };
 }
 
@@ -302,7 +318,7 @@ export function defaultLayout(apps: AppId[]): WorkspaceLayout {
     v: 1,
     folders: [],
     hidden: [],
-    mobile: { columns: 3, pages: [items], view: "grid", cells: {} },
+    mobile: { columns: MOBILE_COLUMNS, pages: [items], view: "grid", cells: {} },
     desktop: {
       columns: 5,
       density: "normal",
@@ -380,9 +396,18 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
     return { out, seen };
   };
 
-  // Phone pages.
+  // Phone pages. Step 2.15: a widget is content too: a page that holds only a widget stays.
   const mobile = place(base.mobile.pages.slice(0, MOBILE_PAGES_MAX));
-  const pages = mobile.out.filter((p) => p.length > 0);
+  const knownWidget = (w: Widget) => (WIDGET_TYPES as readonly string[]).includes(w.type);
+  const widgetPages = new Set((base.widgets ?? []).filter((w) => w.surface === "mobile" && knownWidget(w)).map((w) => Number(w.container)));
+  /** Old page index → its index once empty pages are gone. */
+  const pageIndex = new Map<number, number>();
+  const pages: LayoutItem[][] = [];
+  mobile.out.forEach((p, i) => {
+    if (!p.length && !widgetPages.has(i)) return;
+    pageIndex.set(i, pages.length);
+    pages.push(p);
+  });
   if (!pages.length) pages.push([]);
   pages[pages.length - 1]!.push(...topLevel.filter((i) => !mobile.seen.has(itemKey(i))));
 
@@ -420,7 +445,8 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
       if (!spaces.some((sp) => sp.id === container)) container = spaces[0]!.id;
     } else {
       const page = Number(container);
-      container = String(Number.isInteger(page) ? Math.max(0, Math.min(pages.length - 1, page)) : 0);
+      const at = Number.isInteger(page) ? pageIndex.get(page) : undefined;
+      container = String(at ?? (Number.isInteger(page) ? Math.max(0, Math.min(pages.length - 1, page)) : 0));
     }
     widgetIds.add(w.id);
     widgets.push({ id: w.id, type: w.type, surface: w.surface === "mobile" ? "mobile" : "desktop", container, x: clamp01(w.x), y: clamp01(w.y) });
@@ -442,7 +468,7 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
     v: 1,
     folders,
     hidden,
-    mobile: { columns: base.mobile.columns === 4 ? 4 : 3, pages, view: base.mobile.view === "categories" ? "categories" : "grid", cells: mobileCells },
+    mobile: { columns: MOBILE_COLUMNS, pages, view: base.mobile.view === "categories" ? "categories" : "grid", cells: mobileCells },
     desktop: {
       columns: Math.min(DESKTOP_COLUMNS_MAX, Math.max(DESKTOP_COLUMNS_MIN, Math.round(base.desktop.columns))),
       density: base.desktop.density,

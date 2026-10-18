@@ -1,5 +1,5 @@
 import { useWallpapers } from "./wallpapers";
-import { useTheme } from "@/lib/theme";
+import { useDarkTheme, useTheme } from "@/lib/theme";
 import { RemoveAppsConfirm, RemoveSelectionBar } from "./remove-apps";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
@@ -24,10 +24,11 @@ import { Launcher } from "./launcher";
 import { useWorkspaceLayout } from "./layout";
 import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
-import { DesktopsGlyph, RemoveSpaceConfirm } from "./spaces";
+import { RemoveSpaceConfirm } from "./spaces";
 import { useHomeUi } from "./ui-store";
 import { GridWidget, WidgetStrip, WidgetsPanel } from "./widgets";
 import { SYSTEM_BAR_H } from "../metrics";
+import { HomeGestureBar, NavButtons } from "../phone-nav";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -54,28 +55,27 @@ const SCALE: Record<WorkspaceLayout["desktop"]["density"], IconMetrics & { name:
 export function HomeScreen({
   receded,
   hidden,
-  launcherBtn,
   brushBtn,
 }: {
   receded: boolean;
   hidden: boolean;
-  launcherBtn: RefObject<HTMLButtonElement | null>;
   /** PC: the brush lives in the system bar; phone: in the home header. */
   brushBtn: RefObject<HTMLButtonElement | null>;
 }) {
-  const t = useT();
   const ff = useFormFactor();
   const { layout, apps, ready } = useWorkspaceLayout();
   const editing = useHomeUi((s) => s.editing);
   const drag = useHomeUi((s) => s.drag);
   const { wallpaper } = useWallpapers();
   const image = useWallpaperImage(wallpaper);
-  const wp = wallpaperStyle(wallpaper, image.data);
+  const night = useDarkTheme();
+  const wp = wallpaperStyle(wallpaper, image.data, night);
   const plain = wallpaper.kind === "default";
   const tone = labelTone(wp.dark);
   const scale = SCALE[layout.desktop.density];
-  const cols4 = layout.mobile.columns === 4;
-  // Label sizes follow the scale (PC) or the icons per row (phone) — no separate setting.
+  // Step 2.15: the phone always shows four icons per row.
+  const cols4 = true;
+  // Label sizes follow the scale (PC); the phone has one size.
   const show = layout.appearance.showLabels;
   const twoLines = show && layout.appearance.labelTwoLines;
   const label: LabelStyle = useMemo(
@@ -121,10 +121,6 @@ export function HomeScreen({
   useEffect(() => {
     document.documentElement.dataset.search = layout.appearance.searchAppearance;
   }, [layout.appearance.searchAppearance]);
-  // Step 2.8: one look for every app window (styles/index.css, `.vx-app`).
-  useEffect(() => {
-    document.documentElement.dataset.appLook = layout.appearance.appLook;
-  }, [layout.appearance.appLook]);
 
   // Leaving the home screen (an app comes to the front) ends edit mode.
   useEffect(() => {
@@ -162,16 +158,16 @@ export function HomeScreen({
     return () => window.removeEventListener("keydown", h);
   }, [ff, layout.desktop.spaces]);
 
-  const glassBtn = plain ? undefined : "vx-glass text-text hover:bg-white/75";
-
   return (
     <motion.main
       className={cx(
-        "absolute flex flex-col overflow-hidden shadow-surface [-webkit-touch-callout:none]",
+        // Step 2.15: the wallpaper takes the whole screen (no inset card); content keeps clear of the
+        // system areas (status bar / system bar at the top, navigation or dock at the bottom).
+        "absolute inset-0 flex flex-col overflow-hidden [-webkit-touch-callout:none]",
         plain && "bg-surface",
-        ff === "mobile" ? "inset-[10px] top-[max(var(--safe-top),10px)] bottom-[max(var(--safe-bottom),10px)] rounded-[32px]" : "inset-[14px] rounded-[34px]",
+        ff === "mobile" && "pt-[var(--safe-top)]",
       )}
-      style={{ ...(plain ? {} : wp.style), ...(ff === "desktop" ? { top: SYSTEM_BAR_H + 6 } : {}) }}
+      style={{ ...(plain ? {} : wp.style), ...(ff === "desktop" ? { paddingTop: SYSTEM_BAR_H } : {}) }}
       animate={receded ? { opacity: 0.55, scale: 0.985 } : hidden ? { opacity: 0.6, scale: 0.94 } : { opacity: 1, scale: 1 }}
       transition={{ duration: 0.4, ease: EASE }}
       aria-hidden={hidden || undefined}
@@ -208,19 +204,7 @@ export function HomeScreen({
             )}
           </AnimatePresence>
           <div className="flex-1" />
-          {editing ? (
-            <DoneButton />
-          ) : (
-            <IconButton
-              ref={launcherBtn}
-              label={t("os.launcher")}
-              onClick={() => useHomeUi.getState().setLauncherOpen(!useHomeUi.getState().launcherOpen)}
-              data-testid="launcher-button"
-              className={glassBtn}
-            >
-              <NineDots />
-            </IconButton>
-          )}
+          {editing && <DoneButton />}
         </header>
       ) : (
         <div className="h-3 shrink-0" aria-hidden />
@@ -242,12 +226,12 @@ export function HomeScreen({
         // Room for the dock (rendered above windows by the workspace).
         <div className="shrink-0" style={{ height: dockZone(layout.desktop.dockScale) - 14 }} aria-hidden />
       )}
-      {/* Only on the home screen itself: never under / over an open app. */}
-      {ff === "mobile" && ready && !hidden && <MobileSwitcherButton />}
+      {/* Step 2.15: the phone's system navigation (gesture bar or buttons); the round switcher button is gone. */}
+      {ff === "mobile" && <HomeNav />}
 
       <BrushMenu anchor={brushBtn} layout={layout} />
       <WidgetsPanel />
-      <Launcher anchor={launcherBtn} apps={apps} layout={layout} />
+      <Launcher apps={apps} layout={layout} />
       <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />
       <ContextMenu layout={layout} />
       <RenameSheet layout={layout} />
@@ -260,36 +244,11 @@ export function HomeScreen({
   );
 }
 
-/**
- * Phone: the round glass button at the bottom centre of the HOME screen only
- * (Step 2.3): it opens the app switcher — open apps as cards; the pages are
- * reachable from there too.
- */
-function MobileSwitcherButton() {
-  const t = useT();
-  const count = useWM((s) => s.order.length);
-  return (
-    <button
-      type="button"
-      onClick={() => useWM.getState().setSwitcher(true)}
-      aria-label={t("os.switcher")}
-      title={t("os.switcher")}
-      data-home-control
-      className="vx-glass pressable absolute bottom-3 left-1/2 z-10 flex size-[54px] -translate-x-1/2 items-center justify-center rounded-full"
-      data-testid="mobile-switcher"
-    >
-      <span className="block size-[30px]">
-        <DesktopsGlyph className="size-full" />
-      </span>
-      {count > 0 && (
-        <span className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-white" data-testid="mobile-switcher-count">
-          {count}
-        </span>
-      )}
-    </button>
-  );
+/** Step 2.15: the bottom of the phone home screen: the gesture bar (swipe up: open apps) or the buttons. */
+function HomeNav() {
+  const mode = useWorkspaceLayout().layout.appearance.phoneNav;
+  return mode === "buttons" ? <NavButtons /> : <HomeGestureBar />;
 }
-
 
 /** The brush (edit mode): opens Wallpaper · View · Widgets. */
 export const BrushButton = ({ ref }: { ref: RefObject<HTMLButtonElement | null> }) => {
@@ -454,8 +413,6 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
         )}
       </div>
       <PageDots count={pages.length} page={page} tone={label.tone} />
-      {/* room for the round app-switcher button */}
-      <div className="h-[66px] shrink-0" aria-hidden />
     </div>
   );
 }
@@ -653,12 +610,3 @@ export function Clock({ tone, compact }: { tone: LabelTone; compact?: boolean })
     </div>
   );
 }
-
-export function NineDots({ className = "size-5" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" className={className} aria-hidden>
-      {[3.5, 10, 16.5].flatMap((y) => [3.5, 10, 16.5].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.9" fill="currentColor" />))}
-    </svg>
-  );
-}
-

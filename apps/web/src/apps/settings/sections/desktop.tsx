@@ -31,7 +31,7 @@ export function DesktopSection({ navigate }: SectionProps) {
           testId="settings-desktop-widgets"
         />
       </Group>
-      <AppearancePanel parts={["view", "dock", "reset"]} />
+      <AppearancePanel parts={["view", "nav", "dock", "reset"]} />
     </div>
   );
 }

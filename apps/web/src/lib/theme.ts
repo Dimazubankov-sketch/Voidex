@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type { Theme } from "@voidex/shared";
 
 /**
@@ -49,4 +49,17 @@ export function useTheme(theme: Theme) {
     mq.addEventListener("change", h);
     return () => mq.removeEventListener("change", h);
   }, [theme]);
+}
+
+/** Step 2.15: whether the document is in the dark theme right now (follows <html data-theme>). */
+export function useDarkTheme(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mo = new MutationObserver(cb);
+      mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+      return () => mo.disconnect();
+    },
+    () => document.documentElement.dataset.theme === "dark",
+    () => false,
+  );
 }

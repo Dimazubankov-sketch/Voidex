@@ -5,7 +5,7 @@ import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
 import { useSecurityStatus } from "@/lib/security";
 import { lockNow } from "./lock/auto-lock";
-import { BrushButton, Clock, DoneButton, NineDots } from "./home/home-screen";
+import { BrushButton, Clock, DoneButton } from "./home/home-screen";
 import { useWorkspaceLayout } from "./home/layout";
 import { useHomeUi } from "./home/ui-store";
 import { useNotificationCenter, useUnreadNotifications } from "./notifications/store";
@@ -14,16 +14,16 @@ export { SYSTEM_BAR_H };
 
 /**
  * The PC System Bar (Step 2.3): time and date on the left, small utility
- * controls on the right — Notification Center (bell), lock (with a
- * code-password, Step 2.4) and the app menu (nine dots). In edit mode the brush and "Done" take their places. Background:
+ * controls on the right: Notification Center (bell) and lock (with a
+ * code-password, Step 2.4); Step 2.15 removed the nine-dot app menu (apps are
+ * found in the dock search). In edit mode the brush and "Done" take their places. Background:
  * real glass or none (Settings → Desktop → "System bar background"). It sits
  * above every window; app windows never cover it.
  */
-export function SystemBar({ launcherBtn, brushBtn }: { launcherBtn: RefObject<HTMLButtonElement | null>; brushBtn: RefObject<HTMLButtonElement | null> }) {
+export function SystemBar({ brushBtn }: { brushBtn: RefObject<HTMLButtonElement | null> }) {
   const t = useT();
   const { layout } = useWorkspaceLayout();
   const editing = useHomeUi((s) => s.editing);
-  const launcherOpen = useHomeUi((s) => s.launcherOpen);
   const unread = useUnreadNotifications();
   const ncOpen = useNotificationCenter((s) => s.open);
   const glass = layout.appearance.systemBar !== "off";
@@ -68,15 +68,6 @@ export function SystemBar({ launcherBtn, brushBtn }: { launcherBtn: RefObject<HT
           <RiLock2Line className="size-[16px]" />
         </BarButton>
       )}
-      <BarButton
-        ref={launcherBtn}
-        label={t("os.launcher")}
-        active={launcherOpen}
-        onClick={() => useHomeUi.getState().setLauncherOpen(!useHomeUi.getState().launcherOpen)}
-        testId="launcher-button"
-      >
-        <NineDots className="size-[15px]" />
-      </BarButton>
     </header>
   );
 }

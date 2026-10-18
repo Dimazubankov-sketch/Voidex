@@ -1,6 +1,6 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform, type PanInfo } from "motion/react";
-import { RiCheckDoubleLine, RiCloseLine, RiDeleteBin6Line, RiNotification3Line } from "@remixicon/react";
+import { RiArrowDownSLine, RiCheckDoubleLine, RiCloseLine, RiDeleteBin6Line, RiNotification3Line } from "@remixicon/react";
 import { APP_REGISTRY, type NotificationDto } from "@voidex/shared";
 import { Avatar, ClockGlyph, MailGlyph, StoreGlyph, VibexGlyph, VoidexMark } from "@/brand/brand";
 import { cx } from "@/lib/cx";
@@ -89,7 +89,7 @@ export function timeLabel(iso: string, lang: string, t: TFunction) {
   return formatDate(d, lang as Parameters<typeof formatDate>[1], { day: "numeric", month: "short" });
 }
 
-function NotificationCard({ n, onOpen }: { n: NotificationDto; onOpen: (n: NotificationDto) => void }) {
+function NotificationCard({ n, onOpen, more = 0 }: { n: NotificationDto; onOpen: (n: NotificationDto) => void; /** Collapsed group: how many more are stacked under it (a tap opens the stack). */ more?: number }) {
   const t = useT();
   const lang = useLanguage();
   const ff = useFormFactor();
@@ -125,9 +125,16 @@ function NotificationCard({ n, onOpen }: { n: NotificationDto; onOpen: (n: Notif
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.9}
         onDragEnd={onDragEnd}
-        className="group relative flex items-start gap-3 rounded-[20px] bg-white/55 p-3 shadow-[0_1px_2px_rgba(20,20,40,0.06)] transition-colors hover:bg-white/75"
+        className="vx-nc-card group relative flex items-start gap-3 rounded-[20px] p-3"
       >
-        <button type="button" onClick={() => onOpen(n)} className="absolute inset-0 rounded-[20px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40" aria-label={`${r.appName(lang)}: ${main}. ${r.action(n, t)}`} data-testid="notification-open" />
+        <button
+          type="button"
+          onClick={() => onOpen(n)}
+          className="absolute inset-0 rounded-[20px] outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          aria-label={more ? `${r.appName(lang)}: ${t("notifications.more", { n: more })}` : `${r.appName(lang)}: ${main}. ${r.action(n, t)}`}
+          aria-expanded={more ? false : undefined}
+          data-testid={more ? "notification-group-expand" : "notification-open"}
+        />
         <span className="pointer-events-none relative shrink-0">
           {n.actor ? (
             <Avatar name={n.actor.name} userId={n.actor.id} version={n.actor.avatarVersion} size={40} />
@@ -151,6 +158,7 @@ function NotificationCard({ n, onOpen }: { n: NotificationDto; onOpen: (n: Notif
           <span className="mt-0.5 block truncate text-[14px] font-semibold text-text">{main}</span>
           <span className="block text-[13px] text-text-secondary">{r.action(n, t)}</span>
           {body && <span className="mt-0.5 line-clamp-2 block text-[13px] text-text">{body}</span>}
+          {more > 0 && <span className="mt-1 block text-[12px] font-medium text-text-tertiary" data-testid="notification-more">{t("notifications.more", { n: more })}</span>}
         </span>
         {!n.read && <span className="pointer-events-none mt-1.5 size-2 shrink-0 rounded-full bg-primary" aria-label={t("notifications.unread")} data-testid="notification-unread" />}
         <button
@@ -171,18 +179,127 @@ function NotificationCard({ n, onOpen }: { n: NotificationDto; onOpen: (n: Notif
   );
 }
 
-function Body({ onClose, titleId, closeButton }: { onClose: () => void; titleId: string; closeButton?: boolean }) {
+/** Step 2.15: notifications of one app, newest first; groups ordered by their newest notification. */
+export interface NotificationGroup {
+  app: NotificationDto["app"];
+  items: NotificationDto[];
+}
+export function groupBySource(items: NotificationDto[]): NotificationGroup[] {
+  const groups = new Map<string, NotificationGroup>();
+  const sorted = [...items].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  for (const n of sorted) {
+    const g = groups.get(n.app);
+    if (g) g.items.push(n);
+    else groups.set(n.app, { app: n.app, items: [n] });
+  }
+  return [...groups.values()];
+}
+
+/**
+ * A two-step clear (the reference): a quiet round button; the first tap turns
+ * it into «Очистить», the second clears. It folds back by itself after a while.
+ */
+function ClearButton({ label, confirmLabel, onClear, testId, icon }: { label: string; confirmLabel: string; onClear: () => void; testId: string; icon?: "trash" | "close" }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(() => setArmed(false), 3500);
+    return () => window.clearTimeout(id);
+  }, [armed]);
+  return (
+    <motion.button
+      type="button"
+      layout
+      transition={{ duration: 0.18, ease: EASE }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (armed) {
+          setArmed(false);
+          onClear();
+        } else setArmed(true);
+      }}
+      aria-label={armed ? confirmLabel : label}
+      title={armed ? confirmLabel : label}
+      className={cx(
+        "vx-nc-chip relative flex h-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-[12.5px] font-semibold",
+        armed ? "px-3.5 text-danger" : "w-8 text-text-secondary hover:text-text",
+      )}
+      data-armed={armed || undefined}
+      data-testid={armed ? `${testId}-confirm` : testId}
+    >
+      {armed ? confirmLabel : icon === "trash" ? <RiDeleteBin6Line className="size-[15px]" /> : <RiCloseLine className="size-4" />}
+    </motion.button>
+  );
+}
+
+/**
+ * One source. A single notification is just its card. Several: collapsed, the
+ * newest card with the others stacked under it; a tap opens the stack. Open:
+ * the app's name, «Показать меньше» and a clear for the whole group.
+ */
+function GroupView({ g, expanded, onToggle, onOpen }: { g: NotificationGroup; expanded: boolean; onToggle: () => void; onOpen: (n: NotificationDto) => void }) {
+  const t = useT();
+  const lang = useLanguage();
+  const r = RENDERERS[g.app];
+  if (g.items.length === 1) return <NotificationCard n={g.items[0]!} onOpen={onOpen} />;
+  const [first, ...rest] = g.items;
+  return (
+    <motion.li layout="position" className="list-none" transition={{ duration: 0.24, ease: EASE }} data-testid="notification-group" data-app={g.app} data-count={g.items.length} data-expanded={expanded || undefined}>
+      <AnimatePresence initial={false} mode="popLayout">
+        {expanded ? (
+          <motion.div key="open" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: EASE }}>
+            <div className="flex items-center gap-2 px-1 pb-2 pt-1">
+              <h3 className="min-w-0 flex-1 truncate text-[17px] font-bold tracking-tight text-text">{r.appName(lang)}</h3>
+              <button type="button" onClick={onToggle} className="vx-nc-chip flex h-8 items-center gap-1 rounded-full px-3 text-[12.5px] font-semibold text-text-secondary hover:text-text" data-testid="notification-group-collapse">
+                <RiArrowDownSLine className="size-4 rotate-180" /> {t("notifications.showLess")}
+              </button>
+              <ClearButton label={t("notifications.clearGroup", { app: r.appName(lang) })} confirmLabel={t("notifications.clearConfirm")} onClear={() => g.items.forEach((n) => notificationActions.remove(n.id))} testId="notification-group-clear" />
+            </div>
+            <ul className="flex flex-col gap-2">
+              <AnimatePresence initial={false}>
+                {g.items.map((n) => (
+                  <NotificationCard key={n.id} n={n} onOpen={onOpen} />
+                ))}
+              </AnimatePresence>
+            </ul>
+          </motion.div>
+        ) : (
+          <motion.div key="stack" className="relative pb-[14px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+            {/* The others, stacked under the newest one. */}
+            <span aria-hidden className="vx-nc-card pointer-events-none absolute inset-x-4 bottom-0 top-3 rounded-[20px] opacity-60" />
+            {rest.length > 1 && <span aria-hidden className="vx-nc-card pointer-events-none absolute inset-x-2 bottom-[7px] top-2 rounded-[20px] opacity-80" />}
+            <ul className="relative">
+              <NotificationCard n={first!} onOpen={onToggle} more={rest.length} />
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.li>
+  );
+}
+
+function Body({ onClose, titleId, closeButton, phone }: { onClose: () => void; titleId: string; closeButton?: boolean; phone?: boolean }) {
   const t = useT();
   const q = useNotifications();
-  const items = q.data?.items ?? [];
+  const items = useMemo(() => q.data?.items ?? [], [q.data]);
   const unread = q.data?.unread ?? 0;
+  const groups = useMemo(() => groupBySource(items), [items]);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const open = (n: NotificationDto) => {
     notificationActions.markRead(n.id);
     onClose();
     RENDERERS[n.app].open(n);
   };
+  const toggle = (app: string) =>
+    setExpanded((s) => {
+      const next = new Set(s);
+      if (next.has(app)) next.delete(app);
+      else next.add(app);
+      return next;
+    });
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {phone && <PhoneClock />}
       <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
         <h2 id={titleId} className="flex-1 text-[19px] font-bold tracking-tight text-text">
           {t("notifications.title")}
@@ -192,32 +309,49 @@ function Body({ onClose, titleId, closeButton }: { onClose: () => void; titleId:
             <RiCheckDoubleLine className="size-4" /> {t("notifications.readAll")}
           </button>
         )}
-        {items.length > 0 && (
-          <button type="button" onClick={notificationActions.clear} className="flex h-8 items-center gap-1 rounded-full px-2.5 text-[12.5px] font-medium text-text-secondary hover:bg-black/[0.06]" data-testid="notifications-clear-all">
-            <RiDeleteBin6Line className="size-4" /> {t("notifications.clearAll")}
-          </button>
-        )}
+        {items.length > 0 && <ClearButton label={t("notifications.clearAll")} confirmLabel={t("notifications.clearConfirm")} onClear={notificationActions.clear} testId="notifications-clear-all" icon="trash" />}
         {closeButton && (
-          <button type="button" onClick={onClose} aria-label={t("common.close")} className="grid size-9 shrink-0 place-items-center rounded-full bg-black/[0.06] text-text-secondary" data-testid="notifications-close">
+          <button type="button" onClick={onClose} aria-label={t("common.close")} className="vx-nc-chip grid size-9 shrink-0 place-items-center rounded-full text-text-secondary" data-testid="notifications-close">
             <RiCloseLine className="size-5" />
           </button>
         )}
       </div>
-      <div className="scroll-area min-h-0 flex-1 overscroll-contain px-3 pb-3">
+      <div className="scroll-area min-h-0 flex-1 overscroll-contain px-3 pb-3" data-testid="notifications-scroll">
         {items.length === 0 ? (
           <div className="flex h-full min-h-[180px] flex-col items-center justify-center gap-2 text-center text-text-tertiary" data-testid="notifications-empty">
             <RiNotification3Line className="size-9 opacity-60" />
             <span className="text-[14px]">{t("notifications.empty")}</span>
           </div>
         ) : (
-          <ul className="flex flex-col gap-2" aria-label={t("notifications.title")}>
+          <ul className="flex flex-col gap-2.5" aria-label={t("notifications.title")}>
             <AnimatePresence initial={false}>
-              {items.map((n) => (
-                <NotificationCard key={n.id} n={n} onOpen={open} />
+              {groups.map((g) => (
+                <GroupView key={g.app} g={g} expanded={expanded.has(g.app)} onToggle={() => toggle(g.app)} onOpen={open} />
               ))}
             </AnimatePresence>
           </ul>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Phone: the time and the date above the notifications (like the lock screen). */
+function PhoneClock() {
+  const lang = useLanguage();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = () => setNow(new Date());
+    const id = window.setInterval(tick, 10_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <div className="shrink-0 px-4 pt-4 text-center" data-testid="notifications-clock">
+      <div className="text-[15px] font-medium text-text-secondary" data-testid="notifications-date">
+        {formatDate(now, lang as Parameters<typeof formatDate>[1], { weekday: "short", day: "numeric", month: "short" })}
+      </div>
+      <div className="text-[64px] font-semibold leading-none tracking-tight tabular-nums text-text" data-testid="notifications-time">
+        {new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(now)}
       </div>
     </div>
   );
@@ -262,6 +396,10 @@ function useDialogKeys(ref: React.RefObject<HTMLElement | null>, open: boolean, 
  * The VOIDEX Notification Center — a system overlay above every app.
  *   phone  a glass sheet pulled down from the top edge (follows the finger)
  *   PC     a glass panel sliding in from the right, between the system bar and the dock
+ * Step 2.15 (the reference video): notifications are grouped by app; a group
+ * opens and folds back; one, a group or everything can be cleared (a second
+ * tap confirms); the list scrolls; the phone shows the time and the date.
+ * The surface is the system glass (one token for every glass element).
  */
 export function NotificationCenter() {
   const ff = useFormFactor();
@@ -348,7 +486,7 @@ function MobileCenter() {
         data-full
         data-testid={open ? "notification-center" : undefined}
       >
-        <Body onClose={close} titleId="nc-title-m" closeButton />
+        <Body onClose={close} titleId="nc-title-m" closeButton phone />
         <motion.div className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center" onPan={onPan} onPanEnd={onPanEnd} data-testid="notification-handle">
           <span className="h-[5px] w-10 rounded-full bg-text/35" />
         </motion.div>

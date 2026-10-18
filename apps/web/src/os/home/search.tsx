@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { RiSearchLine } from "@remixicon/react";
+import { RiAddLine, RiSearchLine } from "@remixicon/react";
 import { APP_REGISTRY, type InstalledAppDto, type LanguageCode, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { translate, useLanguage, useT } from "@/lib/i18n";
 import { AppTile } from "@/brand/brand";
 import { AppGlyph } from "./icons";
-import { CATEGORY_LABEL, appCategory, appLabel, openApp } from "./actions";
+import { CATEGORY_LABEL, addToDesktop, appCategory, appLabel, openApp } from "./actions";
 import { useHomeUi } from "./ui-store";
 import { VoidexSearchField } from "@/ui/search-field";
 
@@ -41,7 +41,11 @@ export function searchApps(apps: InstalledAppDto[], layout: WorkspaceLayout, que
 
 function ResultRow({ app, layout, active, onOpen }: { app: InstalledAppDto; layout: WorkspaceLayout; active: boolean; onOpen: (el: HTMLElement) => void }) {
   const lang = useLanguage();
+  const t = useT();
+  // Step 2.15: with the nine-dot menu gone, an app removed from the desktop is put back from here.
+  const hidden = layout.hidden.includes(app.id);
   return (
+    <div className="relative">
     <button
       type="button"
       onClick={(e) => onOpen(e.currentTarget)}
@@ -57,7 +61,22 @@ function ResultRow({ app, layout, active, onOpen }: { app: InstalledAppDto; layo
         <span className="block truncate text-[15px] font-medium">{appLabel(layout, app.id)}</span>
         <span className="block truncate text-[12px] text-text-tertiary">{APP_REGISTRY[app.id].caption[lang]}</span>
       </span>
+      {hidden && <span className="size-8 shrink-0" aria-hidden />}
     </button>
+    {hidden && (
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => addToDesktop(app.id)}
+        className="pressable absolute right-2.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-white shadow-glow"
+        aria-label={t("home.addToDesktop")}
+        title={t("home.addToDesktop")}
+        data-testid={`search-add-${app.id}`}
+      >
+        <RiAddLine className="size-[18px]" />
+      </button>
+    )}
+    </div>
   );
 }
 

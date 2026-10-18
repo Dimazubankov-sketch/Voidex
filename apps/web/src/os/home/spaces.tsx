@@ -1,3 +1,4 @@
+import { useDarkTheme } from "@/lib/theme";
 import { useWallpapers } from "./wallpapers";
 import { RiAddLine, RiCheckLine, RiDeleteBinLine } from "@remixicon/react";
 import { DESKTOP_SPACES_MAX, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
@@ -78,7 +79,8 @@ export function SpacesList({ layout, onPicked, compact, testPrefix = "dock-space
   const { entries, canAdd, add } = useEntries(layout);
   const { wallpaper } = useWallpapers();
   const image = useWallpaperImage(wallpaper);
-  const wp = wallpaper.kind === "default" ? { background: DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data).style;
+  const night = useDarkTheme();
+  const wp = wallpaper.kind === "default" ? { background: night ? "var(--surface)" : DEFAULT_SWATCH } : wallpaperStyle(wallpaper, image.data, night).style;
   const w = compact ? 72 : 100;
   const h = compact ? 46 : 62;
 

@@ -165,7 +165,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         list.push({ id: "add-to-folder", label: t("home.addToFolder"), icon: <RiFolderTransferLine />, sub: "folders" });
         if (!mobile) {
           list.push(dockEntry(id));
-          list.push({ id: "rename", label: t("home.rename"), icon: <RiEditLine />, onSelect: () => ui().setRenaming({ kind: "app", id }) });
+          // Step 2.15: built-in apps keep their names (no "Rename").
           if (layout.desktop.spaces.length > 1) list.push({ id: "move-space", label: t("home.moveToSpace"), icon: <RiMacbookLine />, sub: "spaces" });
         }
         return list;
@@ -241,10 +241,12 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
             keepOpen: true,
             onSelect: () => setView(ff, currentView(layout, ff) === "grid" ? "categories" : "grid"),
           },
-          { id: "widgets", label: t("widgets.title"), icon: <RiApps2Fill />, onSelect: () => ui().setWidgetsOpen(true) },
+          // Step 2.15: «Добавить виджет»: the catalogue, then the widget's page; on PC it lands where the menu was opened.
+          { id: "widgets", label: t("widgets.add"), icon: <RiApps2Fill />, onSelect: () => ui().setWidgetsOpen(true, mobile ? null : { x, y }) },
           { id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) },
         ];
         if (!mobile) {
+          list.push({ id: "all-apps", label: t("launcher.allApps"), icon: <RiLayoutGridLine />, onSelect: () => ui().setLauncherOpen(true) });
           if (layout.desktop.spaces.length < 6) list.push({ id: "new-space", label: t("home.newSpace"), icon: <RiAddLine />, onSelect: newSpace });
           if (!layout.desktop.dockDesktops) {
             list.push({

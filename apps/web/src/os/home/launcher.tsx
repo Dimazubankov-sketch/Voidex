@@ -1,11 +1,11 @@
-import { useMemo, useState, type RefObject } from "react";
+import { useMemo, useState } from "react";
 import { RiAddLine } from "@remixicon/react";
 import type { InstalledAppDto, WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useLanguage, useT } from "@/lib/i18n";
 import { AppTile } from "@/brand/brand";
-import { Popover, Sheet } from "@/ui/overlays";
+import { Sheet } from "@/ui/overlays";
 import { availableSystemActions } from "../system-actions";
 import { useWM } from "../window-manager";
 import { addToDesktop, appLabel, openApp } from "./actions";
@@ -15,10 +15,13 @@ import { useHomeUi } from "./ui-store";
 import { VoidexSearchField } from "@/ui/search-field";
 
 /**
- * The 9-dot menu: every installed app (also the ones removed from the desktop),
- * search, and system actions when there are real ones (see system-actions.ts).
+ * «Все приложения»: every installed app (also the ones removed from the
+ * desktop), search, and system actions when there are real ones (see
+ * system-actions.ts). Step 2.15: the nine-dot button is gone; on PC it opens
+ * from the desktop menu (right click), on the phone the pull-down search lists
+ * every app as well.
  */
-export function Launcher({ anchor, apps, layout }: { anchor: RefObject<HTMLButtonElement | null>; apps: InstalledAppDto[]; layout: WorkspaceLayout }) {
+export function Launcher({ apps, layout }: { apps: InstalledAppDto[]; layout: WorkspaceLayout }) {
   const t = useT();
   const ff = useFormFactor();
   const lang = useLanguage();
@@ -125,16 +128,9 @@ export function Launcher({ anchor, apps, layout }: { anchor: RefObject<HTMLButto
     </div>
   );
 
-  if (ff === "mobile") {
-    return (
-      <Sheet open={open} onClose={close} title={t("os.apps")}>
-        {body}
-      </Sheet>
-    );
-  }
   return (
-    <Popover open={open} onClose={close} anchor={anchor} width={340} testId="launcher-popover">
-      <div className="max-h-[70vh] overflow-auto p-1.5">{body}</div>
-    </Popover>
+    <Sheet open={open} onClose={close} title={t("os.apps")} width={440} testId="launcher-sheet">
+      {body}
+    </Sheet>
   );
 }

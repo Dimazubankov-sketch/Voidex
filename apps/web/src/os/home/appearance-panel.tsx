@@ -14,7 +14,7 @@ import { AppGlyph, glyphBox } from "./icons";
 import { AppTile } from "@/brand/brand";
 
 /** Parts of the panel (wallpapers are chosen only in Settings → Wallpapers, glass in Personalization). */
-export type AppearancePart = "view" | "dock" | "reset";
+export type AppearancePart = "view" | "nav" | "dock" | "reset";
 
 /**
  * Desktop appearance and arrangement — one panel used by the brush menu on
@@ -24,7 +24,7 @@ export type AppearancePart = "view" | "dock" | "reset";
  * device (phone icons per row vs PC scale and dock) are shown on that device.
  * New wallpaper kinds are new swatches here plus a case in `wallpaperStyle`.
  */
-export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?: AppearancePart[] }) {
+export function AppearancePanel({ parts = ["view", "nav", "dock", "reset"] }: { parts?: AppearancePart[] }) {
   const t = useT();
   const ff = useFormFactor();
   const { layout } = useWorkspaceLayout();
@@ -86,7 +86,7 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
           </Field>
           {pc ? (
             <>
-              {/* Phones scale with the number of icons per row; PCs have the scale. */}
+              {/* Phones always show four icons per row (Step 2.15); PCs have the scale. */}
               <Field label={t("appearance.scale")}>
                 <Segmented
                   value={layout.desktop.density}
@@ -111,19 +111,7 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
                 />
               </Field>
             </>
-          ) : (
-            <Field label={t("appearance.phoneColumns")}>
-              <Segmented
-                value={String(layout.mobile.columns) as "3" | "4"}
-                options={[
-                  ["3", "3"],
-                  ["4", "4"],
-                ]}
-                onChange={(v) => updateLayout((l) => ({ ...l, mobile: { ...l.mobile, columns: v === "4" ? 4 : 3 } }))}
-                testId="phone-columns"
-              />
-            </Field>
-          )}
+          ) : null}
           <div className="flex items-center justify-between gap-3 py-1">
             <span className="text-[14px]">{t("appearance.captions")}</span>
             <Switch checked={a.captions} onChange={(captions) => setAppearance({ captions })} label={t("appearance.captions")} />
@@ -149,10 +137,34 @@ export function AppearancePanel({ parts = ["view", "dock", "reset"] }: { parts?:
             <span className="text-[14px]">{t("appearance.dockDesktops")}</span>
             <Switch checked={layout.desktop.dockDesktops} onChange={(dockDesktops) => setDesktop({ dockDesktops })} label={t("appearance.dockDesktops")} />
           </div>
+          {/* Step 2.15: without the search field the dock is only its apps, centred. */}
+          <div className="flex items-center justify-between gap-3 py-1" data-testid="dock-search-setting">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] text-text">{t("appearance.dockSearch")}</span>
+              <span className="block text-[12.5px] text-text-tertiary">{t("appearance.dockSearchHint")}</span>
+            </span>
+            <Switch checked={a.dockSearch} onChange={(dockSearch) => setAppearance({ dockSearch })} label={t("appearance.dockSearch")} />
+          </div>
           <div className="flex items-center justify-between gap-3 py-1" data-testid="dock-separators-setting">
             <span className="text-[14px]">{t("appearance.dockSeparators")}</span>
             <Switch checked={a.dockSeparators} onChange={(dockSeparators) => setAppearance({ dockSeparators })} label={t("appearance.dockSeparators")} />
           </div>
+        </Block>
+      )}
+
+      {parts.includes("nav") && !pc && (
+        <Block title={t("appearance.phoneNav")} hint={t("appearance.phoneNavHint")}>
+          <Field label={t("appearance.phoneNav")}>
+            <Segmented
+              value={a.phoneNav}
+              options={[
+                ["bar", "appearance.phoneNavBar"],
+                ["buttons", "appearance.phoneNavButtons"],
+              ]}
+              onChange={(phoneNav) => setAppearance({ phoneNav })}
+              testId="phone-nav"
+            />
+          </Field>
         </Block>
       )}
 

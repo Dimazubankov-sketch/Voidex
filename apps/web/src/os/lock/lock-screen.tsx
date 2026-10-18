@@ -1,3 +1,4 @@
+import { useDarkTheme } from "@/lib/theme";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useQuery } from "@tanstack/react-query";
@@ -179,7 +180,8 @@ export function LockScreen() {
   const local = state && !state.syncWallpapers ? localWallpapersFor(state.userId) : null;
   const shown = local ? (local.lockWallpaper ?? local.wallpaper) : (state?.wallpaper ?? null);
   const shownSlot = local ? (local.lockWallpaper ? "lock" : "desktop") : state?.wallpaperSlot;
-  const wp = wallpaperStyle(shown ?? { kind: "preset", id: "wave-milk-violet" }, null);
+  const night = useDarkTheme();
+  const wp = wallpaperStyle(shown ?? { kind: "preset", id: "wave-milk-violet" }, null, night);
   const imageQ = useQuery({
     queryKey: ["lock-wallpaper", shownSlot, shown?.kind === "image" ? shown.version : null, !!local],
     enabled: shown?.kind === "image",

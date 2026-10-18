@@ -61,6 +61,8 @@ interface HomeUi {
   /** The brush menu (Wallpaper / View / Widgets), anchored at the brush. */
   brushOpen: boolean;
   widgetsOpen: boolean;
+  /** Step 2.15, PC: where the desktop menu was opened (a new widget lands near it). */
+  widgetsAt: { x: number; y: number } | null;
   launcherOpen: boolean;
   drag: DragState | null;
   /** Step 2.5: apps marked with "−" in edit mode, waiting for "Удалить". */
@@ -82,7 +84,7 @@ interface HomeUi {
   setSearch: (s: Partial<HomeUi["search"]>) => void;
   setAppearanceOpen: (v: boolean) => void;
   setBrushOpen: (v: boolean) => void;
-  setWidgetsOpen: (v: boolean) => void;
+  setWidgetsOpen: (v: boolean, at?: { x: number; y: number } | null) => void;
   setLauncherOpen: (v: boolean) => void;
   setDrag: (d: DragState | null) => void;
   patchDrag: (d: Partial<DragState>) => void;
@@ -99,6 +101,7 @@ export const useHomeUi = create<HomeUi>((set) => ({
   appearanceOpen: false,
   brushOpen: false,
   widgetsOpen: false,
+  widgetsAt: null,
   launcherOpen: false,
   drag: null,
   removeSel: [],
@@ -118,7 +121,7 @@ export const useHomeUi = create<HomeUi>((set) => ({
   setSearch: (s) => set((st) => ({ search: { ...st.search, ...s } })),
   setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false, brushOpen: false }),
   setBrushOpen: (brushOpen) => set({ brushOpen, menu: null, launcherOpen: false }),
-  setWidgetsOpen: (widgetsOpen) => set({ widgetsOpen, menu: null, launcherOpen: false, brushOpen: false }),
+  setWidgetsOpen: (widgetsOpen, at = null) => set({ widgetsOpen, widgetsAt: widgetsOpen ? at : null, menu: null, launcherOpen: false, brushOpen: false }),
   setLauncherOpen: (launcherOpen) => set({ launcherOpen, menu: null }),
   setDrag: (drag) => set({ drag }),
   patchDrag: (d) => set((st) => (st.drag ? { drag: { ...st.drag, ...d } } : {})),

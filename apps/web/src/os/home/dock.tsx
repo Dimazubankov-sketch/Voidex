@@ -27,7 +27,8 @@ import { useHomeUi } from "./ui-store";
 /** Tile edge per dock size — a deliberately small range. */
 export const DOCK_TILE: Record<DockScale, number> = { s: 40, m: 46, l: 52 };
 const PAD = 8;
-const BOTTOM = 14;
+/** Step 2.15: the dock sits a little lower (the desktop uses the whole screen). */
+const BOTTOM = 8;
 const PEAK = 1.12;
 
 /** Height of the dock's glass shell. */
@@ -74,6 +75,9 @@ export function DesktopDock() {
   const glass = shelf && layout.appearance.dock !== "off";
   // Step 2.6: no separators unless turned on in Settings → Desktop.
   const separators = layout.appearance.dockSeparators;
+  // Step 2.15: the search field can be turned off; the apps then stay centred as if it never was there.
+  const search = layout.appearance.dockSearch;
+  if (!search && !shelf) return null;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 z-[30] flex justify-center px-6" style={{ bottom: BOTTOM }} data-testid="bottom-bar">
@@ -88,9 +92,10 @@ export function DesktopDock() {
         data-testid="dock"
         data-glass-shell={glass || undefined}
         data-shelf={shelf || undefined}
+        data-search={search || undefined}
       >
-        <DesktopSearchBar apps={installed} layout={layout} inDock={shelf} height={shelf ? Math.max(36, tile - 6) : 44} />
-        {shelf && separators && <span className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden data-testid="dock-separator" />}
+        {search && <DesktopSearchBar apps={installed} layout={layout} inDock={shelf} height={shelf ? Math.max(36, tile - 6) : 44} />}
+        {search && shelf && separators && <span className="h-[55%] w-px shrink-0 bg-black/10" aria-hidden data-testid="dock-separator" />}
         {apps.map((id, i) => (
           <DockSlot key={id} gap={gapAt === i} tile={tile}>
             <DockApp id={id} layout={layout} mouseX={mouseX} tile={tile} />

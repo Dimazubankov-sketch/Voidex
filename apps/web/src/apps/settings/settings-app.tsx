@@ -1,5 +1,5 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { AnimatePresence, motion, useDragControls } from "motion/react";
 import {
   RiArrowLeftSLine,
   RiNotification3Line,
@@ -31,6 +31,7 @@ import { Avatar, VoidexMark } from "@/brand/brand";
 import { ensureStepUp } from "@/lib/security";
 import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
+import { onSystemBack } from "@/os/phone-nav";
 import { AccountSection, CountrySection, EmailSection, LanguageSection, PersonalSection } from "./sections/account";
 import { DevicesSection, PasswordSection, PhoneSection, SecuritySection } from "./sections/security";
 import { DesktopSection } from "./sections/desktop";
@@ -145,7 +146,6 @@ const ACTIONS: { label: MessageKey; section: SectionId; words: string }[] = [
   { label: "vicloud.plans", section: "vicloud-plans", words: "vicloud+ тариф тарифы подписка план plans 50 200 1 тб гб storage" },
   { label: "settings.apps", section: "apps", words: "приложения программы apps applications уведомления face id сгрузить" },
   { label: "settings.storage", section: "storage", words: "хранилище память место storage memory сгрузить offload" },
-  { label: "personalization.appLook", section: "personalization", words: "вид приложений фон приложений стиль приложений тёмная app look background" },
 ];
 
 function searchSettings(q: string, t: ReturnType<typeof useT>) {
@@ -252,6 +252,18 @@ export function SettingsApp() {
     });
   const back = () => setStack((s) => s.slice(0, -1));
   const def = SECTIONS.find((s) => s.id === current);
+  // Step 2.15: the phone's «Назад» button goes up one page (and leaves Settings from its home page).
+  const depth = stack.length;
+  const searching = !!query.trim();
+  useEffect(
+    () =>
+      onSystemBack(win.windowId, () => {
+        if (depth > 0) return back(), true;
+        if (searching) return setQuery(""), true;
+        return false;
+      }),
+    [win.windowId, depth, searching],
+  );
 
   if (ff === "desktop") {
     return (
@@ -348,29 +360,67 @@ export function SettingsApp() {
         {stack.map((id, i) => {
           const s = SECTIONS.find((x) => x.id === id)!;
           return (
-            <motion.div
-              key={`${id}-${i}`}
-              className="vx-app-bg absolute inset-0 flex flex-col"
-              style={{ zIndex: 10 + i }}
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ duration: 0.34, ease: EASE }}
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={{ left: 0, right: 0.8 }}
-              onDragEnd={(_, info) => (info.offset.x > 110 || info.velocity.x > 700) && back()}
-            >
+            <SwipeBackPage key={`${id}-${i}`} z={10 + i} onBack={back}>
               <MobilePage onBack={back}>
                 <s.Component navigate={navigate} />
               </MobilePage>
-            </motion.div>
+            </SwipeBackPage>
           );
         })}
       </AnimatePresence>
     </div>
   );
 }
+
+/**
+ * A pushed phone page with «swipe right to go back». Step 2.15: the page only
+ * follows the finger once the gesture is clearly horizontal (a small threshold,
+ * and mostly sideways); a mostly vertical move stays a scroll of the page. Once
+ * decided, the gesture keeps its owner until the finger is lifted.
+ */
+function SwipeBackPage({ z, onBack, children }: { z: number; onBack: () => void; children: ReactNode }) {
+  const controls = useDragControls();
+  const start = useRef<{ x: number; y: number; id: number; owner: "x" | "y" | null } | null>(null);
+  return (
+    <motion.div
+      className="vx-app-bg absolute inset-0 flex flex-col"
+      style={{ zIndex: z, touchAction: "pan-y" }}
+      initial={{ x: "100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "100%" }}
+      transition={{ duration: 0.34, ease: EASE }}
+      drag="x"
+      dragListener={false}
+      dragControls={controls}
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={{ left: 0, right: 0.8 }}
+      onPointerDownCapture={(e) => {
+        if (e.button !== 0) return;
+        start.current = { x: e.clientX, y: e.clientY, id: e.pointerId, owner: null };
+      }}
+      onPointerMoveCapture={(e) => {
+        const s = start.current;
+        if (!s || s.id !== e.pointerId || s.owner) return;
+        const dx = e.clientX - s.x;
+        const dy = e.clientY - s.y;
+        if (Math.hypot(dx, dy) < SWIPE_BACK_SLOP) return;
+        // Mostly sideways and to the right: the page takes it; anything else belongs to the scroll.
+        s.owner = dx > 0 && Math.abs(dx) > Math.abs(dy) * SWIPE_BACK_RATIO ? "x" : "y";
+        if (s.owner === "x") controls.start(e);
+      }}
+      onPointerUpCapture={() => (start.current = null)}
+      onPointerCancelCapture={() => (start.current = null)}
+      onDragEnd={(_, info) => (info.offset.x > 110 || info.velocity.x > 700) && onBack()}
+      data-testid="settings-page"
+    >
+      {children}
+    </motion.div>
+  );
+}
+/** Travel (px) before the direction of a swipe on a Settings page is decided. */
+const SWIPE_BACK_SLOP = 12;
+/** How much more sideways than vertical a move must be to count as «back». */
+const SWIPE_BACK_RATIO = 1.6;
 
 function BrandLine() {
   return (
