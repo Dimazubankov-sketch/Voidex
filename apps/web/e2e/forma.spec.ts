@@ -26,7 +26,6 @@ async function createSample(page: Page, name: string) {
   await expect(page.getByTestId("forma-save-state")).toHaveAttribute("data-state", "saved");
 }
 
-const node = (page: Page, name: string) => page.locator(`.fx-canvas [data-forma-el]`).filter({ has: page.locator(`text=${name}`) }).first();
 
 test("Forma: create, select without moving, move on the grid, add a component, save and restore", async ({ page }) => {
   await signUpViaApi(page, "Фёдор", "Формин");
