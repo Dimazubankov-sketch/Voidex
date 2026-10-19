@@ -282,7 +282,7 @@ function EditorLoaded({
       try {
         const r = await formaApi.revision(project.id);
         if (stop) return;
-        if (r.backendRevision !== rev.current.backend) {
+        if (r.backendRevision > rev.current.backend) {
           const fresh = await formaApi.get(project.id);
           if (stop) return;
           rev.current.backend = fresh.backendRevision;
@@ -293,7 +293,8 @@ function EditorLoaded({
           setHistory(next);
           notify("AI-агент обновил Backend");
         }
-        if (r.frontendRevision !== rev.current.frontend && !saving.current) setSave("conflict");
+        // Only a newer revision than ours is someone else's change (an older answer may cross our own save).
+        if (r.frontendRevision > rev.current.frontend && !saving.current) setSave("conflict");
       } catch {
         /* offline: try again later */
       }
