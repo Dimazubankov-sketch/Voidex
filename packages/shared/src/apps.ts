@@ -8,7 +8,7 @@ import type { LanguageCode } from "./regions.js";
  * the future VOIDEX App Market, which will add manifests to this registry
  * (server side) instead of letting users sideload anything.
  */
-export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media" | "clock" | "store";
+export type AppId = "settings" | "mail" | "vibex" | "calculator" | "notes" | "files" | "media" | "clock" | "forma" | "store";
 
 /** Capabilities an app may request. Enforced by the server per endpoint group. */
 export type AppPermission =
@@ -23,7 +23,7 @@ export type AppPermission =
  * Default grouping of apps in the "by category" desktop view. A user can move
  * an app to another category; that choice is stored in their workspace layout.
  */
-export const APP_CATEGORIES = ["work", "communication", "media", "tools", "entertainment", "system"] as const;
+export const APP_CATEGORIES = ["work", "communication", "media", "tools", "developer", "entertainment", "system"] as const;
 export type AppCategory = (typeof APP_CATEGORIES)[number];
 
 export interface AppManifest {
@@ -315,6 +315,44 @@ export const APP_REGISTRY: Record<AppId, AppManifest> = {
     },
     window: { defaultWidth: 1120, defaultHeight: 760, minWidth: 360, minHeight: 560, singleton: true },
   },
+  forma: {
+    id: "forma",
+    // Forma: the visual app builder of Voidex (frontend by the person, backend by authorised AI agents).
+    name: { en: "Forma", ru: "Forma", es: "Forma", de: "Forma", fr: "Forma", pt: "Forma", zh: "Forma", ja: "Forma", ko: "Forma", tr: "Forma" },
+    caption: {
+      en: "App builder",
+      ru: "Конструктор приложений",
+      es: "Creador de apps",
+      de: "App-Baukasten",
+      fr: "Créateur d'apps",
+      pt: "Criador de apps",
+      zh: "应用构建器",
+      ja: "アプリビルダー",
+      ko: "앱 빌더",
+      tr: "Uygulama oluşturucu",
+    },
+    version: "1.0.0",
+    kind: "system",
+    removable: false,
+    preinstalled: true,
+    // Projects live with the account; AI agents connect with their own project tokens, never with the account.
+    permissions: ["account.read"],
+    status: "available",
+    category: "developer",
+    keywords: {
+      en: ["forma", "builder", "constructor", "design", "apps", "interface", "no code", "ai", "backend"],
+      ru: ["forma", "форма", "конструктор", "дизайн", "приложения", "интерфейс", "без кода", "ии", "бэкенд"],
+      es: ["forma", "constructor", "diseño", "aplicaciones", "interfaz", "sin código", "ia"],
+      de: ["forma", "Baukasten", "Design", "Apps", "Oberfläche", "ohne Code", "KI"],
+      fr: ["forma", "constructeur", "design", "applications", "interface", "sans code", "ia"],
+      pt: ["forma", "construtor", "design", "aplicativos", "interface", "sem código", "ia"],
+      zh: ["forma", "构建器", "设计", "应用", "界面", "无代码", "人工智能"],
+      ja: ["forma", "ビルダー", "デザイン", "アプリ", "インターフェース", "ノーコード", "AI"],
+      ko: ["forma", "빌더", "디자인", "앱", "인터페이스", "노코드", "AI"],
+      tr: ["forma", "oluşturucu", "tasarım", "uygulamalar", "arayüz", "kodsuz", "yapay zeka"],
+    },
+    window: { defaultWidth: 1280, defaultHeight: 800, minWidth: 360, minHeight: 560, singleton: true },
+  },
   store: {
     id: "store",
     // Step 2.11: Appex Store, the catalog of the registry (install, open, update, reviews).
@@ -371,6 +409,7 @@ export const APP_RELEASES: Record<AppId, AppRelease[]> = {
   files: [{ version: "1.0.0", date: "2026-10-06" }],
   media: [{ version: "1.0.0", date: "2026-10-06" }],
   clock: [{ version: "1.0.0", date: "2026-10-18" }],
+  forma: [{ version: "1.0.0", date: "2026-10-19" }],
   store: [{ version: "1.0.0", date: "2026-10-13" }],
 };
 

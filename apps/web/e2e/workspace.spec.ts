@@ -417,7 +417,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await signUpViaApi(page, "Дан", "Ок");
   const dockOrder = () => page.locator("[data-dock-app]").evaluateAll((els) => els.map((e) => e.getAttribute("data-dock-app")));
   await expect(page.getByTestId("dock")).toBeVisible();
-  expect(await dockOrder()).toEqual(["mail", "settings", "vibex", "calculator", "notes", "files", "media", "clock", "store"]);
+  expect(await dockOrder()).toEqual(["mail", "settings", "vibex", "calculator", "notes", "files", "media", "clock", "forma", "store"]);
 
   // Hover the Desktops system icon → glass menu; create and switch desktops there.
   await page.getByTestId("dock-desktops").hover();
@@ -438,7 +438,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await page.mouse.move(a.x + 10, a.y, { steps: 2 });
   await page.mouse.move(b.x + 40, b.y, { steps: 10 });
   await page.mouse.up();
-  await expect.poll(dockOrder).toEqual(["settings", "mail", "vibex", "calculator", "notes", "files", "media", "clock", "store"]);
+  await expect.poll(dockOrder).toEqual(["settings", "mail", "vibex", "calculator", "notes", "files", "media", "clock", "forma", "store"]);
 
   // Open from the dock.
   await page.getByTestId("dock-app-mail").click();
@@ -451,7 +451,7 @@ test("PC dock: pinned apps, hover desktops menu, reorder, unpin, pin by drag, em
   await expect(page.getByTestId("dock").getByTestId("home-search")).toBeVisible();
 
   // Unpin all apps and the Desktops item → no glass, only the search field.
-  for (const id of ["mail", "settings", "vibex", "calculator", "notes", "files", "media", "clock", "store"]) {
+  for (const id of ["mail", "settings", "vibex", "calculator", "notes", "files", "media", "clock", "forma", "store"]) {
     await expect(page.getByTestId("home-context-menu")).toHaveCount(0);
     await page.getByTestId(`dock-app-${id}`).click({ button: "right" });
     await page.getByTestId("menu-unpin").click();

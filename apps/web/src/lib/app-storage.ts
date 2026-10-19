@@ -22,6 +22,7 @@ const QUERY_ROOTS: Record<AppId, string[]> = {
   files: [],
   media: [],
   clock: [],
+  forma: ["forma"],
   store: ["store"],
 };
 

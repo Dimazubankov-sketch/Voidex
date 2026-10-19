@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 const root = fileURLToPath(new URL("../../..", import.meta.url));
-const DIRS = ["apps/web/src", "packages/files/src", "packages/media/src", "packages/clock/src"];
+const DIRS = ["apps/web/src", "packages/files/src", "packages/media/src", "packages/clock/src", "packages/forma/src"];
 const DASH = "—";
 
 function files(dir) {

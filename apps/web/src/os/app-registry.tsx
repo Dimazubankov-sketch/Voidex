@@ -1,6 +1,6 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import type { AppId } from "@voidex/shared";
-import { CalculatorGlyph, ClockGlyph, FilesGlyph, MailGlyph, MediaGlyph, NotesGlyph, SettingsGlyph, StoreGlyph, VibexGlyph } from "@/brand/brand";
+import { CalculatorGlyph, ClockGlyph, FilesGlyph, FormaGlyph, MailGlyph, MediaGlyph, NotesGlyph, SettingsGlyph, StoreGlyph, VibexGlyph } from "@/brand/brand";
 
 /**
  * Client half of the App Registry: how each registered app is drawn and
@@ -53,6 +53,11 @@ export const CLIENT_APPS: Record<AppId, ClientApp> = {
     // Step 2.14: the Clock UI (its drums, lists, sound picker) loads with this chunk; the alarm scheduler is part of the shell.
     Component: lazy(() => import("@/apps/clock/clock-app").then((m) => ({ default: m.ClockApp }))),
   },
+  forma: {
+    Icon: FormaGlyph,
+    // Forma: the editor, its component runtime and the sound library load with this chunk only.
+    Component: lazy(() => import("@/apps/forma/forma-app").then((m) => ({ default: m.FormaApp }))),
+  },
   store: {
     Icon: StoreGlyph,
     // Step 2.11: Appex Store; its screenshots load lazily as they scroll in.
@@ -70,5 +75,6 @@ export const APP_LOADERS: Record<AppId, () => Promise<unknown>> = {
   files: () => import("@/apps/files/files-app"),
   media: () => import("@/apps/media/media-app"),
   clock: () => import("@/apps/clock/clock-app"),
+  forma: () => import("@/apps/forma/forma-app"),
   store: () => import("@/apps/store/store-app"),
 };

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-double","name":"Двойной импульс","type":"haptic","durationMs":91,"pattern":[18,55,18],"events":[{"time":0.0,"duration":0.018,"intensity":0.55,"sharpness":0.7,"type":"transient"},{"time":0.073,"duration":0.018,"intensity":0.55,"sharpness":0.7,"type":"transient"}]}

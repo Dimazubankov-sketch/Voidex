@@ -1027,3 +1027,96 @@ export const storeReviewReports = pgTable(
   },
   (t) => [uniqueIndex("store_review_reports_uq").on(t.reviewId, t.reporterId)],
 );
+
+/* ==========================================================================
+   Forma (the app builder): its own tables, nothing shared with other apps
+   ========================================================================== */
+
+/**
+ * One app project. `frontend` is what the person edits ({ settings, frontend }
+ * of @voidex/forma); `backend` is what authorised AI agents write
+ * ({ backend, bindings }). Each layer has its own revision: a write based on an
+ * older revision of the same layer is refused, writes to different layers
+ * never conflict.
+ */
+export const formaProjects = pgTable(
+  "forma_projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    frontend: jsonb("frontend").$type<Record<string, unknown>>().notNull(),
+    backend: jsonb("backend").$type<Record<string, unknown>>().notNull(),
+    frontendRevision: integer("frontend_revision").notNull().default(1),
+    backendRevision: integer("backend_revision").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("forma_projects_owner_idx").on(t.ownerId, t.updatedAt)],
+);
+
+/** An AI agent connection: bound to one project, with scopes and an expiry. Only a SHA-256 of the token is kept. */
+export const formaAgents = pgTable(
+  "forma_agents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => formaProjects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    client: text("client").notNull(),
+    scopes: jsonb("scopes").$type<string[]>().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    revokedAt: ts("revoked_at"),
+    lastUsedAt: ts("last_used_at"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("forma_agents_token_uq").on(t.tokenHash), index("forma_agents_project_idx").on(t.projectId, t.createdAt)],
+);
+
+/** History of a layer: a snapshot per revision, who made it and what changed. */
+export const formaRevisions = pgTable(
+  "forma_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => formaProjects.id, { onDelete: "cascade" }),
+    layer: text("layer", { enum: ["frontend", "backend"] }).notNull(),
+    revision: integer("revision").notNull(),
+    actor: text("actor", { enum: ["user", "agent"] }).notNull(),
+    agentId: uuid("agent_id").references(() => formaAgents.id, { onDelete: "set null" }),
+    agentName: text("agent_name"),
+    summary: jsonb("summary").$type<string[]>().notNull(),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("forma_revisions_uq").on(t.projectId, t.layer, t.revision)],
+);
+
+/** Every agent call and every connection change, per project. */
+export const formaAudit = pgTable(
+  "forma_audit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => formaProjects.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id").references(() => formaAgents.id, { onDelete: "set null" }),
+    actor: text("actor", { enum: ["user", "agent"] }).notNull(),
+    agentName: text("agent_name"),
+    action: text("action").notNull(),
+    ok: boolean("ok").notNull(),
+    detail: jsonb("detail").$type<Record<string, unknown>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("forma_audit_project_idx").on(t.projectId, t.createdAt)],
+);

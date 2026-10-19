@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-long-strong","name":"Плотная вибрация","type":"haptic","durationMs":360,"pattern":[360],"events":[{"time":0.0,"duration":0.36,"intensity":0.82,"sharpness":0.45,"type":"continuous"}]}

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-triple","name":"Тройной импульс","type":"haptic","durationMs":132,"pattern":[12,48,12,48,12],"events":[{"time":0.0,"duration":0.012,"intensity":0.5,"sharpness":0.8,"type":"transient"},{"time":0.06,"duration":0.012,"intensity":0.5,"sharpness":0.8,"type":"transient"},{"time":0.12,"duration":0.012,"intensity":0.5,"sharpness":0.8,"type":"transient"}]}

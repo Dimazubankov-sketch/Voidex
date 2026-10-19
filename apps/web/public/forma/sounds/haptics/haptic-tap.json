@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-tap","name":"Короткий импульс","type":"haptic","durationMs":16,"pattern":[16],"events":[{"time":0.0,"duration":0.016,"intensity":0.48,"sharpness":0.7,"type":"transient"}]}

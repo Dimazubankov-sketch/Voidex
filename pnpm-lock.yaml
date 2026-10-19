@@ -25,6 +25,9 @@ importers:
       '@simplewebauthn/server':
         specifier: ^13
         version: 13.3.3
+      '@voidex/forma':
+        specifier: workspace:*
+        version: link:../../packages/forma
       '@voidex/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -89,6 +92,9 @@ importers:
       '@voidex/files':
         specifier: workspace:*
         version: link:../../packages/files
+      '@voidex/forma':
+        specifier: workspace:*
+        version: link:../../packages/forma
       '@voidex/media':
         specifier: workspace:*
         version: link:../../packages/media
@@ -199,6 +205,15 @@ importers:
       typescript:
         specifier: 5.9.3
         version: 5.9.3
+
+  packages/forma:
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)
 
   packages/media:
     dependencies:

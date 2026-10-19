@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-hold","name":"Удержание вибрации","type":"haptic","durationMs":600,"pattern":[600],"events":[{"time":0.0,"duration":0.6,"intensity":0.42,"sharpness":0.25,"type":"continuous"}]}

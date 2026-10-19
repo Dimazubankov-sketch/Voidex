@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-press","name":"Нажим","type":"haptic","durationMs":35,"pattern":[35],"events":[{"time":0.0,"duration":0.035,"intensity":0.7,"sharpness":0.5,"type":"continuous"}]}

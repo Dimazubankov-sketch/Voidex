@@ -116,6 +116,8 @@ export const ICON_OPTICAL_SCALE = {
   store: 1.1,
   // Step 2.14: an open ring with gaps and two thin hands (about 45% of its box): drawn like the Store's mark.
   clock: 1.1,
+  // Forma: a solid ribbon F filling most of its box, drawn a little smaller like the other solid sheets.
+  forma: 0.92,
   desktops: 1.05,
 } as const;
 
@@ -232,4 +234,9 @@ export function Avatar({
       {src ? <img src={src} alt="" className="size-full object-cover" draggable={false} /> : initials(name)}
     </span>
   );
+}
+
+/** Forma: the user's ribbon F, cut out of the delivered artwork (white tile and glow removed, not redrawn). */
+export function FormaGlyph({ className }: { className?: string }) {
+  return <TrimmedLogo src="/brand/app-forma.png" className={className} optical={ICON_OPTICAL_SCALE.forma} />;
 }

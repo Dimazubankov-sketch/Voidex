@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-tick","name":"Точный импульс","type":"haptic","durationMs":9,"pattern":[9],"events":[{"time":0.0,"duration":0.009,"intensity":0.62,"sharpness":0.95,"type":"transient"}]}

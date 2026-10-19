@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-end","name":"Завершающий импульс","type":"haptic","durationMs":145,"pattern":[70,55,20],"events":[{"time":0.0,"duration":0.07,"intensity":0.66,"sharpness":0.6,"type":"continuous"},{"time":0.125,"duration":0.02,"intensity":0.66,"sharpness":0.6,"type":"transient"}]}

@@ -19,6 +19,7 @@
     "@voidex/calculator": "workspace:*",
     "@voidex/clock": "workspace:*",
     "@voidex/files": "workspace:*",
+    "@voidex/forma": "workspace:*",
     "@voidex/media": "workspace:*",
     "@voidex/notes": "workspace:*",
     "@voidex/shared": "workspace:*",

@@ -9,3 +9,4 @@ export * from "./runtime.js";
 export * from "./permissions.js";
 export * from "./diff.js";
 export * from "./sample.js";
+export * from "./api.js";

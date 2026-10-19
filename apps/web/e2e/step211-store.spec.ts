@@ -14,7 +14,7 @@ const SHOTS = process.env.STEP211_SHOTS;
 async function shot(page: Page, name: string) {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}-${isMobile(page) ? "phone" : "pc"}.png` });
 }
-const CATALOG = ["calculator", "clock", "files", "mail", "media", "notes", "vibex"];
+const CATALOG = ["calculator", "clock", "files", "forma", "mail", "media", "notes", "vibex"];
 
 async function openStore(page: Page) {
   if (isMobile(page)) await page.getByTestId("app-store").click();

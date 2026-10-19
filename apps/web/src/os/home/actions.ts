@@ -30,6 +30,7 @@ export const CATEGORY_LABEL: Record<AppCategory, MessageKey> = {
   communication: "cat.communication",
   media: "cat.media",
   tools: "cat.tools",
+  developer: "cat.developer",
   entertainment: "cat.entertainment",
   system: "cat.system",
 };

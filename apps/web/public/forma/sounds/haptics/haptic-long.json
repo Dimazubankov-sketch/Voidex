@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-long","name":"Длинная вибрация","type":"haptic","durationMs":220,"pattern":[220],"events":[{"time":0.0,"duration":0.22,"intensity":0.55,"sharpness":0.35,"type":"continuous"}]}

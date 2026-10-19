@@ -55,6 +55,7 @@ const CATEGORY: Record<AppCategory, MessageKey> = {
   communication: "store.category.communication",
   media: "store.category.media",
   tools: "store.category.tools",
+  developer: "store.category.developer",
   entertainment: "store.category.entertainment",
   system: "store.category.system",
 };

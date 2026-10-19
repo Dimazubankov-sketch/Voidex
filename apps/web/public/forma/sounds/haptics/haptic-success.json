@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"haptic-success","name":"Тактильный успех","type":"haptic","durationMs":113,"pattern":[16,65,32],"events":[{"time":0.0,"duration":0.016,"intensity":0.62,"sharpness":0.55,"type":"transient"},{"time":0.081,"duration":0.032,"intensity":0.62,"sharpness":0.55,"type":"transient"}]}
