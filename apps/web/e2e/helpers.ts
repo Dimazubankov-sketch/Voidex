@@ -178,14 +178,17 @@ export async function settingsRoot(page: Page) {
  * the bottom bar (the round switcher button is gone).
  */
 export async function homeSwitcher(page: Page) {
-  const box = (await page.getByTestId("home-gesture-bar").boundingBox())!;
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  for (let i = 1; i <= 6; i++) await page.mouse.move(x, y - i * 15);
-  await page.mouse.up();
-  await expect(page.getByTestId("app-switcher")).toBeVisible();
+  // Right after an app went home its window may still be shrinking over the bar: swipe again then.
+  await expect(async () => {
+    const box = (await page.getByTestId("home-gesture-bar").boundingBox())!;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(x, y - i * 15);
+    await page.mouse.up();
+    await expect(page.getByTestId("app-switcher")).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 15000 });
 }
 
 /** Step 2.15: «Добавить виджет»: the catalogue first, then the widget's page with its own «Добавить виджет». */

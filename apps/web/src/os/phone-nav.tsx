@@ -157,7 +157,12 @@ export function HomeGestureBar() {
           useWM.getState().setSwitcher(true);
         }
       }}
-      onPointerUp={() => (start.current = null)}
+      onPointerUp={(e) => {
+        // The moves can come in merged: a release far enough up still opens the switcher.
+        const s = start.current;
+        start.current = null;
+        if (s && s.id === e.pointerId && s.y - e.clientY > 36 && Math.abs(e.clientX - s.x) < (s.y - e.clientY) * 1.4) useWM.getState().setSwitcher(true);
+      }}
       onPointerCancel={() => (start.current = null)}
       onKeyDown={(e) => {
         if (e.key === "ArrowUp" || e.key === "Enter") useWM.getState().setSwitcher(true);
