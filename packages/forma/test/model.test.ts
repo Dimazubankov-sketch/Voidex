@@ -59,6 +59,8 @@ describe("project", () => {
       }
     }
     const again = parseProject(JSON.parse(JSON.stringify(p)), parseBackendLayer);
+    // Server ids are UUIDs, which may start with a digit.
+    expect(parseProject({ ...JSON.parse(JSON.stringify(p)), id: "41e9ce10-24c1-44f1-9a22-7560302a2620" }, parseBackendLayer).id).toBe("41e9ce10-24c1-44f1-9a22-7560302a2620");
     expect(again.frontend).toEqual(p.frontend);
     // 9 library categories including sounds: 8 component categories, none empty.
     expect(componentsByCategory().every((c) => c.items.length > 0)).toBe(true);

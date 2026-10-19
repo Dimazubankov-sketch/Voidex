@@ -450,7 +450,8 @@ export function parseProject(v: unknown, parseBackendLayer: (p: Record<string, u
   const publishing = isRecord(v.publishing) ? v.publishing : {};
   return {
     schemaVersion: FORMA_SCHEMA_VERSION,
-    id: id(v.id, "id"),
+    // Stored projects have the database's UUID (may start with a digit).
+    id: typeof v.id === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(v.id) ? v.id : id(v.id, "id"),
     name: doc.name,
     kind: "app",
     createdAt: created,
