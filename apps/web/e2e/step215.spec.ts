@@ -204,6 +204,8 @@ test("«Добавить виджет»: the catalogue, then the widget's page; 
   await expect(page.getByTestId("widget-config-preview").getByTestId("clock-widget")).toBeVisible();
   await page.getByTestId("widget-config-back").click();
   await addWidgetFromPicker(page, "clock");
+  // The desktop saves its layout a moment after the edit: wait for the stored widget before reading its place.
+  await expect.poll(async () => (await storedLayout(page))?.widgets?.some((x) => x.type === "clock") ?? false).toBe(true);
   const l = await layoutOf(page);
   const w = l.widgets.find((x) => x.type === "clock")!;
   const cells = isMobile(page) ? l.mobile.cells : l.desktop.cells;
