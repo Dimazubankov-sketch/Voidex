@@ -209,8 +209,8 @@ test("«Добавить виджет»: the catalogue, then the widget's page; 
   const cells = isMobile(page) ? l.mobile.cells : l.desktop.cells;
   const at = cells[`widget:${w.id}`]!;
   if (isMobile(page)) {
-    // 9 apps on 4 columns: rows 0 and 1 full, one icon in row 2 → the first free 2 x 2 is at column 1 of row 2.
-    expect(at).toEqual({ c: 1, r: 2 });
+    // 10 apps on 4 columns: rows 0 and 1 full, two icons in row 2 → the first free 2 x 2 is at column 2 of row 2.
+    expect(at).toEqual({ c: 2, r: 2 });
   } else {
     // Near where the menu was opened (right part of the screen, lower half).
     const grid = page.getByTestId("desktop-grid");
