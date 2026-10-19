@@ -1,0 +1,19 @@
+{
+  "name": "@voidex/forma",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "description": "Forma: the versioned project model of the Voidex app builder (frontend, backend contracts, bindings), editor commands, adaptive layout and the runtime shared by the preview, the server API and AI agents.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
