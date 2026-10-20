@@ -188,6 +188,8 @@ test("«Добавить виджет»: the catalogue, then the widget's page; 
     await expect(page.getByTestId("brush-widgets")).toContainText("Добавить виджет");
     await page.getByTestId("brush-widgets").click();
   } else {
+    // Right after unlocking the lock screen may still be fading out over the desktop.
+    await expect.poll(() => page.evaluate(() => !!document.elementFromPoint(1100, 600)?.closest("[data-home-free]"))).toBe(true);
     await page.mouse.click(1100, 600, { button: "right" });
     await expect(page.getByTestId("menu-widgets")).toContainText("Добавить виджет");
     await page.getByTestId("menu-widgets").click();
