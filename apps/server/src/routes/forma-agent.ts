@@ -448,7 +448,7 @@ export function openApi(origin: string) {
       title: "Voidex Forma agent API",
       version: "1.0.0",
       description:
-        "Typed access of AI agents to one Forma app project: read the interface, write the backend (operations with contracts) and bind component events to it. Authenticate with the project connection token from Forma → AI. Mutating requests also need the header X-Voidex-Client: native.",
+        "Typed access of AI agents to one Forma app project: read the interface, write the backend (operations with contracts) and bind component events to it. Authenticate with the project connection token from Forma → AI.",
     },
     servers: [{ url: `${origin}/api/forma/agent/v1` }],
     components: { securitySchemes: { formaToken: { type: "http", scheme: "bearer", bearerFormat: "fma_..." } } },

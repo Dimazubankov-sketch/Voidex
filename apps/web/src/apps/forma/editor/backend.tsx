@@ -269,7 +269,7 @@ function Bindings({ project }: { project: Project }) {
 
 function Instructions({ created, notify }: { created: FormaAgentCreated; notify: (t: string) => void }) {
   const { token, endpoints, agent } = created;
-  const claude = `claude mcp add --transport http forma ${endpoints.mcp} \\\n  --header "Authorization: Bearer ${token}" \\\n  --header "X-Voidex-Client: native"`;
+  const claude = `claude mcp add --transport http forma ${endpoints.mcp} \\\n  --header "Authorization: Bearer ${token}"`;
   const curl = `curl -H "Authorization: Bearer ${token}" ${endpoints.rest}/project/info`;
   const copy = async (text: string) => notify((await copyText(text)) ? "Скопировано" : "Не удалось скопировать");
   return (
@@ -300,8 +300,8 @@ function Instructions({ created, notify }: { created: FormaAgentCreated; notify:
         <>
           <h5>ChatGPT (действия GPT по OpenAPI)</h5>
           <p className="fx-muted">
-            В редакторе GPT добавьте действие, импортируйте схему по адресу ниже и выберите аутентификацию «API Key → Bearer» с этим ключом. Сейчас ChatGPT может читать проект и запускать проверки; запись
-            требует заголовка X-Voidex-Client, который действия GPT не передают.
+            В редакторе GPT добавьте действие, импортируйте схему по адресу ниже и выберите аутентификацию «API Key → Bearer» с этим ключом. ChatGPT получит те права, которые
+            выбраны для этого подключения.
           </p>
           <pre className="fx-code small">{endpoints.openapi}</pre>
           <button type="button" className="fx-btn sm" onClick={() => void copy(endpoints.openapi)}>

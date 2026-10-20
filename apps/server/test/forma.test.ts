@@ -237,6 +237,61 @@ describe("Forma: AI agents", () => {
     expect(spec.json().paths["/backend/operations/{name}"].put.operationId).toBe("forma_upsert_operation");
   });
 
+  it("CSRF: only the agent routes with an agent token skip the client header; everything else keeps it", async () => {
+    const a = await person("Жанна");
+    const p = ((await a.d.post("/api/forma/projects", { name: "CSRF", template: "sample" })).body as FormaProjectDto).project;
+    const { token, agent: conn } = await connect(a.d, p.id);
+    const cookie = Object.entries(a.d.cookies).map(([k, v]) => `${k}=${v}`).join("; ");
+    // A raw request: no X-Voidex-Client, a foreign Origin (what a cross-site page or ChatGPT's server would send).
+    const raw = async (method: string, url: string, headers: Record<string, string>, payload?: object) => {
+      const all: Record<string, string> = { origin: "https://evil.example", "x-test-client": `raw-${Math.random()}`, ...headers };
+      if (!all.origin) delete all.origin;
+      const res = await env.app.inject({ method: method as "POST", url, payload, headers: all });
+      return { status: res.statusCode, body: res.body ? (res.json() as any) : null, headers: res.headers };
+    };
+    const csrf = (r: { status: number; body: any }) => {
+      expect(r.status).toBe(403);
+      expect(r.body.error.code).toBe("csrf_failed");
+    };
+    // 1. Cookie-based mutations without the header are still refused: Forma's person routes and the rest of Voidex.
+    csrf(await raw("POST", "/api/forma/projects", { cookie }, { name: "Чужой" }));
+    csrf(await raw("PUT", `/api/forma/projects/${p.id}/frontend`, { cookie }, { baseRevision: 1, document: doc(p) }));
+    csrf(await raw("DELETE", `/api/forma/projects/${p.id}`, { cookie }));
+    csrf(await raw("POST", "/api/auth/logout", { cookie }));
+    // An agent token does not open person routes either.
+    csrf(await raw("POST", "/api/forma/projects", { cookie, authorization: `Bearer ${token}` }, { name: "Чужой" }));
+    csrf(await raw("POST", `/api/forma/projects/${p.id}/agents`, { authorization: `Bearer ${token}` }, { name: "x", client: "other", scopes: ["project.read"], ttlHours: 1 }));
+    // The exemption follows the matched route, not the raw path.
+    const trick = await raw("POST", "/api/forma/agent/v1/../../projects", { cookie, authorization: `Bearer ${token}` }, { name: "Чужой" });
+    expect(trick.status).toBeGreaterThanOrEqual(400);
+    expect((await a.d.get("/api/forma/projects")).body.length).toBe(1);
+    // 2. The agent API with a valid token works without the header (REST and MCP).
+    const info = await raw("GET", "/api/forma/agent/v1/project/info", { authorization: `Bearer ${token}` });
+    expect(info.status).toBe(200);
+    const write = await raw("POST", "/api/forma/agent/v1/backend/commands", { authorization: `Bearer ${token}` }, { baseRevision: info.body.backendRevision, commands: sampleBackendCommands(p) });
+    expect(write.status).toBe(200);
+    expect(write.headers["access-control-allow-origin"]).toBeUndefined();
+    const mcp = await raw("POST", "/api/forma/mcp", { authorization: `Bearer ${token}`, accept: "application/json, text/event-stream" }, { jsonrpc: "2.0", id: 1, method: "tools/list" });
+    expect(mcp.status).toBe(200);
+    expect(mcp.body.result.tools.length).toBeGreaterThan(0);
+    // 3. Without a credential: refused, and the session cookie is never accepted as one.
+    csrf(await raw("POST", "/api/forma/agent/v1/backend/commands", {}, { baseRevision: 2, commands: [] }));
+    csrf(await raw("POST", "/api/forma/agent/v1/backend/commands", { cookie }, { baseRevision: 2, commands: [] }));
+    expect((await raw("POST", "/api/forma/agent/v1/backend/commands", { cookie, "x-voidex-client": "web", origin: "" }, { baseRevision: 2, commands: [] })).status).toBe(401);
+    expect((await raw("POST", "/api/forma/agent/v1/backend/commands", { authorization: `Bearer ${a.d.accessToken}`, "x-voidex-client": "web", origin: "" }, { baseRevision: 2, commands: [] })).status).toBe(401);
+    // 4. Unknown, malformed, expired and revoked tokens are refused.
+    expect((await raw("POST", "/api/forma/agent/v1/backend/commands", { authorization: `Bearer fma_${"B".repeat(40)}` }, { baseRevision: 2, commands: [] })).status).toBe(401);
+    expect((await raw("POST", "/api/forma/mcp", { authorization: "Bearer fma_short" }, { jsonrpc: "2.0", id: 1, method: "tools/list" })).status).toBe(401);
+    const short = await connect(a.d, p.id, ["project.read", "backend.write"], 1);
+    env.clock.advance(2 * 3600_000);
+    expect((await raw("POST", "/api/forma/agent/v1/backend/commands", { authorization: `Bearer ${short.token}` }, { baseRevision: 2, commands: [] })).status).toBe(401);
+    env.clock.advance(-2 * 3600_000);
+    expect((await a.d.delete(`/api/forma/projects/${p.id}/agents/${conn.id}`)).status).toBe(200);
+    expect((await raw("POST", "/api/forma/agent/v1/backend/commands", { authorization: `Bearer ${token}` }, { baseRevision: 2, commands: [] })).status).toBe(401);
+    // Nothing above reached the backend after the agent's own write.
+    expect((await a.d.get(`/api/forma/projects/${p.id}`)).body.backendRevision).toBe(write.body.backendRevision);
+  });
+
   it("syntax check compiles handler code without running it", () => {
     expect(checkSyntax("export default async function handler(input) { return { ok: 1 } }")).toBeNull();
     expect(checkSyntax("export default async function handler(input) { return { ok: }")).toMatch(/Unexpected|token/i);

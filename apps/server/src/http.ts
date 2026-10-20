@@ -99,6 +99,7 @@ export function clearSessionCookie(reply: FastifyReply, config: Config) {
  */
 export function assertSameOrigin(req: FastifyRequest, config: Config) {
   if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return;
+  if (isFormaAgentRequest(req)) return;
   const client = req.headers["x-voidex-client"];
   if (client !== "web" && client !== "native") {
     throw fail(ErrorCode.CsrfFailed, "Request blocked by CSRF protection.");
@@ -116,6 +117,23 @@ export function assertSameOrigin(req: FastifyRequest, config: Config) {
       throw fail(ErrorCode.CsrfFailed, "Request blocked: unexpected origin.");
     }
   }
+}
+
+/**
+ * Forma agent API (external AI agents: ChatGPT Actions, Claude Code, MCP
+ * clients). These routes authenticate only by the project-bound agent token
+ * in the Authorization header and never read the session cookie, so a
+ * cross-site request has nothing to ride on: a browser cannot attach that
+ * header to a forged form. The exemption covers only the matched agent routes
+ * (by their registered pattern, not the raw URL) and only requests that carry
+ * an agent bearer token; everything else, Forma's own person routes included,
+ * keeps the CSRF check. The token itself is verified by the route.
+ */
+const FORMA_AGENT_ROUTE = /^\/api\/forma\/(agent\/v1\/|mcp$)/;
+export function isFormaAgentRequest(req: FastifyRequest) {
+  const route = req.routeOptions?.url;
+  const auth = req.headers.authorization;
+  return !!route && FORMA_AGENT_ROUTE.test(route) && typeof auth === "string" && auth.startsWith("Bearer fma_");
 }
 
 /**

@@ -122,8 +122,7 @@ requests per minute, 256 KB per agent request, 64 KB per handler, 100 operations
 
 ```bash
 claude mcp add --transport http forma https://voidex.su/api/forma/mcp \
-  --header "Authorization: Bearer fma_..." \
-  --header "X-Voidex-Client: native"
+  --header "Authorization: Bearer fma_..."
 ```
 
 The MCP endpoint is stateless Streamable HTTP with JSON responses
@@ -134,15 +133,20 @@ tools the connection's scopes allow. Tool failures come back as results with
 ### REST and ChatGPT
 
 `https://voidex.su/api/forma/agent/v1/openapi.json` describes the same tools as
-REST (OpenAPI 3.1, bearer auth). Mutating requests need `X-Voidex-Client: native`
-(the Voidex CSRF rule for every `/api/` write).
+REST (OpenAPI 3.1, bearer auth).
 
-ChatGPT: a GPT with Actions imports that OpenAPI document with «API Key → Bearer».
-Reading and checks work today. Writes are blocked because GPT Actions cannot
-send the second header; letting token-only Forma agent routes skip the
-`X-Voidex-Client` check is a one-line change in the shared CSRF hook
-(`apps/server/src/http.ts`) and is **waiting for approval** (it touches Voidex's
-shared security code). ChatGPT's developer-mode MCP connectors require OAuth,
+CSRF: the agent routes (`/api/forma/agent/v1/*` and `/api/forma/mcp`) are the
+only routes exempt from the `X-Voidex-Client` CSRF header, and only for
+requests that carry `Authorization: Bearer fma_...`. They authenticate by that
+project-bound token alone (hash lookup, expiry, revocation, scopes) and never
+read the session cookie, so a forged cross-site request has nothing to ride on.
+The exemption matches the registered route pattern, not the raw URL. Every
+other route, Forma's own person routes included, keeps the CSRF check
+(`apps/server/src/http.ts`, `isFormaAgentRequest`; tests in
+`apps/server/test/forma.test.ts`). CORS is unchanged: no wildcard origin.
+
+ChatGPT: a GPT with Actions imports that OpenAPI document with «API Key → Bearer»
+and can read and write within the connection's scopes. ChatGPT's developer-mode MCP connectors require OAuth,
 which Voidex does not offer yet.
 
 ### Voidex AI
