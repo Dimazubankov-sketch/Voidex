@@ -157,7 +157,8 @@ test("cancel from the composer sends nothing and releases the camera; zoom never
     for (let d = 35; d <= 75; d += 5) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(d) });
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     await expect.poll(lastZoom).toBeGreaterThan(1.8);
-    await expect(page.getByTestId("circle-zoom-level")).toBeVisible();
+    // Step 2.16: the zoom works, but no number is shown on the circle.
+    await expect(page.getByTestId("circle-zoom-level")).toHaveCount(0);
     // Pinch in, far: it stops at 1x.
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: pts(80) });
     for (let d = 70; d >= 10; d -= 10) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: pts(d) });

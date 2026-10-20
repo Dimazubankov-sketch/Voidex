@@ -137,7 +137,11 @@ function settle(el: WheelElement, state: WheelState) {
 const FLING_ROWS_MAX = 14;
 const FLING_TAU = 300;
 /** Release speed (px / ms) below which a drag just snaps to its row. */
-const FLING_MIN = 0.25;
+const FLING_MIN = 0.55;
+/** Step 2.16: a drag shorter than this (rows of finger travel) never spins on: it steps. */
+const FLING_MIN_ROWS = 1.5;
+/** …and a nudge of at least this much of a row is one row on, never more. */
+const NUDGE = 0.2;
 
 const raf = (fn: (t: number) => void): number =>
   typeof globalThis.requestAnimationFrame === "function" ? globalThis.requestAnimationFrame(fn) : (setTimeout(() => fn(Date.now()), 16) as unknown as number);
@@ -171,14 +175,21 @@ function recentre(el: WheelElement, state: WheelState, extra = 0) {
  * (a short move is a short turn), then comes to rest exactly on a row. Each
  * row it passes is a real step (the tick sound, the change).
  */
-function fling(el: WheelElement, state: WheelState, velocity: number) {
+function fling(el: WheelElement, state: WheelState, velocity: number, dragRows = Infinity, startRow?: number) {
   stopSpin(state);
-  if (reduced() || Math.abs(velocity) < FLING_MIN) {
+  // Step 2.16: a small move goes exactly one row on (or stays), whatever its speed: the next
+  // or the previous number is always easy to reach. Only a real flick spins on.
+  if (reduced() || Math.abs(velocity) < FLING_MIN || Math.abs(dragRows) < FLING_MIN_ROWS) {
     state.touching = false;
-    move(el, state, Math.round(el.scrollTop / ROW_HEIGHT));
+    const here = el.scrollTop / ROW_HEIGHT;
+    let row = Math.round(here);
+    if (startRow !== undefined && Math.abs(dragRows) < 1) row = Math.abs(dragRows) >= NUDGE ? startRow + Math.sign(dragRows) : startRow;
+    move(el, state, row);
     return;
   }
-  const travel = Math.max(-FLING_ROWS_MAX * ROW_HEIGHT, Math.min(FLING_ROWS_MAX * ROW_HEIGHT, velocity * FLING_TAU));
+  // The speed above the flick threshold decides how far it turns (a fair flick: a few rows).
+  const speed = Math.abs(velocity) - FLING_MIN * 0.6;
+  const travel = Math.sign(velocity) * Math.min(FLING_ROWS_MAX * ROW_HEIGHT, speed * FLING_TAU);
   // Land on a row, inside the middle copy (the same numbers one copy away).
   recentre(el, state, travel);
   const from = el.scrollTop;
@@ -319,7 +330,9 @@ export function mountWheel(el: WheelElement, onChange: WheelChange): () => void 
       // A finger held still before lifting is no flick.
       const fresh = Date.now() - last.t < 60;
       const velocity = fresh && event?.type !== "pointercancel" ? -(last.y - first.y) / dt : 0;
-      fling(el, state, velocity);
+      // How far the finger took the drum (rows) and the row it started on (recentring moves both alike).
+      const dragRows = (el.scrollTop - d.top) / ROW_HEIGHT;
+      fling(el, state, velocity, dragRows, Math.round(d.top / ROW_HEIGHT));
     };
     on("pointerup", release);
     on("pointercancel", release);

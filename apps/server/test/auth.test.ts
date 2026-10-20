@@ -449,6 +449,10 @@ describe("account & settings", () => {
     const r = await d.patch("/api/preferences", { notifications: { sound: true } });
     expect(r.body.notifications.sound).toBe(true);
     expect(r.body.notifications.newMailBanner).toBe(true);
+    // Step 2.16: the notification sound, «Входящее» by default; only Forma's notification sounds.
+    expect(r.body.notifications.soundId).toBe("soft-inbox");
+    expect((await d.patch("/api/preferences", { notifications: { soundId: "drop-notice" } })).body.notifications).toMatchObject({ soundId: "drop-notice", sound: true });
+    expect((await d.patch("/api/preferences", { notifications: { soundId: "alarm-bells" } })).status).toBe(400);
   });
 
   it("lists consents and exports data", async () => {

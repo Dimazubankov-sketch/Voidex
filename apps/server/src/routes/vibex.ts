@@ -87,6 +87,8 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
   // ---------------------------------------------------------------- people
   app.get("/people", async (req) => vibex.people(req.auth!.userId, parse(VibexPeopleQuerySchema, req.query).q));
 
+  // Step 2.16: people to follow (before /people/:id, which would take "suggested" for an id).
+  app.get("/people/suggested", async (req) => vibex.suggested(req.auth!.userId));
   app.get("/people/:id", async (req) => vibex.profile(req.auth!.userId, parse(idParam, req.params).id));
 
   app.get("/people/:id/cover", async (req, reply) => {

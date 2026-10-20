@@ -121,11 +121,21 @@ export const DEFAULT_APP_PREFS: AppPrefs = { lock: false, notifications: true };
 export const StorePrefsSchema = z.object({ autoUpdate: z.boolean(), updateNotifications: z.boolean() });
 export type StorePrefs = z.infer<typeof StorePrefsSchema>;
 
+/**
+ * Step 2.16: the system notification sounds to choose from (Settings →
+ * Notifications): a few of Forma's «Уведомления» (the same files Forma plays,
+ * see apps/web/src/lib/notification-sounds.ts). «Входящее» by default.
+ */
+export const NOTIFICATION_SOUNDS = ["soft-inbox", "soft-notice", "soft-message", "soft-ping", "soft-mention", "bright-notice", "drop-notice"] as const;
+export type NotificationSoundId = (typeof NOTIFICATION_SOUNDS)[number];
+export const DEFAULT_NOTIFICATION_SOUND: NotificationSoundId = "soft-inbox";
+
 export const PreferencesSchema = z.object({
   notifications: z.object({
     newMailBanner: z.boolean(),
     showPreview: z.boolean(),
     sound: z.boolean(),
+    soundId: z.enum(NOTIFICATION_SOUNDS),
   }),
   vicloud: ViCloudPrefsSchema,
   store: StorePrefsSchema,
@@ -146,7 +156,7 @@ export const PreferencesPatchSchema = z.object({
   apps: PreferencesSchema.shape.apps.optional(),
 });
 export const DEFAULT_PREFERENCES: Preferences = {
-  notifications: { newMailBanner: true, showPreview: true, sound: false },
+  notifications: { newMailBanner: true, showPreview: true, sound: true, soundId: DEFAULT_NOTIFICATION_SOUND },
   vicloud: { syncFiles: true, syncMedia: true, backup: true, backupMedia: true, backupCellular: false },
   store: { autoUpdate: true, updateNotifications: true },
   apps: {},

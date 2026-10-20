@@ -57,7 +57,6 @@ export function SoundPicker({ value, onPick, onBack, backIsClose }: { value: str
               <button
                 type="button"
                 className={cx("vc-sound-play", isPlaying && "playing")}
-                disabled={isPlaying}
                 aria-label={isPlaying ? t("sound.playing", { name: s.name }) : t("sound.listen", { name: s.name })}
                 onClick={() => {
                   previewSound(s.id).catch(() => toast({ title: t("sound.loadFailed"), tone: "danger" }));

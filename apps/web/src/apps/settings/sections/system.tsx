@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { RiDownload2Line, RiFileTextLine } from "@remixicon/react";
-import type { ConsentDto, LegalDocumentDto } from "@voidex/shared";
+import { RiCheckLine, RiDownload2Line, RiFileTextLine } from "@remixicon/react";
+import { NOTIFICATION_SOUNDS, type ConsentDto, type LegalDocumentDto } from "@voidex/shared";
 import { api } from "@/lib/api";
 import { useUpdatePreferences } from "@/lib/account";
 import { errorMessage } from "@/lib/errors";
@@ -9,6 +9,7 @@ import { formatDate, useLanguage, useT } from "@/lib/i18n";
 import { qk } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { useSystemInfo } from "@/lib/system";
+import { NOTIFICATION_SOUND_NAMES, previewNotificationSound, soundIdOf } from "@/lib/notification-sounds";
 import { VoidexMark } from "@/brand/brand";
 import { Notice, Skeleton, Switch } from "@/ui/controls";
 import { LegalSheet } from "@/auth/legal-sheet";
@@ -76,9 +77,10 @@ export function NotificationsSection() {
   const t = useT();
   const prefs = useSession((s) => s.user!.preferences.notifications);
   const update = useUpdatePreferences();
-  const row = (key: keyof typeof prefs, label: string, hint: string, disabled?: boolean) => (
+  const row = (key: "newMailBanner" | "showPreview" | "sound", label: string, hint: string, disabled?: boolean) => (
     <Row label={label} hint={hint} right={<Switch checked={prefs[key]} disabled={disabled} onChange={(v) => update.mutate({ notifications: { [key]: v } })} label={label} />} testId={`pref-${key}`} />
   );
+  const soundId = soundIdOf(prefs.soundId);
   return (
     <div>
       <SectionTitle>{t("settings.notifications")}</SectionTitle>
@@ -87,6 +89,23 @@ export function NotificationsSection() {
         {row("showPreview", t("settings.notifications.preview"), t("settings.notifications.previewHint"), !prefs.newMailBanner)}
         {row("sound", t("settings.notifications.sound"), t("settings.notifications.soundHint"))}
       </Group>
+      {/* Step 2.16: the notification sound (Forma's «Уведомления»); a tap chooses it and plays it. */}
+      {prefs.sound && (
+        <Group title={t("settings.notifications.soundChoice")}>
+          {NOTIFICATION_SOUNDS.map((id) => (
+            <Row
+              key={id}
+              label={t(NOTIFICATION_SOUND_NAMES[id])}
+              onClick={() => {
+                void previewNotificationSound(id);
+                if (id !== soundId) update.mutate({ notifications: { soundId: id } });
+              }}
+              right={id === soundId ? <RiCheckLine className="size-5 text-primary" aria-label={t("common.selected")} /> : undefined}
+              testId={`pref-sound-${id}`}
+            />
+          ))}
+        </Group>
+      )}
       {update.error && <Notice tone="danger">{errorMessage(t, update.error)}</Notice>}
     </div>
   );

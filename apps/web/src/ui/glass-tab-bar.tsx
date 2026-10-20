@@ -56,13 +56,23 @@ export function GlassTabBar<K extends string>({
   const swipe = useRef<{ id: number; x: number; l: number; r: number; moving: boolean } | null>(null);
   const swiped = useRef(false);
 
+  /**
+   * Step 2.16: a tab's edges in the bar's own layout (offsets), never from
+   * screen rects: those change while the window or the page is still sliding
+   * or scaling in, which left the capsule half way between two tabs or as a
+   * sliver beside the active one.
+   */
   const edgesOf = (key: K) => {
     const el = buttons.current.get(key);
-    const host = bar.current;
-    if (!el || !host) return null;
-    const b = el.getBoundingClientRect();
-    const h = host.getBoundingClientRect();
-    return { l: b.left - h.left + 4, r: b.right - h.left - 4 };
+    if (!el || !bar.current || !el.offsetWidth) return null;
+    return { l: el.offsetLeft + 4, r: el.offsetLeft + el.offsetWidth - 4 };
+  };
+  /** Back where the active tab is (a swipe that was taken over or cut short). */
+  const settle = () => {
+    const edges = edgesOf(active);
+    if (!edges) return;
+    void animate(left, edges.l, LEAD);
+    void animate(right, edges.r, LEAD);
   };
 
   useLayoutEffect(() => {
@@ -105,11 +115,13 @@ export function GlassTabBar<K extends string>({
   };
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-2" data-testid={wrapTestId}>
+    // Step 2.16: the bar's strip belongs to the bar: no page gesture (the side menu's swipe) starts in it.
+    <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-2" data-gesture-owner="" data-testid={wrapTestId}>
       <nav
         ref={bar}
         role="tablist"
         aria-label={ariaLabel}
+        data-gesture-owner=""
         className="vx-tabbar pointer-events-auto relative flex h-[60px] w-full max-w-[460px] touch-none select-none items-center rounded-full px-1"
         data-testid={testId}
         data-active={active}
@@ -146,24 +158,20 @@ export function GlassTabBar<K extends string>({
           swiped.current = true;
           const next = tabAt((left.get() + right.get()) / 2);
           if (next !== active) onSelect(next);
-          else {
-            // Back to the same tab: the capsule settles where it belongs.
-            const edges = edgesOf(active);
-            if (edges) {
-              void animate(left, edges.l, LEAD);
-              void animate(right, edges.r, LEAD);
-            }
-          }
+          // Back to the same tab: the capsule settles where it belongs.
+          else settle();
         }}
         onPointerCancel={() => {
           const s = swipe.current;
           swipe.current = null;
+          if (s?.moving) settle();
+        }}
+        onLostPointerCapture={() => {
+          // Someone else took the drag over mid-swipe: never leave the capsule where the finger was.
+          const s = swipe.current;
           if (!s?.moving) return;
-          const edges = edgesOf(active);
-          if (edges) {
-            void animate(left, edges.l, LEAD);
-            void animate(right, edges.r, LEAD);
-          }
+          swipe.current = null;
+          settle();
         }}
         onClickCapture={(e) => {
           // The click at the end of a swipe is not a tap.

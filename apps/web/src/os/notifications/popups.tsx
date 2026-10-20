@@ -7,7 +7,7 @@ import { create } from "zustand";
 import { Avatar } from "@/brand/brand";
 import { getFormFactor, useFormFactor } from "@/lib/form-factor";
 import { useLanguage, useT } from "@/lib/i18n";
-import { playNotificationSound } from "@/lib/sound";
+import { playNotificationSound, preloadNotificationSound } from "@/lib/notification-sounds";
 import { useSession } from "@/lib/session";
 import { foregroundId, useWM } from "../window-manager";
 import { RENDERERS, timeLabel } from "./center";
@@ -111,12 +111,17 @@ export function popupNotification(n: NotificationDto, opts: { onScreen?: boolean
   }
   if (prefs?.notifications.sound && Date.now() - lastSound > SOUND_GAP_MS) {
     lastSound = Date.now();
-    playNotificationSound();
+    playNotificationSound(prefs.notifications.soundId);
   }
 }
 
 export function SystemPopups() {
   const ff = useFormFactor();
+  // Step 2.16: the chosen notification sound is decoded ahead, so the first one plays at once.
+  const sound = useSession((st) => st.user?.preferences.notifications);
+  useEffect(() => {
+    if (sound?.sound) preloadNotificationSound(sound.soundId);
+  }, [sound?.sound, sound?.soundId]);
   const shown = usePopups((s) => s.shown);
   const max = ff === "desktop" ? 3 : 1;
   const phone = ff !== "desktop";

@@ -411,6 +411,30 @@ export class VibexService {
     return rows.map((r) => map.get(r.id)!).filter(Boolean);
   }
 
+  /**
+   * Step 2.16: people to follow, for «Подписки» when it has nothing to show:
+   * active accounts I don't follow yet (people I followed never come back
+   * here), those who post most recently and are followed most first.
+   */
+  async suggested(viewerId: string, limit = 12): Promise<VibexPersonDto[]> {
+    const lastPost = sql<Date | null>`(select max(${vibexPosts.createdAt}) from ${vibexPosts} where ${vibexPosts.authorId} = ${users.id} and ${vibexPosts.deletedAt} is null)`;
+    const followers = sql<number>`(select count(*) from ${vibexFollows} where ${vibexFollows.followeeId} = ${users.id})`;
+    const rows = await this.ctx.db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          ne(users.id, viewerId),
+          eq(users.status, "active"),
+          sql`not exists (select 1 from ${vibexFollows} where ${vibexFollows.followerId} = ${viewerId} and ${vibexFollows.followeeId} = ${users.id})`,
+        ),
+      )
+      .orderBy(sql`${lastPost} desc nulls last`, sql`${followers} desc`, desc(users.createdAt))
+      .limit(Math.max(1, Math.min(30, limit)));
+    const map = await this.persons(rows.map((r) => r.id));
+    return rows.map((r) => map.get(r.id)!).filter(Boolean);
+  }
+
   async profile(viewerId: string, userId: string): Promise<VibexProfileDto> {
     const person = await this.person(userId);
     const settings = await this.settings(userId);

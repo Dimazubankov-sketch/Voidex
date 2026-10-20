@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { closeSwipes, mountSwipes, mountWheel, setWheelChange, setWheelValue, wheelSpec, type WheelElement } from "@voidex/clock";
 import { cx } from "@/lib/cx";
-import { playWheelTick } from "./audio";
+import { playWheelTick, unlockAudio } from "./audio";
 import { ClockIcon } from "./icons";
 
 /** The current time, refreshed every `ms` (only while the component is on screen). */
@@ -86,6 +86,10 @@ export function Wheel({
         {...spec.attrs}
         aria-valuetext={`${String(value).padStart(padded ? 2 : 1, "0")}${unit ? " " + unit : ""}`}
         data-testid={testId}
+        // Step 2.16: the touch that turns the drum also lets it click (audio may start inside a gesture).
+        onPointerDownCapture={unlockAudio}
+        onKeyDownCapture={unlockAudio}
+        onWheelCapture={unlockAudio}
       >
         <div className="vc-wheel-values" aria-hidden="true">
           {spec.options.map((text, i) => (

@@ -197,31 +197,34 @@ test("alarm editor: the sound picker previews once per tap, a second tap on the 
   await expect(picker.getByTestId("clock-sound-row").first()).toHaveClass(/chosen/);
   const sonar = picker.locator('[data-testid="clock-sound-row"][data-sound="alarm-sonar"]');
   await sonar.getByTestId("clock-sound-preview").click();
-  // While it plays the same button cannot start it again.
-  await expect(sonar.getByTestId("clock-sound-preview")).toBeDisabled();
+  await expect(sonar.getByTestId("clock-sound-preview")).toHaveClass(/playing/);
+  // Step 2.16: a tap while it plays is never ignored: it starts again (and still only one plays).
+  await sonar.getByTestId("clock-sound-preview").click();
+  await expect(sonar.getByTestId("clock-sound-preview")).toHaveClass(/playing/);
+  await expect(picker.locator(".vc-sound-play.playing")).toHaveCount(1);
   await expect(picker.getByTestId("clock-sound-featured")).toHaveText("Сонар");
   // Another sound takes over.
   const bells = picker.locator('[data-testid="clock-sound-row"][data-sound="alarm-bells"]');
   await bells.getByTestId("clock-sound-preview").click();
-  await expect(bells.getByTestId("clock-sound-preview")).toBeDisabled();
-  await expect(sonar.getByTestId("clock-sound-preview")).toBeEnabled();
+  await expect(bells.getByTestId("clock-sound-preview")).toHaveClass(/playing/);
+  await expect(sonar.getByTestId("clock-sound-preview")).not.toHaveClass(/playing/);
   // Step 2.15: choosing a melody plays it (the previous preview stops) and keeps the list open; back shows the choice.
   const drop = picker.locator('[data-testid="clock-sound-row"][data-sound="alarm-drop"]');
   await drop.getByTestId("clock-sound-choose").click();
   await expect(drop).toHaveClass(/chosen/);
-  await expect(drop.getByTestId("clock-sound-preview")).toBeDisabled();
-  await expect(bells.getByTestId("clock-sound-preview")).toBeEnabled();
+  await expect(drop.getByTestId("clock-sound-preview")).toHaveClass(/playing/);
+  await expect(bells.getByTestId("clock-sound-preview")).not.toHaveClass(/playing/);
   await bells.getByTestId("clock-sound-choose").click();
   await expect(bells).toHaveClass(/chosen/);
   await expect(picker.getByTestId("clock-sound-featured")).toHaveText("Колокола");
   await page.getByTestId("clock-sheet-back").click();
   await expect(page.getByTestId("clock-alarm-sound")).toContainText("Колокола");
-  // Back to the list, preview, then leave: nothing keeps playing (every preview button enabled again on return).
+  // Back to the list, preview, then leave: nothing keeps playing (no preview button left playing on return).
   await page.getByTestId("clock-alarm-sound").click();
   await picker.locator('[data-testid="clock-sound-row"][data-sound="alarm-drop"]').getByTestId("clock-sound-preview").click();
   await page.getByTestId("clock-sheet-back").click();
   await page.getByTestId("clock-alarm-sound").click();
-  await expect(picker.locator('[data-testid="clock-sound-preview"]:disabled')).toHaveCount(0);
+  await expect(picker.locator(".vc-sound-play.playing")).toHaveCount(0);
 });
 
 test("stopwatch: Start / Pause / Reset only, no laps", async ({ page }) => {

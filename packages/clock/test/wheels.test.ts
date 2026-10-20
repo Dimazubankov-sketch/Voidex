@@ -239,3 +239,30 @@ test("Step 2.15: a late echo of a value the drum already passed does not pull it
   assert.equal(w.el.scrollTop, wheelPosition(0, 60) * ROW_HEIGHT);
   unmountWheels(w.root);
 });
+
+test("Step 2.16: a short quick nudge goes exactly one row on (either way), never 2–4; a tiny touch stays", async () => {
+  const w = wheel(10, 60, "minutes");
+  const changes: number[] = [];
+  mountWheels(w.root, (_k, v) => changes.push(v));
+  const nudge = async (id: number, dy: number) => {
+    w.handlers.pointerdown!({ pointerId: id, clientY: 300, button: 0 });
+    for (let i = 1; i <= 3; i++) {
+      await sleep(6);
+      w.handlers.pointermove!({ pointerId: id, clientY: 300 - (dy * i) / 3 });
+    }
+    w.handlers.pointerup!({ pointerId: id, type: "pointerup" });
+    await sleep(500);
+    flushWheels(w.root);
+  };
+  // A fast flick of a third of a row (that used to spin 2–4 rows on).
+  await nudge(1, ROW_HEIGHT * 0.35);
+  assert.equal(changes.at(-1), 11);
+  await nudge(2, -ROW_HEIGHT * 0.4);
+  assert.equal(changes.at(-1), 10);
+  // A tiny touch (a tenth of a row) moves nothing.
+  const n = changes.length;
+  await nudge(3, ROW_HEIGHT * 0.1);
+  assert.equal(changes.length, n);
+  assert.equal(w.el.dataset.value, "10");
+  unmountWheels(w.root);
+});

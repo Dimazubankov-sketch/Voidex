@@ -14,7 +14,7 @@ import {
   RiUser3Fill,
   RiUser3Line,
 } from "@remixicon/react";
-import { VibexGlyph } from "@/brand/brand";
+import { Avatar, VibexGlyph } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
@@ -35,11 +35,11 @@ import { mayStart } from "@/os/gesture-priority";
 import { ShareSheet } from "./share-sheet";
 import { DRAWER_WIDTH, SidebarPanel, drawerProgress } from "./sidebar";
 import { PushDrawer } from "@/ui/push-drawer";
-import { useActivityCount, useChats, useFeed, useUpdateSettings, useVibexMe } from "./data";
+import { useActivityCount, useChats, useFeed, useFollow, useSuggested, useUpdateSettings, useVibexMe } from "./data";
 import { VibexHeader, VibexSearchButton, VibexTitle } from "./header";
 import { VibexTabBar } from "./tabbar";
 import { PublicationViewerHost } from "./publications";
-import type { VibexFeedMode } from "@voidex/shared";
+import type { VibexFeedMode, VibexPersonDto } from "@voidex/shared";
 import { VibexStoreContext, createVibexStore, useVibex, useVibexStore, type VibexPage, type VibexSection } from "./store";
 
 
@@ -149,13 +149,53 @@ function Feed({ switcher = true }: { switcher?: boolean }) {
   );
 }
 
-/** «Подписки» with nobody followed (or nothing posted by them yet). */
+/**
+ * «Подписки» with nobody followed (or nothing posted by them yet). Step 2.16:
+ * never an empty screen: people to follow, each with «Подписаться». Someone
+ * just followed leaves the list at once and is not suggested again.
+ */
 function FollowingEmpty() {
   const t = useT();
+  const people = useSuggested();
+  const [gone, setGone] = useState<Set<string>>(() => new Set());
+  const list = (people.data ?? []).filter((p) => !gone.has(p.id));
   return (
-    <div className="flex flex-col items-center gap-2 px-6 py-14 text-center" data-testid="feed-following-empty">
+    <div className="flex flex-col items-center gap-2 px-4 pb-10 pt-8 text-center" data-testid="feed-following-empty">
       <p className="text-[16px] font-semibold text-text">{t("vibex.feed.followingEmpty")}</p>
-      <p className="max-w-[320px] text-[14px] text-text-secondary">{t("vibex.feed.followingEmptyHint")}</p>
+      <p className="max-w-[320px] text-[14px] text-text-secondary">{t("vibex.feed.suggestHint")}</p>
+      {list.length > 0 && (
+        <div className="mt-4 w-full max-w-[480px] overflow-hidden rounded-[22px] bg-surface text-left shadow-[0_1px_2px_rgba(20,20,40,0.05)]" data-testid="feed-suggested">
+          {list.map((p) => (
+            <SuggestedPerson key={p.id} person={p} onFollowed={() => setGone((g) => new Set(g).add(p.id))} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SuggestedPerson({ person, onFollowed }: { person: VibexPersonDto; onFollowed: () => void }) {
+  const t = useT();
+  const push = useVibex((s) => s.push);
+  const follow = useFollow(person.id);
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5 [&+&]:border-t [&+&]:border-border" data-testid="feed-suggested-person" data-person={person.id}>
+      <button type="button" onClick={() => push({ kind: "person", id: person.id })} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+        <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={44} />
+        <span className="min-w-0">
+          <span className="block truncate text-[15px] font-semibold text-text">{person.name}</span>
+          <span className="block truncate text-[13px] text-text-secondary">{person.address}</span>
+        </span>
+      </button>
+      <button
+        type="button"
+        disabled={follow.isPending}
+        onClick={() => follow.mutate(true, { onSuccess: onFollowed })}
+        className="h-9 shrink-0 rounded-full bg-primary px-4 text-[14px] font-semibold text-white transition active:scale-95 disabled:opacity-60"
+        data-testid="feed-suggested-follow"
+      >
+        {t("vibex.profile.follow")}
+      </button>
     </div>
   );
 }

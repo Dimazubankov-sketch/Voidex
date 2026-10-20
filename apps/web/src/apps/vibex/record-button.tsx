@@ -462,11 +462,7 @@ function CircleCapture({
         </svg>
         <video ref={video} autoPlay muted playsInline className={cx("absolute left-2 top-2 rounded-full bg-black object-cover", facing === "user" && "[transform:scaleX(-1)]")} style={{ width: size, height: size }} />
         {!stream && <Spinner className="absolute inset-0 m-auto text-white" />}
-        {zoomRange && !desktop && zoom > zoomRange.min + 0.05 && (
-          <span className="pointer-events-none absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-2.5 py-0.5 text-[12.5px] font-semibold tabular-nums text-white" data-testid="circle-zoom-level">
-            {zoom.toFixed(1)}×
-          </span>
-        )}
+        {/* Step 2.16: pinch zoom works; no zoom number on the circle. */}
         {paused && (
           <span className="absolute inset-0 m-auto flex h-9 w-fit items-center rounded-full bg-black/55 px-4 text-[14px] font-medium text-white" data-testid="circle-paused-label">
             {t("vibex.circle.paused")}
@@ -493,7 +489,6 @@ function CircleCapture({
                 aria-label={t("vibex.circle.zoom")}
                 data-testid="circle-zoom"
               />
-              <span className="w-10 text-right">{zoom.toFixed(1)}×</span>
             </label>
           )}
           <div className="flex items-center gap-5">

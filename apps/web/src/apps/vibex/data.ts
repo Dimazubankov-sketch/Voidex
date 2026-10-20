@@ -168,8 +168,14 @@ export function useFollow(userId: string) {
       queryClient.setQueryData(vk.profile(userId), p);
       void queryClient.invalidateQueries({ queryKey: ["vibex", "follows"] });
       void queryClient.invalidateQueries({ queryKey: vk.posts });
+      void queryClient.invalidateQueries({ queryKey: vk.feed });
     },
   });
+}
+
+/** Step 2.16: people to follow (an empty «Подписки»); people I follow never come back here. */
+export function useSuggested(enabled = true) {
+  return useQuery({ queryKey: ["vibex", "suggested"], enabled, staleTime: 30_000, queryFn: () => api.get<VibexPersonDto[]>("/api/vibex/people/suggested") });
 }
 
 export function useFollowList(userId: string, which: "followers" | "following", enabled: boolean) {

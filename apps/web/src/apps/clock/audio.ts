@@ -62,9 +62,9 @@ export async function enableAudio(): Promise<Ctx> {
   return context;
 }
 
-/** Best effort from any tap: never throws. */
+/** Best effort from any tap: never throws (Step 2.16: also gets the drums' click ready). */
 export function unlockAudio() {
-  if (context?.state === "running") return;
+  if (context?.state === "running") return warmTick();
   enableAudio().catch(() => {});
 }
 
@@ -83,13 +83,33 @@ function warmTick() {
     .finally(() => (tickLoading = false));
 }
 
-/** The drums' click: only once the context runs (a tap unlocked it), rate-limited. */
+/**
+ * The drums' click: once the context runs (Step 2.16: touching a drum unlocks
+ * it, see unlockAudio), rate-limited. Until the click file is decoded a short
+ * made-up click plays instead, so the first steps are never silent.
+ */
 export function playWheelTick() {
   if (!context || context.state !== "running") return;
-  if (!tickBuffer) return warmTick();
   const now = context.currentTime;
   if (now - lastTick < 0.028) return;
   lastTick = now;
+  if (!tickBuffer) {
+    warmTick();
+    try {
+      const o = context.createOscillator();
+      const g = context.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(2300, now);
+      g.gain.setValueAtTime(0.03, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.025);
+      o.connect(g).connect(context.destination);
+      o.start(now);
+      o.stop(now + 0.03);
+    } catch {
+      /* no audio */
+    }
+    return;
+  }
   const source = context.createBufferSource();
   const gain = context.createGain();
   source.buffer = tickBuffer;
@@ -153,14 +173,12 @@ export function stopPreview() {
 }
 
 /**
- * Plays a sound once (Step 2.15: reliably on every tap). The same sound is not
- * started again while it is really playing; another sound stops it first. A
- * preview that could not be heard (the context was held back, the end never
- * came) never blocks the next tap: it is simply started again.
+ * Plays a sound once (Step 2.15: reliably on every tap). Step 2.16: a tap
+ * always plays: the preview that is playing (the same sound or another) stops
+ * first, so two never overlap and no tap is ever ignored.
  */
 export async function previewSound(id: string): Promise<void> {
-  const ctxNow = context;
-  if (preview && preview.id === id && ctxNow?.state === "running" && ctxNow.currentTime < preview.endsAt) return;
+  // Step 2.16: every tap is heard: whatever is playing (this sound too) stops and it starts again.
   stopPreview();
   const token = ++previewToken;
   useClockAudio.setState({ previewId: id });

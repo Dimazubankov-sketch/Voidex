@@ -5,14 +5,19 @@
  * (Settings → Personalization: light, dark, system). No hardcoded white.
  */
 .vx-clock {
+  /* Step 2.16: the palette of Vibex: the app background, white (dark: graphite) cards lifted by a soft
+     shadow and a hairline instead of a violet frame, the active state as Vibex's selected chat card,
+     Vibex's violet button gradient and glow. Only colours: the layout stays as it is. */
   --vc-accent: var(--primary);
   --vc-accent-text: var(--primary-strong);
-  --vc-tint: color-mix(in srgb, var(--primary) 8%, var(--surface));
-  --vc-tint-strong: color-mix(in srgb, var(--primary) 15%, var(--surface));
-  --vc-line: color-mix(in srgb, var(--primary) 12%, var(--border));
-  --vc-card: var(--surface);
+  --vc-card: var(--chat-card, var(--surface));
+  --vc-tint: var(--chat-card-active, color-mix(in srgb, var(--primary) 9%, var(--surface)));
+  --vc-tint-strong: color-mix(in srgb, var(--primary) 14%, var(--vc-card));
+  --vc-line: color-mix(in srgb, var(--border) 55%, transparent);
+  --vc-shadow: var(--chat-card-shadow, 0 1px 2px rgba(24, 18, 60, 0.04), 0 8px 20px -14px rgba(40, 28, 110, 0.26));
   --vc-muted: var(--text-tertiary);
-  --vc-gradient: linear-gradient(135deg, color-mix(in srgb, var(--primary) 62%, #ffffff), var(--primary));
+  --vc-gradient: linear-gradient(135deg, #9a86ff, #7a62f5);
+  --vc-glow: 0 8px 20px -8px rgba(108, 92, 255, 0.7);
   --vc-radius: 24px;
   position: relative;
   display: flex;
@@ -22,6 +27,15 @@
   color: var(--text);
   overflow: hidden;
   isolation: isolate;
+}
+:root[data-theme="dark"] .vx-clock {
+  --vc-gradient: linear-gradient(135deg, #9387ff, #6f62f0);
+  --vc-glow: 0 8px 20px -8px rgba(127, 114, 255, 0.55);
+}
+/* Step 2.16: cards lie on the app background like Vibex's cards: no violet fill, a soft lift. */
+.vx-clock :is(.vc-card, .vc-form-card, .vc-hero, .vc-wheel-panel, .vc-sound-feature) {
+  background: var(--vc-card);
+  box-shadow: var(--vc-shadow);
 }
 .vx-clock button {
   font: inherit;
@@ -130,7 +144,7 @@
   border-color: transparent;
   background: var(--vc-gradient);
   color: #fff;
-  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--primary) 70%, transparent);
+  box-shadow: var(--vc-glow);
 }
 .vc-icon-button:disabled {
   opacity: 0.45;
@@ -879,7 +893,7 @@
   border-color: transparent;
   background: var(--vc-gradient);
   color: #fff;
-  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--primary) 80%, transparent);
+  box-shadow: var(--vc-glow);
 }
 .vc-round.small {
   width: 64px;
