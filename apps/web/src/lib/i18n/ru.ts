@@ -1590,4 +1590,7 @@ export const ru: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "Подписки",
   "vibex.feed.followingEmpty": "Нет постов от ваших подписок",
   "vibex.feed.followingEmptyHint": "Подпишитесь на людей в Поиске или из Рекомендаций: их посты появятся здесь.",
+  "home.editPages": "Изменить страницы",
+  "home.editPagesDone": "Готово",
+  "home.pageN": "Страница {n}",
 };

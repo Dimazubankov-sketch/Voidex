@@ -13,7 +13,7 @@ import { useGesturePeek } from "./gesture-peek";
 import { useWorkspaceLayout } from "./home/layout";
 import { NavButtons } from "./phone-nav";
 import { captureWindow } from "./snapshots";
-import { foregroundId, useWM, type AppWindow, type Rect } from "./window-manager";
+import { foregroundId, switchOrder, useWM, type AppWindow, type Rect } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const GUTTER = 10;
@@ -307,7 +307,7 @@ const SETTLE = { type: "spring", stiffness: 520, damping: 46 } as const;
 function slideTo(dir: -1 | 1, width: number, dx = 0) {
   const s = useWM.getState();
   const from = s.focusedId;
-  const list = Object.values(s.windows).sort((a, b) => a.openedAt - b.openedAt || a.id.localeCompare(b.id));
+  const list = switchOrder(s);
   const i = list.findIndex((w) => w.id === from);
   const next = i < 0 ? undefined : list[i + dir];
   if (!from || !next) return false;

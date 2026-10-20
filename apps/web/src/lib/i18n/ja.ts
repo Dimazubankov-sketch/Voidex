@@ -1575,4 +1575,7 @@ export const ja: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "フォロー中",
   "vibex.feed.followingEmpty": "フォロー中の人の投稿はまだありません",
   "vibex.feed.followingEmptyHint": "検索やおすすめから人をフォローすると、その投稿がここに表示されます。",
+  "home.editPages": "ページを編集",
+  "home.editPagesDone": "完了",
+  "home.pageN": "ページ {n}",
 };

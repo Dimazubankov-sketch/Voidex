@@ -46,8 +46,14 @@ export interface AppWindow {
 
 interface WMState {
   windows: Record<string, AppWindow>;
-  /** Back-to-front order. */
+  /** Back-to-front order (also the order of last use: focusing brings a window to the end). */
   order: string[];
+  /**
+   * Step 2.16: phone gesture bar. While the person swipes from app to app the
+   * order of last use is held still (so the next swipe goes on to the app
+   * before, and a swipe back returns): null when no such run is going on.
+   */
+  swipeOrder: string[] | null;
   focusedId: string | null;
   switcherOpen: boolean;
   /** Current PC virtual desktop. */
@@ -118,6 +124,7 @@ function defaultRect(appId: AppId, b: { w: number; h: number }, index: number): 
 export const useWM = create<WMState>((set, get) => ({
   windows: {},
   order: [],
+  swipeOrder: null,
   focusedId: null,
   switcherOpen: false,
   space: DEFAULT_SPACE,
@@ -140,6 +147,7 @@ export const useWM = create<WMState>((set, get) => ({
   },
 
   open: (appId, opts = {}) => {
+    endSwipeRun();
     const s = get();
     const manifest = APP_REGISTRY[appId];
     const existing = manifest.window.singleton ? Object.values(s.windows).find((w) => w.appId === appId) : undefined;
@@ -186,21 +194,12 @@ export const useWM = create<WMState>((set, get) => ({
   },
 
   focus: (id) => {
-    const s = get();
-    const w = s.windows[id];
-    if (!w) return;
-    const state = w.state === "minimized" ? w.prevState : w.state;
-    set({
-      windows: { ...s.windows, [id]: { ...w, state } },
-      order: [...s.order.filter((i) => i !== id), id],
-      focusedId: id,
-      switcherOpen: false,
-      space: w.space,
-    });
-    persist();
+    endSwipeRun();
+    focusWindow(id);
   },
 
   close: (id) => {
+    endSwipeRun();
     const s = get();
     const { [id]: removed, ...rest } = s.windows;
     // Closing forgets the window's size / position: reopening uses the defaults.
@@ -235,6 +234,7 @@ export const useWM = create<WMState>((set, get) => ({
 
   /** Workspace / Home: every app steps aside, nothing is closed. */
   goHome: () => {
+    endSwipeRun();
     const s = get();
     const windows = Object.fromEntries(
       Object.entries(s.windows).map(([id, w]) => [id, w.state === "minimized" ? w : { ...w, state: "minimized" as const, prevState: w.state }]),
@@ -245,11 +245,16 @@ export const useWM = create<WMState>((set, get) => ({
 
   switchAdjacent: (dir) => {
     const s = get();
-    const list = Object.values(s.windows).sort((a, b) => a.openedAt - b.openedAt || a.id.localeCompare(b.id));
+    const list = switchOrder(s);
     const i = list.findIndex((w) => w.id === s.focusedId);
     const next = i < 0 ? undefined : list[i + dir];
     if (!next) return false;
-    get().focus(next.id);
+    // Hold the order of last use still for the next swipes (see swipeOrder), then focus.
+    const held = list.map((w) => w.id);
+    focusWindow(next.id);
+    set({ swipeOrder: held });
+    window.clearTimeout(swipeRunTimer);
+    swipeRunTimer = window.setTimeout(() => useWM.setState({ swipeOrder: null }), SWIPE_RUN_MS);
     return true;
   },
 
@@ -268,7 +273,7 @@ export const useWM = create<WMState>((set, get) => ({
 
   closeAll: () => {
     for (const k of Object.keys(savedRects)) delete savedRects[k as AppId];
-    set({ windows: {}, order: [], focusedId: null, switcherOpen: false });
+    set({ windows: {}, order: [], swipeOrder: null, focusedId: null, switcherOpen: false });
     persist();
   },
 
@@ -276,7 +281,7 @@ export const useWM = create<WMState>((set, get) => ({
   reset: () => {
     persistKey = null;
     for (const k of Object.keys(savedRects)) delete savedRects[k as AppId];
-    set({ windows: {}, order: [], focusedId: null, switcherOpen: false, space: DEFAULT_SPACE });
+    set({ windows: {}, order: [], swipeOrder: null, focusedId: null, switcherOpen: false, space: DEFAULT_SPACE });
   },
 
   hydrate: (userId) => {
@@ -307,7 +312,7 @@ export const useWM = create<WMState>((set, get) => ({
         };
         order.push(o.appId);
       }
-      set({ windows, order, focusedId: null, space: typeof data.space === "string" ? data.space : DEFAULT_SPACE });
+      set({ windows, order, swipeOrder: null, focusedId: null, space: typeof data.space === "string" ? data.space : DEFAULT_SPACE });
     } catch {
       /* corrupt or unavailable storage: start clean */
     }
@@ -315,6 +320,43 @@ export const useWM = create<WMState>((set, get) => ({
 }));
 
 const savedRects: Partial<Record<AppId, Rect>> = {};
+
+/** A pause this long after a gesture-bar swipe ends the run: the app you stayed in now counts as the last one used. */
+const SWIPE_RUN_MS = 2500;
+let swipeRunTimer: number | undefined;
+function endSwipeRun() {
+  window.clearTimeout(swipeRunTimer);
+  if (useWM.getState().swipeOrder) useWM.setState({ swipeOrder: null });
+}
+
+/** Brings a window up and in front (and to the end of the order of last use). */
+function focusWindow(id: string) {
+  const s = useWM.getState();
+  const w = s.windows[id];
+  if (!w) return;
+  const state = w.state === "minimized" ? w.prevState : w.state;
+  useWM.setState({
+    windows: { ...s.windows, [id]: { ...w, state } },
+    order: [...s.order.filter((i) => i !== id), id],
+    focusedId: id,
+    switcherOpen: false,
+    space: w.space,
+  });
+  persist();
+}
+
+/**
+ * Step 2.16: the phone gesture bar's sequence of apps, oldest use first: a
+ * swipe right brings the app used just before this one, a swipe left the one
+ * used after it (during a run of swipes the order is held, see swipeOrder).
+ */
+export function switchOrder(s: Pick<WMState, "order" | "windows" | "swipeOrder">): AppWindow[] {
+  const ids = s.swipeOrder ?? s.order;
+  const list = ids.map((id) => s.windows[id]).filter((w): w is AppWindow => !!w);
+  // Windows that appeared during a run (none normally) go to the end.
+  for (const id of s.order) if (!ids.includes(id) && s.windows[id]) list.push(s.windows[id]!);
+  return list;
+}
 
 function persist() {
   if (!persistKey) return;

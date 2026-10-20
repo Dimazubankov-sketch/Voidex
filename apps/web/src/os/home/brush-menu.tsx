@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { RiApps2Line, RiArrowDownSLine, RiArrowUpDownLine, RiImageLine, RiLayoutGridLine, RiListUnordered } from "@remixicon/react";
+import { RiApps2Line, RiArrowDownSLine, RiLayoutMasonryLine, RiArrowUpDownLine, RiImageLine, RiLayoutGridLine, RiListUnordered } from "@remixicon/react";
 import type { WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
@@ -141,6 +141,7 @@ export function BrushMenu({ anchor, layout }: { anchor: RefObject<HTMLElement | 
               <RiArrowUpDownLine className="text-text-tertiary" />
             </button>
             <Row icon={<RiApps2Line />} label={t("widgets.add")} onClick={() => ui().setWidgetsOpen(true)} testId="brush-widgets" />
+            {ff === "mobile" && <Row icon={<RiLayoutMasonryLine />} label={t("home.editPages")} onClick={() => ui().setPagesOpen(true)} testId="brush-pages" />}
           </motion.div>
         )}
       </AnimatePresence>

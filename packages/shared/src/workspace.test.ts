@@ -32,6 +32,7 @@ import {
   placementOf,
   freeBlock,
   placeGroup,
+  reorderPages,
   gridPlacement,
   categoryOf,
   type LayoutItem,
@@ -603,5 +604,21 @@ describe("Step 2.15: desktop and widgets", () => {
     const e = Object.fromEntries([...placementOf(edge, place, g)].map(([k, p]) => [k, `${p.c},${p.r}`]));
     expect(e["app:settings"]).toBe("9,4");
     expect(e["app:mail"]).toBe("8,4");
+  });
+});
+
+describe("Step 2.16: reorder phone pages", () => {
+  const ALL: AppId[] = ["mail", "settings", "vibex", "notes", "files", "media", "store", "calculator", "clock"];
+  it("a page moves with its icons and widgets; the others keep theirs; out of range does nothing", () => {
+    let l = normalizeLayout(null, ALL);
+    l = moveItem(l, { kind: "app", id: "clock" }, { surface: "mobile", page: 1 }, 0);
+    l = moveItem(l, { kind: "app", id: "notes" }, { surface: "mobile", page: 2 }, 0);
+    l = addWidget(l, "clock", { surface: "mobile", page: 2 }, "w1");
+    const before = l.mobile.pages.map((p) => p.map((i) => i.id));
+    const r = reorderPages(l, 2, 0);
+    expect(r.mobile.pages.map((p) => p.map((i) => i.id))).toEqual([before[2], before[0], before[1]]);
+    expect(r.widgets.find((w) => w.surface === "mobile")?.container).toBe("0");
+    expect(normalizeLayout(r, ALL).mobile.pages[0]!.map((i) => i.id)).toEqual(["notes"]);
+    expect(reorderPages(l, 0, 5)).toBe(l);
   });
 });

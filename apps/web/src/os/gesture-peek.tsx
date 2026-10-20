@@ -8,7 +8,7 @@ import { useLanguage } from "@/lib/i18n";
 import { CLIENT_APPS } from "./app-registry";
 import { barDrag, dragRadius, dragScale } from "./gesture-bar";
 import { isPrivateApp, mountSnapshot, snapshotOf, useSnapshots } from "./snapshots";
-import { foregroundId, useWM, type AppWindow } from "./window-manager";
+import { foregroundId, switchOrder, useWM, type AppWindow } from "./window-manager";
 
 const GAP = 16;
 /** Travel (px) after which the gesture counts as entering the switcher and the backdrop is on. */
@@ -81,7 +81,7 @@ export function GesturePeek() {
   const wm = useWM();
   const { w, h } = wm.bounds;
   const fg = foregroundId(wm);
-  const list = Object.values(wm.windows).sort((a, b) => a.openedAt - b.openedAt || a.id.localeCompare(b.id));
+  const list = switchOrder(wm);
   const i = list.findIndex((x) => x.id === fg);
   const prev = i > 0 ? list[i - 1] : undefined;
   const next = i >= 0 ? list[i + 1] : undefined;

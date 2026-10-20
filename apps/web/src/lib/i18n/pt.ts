@@ -1575,4 +1575,7 @@ export const pt: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "Seguindo",
   "vibex.feed.followingEmpty": "Nenhum post de quem você segue",
   "vibex.feed.followingEmptyHint": "Siga pessoas na Busca ou em Para você: os posts delas aparecerão aqui.",
+  "home.editPages": "Editar páginas",
+  "home.editPagesDone": "Concluído",
+  "home.pageN": "Página {n}",
 };

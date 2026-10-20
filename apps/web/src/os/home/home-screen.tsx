@@ -13,6 +13,7 @@ import { useWM } from "../window-manager";
 import { CATEGORY_LABEL, appCategory, appLabel, itemKey, openApp } from "./actions";
 import { labelTone, useWallpaperImage, wallpaperStyle, type LabelTone } from "./appearance";
 import { BrushMenu } from "./brush-menu";
+import { PagesEditor } from "./pages-editor";
 import { ContextMenu } from "./context-menu";
 import { FolderOverlay } from "./folder-overlay";
 import { useHomeGestures } from "./gestures";
@@ -232,6 +233,7 @@ export function HomeScreen({
 
       <BrushMenu anchor={brushBtn} layout={layout} />
       <WidgetsPanel />
+      {ff === "mobile" && <PagesEditor layout={layout} />}
       <Launcher apps={apps} layout={layout} />
       <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />
       <ContextMenu layout={layout} />

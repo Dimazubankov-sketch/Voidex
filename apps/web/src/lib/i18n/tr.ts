@@ -1575,4 +1575,7 @@ export const tr: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "Takip edilenler",
   "vibex.feed.followingEmpty": "Takip ettiklerinden gönderi yok",
   "vibex.feed.followingEmptyHint": "Arama'dan veya Senin için'den insanları takip et: gönderileri burada görünür.",
+  "home.editPages": "Sayfaları düzenle",
+  "home.editPagesDone": "Bitti",
+  "home.pageN": "Sayfa {n}",
 };

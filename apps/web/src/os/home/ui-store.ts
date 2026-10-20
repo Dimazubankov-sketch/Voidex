@@ -63,6 +63,9 @@ interface HomeUi {
   /** The brush menu (Wallpaper / View / Widgets), anchored at the brush. */
   brushOpen: boolean;
   widgetsOpen: boolean;
+  /** Step 2.16: «Изменить страницы» (phone): the overview of all pages. */
+  pagesOpen: boolean;
+  setPagesOpen: (v: boolean) => void;
   /** Step 2.15, PC: where the desktop menu was opened (a new widget lands near it). */
   widgetsAt: { x: number; y: number } | null;
   launcherOpen: boolean;
@@ -110,6 +113,8 @@ export const useHomeUi = create<HomeUi>((set) => ({
   appearanceOpen: false,
   brushOpen: false,
   widgetsOpen: false,
+  pagesOpen: false,
+  setPagesOpen: (pagesOpen) => set({ pagesOpen, menu: null, launcherOpen: false, brushOpen: false }),
   widgetsAt: null,
   launcherOpen: false,
   drag: null,
@@ -125,7 +130,7 @@ export const useHomeUi = create<HomeUi>((set) => ({
   toggleRemoveSel: (id) => set((st) => ({ removeSel: st.removeSel.includes(id) ? st.removeSel.filter((a) => a !== id) : [...st.removeSel, id] })),
   setRemoveConfirm: (removeConfirm) => set({ removeConfirm, menu: null }),
   setEditing: (editing) =>
-    set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null, brushOpen: false, removeSel: [] }),
+    set(editing ? { editing, menu: null, launcherOpen: false } : { editing, renamingFolder: null, brushOpen: false, pagesOpen: false, removeSel: [] }),
   setMobilePage: (mobilePage) => set({ mobilePage }),
   setOpenFolder: (openFolder) => set(openFolder ? { openFolder, menu: null } : { openFolder, menu: null, renamingFolder: null }),
   setRenamingFolder: (renamingFolder) => set({ renamingFolder }),

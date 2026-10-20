@@ -1575,4 +1575,7 @@ export const zh: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "关注",
   "vibex.feed.followingEmpty": "你关注的人还没有发帖",
   "vibex.feed.followingEmptyHint": "在搜索或推荐中关注他人：他们的帖子会显示在这里。",
+  "home.editPages": "编辑页面",
+  "home.editPagesDone": "完成",
+  "home.pageN": "第 {n} 页",
 };

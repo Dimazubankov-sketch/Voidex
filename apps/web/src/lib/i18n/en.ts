@@ -1606,6 +1606,9 @@ export const en = {
   "vibex.feed.modeFollowing": "Following",
   "vibex.feed.followingEmpty": "No posts from the people you follow",
   "vibex.feed.followingEmptyHint": "Follow people in Search or from Recommendations: their posts will appear here.",
+  "home.editPages": "Edit pages",
+  "home.editPagesDone": "Done",
+  "home.pageN": "Page {n}",
 } as const;
 
 

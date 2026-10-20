@@ -1575,4 +1575,7 @@ export const de: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "Abonniert",
   "vibex.feed.followingEmpty": "Keine Posts von Leuten, denen du folgst",
   "vibex.feed.followingEmptyHint": "Folge Leuten über die Suche oder „Für dich“: Ihre Posts erscheinen hier.",
+  "home.editPages": "Seiten bearbeiten",
+  "home.editPagesDone": "Fertig",
+  "home.pageN": "Seite {n}",
 };

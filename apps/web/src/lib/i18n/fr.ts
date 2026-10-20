@@ -1575,4 +1575,7 @@ export const fr: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "Abonnements",
   "vibex.feed.followingEmpty": "Aucune publication de vos abonnements",
   "vibex.feed.followingEmptyHint": "Abonnez-vous à des personnes via Rechercher ou Pour vous : leurs publications apparaîtront ici.",
+  "home.editPages": "Modifier les pages",
+  "home.editPagesDone": "Terminé",
+  "home.pageN": "Page {n}",
 };

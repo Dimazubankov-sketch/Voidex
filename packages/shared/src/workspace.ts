@@ -729,6 +729,25 @@ export function placeItem(l: WorkspaceLayout, item: LayoutItem, pos: Position): 
   return n;
 }
 
+/**
+ * Step 2.16: «Изменить страницы» — a phone page moves to another place among
+ * the pages and takes everything on it along (icons, folders, widgets with
+ * their cells): nothing has to be carried over by hand.
+ */
+export function reorderPages(l: WorkspaceLayout, from: number, to: number): WorkspaceLayout {
+  const count = l.mobile.pages.length;
+  if (from === to || from < 0 || from >= count || to < 0 || to >= count) return l;
+  const order = l.mobile.pages.map((_, i) => i);
+  order.splice(to, 0, order.splice(from, 1)[0]!);
+  /** Old page index → new index. */
+  const at = new Map(order.map((old, i) => [old, i]));
+  return {
+    ...l,
+    mobile: { ...l.mobile, pages: order.map((old) => l.mobile.pages[old]!) },
+    widgets: l.widgets.map((w) => (w.surface === "mobile" && at.has(Number(w.container)) ? { ...w, container: String(at.get(Number(w.container))) } : w)),
+  };
+}
+
 export function newWidgetId(random: () => number = Math.random): string {
   return `w_${Math.floor(random() * 36 ** 8)
     .toString(36)

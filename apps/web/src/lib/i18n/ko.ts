@@ -1575,4 +1575,7 @@ export const ko: Record<MessageKey, string> = {
   "vibex.feed.modeFollowing": "팔로잉",
   "vibex.feed.followingEmpty": "팔로우하는 사람의 게시물이 없습니다",
   "vibex.feed.followingEmptyHint": "검색이나 추천에서 사람을 팔로우하면 게시물이 여기에 표시됩니다.",
+  "home.editPages": "페이지 편집",
+  "home.editPagesDone": "완료",
+  "home.pageN": "{n}페이지",
 };

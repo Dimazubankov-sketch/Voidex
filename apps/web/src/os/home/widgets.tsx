@@ -214,6 +214,9 @@ function RemoveBadge({ onRemove }: { onRemove: () => void }) {
 /** Phone: holding a dragged widget this close to the side of the screen carries it to the next page. */
 const EDGE = 26;
 const EDGE_HOLD_MS = 600;
+/** Long press that picks a widget up (as for icons), and how far the finger may wander meanwhile. */
+const LONG_PRESS_MS = 450;
+const PRESS_SLOP = 8;
 
 /**
  * One placed widget in its grid cells: glass card. In edit mode it wiggles
@@ -231,6 +234,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const [dragging, setDragging] = useState(false);
+  const touchPress = useRef(false);
   /** After a drop: the rect it was let go at, and the cell it was sent to (the glide starts once it is there). */
   const snap = useRef<{ from: DOMRect; cell: string } | null>(null);
 
@@ -252,16 +256,50 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
 
   if (!def) return null;
 
-  const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!editing || e.button !== 0) return;
+  /**
+   * Step 2.16: outside edit mode a long press picks the widget up like an app
+   * icon: edit mode starts and the same finger / mouse carries it on, free
+   * under the pointer; the grid only applies when it is let go.
+   */
+  const pressStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
+    if (editing) return beginDrag(e.clientX, e.clientY);
+    const id = e.pointerId;
+    const from = { x: e.clientX, y: e.clientY };
+    let at = { ...from };
+    touchPress.current = e.pointerType !== "mouse";
+    const stop = () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("pointermove", track);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    const track = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      at = { x: ev.clientX, y: ev.clientY };
+      if (Math.hypot(at.x - from.x, at.y - from.y) > PRESS_SLOP) stop();
+    };
+    const timer = window.setTimeout(() => {
+      stop();
+      navigator.vibrate?.(8);
+      useHomeUi.getState().setEditing(true);
+      // The drag begins where the press began, so the widget jumps by nothing and follows from here.
+      beginDrag(from.x, from.y);
+    }, LONG_PRESS_MS);
+    window.addEventListener("pointermove", track);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
+
+  const beginDrag = (clientX: number, clientY: number) => {
     const el = ref.current;
     const grid = el?.closest<HTMLElement>("[data-home-grid]");
     const host = el?.closest<HTMLElement>("[data-grid-host]") ?? grid;
     if (!el || !grid || !host) return;
     x.stop();
     y.stop();
-    const start = { x: e.clientX - x.get(), y: e.clientY - y.get() };
+    const start = { x: clientX - x.get(), y: clientY - y.get() };
     const box0 = el.getBoundingClientRect();
     const natural = { left: box0.left - x.get(), top: box0.top - y.get(), w: box0.width, h: box0.height };
     const area = host.getBoundingClientRect();
@@ -365,10 +403,12 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       data-widget={widget.id}
       data-dragging={dragging || undefined}
       data-testid={`widget-${widget.type}`}
-      onPointerDown={startDrag}
+      onPointerDown={pressStart}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        // A finger's long press picks the widget up (the browser also reports it as a context menu).
+        if (touchPress.current) return;
         useHomeUi.getState().openMenu({ x: e.clientX, y: e.clientY, target: { kind: "widget", id: widget.id } });
       }}
     >
