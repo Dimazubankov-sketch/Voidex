@@ -15,6 +15,20 @@ async function shot(page: Page, name: string) {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}-${isMobile(page) ? "phone" : "pc"}.png` });
 }
 
+// The editor must never fall into a render loop (e.g. the canvas and the
+// editor handing the current screen back and forth).
+const loops = new WeakMap<Page, string[]>();
+test.beforeEach(async ({ page }) => {
+  const list: string[] = [];
+  loops.set(page, list);
+  page.on("console", (m) => {
+    if (m.type() === "error" && m.text().includes("Maximum update depth")) list.push(m.text());
+  });
+});
+test.afterEach(async ({ page }) => {
+  expect(loops.get(page) ?? []).toEqual([]);
+});
+
 async function createSample(page: Page, name: string) {
   await openApp(page, "forma");
   await expect(page.getByTestId("forma-app")).toBeVisible();

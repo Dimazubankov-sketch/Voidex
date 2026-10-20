@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   RiArrowLeftLine,
@@ -227,6 +227,8 @@ function EditorLoaded({
         savedJson.current = json;
         const still = JSON.stringify(docOf(historyRef.current.present)) === json;
         setSave(still ? "saved" : "dirty");
+        // Changed while this save was in flight: save the newer state too.
+        if (!still) window.setTimeout(() => void saveAgain.current(false), 300);
         if (checkpoint) notify("Проект сохранён");
       } catch (e) {
         if (e instanceof ApiError && e.status === 409) setSave("conflict");
@@ -240,9 +242,12 @@ function EditorLoaded({
     },
     [notify],
   );
+  const saveAgain = useRef(doSave);
+  saveAgain.current = doSave;
 
-  // Autosave: shortly after the last change.
-  useEffect(() => {
+  // Autosave: shortly after the last change. A layout effect, so the badge
+  // never shows "saved" for a frame after an unsaved change.
+  useLayoutEffect(() => {
     if (save === "conflict") return;
     const json = JSON.stringify(docOf(project));
     if (json === savedJson.current) {

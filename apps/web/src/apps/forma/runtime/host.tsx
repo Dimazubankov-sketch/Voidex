@@ -141,13 +141,20 @@ export function useRuntime(project: Project, mode: "preview" | "canvas", opts: {
     if (step.state !== stateRef.current) apply(step);
   }, [now, hasTimers, apply]);
 
+  // The screen the editor asked for. Reporting it back would make the two
+  // ping-pong when both change in the same frame, so only the runtime's own
+  // navigation is reported.
+  const followed = useRef<string | null>(null);
   useEffect(() => {
+    if (state.screenId === followed.current) return;
+    followed.current = null;
     onScreen.current?.(state.screenId);
   }, [state.screenId]);
 
   // The editor moves to another screen: the canvas follows.
   useEffect(() => {
     if (opts.screenId && opts.screenId !== stateRef.current.screenId && findScreen(pRef.current, opts.screenId)) {
+      followed.current = opts.screenId;
       const next = { ...stateRef.current, screenId: opts.screenId, dialogs: [], drawer: false };
       stateRef.current = next;
       setState(next);
