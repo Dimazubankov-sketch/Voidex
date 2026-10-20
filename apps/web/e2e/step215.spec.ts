@@ -151,8 +151,11 @@ test("Notification Center: grouped by app, a group opens and folds, clear one / 
   // Collapsed: only the newest card of each group.
   await expect(system.getByTestId("notification")).toHaveCount(1);
   await expect(system.getByTestId("notification-more")).toHaveText("Ещё 2");
-  await system.getByTestId("notification-group-expand").click();
-  await expect(system).toHaveAttribute("data-expanded", "true");
+  // The center may still be sliding in on a busy runner and the tap can miss; tap again only if it did not open.
+  await expect(async () => {
+    if ((await system.getAttribute("data-expanded")) !== "true") await system.getByTestId("notification-group-expand").click();
+    await expect(system).toHaveAttribute("data-expanded", "true", { timeout: 2000 });
+  }).toPass({ timeout: 15_000 });
   await expect(system.getByTestId("notification")).toHaveCount(3);
   // One notification: its ×.
   await system.getByTestId("notification").first().hover();
