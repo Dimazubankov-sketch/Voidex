@@ -66,7 +66,6 @@ const categories = [
   ['all', 'Все', LayoutGrid],
   ['txt', '.txt', FileText],
   ['prsn', '.prsn', Presentation],
-  ['book', '.book', BookOpen],
   ['downloaded', 'Скачанные', Download],
   ['folders', 'Папки', Folder],
 ] as const;
@@ -749,7 +748,7 @@ export function FilesApp({
                         : section === 'trash'
                           ? 'Удалённые документы можно восстановить здесь.'
                           : cloudOff
-                            ? 'Файлы .txt, .prsn и .book из Vibex и Почты VoidOps открываются здесь.'
+                            ? 'Файлы .txt и .prsn из Vibex и Почты VoidOps открываются здесь.'
                             : 'Скачанные документы и презентации сохраняются здесь, в облаке Voidex.'}
                     </p>
                   </div>

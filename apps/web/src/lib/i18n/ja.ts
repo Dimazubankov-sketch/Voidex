@@ -1578,4 +1578,8 @@ export const ja: Record<MessageKey, string> = {
   "home.editPages": "ページを編集",
   "home.editPagesDone": "完了",
   "home.pageN": "ページ {n}",
+  "notes.image.preview": "画像",
+  "notes.image.shape.square": "正方形",
+  "notes.image.shape.portrait": "縦長",
+  "notes.image.shape.landscape": "横長",
 };

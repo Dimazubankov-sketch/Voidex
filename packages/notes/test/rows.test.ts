@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addSpread, joinRow, layoutBlocks, leaveRow, moveInPage, rowExtent } from "../src/document.ts";
+import { asRow, joinRow, layoutBlocks, leaveRow, moveInPage, rowExtent, setRowLook } from "../src/document.ts";
 import type { NoteBlock } from "@voidex/shared";
 
 const IMG = "/api/notes/media?id=0b9d6f7e-3a8e-4b0e-9a1a-2f2b4c5d6e7f";
@@ -40,17 +40,18 @@ test("reorder inside a row; at its edge an image steps out; other blocks jump ov
   assert.equal(moveInPage(row, 0, -1), null);
 });
 
-test("a book spread adds two empty pages", () => {
-  const b = {
-    kind: "book" as const,
-    format: "book" as const,
-    pages: [
-      { id: "p1", blocks: [txt("x")] },
-      { id: "p2", blocks: [txt("y")] },
-    ],
-  };
-  const r = addSpread(b);
-  assert.equal(r.note.pages.length, 4);
-  assert.equal(r.note.pages[2]!.id, r.page.id);
-  assert.equal(r.note.kind, "book");
+test("Step 2.16: a row shares one size and one shape; the first picture decides; pictures added together form a row", () => {
+  let l: NoteBlock[] = [txt("t"), { ...img("a"), width: 80, shape: "portrait" }, img("b"), img("c")];
+  l = joinRow(l, 2, "r1");
+  assert.deepEqual(l.slice(1, 3).map((b) => [b.row, b.width, b.shape]), [["r1", 80, "portrait"], ["r1", 80, "portrait"]]);
+  l = joinRow(l, 3, "r2");
+  assert.deepEqual(l.slice(1).map((b) => [b.row, b.width, b.shape]), [["r1", 80, "portrait"], ["r1", 80, "portrait"], ["r1", 80, "portrait"]]);
+  // Resizing or reshaping any of them changes them all.
+  l = setRowLook(l, 3, { width: 60 });
+  l = setRowLook(l, 2, { shape: "landscape" });
+  assert.deepEqual(l.slice(1).map((b) => [b.width, b.shape]), [[60, "landscape"], [60, "landscape"], [60, "landscape"]]);
+  assert.equal(l[0]!.width, undefined);
+  const row = asRow([{ ...img("x"), width: 100 }, img("y"), img("z")], "r9");
+  assert.deepEqual(row.map((b) => [b.row, b.width, b.shape]), [["r9", 100, "square"], ["r9", 100, "square"], ["r9", 100, "square"]]);
+  assert.deepEqual(asRow([img("solo")], "r"), [img("solo")]);
 });

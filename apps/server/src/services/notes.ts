@@ -9,7 +9,7 @@ import {
   NOTES_NAME_MAX,
   NOTES_PROJECTS_MAX,
   NOTES_SHARES_MAX,
-  emptyBook,
+  bookAsNote,
   emptyNote,
   emptyPresentation,
   legacySnapshot,
@@ -20,7 +20,9 @@ import {
   notesPageCount,
   notesPreview,
   validCover,
+  validBookBody,
   validNotesBody,
+  type BookBody,
   type LegacyProject,
   type NotesBody,
   type NotesDocKind,
@@ -253,10 +255,11 @@ export class NotesService {
     return {
       id: d.id,
       projectId: d.projectId,
-      kind: d.kind,
+      // Step 2.16: a book written earlier is a note now (same pages; it is saved as one).
+      kind: d.kind === "book" ? "note" : d.kind,
       name: d.name,
       cover: d.cover,
-      format: (data.format ?? (d.kind === "note" ? "vertical" : d.kind === "book" ? "book" : "rect")) as NotesDocMetaDto["format"],
+      format: (d.kind === "book" ? "vertical" : (data.format ?? (d.kind === "note" ? "vertical" : "rect"))) as NotesDocMetaDto["format"],
       role,
       revision: d.revision,
       pages: notesPageCount(d.data),
@@ -378,6 +381,8 @@ export class NotesService {
   // ------------------------------------------------------------------ documents
 
   async createDocument(userId: string, projectId: string, input: { kind: NotesDocKind; name: string; format?: string; data?: unknown }, sessionId?: string): Promise<NotesDocumentDto> {
+    // Step 2.16: books are no longer made (earlier ones live on as notes).
+    if (input.kind === "book") throw fail(ErrorCode.ValidationFailed, "Books are no longer supported; write a note.");
     await this.requireProject(userId, projectId, "write");
     const [{ n, max }] = (await this.ctx.db
       .select({ n: sql<number>`count(*)::int`, max: sql<number>`coalesce(max(${notesDocuments.position}), -1)::int` })
@@ -391,14 +396,14 @@ export class NotesService {
       await this.checkMedia(userId, notesMediaIds(data), []);
     } else
       data =
-        input.kind === "note" ? emptyNote(input.format === "square" ? "square" : "vertical") : input.kind === "book" ? emptyBook() : emptyPresentation(input.format === "square" ? "square" : "rect");
+        input.kind === "note" ? emptyNote(input.format === "square" ? "square" : "vertical") : emptyPresentation(input.format === "square" ? "square" : "rect");
     if (Buffer.byteLength(JSON.stringify(data)) > NOTES_DOC_MAX_BYTES) throw fail(ErrorCode.NotesTooLarge, "The document is too large.");
     const [row] = await this.ctx.db
       .insert(notesDocuments)
       .values({
         projectId,
         kind: input.kind,
-        name: cleanName(input.name, input.kind === "note" ? "Новая заметка" : input.kind === "book" ? "Новая книга" : "Новая презентация"),
+        name: cleanName(input.name, input.kind === "note" ? "Новая заметка" : "Новая презентация"),
         data: data as unknown as Record<string, unknown>,
         mediaIds: [...notesMediaIds(data)],
         position: max + 1,
@@ -418,14 +423,17 @@ export class NotesService {
       .where(or(and(eq(notesMembers.resourceType, "project"), eq(notesMembers.resourceId, project.id)), and(eq(notesMembers.resourceType, "document"), eq(notesMembers.resourceId, doc.id))))
       .limit(1);
     const owner = (await this.people([project.ownerId])).get(project.ownerId)!;
-    return { ...this.docMeta(doc, role, !!member), data: doc.data as unknown as NotesBody, projectName: project.name, owner };
+    const data = doc.kind === "book" && validBookBody(doc.data) ? bookAsNote(doc.data) : (doc.data as unknown as NotesBody);
+    return { ...this.docMeta(doc, role, !!member), data, projectName: project.name, owner };
   }
 
   /** Saves the body (compare-and-swap on the revision). Editors and the owner only; checked on every save. */
   async saveDocument(userId: string, documentId: string, input: { data: unknown; revision: number }, sessionId?: string): Promise<{ revision: number; updatedAt: string }> {
     const { doc, project, role } = await this.docAccess(userId, documentId);
     if (!canWrite(role)) throw fail(ErrorCode.NotesAccessRevoked, "You can only read this document.", { status: 403 });
-    if (!validNotesBody(doc.kind, input.data)) throw fail(ErrorCode.ValidationFailed, "This is not a Notes document.");
+    // Step 2.16: a book written earlier comes back as a note and stays one from now on.
+    const kind: NotesDocKind = doc.kind === "book" ? "note" : doc.kind;
+    if (!validNotesBody(kind, input.data)) throw fail(ErrorCode.ValidationFailed, "This is not a Notes document.");
     if (Buffer.byteLength(JSON.stringify(input.data)) > NOTES_DOC_MAX_BYTES) throw fail(ErrorCode.NotesTooLarge, "The document is too large.");
     const media = notesMediaIds(input.data);
     await this.checkMedia(userId, media, [...doc.mediaIds, ...notesMediaIds({ cover: project.cover })]);
@@ -433,7 +441,7 @@ export class NotesService {
     const now = this.ctx.now();
     const rows = await this.ctx.db
       .update(notesDocuments)
-      .set({ data: input.data as unknown as Record<string, unknown>, mediaIds: [...media], revision: sql`${notesDocuments.revision} + 1`, updatedAt: now, updatedBy: userId })
+      .set({ kind, data: input.data as unknown as Record<string, unknown>, mediaIds: [...media], revision: sql`${notesDocuments.revision} + 1`, updatedAt: now, updatedBy: userId })
       .where(and(eq(notesDocuments.id, documentId), eq(notesDocuments.revision, input.revision)))
       .returning({ revision: notesDocuments.revision });
     if (!rows.length) {
@@ -719,7 +727,13 @@ export class NotesService {
     const documents = docs
       .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
       .filter((d) => (d.kind === "note" || d.kind === "presentation" || d.kind === "book") && validNotesBody(d.kind as NotesDocKind, d.data))
-      .map((d) => ({ legacyId: "", kind: d.kind as NotesDocKind, name: String(d.name ?? ""), cover: notesMediaId(d.cover) ? (d.cover as string) : null, data: d.data as NotesBody }));
+      .map((d) => ({
+        legacyId: "",
+        kind: (d.kind === "book" ? "note" : d.kind) as NotesDocKind,
+        name: String(d.name ?? ""),
+        cover: notesMediaId(d.cover) ? (d.cover as string) : null,
+        data: d.kind === "book" ? bookAsNote(d.data as BookBody) : (d.data as NotesBody),
+      }));
     return { legacyId: "", name: String(data.name ?? "Проект"), cover: notesMediaId(data.cover) ? (data.cover as string) : null, documents };
   }
 

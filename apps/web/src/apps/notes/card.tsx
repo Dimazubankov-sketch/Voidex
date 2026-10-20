@@ -9,7 +9,7 @@ import { FILE_ICON } from "./file-icons";
 export const openNotesCard = (token: string) => useWM.getState().open("notes", { params: { share: token } });
 
 /**
- * A Notes share as a file (Step 2.6): the VOIDEX .txt / .prsn / .book icon and
+ * A Notes share as a file (Step 2.6): the VOIDEX .txt / .prsn icon and
  * "Name.txt". Shown in Vibex messages and VoidOps letters; tapping it opens
  * Notes. Built as a file so it can later be downloaded or kept in Files.
  */
@@ -38,7 +38,7 @@ export function NotesFileCard({ card, tone = "default", className }: { card: Not
           {card.ext}
         </span>
         <span className={cx("text-[12.5px]", tone === "mine" ? "text-white/75" : "text-text-tertiary")}>
-          {card.kind === "project" ? t("notes.card.project") : card.kind === "presentation" ? t("notes.presentation") : card.kind === "book" ? t("notes.book") : t("notes.card.note")}
+          {card.kind === "project" ? t("notes.card.project") : card.kind === "presentation" ? t("notes.presentation") : t("notes.card.note")}
         </span>
       </span>
     </button>

@@ -175,20 +175,22 @@ test("Calculator: no History / help buttons; the mode switch slides", async ({ p
   expect(await page.locator(".vxc .mode-switch").evaluate((el) => getComputedStyle(el, "::before").transitionDuration)).toBe("0.34s");
 });
 
-test("Notes: \"+\" inside the centred search field in its colours; delete page in the toolbar", async ({ page }) => {
+test("Notes (Step 2.16): a narrower search field with the \"+\" as its own round button on the right, no microphone; delete page in the toolbar", async ({ page }) => {
   await signUpViaApi(page, "Ната", "Заметкина");
   await launch(page, "notes");
   const field = page.getByTestId("notes-search-field");
   const add = page.getByTestId("notes-add");
-  await expect(field.getByTestId("notes-add")).toBeVisible();
+  await expect(add).toBeVisible();
+  await expect(field.getByTestId("notes-add")).toHaveCount(0);
   const [fb, ab] = [(await field.boundingBox())!, (await add.boundingBox())!];
-  expect(ab.x + ab.width).toBeLessThanOrEqual(fb.x + fb.width);
-  const vw = page.viewportSize()!.width;
+  // Beside the field, on the right, round, at the field's height.
+  expect(ab.x).toBeGreaterThanOrEqual(fb.x + fb.width);
+  expect(Math.abs(ab.width - ab.height)).toBeLessThan(2);
+  expect(Math.abs(ab.y + ab.height / 2 - (fb.y + fb.height / 2))).toBeLessThan(3);
+  // The pair is centred in the window.
   const win = (await page.locator('[data-testid="window-notes"]').boundingBox())!;
-  expect(Math.abs(fb.x + fb.width / 2 - (win.x + win.width / 2))).toBeLessThan(4);
-  expect(vw).toBeGreaterThan(0);
-  const [fieldBg, addBg] = await Promise.all([field.evaluate((el) => getComputedStyle(el).backgroundColor), add.evaluate((el) => getComputedStyle(el).backgroundColor)]);
-  expect(addBg).toBe(fieldBg);
+  expect(Math.abs((fb.x + ab.x + ab.width) / 2 - (win.x + win.width / 2))).toBeLessThan(6);
+  await expect(page.getByTestId("notes-bottom-bar").locator('[aria-label*="икрофон"], [data-testid*="mic"]')).toHaveCount(0);
 
   // A note with two pages: the toolbar deletes the page in one tap (asking first: it has text).
   const p = (await api(page, "POST", "/api/notes/projects", { name: "Проект 2.8" })).body;

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import type { ServerEvent } from "@voidex/shared";
-import { notesWorkspaces } from "../src/db/schema.js";
+import { notesDocuments, notesWorkspaces } from "../src/db/schema.js";
 import { Device, createTestEnv, signUp, type TestEnv } from "./helpers.js";
 
 let env: TestEnv;
@@ -41,7 +41,7 @@ async function project(u: U, name = "Проект") {
   expect(r.status).toBe(201);
   return r.body.id as string;
 }
-async function doc(u: U, projectId: string, kind: "note" | "presentation" | "book" = "note", name = "Заметка") {
+async function doc(u: U, projectId: string, kind: "note" | "presentation" = "note", name = "Заметка") {
   const r = await u.d.post(`/api/notes/projects/${projectId}/documents`, { kind, name });
   expect(r.status).toBe(201);
   return r.body as { id: string; revision: number };
@@ -363,72 +363,52 @@ describe("Notes share cards in Vibex and VoidOps", () => {
   });
 });
 
-describe("Step 2.13: books (.book) on the Notes infrastructure", () => {
+describe("Step 2.16: books are gone; books written earlier live on as notes", () => {
   const book = (blocks: unknown[][]) => ({ kind: "book", format: "book", pages: blocks.map((b) => ({ id: uid(), blocks: b })) });
 
-  it("a new book opens on a spread; pages, headings, sizes, picture rows and wrap are stored; bad shapes are refused", async () => {
+  it("no new books; an earlier book opens as a note with all its pages and is saved as a note; a copy of it is a note too", async () => {
     const a = await user("Ольга");
+    const b = await user("Рита");
     const p = await project(a, "Библиотека");
-    const created = await a.d.post(`/api/notes/projects/${p}/documents`, { kind: "book", name: "" });
-    expect(created.status).toBe(201);
-    expect(created.body).toMatchObject({ kind: "book", format: "book", name: "Новая книга", pages: 2 });
-    expect(created.body.data.pages).toHaveLength(2);
-    const img = (await upload(a, PNG)).body.url as string;
-    const row = uid();
+    expect((await a.d.post(`/api/notes/projects/${p}/documents`, { kind: "book", name: "" })).status).toBe(400);
+    // An earlier book, stored as it was (Step 2.13).
+    const n = await doc(a, p, "note", "Роман");
     const data = book([
-      [
-        { id: uid(), kind: "heading", text: "Глава 1" },
-        { id: uid(), kind: "heading2", text: "Часть" },
-        { id: uid(), kind: "text", text: "Крупно", size: 24, bold: true },
-        { id: uid(), kind: "image", text: "", src: img, width: 40, align: "left", wrap: true },
-      ],
-      [
-        { id: uid(), kind: "image", text: "", src: img, width: 50, row },
-        { id: uid(), kind: "image", text: "", src: img, width: 50, row },
-      ],
-      [{ id: uid(), kind: "text", text: "" }],
+      [{ id: uid(), kind: "heading", text: "Глава 1" }, { id: uid(), kind: "text", text: "Крупно", size: 24 }],
+      [{ id: uid(), kind: "text", text: "вторая страница" }],
     ]);
-    const saved = await a.d.put(`/api/notes/documents/${created.body.id}`, { data, revision: created.body.revision });
-    expect(saved.status).toBe(200);
-    const back = await a.d.get(`/api/notes/documents/${created.body.id}`);
-    expect(back.body).toMatchObject({ kind: "book", pages: 3 });
-    expect(back.body.data.pages[0].blocks[2]).toMatchObject({ size: 24, bold: true });
-    expect(back.body.data.pages[0].blocks[3]).toMatchObject({ wrap: true, align: "left" });
-    expect(back.body.data.pages[1].blocks.map((b: { row?: string }) => b.row)).toEqual([row, row]);
-    // Sizes are only the offered ones; a book is not a note.
-    const rev = saved.body.revision;
-    expect((await a.d.put(`/api/notes/documents/${created.body.id}`, { data: book([[{ id: uid(), kind: "text", text: "x", size: 13 }]]), revision: rev })).status).toBe(400);
-    expect((await a.d.put(`/api/notes/documents/${created.body.id}`, { data: note("not a book"), revision: rev })).status).toBe(400);
-    // A stale save never overwrites (CAS).
-    expect((await a.d.put(`/api/notes/documents/${created.body.id}`, { data, revision: created.body.revision })).status).toBe(409);
+    await env.app.ctx.db.update(notesDocuments).set({ kind: "book", data }).where(eq(notesDocuments.id, n.id));
+    const opened = await a.d.get(`/api/notes/documents/${n.id}`);
+    expect(opened.body).toMatchObject({ kind: "note", format: "vertical", pages: 2 });
+    expect(opened.body.data).toMatchObject({ kind: "note", format: "vertical" });
+    expect(JSON.stringify(opened.body.data)).toContain("вторая страница");
+    expect(opened.body.data.pages[0].blocks[1]).toMatchObject({ size: 24 });
+    const listed = await a.d.get(`/api/notes/projects/${p}`);
+    expect(JSON.stringify(listed.body)).not.toContain('"book"');
+    // A copy link of it is a .txt card and makes a note.
+    const share = await a.d.post("/api/notes/shares", { resourceType: "document", resourceId: n.id, mode: "copy" });
+    expect(share.body.card).toMatchObject({ ext: ".txt" });
+    const accepted = await b.d.post(`/api/notes/shares/${share.body.token}/accept`, {});
+    expect((await b.d.get(`/api/notes/documents/${accepted.body.documentId}`)).body).toMatchObject({ kind: "note", format: "vertical", pages: 2 });
+    // Saved from the editor: a note from now on, nothing lost.
+    const next = { ...opened.body.data, pages: [...opened.body.data.pages, { id: uid(), blocks: [{ id: uid(), kind: "text", text: "третья" }] }] };
+    expect((await a.d.put(`/api/notes/documents/${n.id}`, { data: next, revision: opened.body.revision })).status).toBe(200);
+    const [row] = await env.app.ctx.db.select().from(notesDocuments).where(eq(notesDocuments.id, n.id));
+    expect(row!.kind).toBe("note");
+    expect(JSON.stringify(row!.data)).toContain("вторая страница");
   });
 
-  it("a book is shared as a .book card: a copy for one person, edit access for another, revoke closes it", async () => {
+  it("picture rows keep their shared shape; unknown shapes are refused", async () => {
     const a = await user("Пётр");
-    const b = await user("Рита");
-    const c = await user("Семён");
-    const p = await project(a, "Рукописи");
-    const n = await doc(a, p, "book", "Роман");
-    await a.d.put(`/api/notes/documents/${n.id}`, { data: book([[{ id: uid(), kind: "text", text: "первая страница" }], [{ id: uid(), kind: "text", text: "вторая" }]]), revision: n.revision });
-    const copyShare = await a.d.post("/api/notes/shares", { resourceType: "document", resourceId: n.id, mode: "copy" });
-    expect(copyShare.body.card).toMatchObject({ title: "Роман", ext: ".book", kind: "book" });
-    const info = await b.d.get(`/api/notes/shares/${copyShare.body.token}`);
-    expect(info.body).toMatchObject({ kind: "book", ext: ".book", access: "none" });
-    const accepted = await b.d.post(`/api/notes/shares/${copyShare.body.token}/accept`, {});
-    const copy = await b.d.get(`/api/notes/documents/${accepted.body.documentId}`);
-    expect(copy.body).toMatchObject({ kind: "book", role: "owner" });
-    expect(JSON.stringify(copy.body.data)).toContain("вторая");
-
-    const access = await a.d.post("/api/notes/shares", { resourceType: "document", resourceId: n.id, mode: "access", role: "editor" });
-    await c.d.post(`/api/notes/shares/${access.body.token}/accept`, {});
-    const opened = await c.d.get(`/api/notes/documents/${n.id}`);
-    expect(opened.body).toMatchObject({ kind: "book", role: "editor" });
-    expect((await c.d.put(`/api/notes/documents/${n.id}`, { data: book([[{ id: uid(), kind: "text", text: "правка Семёна" }]]), revision: opened.body.revision })).status).toBe(200);
-    expect(JSON.stringify((await a.d.get(`/api/notes/documents/${n.id}`)).body.data)).toContain("правка Семёна");
-    expect((await a.d.delete(`/api/notes/access/document/${n.id}/${c.id}`)).status).toBeLessThan(300);
-    expect((await c.d.get(`/api/notes/documents/${n.id}`)).status).toBe(404);
-    // B's copy and the original are independent.
-    expect(JSON.stringify((await b.d.get(`/api/notes/documents/${accepted.body.documentId}`)).body.data)).not.toContain("правка Семёна");
+    const p = await project(a, "Фото");
+    const n = await doc(a, p, "note", "Поездка");
+    const img = (await upload(a, PNG)).body.url as string;
+    const row = uid();
+    const pics = (shape: string) => ({ kind: "note", format: "vertical", pages: [{ id: uid(), blocks: [0, 1, 2].map(() => ({ id: uid(), kind: "image", text: "", src: img, width: 80, row, shape })) }] });
+    const ok = await a.d.put(`/api/notes/documents/${n.id}`, { data: pics("portrait"), revision: n.revision });
+    expect(ok.status).toBe(200);
+    expect((await a.d.get(`/api/notes/documents/${n.id}`)).body.data.pages[0].blocks.map((x: { shape: string }) => x.shape)).toEqual(["portrait", "portrait", "portrait"]);
+    expect((await a.d.put(`/api/notes/documents/${n.id}`, { data: pics("circle"), revision: ok.body.revision })).status).toBe(400);
   });
 
   it("a .book file is accepted as a VoidOps attachment only when its content is a book", async () => {

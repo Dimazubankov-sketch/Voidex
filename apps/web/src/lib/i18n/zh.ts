@@ -1578,4 +1578,8 @@ export const zh: Record<MessageKey, string> = {
   "home.editPages": "编辑页面",
   "home.editPagesDone": "完成",
   "home.pageN": "第 {n} 页",
+  "notes.image.preview": "图片",
+  "notes.image.shape.square": "正方形",
+  "notes.image.shape.portrait": "竖向",
+  "notes.image.shape.landscape": "横向",
 };

@@ -1578,4 +1578,8 @@ export const tr: Record<MessageKey, string> = {
   "home.editPages": "Sayfaları düzenle",
   "home.editPagesDone": "Bitti",
   "home.pageN": "Sayfa {n}",
+  "notes.image.preview": "Görsel",
+  "notes.image.shape.square": "Kare",
+  "notes.image.shape.portrait": "Dikey",
+  "notes.image.shape.landscape": "Yatay",
 };

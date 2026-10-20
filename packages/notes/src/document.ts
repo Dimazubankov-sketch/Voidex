@@ -3,7 +3,7 @@
  * shapes (see @voidex/shared notes.ts): pages of a note, Note → Presentation,
  * reflowing slides between formats. No React, no DOM: tested with node.
  */
-import type { BookBody, NoteBlock, NoteBody, NotePage, PresentationBody, Slide, SlideFormat, SlideLayer } from "@voidex/shared";
+import type { BookBody, NoteBlock, NoteBody, NoteImageShape, NotePage, PresentationBody, Slide, SlideFormat, SlideLayer } from "@voidex/shared";
 
 /** A note or a book: pages of blocks (Step 2.13: the page functions serve both). */
 export type PagedBody = NoteBody | BookBody;
@@ -44,14 +44,6 @@ export function addPage<T extends PagedBody>(n: T, index = n.pages.length - 1): 
 }
 
 
-/** Step 2.13 (books): adds two empty pages (a spread) after page `index` (or at the end). */
-export function addSpread<T extends PagedBody>(n: T, index = n.pages.length - 1): { note: T; page: NotePage } {
-  const first = addPage(n, index);
-  const second = addPage(first.note, index + 1);
-  return { note: second.note, page: first.page };
-}
-
-/** Joins all pages back into one continuous sheet (nothing is lost). */
 export function mergePages<T extends PagedBody>(n: T): T {
   if (n.pages.length <= 1) return n;
   return { ...n, pages: [{ id: n.pages[0]!.id, blocks: n.pages.flatMap((p) => p.blocks) }] };
@@ -266,13 +258,42 @@ export function rowExtent(blocks: NoteBlock[], index: number): [number, number] 
   return [a, z];
 }
 
-/** Puts the image at `index` beside the image before it (joining that one's row, or starting one). */
+/** Step 2.16: the shape a row of pictures starts with. */
+export const DEFAULT_ROW_SHAPE: NoteImageShape = "square";
+
+/**
+ * Puts the image at `index` beside the image before it (joining that one's
+ * row, or starting one). Step 2.16: the row's first picture decides its size
+ * and shape; the one that joins takes them on.
+ */
 export function joinRow(blocks: NoteBlock[], index: number, rowId: string): NoteBlock[] {
   const prev = blocks[index - 1];
   const b = blocks[index];
   if (!prev || !b || prev.kind !== "image" || b.kind !== "image") return blocks;
   const id = prev.row ?? rowId;
-  return blocks.map((x, i) => (i === index - 1 || i === index ? { ...x, row: id, wrap: undefined } : x));
+  const [a] = prev.row ? rowExtent(blocks, index - 1) : [index - 1];
+  const first = blocks[a]!;
+  const look = { width: first.width ?? 100, shape: first.shape ?? DEFAULT_ROW_SHAPE };
+  return blocks.map((x, i) => (i === index - 1 || i === index || (i >= a && i < index && x.row === id) ? { ...x, row: id, wrap: undefined, align: undefined, ...look } : x));
+}
+
+/**
+ * Step 2.16: the size (width of the whole row, % of the line) or the shape of
+ * a row of pictures: every picture of the row takes it, so they always stand
+ * at one height, side by side, never over one another. A picture on its own
+ * just takes it itself.
+ */
+export function setRowLook(blocks: NoteBlock[], index: number, look: { width?: number; shape?: NoteImageShape }): NoteBlock[] {
+  const [a, z] = rowExtent(blocks, index);
+  const width = look.width === undefined ? undefined : Math.max(10, Math.min(100, Math.round(look.width)));
+  return blocks.map((x, i) => (i >= a && i <= z ? { ...x, ...(width !== undefined ? { width } : {}), ...(look.shape ? { shape: look.shape } : {}) } : x));
+}
+
+/** Step 2.16: pictures added together stand in one row (the first one's size and the default shape). */
+export function asRow(images: NoteBlock[], rowId: string): NoteBlock[] {
+  if (images.length < 2) return images;
+  const width = images[0]!.width ?? 100;
+  return images.map((x) => ({ ...x, row: rowId, width, shape: x.shape ?? DEFAULT_ROW_SHAPE, align: undefined, wrap: undefined }));
 }
 
 /** Takes the image at `index` out of its row onto a line of its own (right after the row). */

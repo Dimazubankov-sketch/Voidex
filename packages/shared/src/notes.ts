@@ -68,7 +68,16 @@ export interface NoteBlock {
   wrap?: boolean;
   /** Step 2.13: neighbouring images with the same row id stand side by side in one row. */
   row?: string;
+  /**
+   * Step 2.16: the shape of the pictures of a row (all pictures of a row share
+   * it, and the row's width): square, portrait (vertical) or landscape.
+   */
+  shape?: NoteImageShape;
+  /** Step 2.16: a picture's width / height, known when it is added (its place is kept while it loads). */
+  ratio?: number;
 }
+export const NOTE_IMAGE_SHAPES = ["square", "portrait", "landscape"] as const;
+export type NoteImageShape = (typeof NOTE_IMAGE_SHAPES)[number];
 /** A page of a note. A note with one page is continuous (it grows as you write). */
 export interface NotePage {
   id: string;
@@ -144,7 +153,9 @@ function validBlock(b: unknown) {
     opt(b.italic, bool) &&
     opt(b.size, (v) => (BOOK_FONT_SIZES as readonly number[]).includes(v as number)) &&
     opt(b.wrap, bool) &&
-    opt(b.row, (v) => str(v, 64))
+    opt(b.row, (v) => str(v, 64)) &&
+    opt(b.shape, (v) => (NOTE_IMAGE_SHAPES as readonly string[]).includes(v as string)) &&
+    opt(b.ratio, (v) => num(v, 0.05, 20))
   );
 }
 
@@ -222,6 +233,14 @@ const newId = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString
 
 export function emptyNote(format: NoteFormat = "vertical"): NoteBody {
   return { kind: "note", format, pages: [{ id: newId(), blocks: [{ id: newId(), kind: "text", text: "" }] }] };
+}
+
+/**
+ * Step 2.16: books are gone. A book written earlier opens (and is saved) as a
+ * note with the same pages: nothing of it is lost.
+ */
+export function bookAsNote(b: BookBody): NoteBody {
+  return { kind: "note", format: "vertical", pages: b.pages };
 }
 
 /** Step 2.13: a new book opens on its first spread (two empty pages). */
@@ -366,8 +385,8 @@ export interface NotesPrefsDto {
 }
 export const DEFAULT_NOTES_PREFS: NotesPrefsDto = { projectsView: "grid", projectsSort: "modified", docsView: "grid", docsSort: "custom" };
 
-/** The file-card extension: presentations are .prsn, books .book, notes and whole projects .txt. */
-export const notesExt = (kind: NotesShareKind): NotesExt => (kind === "presentation" ? ".prsn" : kind === "book" ? ".book" : ".txt");
+/** The file-card extension: presentations are .prsn; notes (Step 2.16: books written earlier too) and whole projects .txt. */
+export const notesExt = (kind: NotesShareKind): NotesExt => (kind === "presentation" ? ".prsn" : ".txt");
 
 
 // ---------------------------------------------------------------- legacy (Step 2.5 workspace)

@@ -1578,4 +1578,8 @@ export const ko: Record<MessageKey, string> = {
   "home.editPages": "페이지 편집",
   "home.editPagesDone": "완료",
   "home.pageN": "{n}페이지",
+  "notes.image.preview": "이미지",
+  "notes.image.shape.square": "정사각형",
+  "notes.image.shape.portrait": "세로",
+  "notes.image.shape.landscape": "가로",
 };

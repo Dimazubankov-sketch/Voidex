@@ -1593,4 +1593,8 @@ export const ru: Record<MessageKey, string> = {
   "home.editPages": "Изменить страницы",
   "home.editPagesDone": "Готово",
   "home.pageN": "Страница {n}",
+  "notes.image.preview": "Изображение",
+  "notes.image.shape.square": "Квадрат",
+  "notes.image.shape.portrait": "Вертикальный",
+  "notes.image.shape.landscape": "Горизонтальный",
 };

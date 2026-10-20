@@ -48,10 +48,10 @@ export function NotesHeader({ onBack, right }: { onBack?: () => void; right?: Re
 }
 
 /**
- * Bottom bar of the browser screens: one centred search field with the "+"
- * (new project / new note or presentation) inside it, at its end, as the
- * round button in Media's search. Thumb-reachable on phones (safe area
- * aware), the same compact bar on PC.
+ * Bottom bar of the browser screens (Step 2.16, the reference): a slightly
+ * narrower search field and, beside it on the right, the "+" as a round
+ * button of its own (new project / new note or presentation). No microphone.
+ * Thumb-reachable on phones (safe area aware), the same compact bar on PC.
  */
 export function BottomBar({
   query,
@@ -69,11 +69,12 @@ export function BottomBar({
   addMenu?: { id: string; label: string; icon: ReactNode; onSelect: () => void }[];
 }) {
   const pop = usePopover();
+  const add = onAdd || addMenu;
   return (
-    <div className="vx-kb-bottom pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pt-6" data-testid="notes-bottom-bar">
-      <div className="pointer-events-auto w-full max-w-[560px]">
+    <div className="vx-kb-bottom pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pt-6" data-testid="notes-bottom-bar">
+      <div className="pointer-events-auto flex w-full max-w-[520px] items-center gap-2.5">
         <VoidexSearchField
-          className="w-full shadow-[0_6px_24px_rgba(20,20,40,0.12)]"
+          className="min-w-0 flex-1 shadow-[0_6px_24px_rgba(20,20,40,0.12)]"
           size="lg"
           name="voidex-notes-search"
           value={query}
@@ -81,28 +82,20 @@ export function BottomBar({
           placeholder={placeholder}
           aria-label={placeholder}
           testId="notes-search"
-          trailing={
-            onAdd || addMenu ? (
-              <button
-                ref={pop.anchor}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => {
-                  // The button sits inside the field's <label>: keep the tap from focusing the input.
-                  e.preventDefault();
-                  if (addMenu) pop.toggle();
-                  else onAdd?.();
-                }}
-                aria-label={addLabel}
-                title={addLabel}
-                className="-mr-1 grid size-9 shrink-0 place-items-center rounded-full bg-[var(--search-bg)] text-[var(--search-icon)] transition hover:brightness-95 active:scale-95"
-                data-testid="notes-add"
-              >
-                <RiAddLine className="size-5" />
-              </button>
-            ) : undefined
-          }
         />
+        {add && (
+          <button
+            ref={pop.anchor}
+            type="button"
+            onClick={() => (addMenu ? pop.toggle() : onAdd?.())}
+            aria-label={addLabel}
+            title={addLabel}
+            className="vn2-float grid size-12 shrink-0 place-items-center rounded-full text-text shadow-[0_6px_24px_rgba(20,20,40,0.12)] transition active:scale-95"
+            data-testid="notes-add"
+          >
+            <RiAddLine className="size-6" />
+          </button>
+        )}
         {addMenu && (
           <Popover open={pop.open} onClose={pop.close} anchor={pop.anchor} width={230} testId="notes-add-menu">
             <Menu items={addMenu} onDone={pop.close} />
@@ -239,24 +232,7 @@ export function DocCover({ cover, kind, preview, id, className }: { cover: strin
       aria-hidden
       data-system-ui
     >
-      {kind === "book" ? (
-        <span className="flex h-[66%] w-[84%] overflow-hidden rounded-[5px] bg-white shadow-[0_6px_18px_-8px_rgba(60,40,160,0.35)]">
-          {[0, 1].map((side) => (
-            <span key={side} className={cx("flex flex-1 flex-col gap-[7%] p-[7%]", side === 0 && "border-r border-[#e5e3f3]")}>
-              {side === 0 && preview ? (
-                <span className="line-clamp-6 text-[7.5px] leading-[1.35] text-[#6b6880]">{preview}</span>
-              ) : (
-                <>
-                  <span className="h-[6%] w-[70%] rounded-full" style={{ background: side === 0 ? `hsl(${h} 70% 70%)` : "#e5e3f3" }} />
-                  <span className="h-[4%] w-full rounded-full bg-[#e5e3f3]" />
-                  <span className="h-[4%] w-[85%] rounded-full bg-[#e5e3f3]" />
-                  <span className="h-[4%] w-[60%] rounded-full bg-[#e5e3f3]" />
-                </>
-              )}
-            </span>
-          ))}
-        </span>
-      ) : kind === "presentation" ? (
+      {kind === "presentation" ? (
         <span className="flex aspect-video w-[78%] flex-col justify-center gap-[6%] rounded-[8%/14%] bg-white px-[8%] shadow-[0_6px_18px_-8px_rgba(60,40,160,0.35)]">
           <span className="h-[14%] w-[70%] rounded-full" style={{ background: `hsl(${h} 70% 62%)` }} />
           <span className="h-[8%] w-[50%] rounded-full bg-[#d9d6ef]" />

@@ -1,4 +1,18 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type CSSProperties,
+  type DragEvent,
+  type KeyboardEvent,
+  type PointerEvent as RPointerEvent,
+  type ReactNode,
+} from "react";
 import {
   RiAddLine,
   RiAlignCenter,
@@ -12,11 +26,9 @@ import {
   RiArrowRightSLine,
   RiArrowUpLine,
   RiBold,
-  RiBookOpenLine,
   RiCheckboxLine,
   RiDeleteBinLine,
   RiEraserLine,
-  RiFontSize,
   RiImageAddLine,
   RiItalic,
   RiLayoutColumnLine,
@@ -25,8 +37,8 @@ import {
   RiScissorsCutLine,
   RiTextWrap,
 } from "@remixicon/react";
-import { BOOK_FONT_SIZES, type NoteBlock, type NoteBlockKind } from "@voidex/shared";
-import { addPage, addSpread, block, deleteOrClearPage, joinRow, layoutBlocks, leaveRow, moveInPage, newId, pageHasContent, removePage, splitAt, type PagedBody } from "@voidex/notes";
+import type { NoteBlock, NoteBlockKind, NoteBody, NoteImageShape, NotePage } from "@voidex/shared";
+import { addPage, asRow, block, deleteOrClearPage, joinRow, layoutBlocks, leaveRow, moveInPage, newId, pageHasContent, removePage, setRowLook, splitAt, DEFAULT_ROW_SHAPE } from "@voidex/notes";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
@@ -35,7 +47,7 @@ import { ConfirmDialog, Popover, toast, usePopover } from "@/ui/overlays";
 import { downscale, notesApi, useMediaUrl } from "./data";
 import { Menu } from "./kit";
 
-type Change = (next: PagedBody, structural?: boolean) => void;
+type Change = (next: NoteBody, structural?: boolean) => void;
 
 /** Step 2.13: the block styles of the toolbar's selector (Обычный, Заголовок, Подзаголовок, Заголовок 2, Цитата, Код). */
 const TEXT_KINDS: { kind: NoteBlockKind; key: MessageKey }[] = [
@@ -60,18 +72,31 @@ const SHORTCUTS: [RegExp, NoteBlockKind][] = [
   [/^>\s$/, "quote"],
   [/^```$/, "code"],
 ];
+/** Step 2.16: the shapes a row of pictures can take, as CSS aspect ratios. */
+const SHAPE_RATIO: Record<NoteImageShape, string> = { square: "1 / 1", portrait: "3 / 4", landscape: "4 / 3" };
+/** Pictures added together stand in rows of at most this many. */
+const ROW_MAX = 4;
+const LONG_PRESS_MS = 450;
 
+/**
+ * Step 2.16 (performance): text fields size themselves to their text
+ * (`field-sizing: content`), with no script and no extra layout pass. Where a
+ * browser can't, a field is measured only when its own text changes, and the
+ * page never moves while it is: before, every field was collapsed to 0 px and
+ * measured again on every keystroke, which shrank the document for a moment
+ * and threw the scroll position up or down.
+ */
+const AUTO_SIZE = typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("field-sizing", "content");
 function fit(el: HTMLTextAreaElement | null) {
-  if (!el) return;
-  el.style.height = "0px";
+  if (!el || AUTO_SIZE) return;
+  const scroller = el.closest<HTMLElement>("[data-notes-scroller]");
+  const top = scroller?.scrollTop ?? 0;
+  el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
+  if (scroller && scroller.scrollTop !== top) scroller.scrollTop = top;
 }
 
-function mapBlocks<T extends PagedBody>(n: T, fn: (b: NoteBlock) => NoteBlock): T {
-  return { ...n, pages: n.pages.map((p) => ({ ...p, blocks: p.blocks.map(fn) })) };
-}
-
-function locate(n: PagedBody, id: string): { page: number; index: number } | null {
+function locate(n: NoteBody, id: string): { page: number; index: number } | null {
   for (let p = 0; p < n.pages.length; p++) {
     const i = n.pages[p]!.blocks.findIndex((b) => b.id === id);
     if (i >= 0) return { page: p, index: i };
@@ -79,42 +104,66 @@ function locate(n: PagedBody, id: string): { page: number; index: number } | nul
   return null;
 }
 
-function withPage<T extends PagedBody>(n: T, page: number, fn: (blocks: NoteBlock[]) => NoteBlock[]): T {
+/** A new body with only page `page` changed (the other pages keep their identity, so they don't render again). */
+function withPage(n: NoteBody, page: number, fn: (blocks: NoteBlock[]) => NoteBlock[]): NoteBody {
   return { ...n, pages: n.pages.map((p, i) => (i === page ? { ...p, blocks: fn([...p.blocks]) } : p)) };
 }
 
-const allBlocks = (n: PagedBody) => n.pages.flatMap((p) => p.blocks);
+/** One block changed: only its page and the block itself are new objects. */
+function patchBlock(n: NoteBody, id: string, patch: Partial<NoteBlock>): NoteBody {
+  const at = locate(n, id);
+  if (!at) return n;
+  return withPage(n, at.page, (l) => {
+    l[at.index] = { ...l[at.index]!, ...patch };
+    return l;
+  });
+}
 
+const allBlocks = (n: NoteBody) => n.pages.flatMap((p) => p.blocks);
+
+/** Width / height of an image file (null when it can't be read). */
+async function ratioOf(file: Blob): Promise<number | undefined> {
+  try {
+    const bmp = await createImageBitmap(file);
+    const r = bmp.width / Math.max(1, bmp.height);
+    bmp.close?.();
+    return Math.max(0.05, Math.min(20, Math.round(r * 1000) / 1000));
+  } catch {
+    return undefined;
+  }
+}
+
+/** What the blocks may ask of the editor; one object for the editor's whole life (so blocks never render again just because the editor did). */
+interface Actions {
+  register(id: string, el: HTMLTextAreaElement | null): void;
+  text(b: NoteBlock, text: string): void;
+  key(e: KeyboardEvent<HTMLTextAreaElement>, b: NoteBlock): void;
+  focused(id: string): void;
+  check(b: NoteBlock): void;
+  selectImage(id: string): void;
+  patchImage(id: string, p: Partial<NoteBlock>): void;
+  rowLook(id: string, look: { width?: number; shape?: NoteImageShape }): void;
+  tail(page: number): void;
+  preview(src: string): void;
+}
 
 /**
  * The note editor (Step 2.6): clean paper — no block frames, no grid — with a
- * small toolbar. Vertical: a portrait sheet that grows as you write (one
- * page = unlimited length), pages stacked downwards. Square: square pages
- * running sideways (the wheel scrolls them), text flowing on to the next
- * page by itself. Pages: "+ Новая страница" and "Разделить здесь" in the
- * page navigator (‹ 2 / 6 ›); there is no page-break button.
+ * small toolbar. Vertical: one sheet that grows as you write; pages appear
+ * only when the person makes one (new page / split here). Square: square
+ * pages running sideways, the text flowing on from page to page.
  *
- * Step 2.13: the same editor writes books (`.book`): fixed pages shown as a
- * spread on wide screens and one page on phones; only the shown pages are
- * rendered; pages come only from "+" (a page or a spread), never by
- * themselves. Notes and books share blocks, pictures (rows of pictures side
- * by side, text flowing around a picture on the left or right) and styles.
+ * Step 2.16:
+ * - a note with one page is one open sheet: no page edge in view while you
+ *   write; page edges show once there are pages;
+ * - typing renders only the block being written (blocks and pages are
+ *   memoised and get stable actions), fields size themselves (see fit), and
+ *   pictures keep their place while they load (their proportions are stored):
+ *   nothing moves the page by itself;
+ * - pictures side by side share one size and one shape (square, portrait,
+ *   landscape), set by the first; a long press shows a picture large.
  */
-export function NoteEditor({
-  body,
-  onChange,
-  readOnly,
-  initialPage = 0,
-  onPage,
-}: {
-  body: PagedBody;
-  onChange: Change;
-  readOnly: boolean;
-  /** Books: the page to open on (back from reading mode on the page that was read). */
-  initialPage?: number;
-  /** Books: the first page shown changed. */
-  onPage?: (page: number) => void;
-}) {
+export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onChange: Change; readOnly: boolean }) {
   const t = useT();
   const ff = useFormFactor();
   const scroller = useRef<HTMLDivElement>(null);
@@ -124,25 +173,14 @@ export function NoteEditor({
   const [focused, setFocused] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(0);
-  const [page, setPage] = useState(initialPage);
-  const [pageCount, setPageCount] = useState(body.pages.length);
+  const [page, setPage] = useState(0);
+  const [columns, setColumns] = useState(body.pages.length);
   const [side, setSide] = useState(600);
-  const [box, setBox] = useState({ w: 800, h: 700 });
-  const book = body.kind === "book";
-  const square = body.kind === "note" && body.format === "square";
+  const [preview, setPreview] = useState<string | null>(null);
+  const square = body.format === "square";
   const bodyRef = useRef(body);
   bodyRef.current = body;
-
-  // Book: a spread (two pages) when there is room for two readable pages, one page otherwise.
-  const spread = book && box.w >= 820;
-  const per = spread ? 2 : 1;
-  const bookPageW = Math.floor(spread ? Math.max(260, Math.min((box.w - 120) / 2, ((box.h - 180) / 1.414) * 1.05, 560)) : Math.max(240, Math.min(box.w - 24, 620)));
-  const first = book ? Math.min(page, Math.max(0, body.pages.length - 1)) - (Math.min(page, Math.max(0, body.pages.length - 1)) % per) : 0;
-  const visible = (p: number) => !book || (p >= first && p < first + per);
-  useEffect(() => {
-    if (book) onPage?.(first);
-  }, [book, first, onPage]);
-
+  const pageCount = square ? columns : body.pages.length;
 
   // ------------------------------------------------------------ focus
   useLayoutEffect(() => {
@@ -158,11 +196,6 @@ export function NoteEditor({
   });
   const focusBlock = (id: string, pos: number) => {
     pendingFocus.current = { id, pos };
-    if (book) {
-      // A book shows only its current pages: turn to the page that holds the block.
-      const at = locate(bodyRef.current, id);
-      if (at && !visible(at.page)) setPage(at.page);
-    }
     const el = areas.current.get(id);
     if (el) {
       pendingFocus.current = null;
@@ -172,18 +205,19 @@ export function NoteEditor({
     }
   };
 
-  // ------------------------------------------------------------ layout: square side, columns, page indicator
+  // ------------------------------------------------------------ layout: square side (and fields where they can't size themselves)
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
+    let width = el.clientWidth;
     const measure = () => {
       const w = el.clientWidth;
       const h = el.clientHeight;
       const mobile = w < 600;
-      const s = Math.floor(Math.max(260, Math.min(mobile ? w - 24 : w - 96, h - (mobile ? 150 : 170), 860)));
-      setSide(s);
-      setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
-      for (const a of areas.current.values()) fit(a);
+      setSide(Math.floor(Math.max(260, Math.min(mobile ? w - 24 : w - 96, h - (mobile ? 150 : 170), 860))));
+      // Only a new width changes where lines wrap.
+      if (!AUTO_SIZE && w !== width) for (const a of areas.current.values()) fit(a);
+      width = w;
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -192,36 +226,38 @@ export function NoteEditor({
   }, []);
 
   const GAP = 28;
-  // Square: the number of columns (pages) the text needs, from where the last block lands.
+  // Square: the number of columns (pages) the text needs, from where the last block lands (square only).
   useLayoutEffect(() => {
-    if (!square) {
-      setPageCount(body.pages.length);
-      return;
-    }
+    if (!square) return;
     const s = sheet.current;
-    if (!s) return;
-    let max = 0;
-    for (const el of s.querySelectorAll<HTMLElement>("[data-block]")) max = Math.max(max, el.offsetLeft + 1);
+    const last = s?.querySelector<HTMLElement>("[data-page]:last-child > [data-block]:last-child");
+    const max = last ? last.offsetLeft + 1 : 0;
     const n = Math.max(1, Math.floor(max / (side + GAP)) + 1, body.pages.length);
-    if (n !== pageCount) setPageCount(n);
+    if (n !== columns) setColumns(n);
   });
 
+  // The page indicator follows the scroll, at most once a frame.
+  const scrollFrame = useRef(0);
   const onScroll = useCallback(() => {
-    const el = scroller.current;
-    if (!el || book) return;
-    if (square) {
-      setPage(Math.round(el.scrollLeft / (side + GAP)));
-      return;
-    }
-    const sheets = el.querySelectorAll<HTMLElement>("[data-page]");
-    const mid = el.scrollTop + el.clientHeight / 3;
-    let current = 0;
-    sheets.forEach((s, i) => {
-      if (s.offsetTop <= mid) current = i;
+    if (scrollFrame.current) return;
+    scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = 0;
+      const el = scroller.current;
+      if (!el) return;
+      if (square) {
+        setPage(Math.round(el.scrollLeft / (side + GAP)));
+        return;
+      }
+      const sheets = el.querySelectorAll<HTMLElement>("[data-page]");
+      if (sheets.length < 2) return setPage(0);
+      const mid = el.scrollTop + el.clientHeight / 3;
+      let current = 0;
+      sheets.forEach((s, i) => {
+        if (s.offsetTop <= mid) current = i;
+      });
+      setPage(current);
     });
-    setPage(current);
-  }, [square, side, book]);
-
+  }, [square, side]);
 
   // The wheel turns square pages sideways.
   useEffect(() => {
@@ -239,47 +275,14 @@ export function NoteEditor({
   const goPage = (i: number) => {
     const el = scroller.current;
     if (!el) return;
-    if (book) {
-      const target = Math.max(0, Math.min(bodyRef.current.pages.length - 1, i));
-      setPage(target - (target % per));
-      el.scrollTo({ top: 0 });
-      return;
-    }
     const target = Math.max(0, Math.min(pageCount - 1, i));
     if (square) el.scrollTo({ left: target * (side + GAP), behavior: "smooth" });
     else el.querySelectorAll<HTMLElement>("[data-page]")[target]?.scrollIntoView({ behavior: "smooth", block: "start" });
     setPage(target);
   };
 
-  // Book: ← / → turn the pages when no text field has the keyboard.
-  useEffect(() => {
-    if (!book) return;
-    const key = (e: globalThis.KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
-      const tgt = e.target as HTMLElement | null;
-      if (tgt && (tgt.closest("textarea, input, [contenteditable=true], [role=dialog], [role=menu]") || !scroller.current?.closest("[data-testid=notes-doc]")?.isConnected)) return;
-      if (e.key === "ArrowRight") goPage(first + per);
-      else if (e.key === "ArrowLeft") goPage(first - per);
-      else return;
-      e.preventDefault();
-    };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  });
-
-
   // ------------------------------------------------------------ edits
-  const patch = (id: string, p: Partial<NoteBlock>, structural = false) => onChange(mapBlocks(bodyRef.current, (b) => (b.id === id ? { ...b, ...p } : b)), structural);
-
-  const setText = (b: NoteBlock, text: string) => {
-    for (const [re, kind] of SHORTCUTS) {
-      if (b.kind === "text" && re.test(text)) {
-        patch(b.id, { kind, text: "" }, true);
-        return;
-      }
-    }
-    patch(b.id, { text });
-  };
+  const patch = (id: string, p: Partial<NoteBlock>, structural = false) => onChange(patchBlock(bodyRef.current, id, p), structural);
 
   const insertAfter = (id: string, blocks: NoteBlock[], focus?: { id: string; pos: number }) => {
     const n = bodyRef.current;
@@ -300,8 +303,6 @@ export function NoteEditor({
     const start = el.selectionStart;
     const end = el.selectionEnd;
     const n = bodyRef.current;
-    const flat = allBlocks(n);
-    const idx = flat.findIndex((x) => x.id === b.id);
     if ((e.key === "b" || e.key === "i") && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
       patch(b.id, e.key === "b" ? { bold: !b.bold } : { italic: !b.italic }, true);
@@ -362,25 +363,17 @@ export function NoteEditor({
         const merged = removePage(n, at.page);
         onChange(merged, true);
         const last = merged.pages[at.page - 1]!.blocks.at(-1);
-        if (last) {
-          pendingFocus.current = { id: last.id, pos: -1 };
-          if (book) setPage(at.page - 1);
-        }
+        if (last) pendingFocus.current = { id: last.id, pos: -1 };
         return;
       }
     }
-    if (e.key === "ArrowUp" && start === 0 && end === 0) {
-      const prev = flat.slice(0, idx).reverse().find((x) => x.kind !== "image");
-      if (prev) {
+    if ((e.key === "ArrowUp" && start === 0 && end === 0) || (e.key === "ArrowDown" && start === b.text.length && end === start)) {
+      const flat = allBlocks(n);
+      const idx = flat.findIndex((x) => x.id === b.id);
+      const target = e.key === "ArrowUp" ? flat.slice(0, idx).reverse().find((x) => x.kind !== "image") : flat.slice(idx + 1).find((x) => x.kind !== "image");
+      if (target) {
         e.preventDefault();
-        focusBlock(prev.id, -1);
-      }
-    }
-    if (e.key === "ArrowDown" && start === b.text.length && end === start) {
-      const next = flat.slice(idx + 1).find((x) => x.kind !== "image");
-      if (next) {
-        e.preventDefault();
-        focusBlock(next.id, 0);
+        focusBlock(target.id, e.key === "ArrowUp" ? -1 : 0);
       }
     }
   };
@@ -391,13 +384,17 @@ export function NoteEditor({
     if (!images.length || readOnly) return;
     setUploading((n) => n + images.length);
     try {
-      const blocks: NoteBlock[] = [];
+      const added: NoteBlock[] = [];
       for (const f of images) {
-        const src = await notesApi.upload(f.type === "image/gif" ? f : await downscale(f, 2000));
-        blocks.push({ ...block("image"), src, width: 100, align: "center" });
+        const data = f.type === "image/gif" ? f : await downscale(f, 2000);
+        const [src, ratio] = await Promise.all([notesApi.upload(data), ratioOf(data)]);
+        added.push({ ...block("image"), src, width: 100, align: "center", ...(ratio ? { ratio } : {}) });
       }
+      // Step 2.16: pictures added together stand side by side (rows of up to four).
+      const blocks: NoteBlock[] = [];
+      for (let i = 0; i < added.length; i += ROW_MAX) blocks.push(...asRow(added.slice(i, i + ROW_MAX), newId()));
       const n = bodyRef.current;
-      const anchor = afterId ?? focused ?? n.pages[Math.min(book ? first : page, n.pages.length - 1)]!.blocks.at(-1)?.id ?? null;
+      const anchor = afterId ?? focused ?? n.pages[Math.min(page, n.pages.length - 1)]!.blocks.at(-1)?.id ?? null;
       const tail = block("text");
       if (anchor && locate(n, anchor)) insertAfter(anchor, [...blocks, tail]);
       else onChange(withPage(n, n.pages.length - 1, (l) => [...l, ...blocks, tail]), true);
@@ -447,7 +444,6 @@ export function NoteEditor({
       withPage(without, p2, (l) => (delta < 0 ? [...l, it] : [it, ...l])),
       true,
     );
-    if (book) setPage(p2);
   };
 
   /** Step 2.13: beside the picture before it (a row), or back on a line of its own. */
@@ -457,6 +453,17 @@ export function NoteEditor({
     if (!at) return;
     onChange(
       withPage(n, at.page, (l) => (join ? joinRow(l, at.index, newId()) : leaveRow(l, at.index))),
+      true,
+    );
+  };
+
+  /** Step 2.16: one size / one shape for every picture of the row. */
+  const rowLook = (id: string, look: { width?: number; shape?: NoteImageShape }) => {
+    const n = bodyRef.current;
+    const at = locate(n, id);
+    if (!at) return;
+    onChange(
+      withPage(n, at.page, (l) => setRowLook(l, at.index, look)),
       true,
     );
   };
@@ -478,20 +485,71 @@ export function NoteEditor({
     setSelectedImage(null);
   };
 
+  const tailClick = (pageIndex: number) => {
+    const p = bodyRef.current.pages[pageIndex];
+    const last = p?.blocks.at(-1);
+    if (last && last.kind !== "image" && !last.text) focusBlock(last.id, 0);
+    else if (last) {
+      const nb = block();
+      insertAfter(last.id, [nb], { id: nb.id, pos: 0 });
+    }
+  };
+
+  const setText = (b: NoteBlock, text: string) => {
+    for (const [re, kind] of SHORTCUTS) {
+      if (b.kind === "text" && re.test(text)) {
+        patch(b.id, { kind, text: "" }, true);
+        return;
+      }
+    }
+    patch(b.id, { text });
+  };
+
+  // The blocks' actions: one object for the editor's life, always calling the latest code.
+  const impl = useRef<Actions>(null!);
+  impl.current = {
+    register: (id, el) => {
+      if (el) areas.current.set(id, el);
+      else areas.current.delete(id);
+    },
+    text: setText,
+    key: onKey,
+    focused: (id) => {
+      setFocused(id);
+      setSelectedImage(null);
+    },
+    check: (b) => patch(b.id, { checked: !b.checked }, true),
+    selectImage: (id) => setSelectedImage(id),
+    patchImage: (id, p) => patch(id, p, true),
+    rowLook,
+    tail: tailClick,
+    preview: (src) => setPreview(src),
+  };
+  const act = useMemo<Actions>(
+    () => ({
+      register: (...a) => impl.current.register(...a),
+      text: (...a) => impl.current.text(...a),
+      key: (...a) => impl.current.key(...a),
+      focused: (...a) => impl.current.focused(...a),
+      check: (...a) => impl.current.check(...a),
+      selectImage: (...a) => impl.current.selectImage(...a),
+      patchImage: (...a) => impl.current.patchImage(...a),
+      rowLook: (...a) => impl.current.rowLook(...a),
+      tail: (...a) => impl.current.tail(...a),
+      preview: (...a) => impl.current.preview(...a),
+    }),
+    [],
+  );
+
   // ------------------------------------------------------------ pages
-  const focusedPage = focused ? (locate(body, focused)?.page ?? null) : null;
-  /** The page the page actions work on: the focused one, else the one shown (a spread: its left page). */
-  const currentPage = Math.min(book ? (focusedPage !== null && visible(focusedPage) ? focusedPage : first) : page, body.pages.length - 1);
-  const newPage = (two = false) => {
+  const newPage = () => {
     const n = bodyRef.current;
     const at = focused ? locate(n, focused) : null;
-    const after = book ? Math.min(n.pages.length - 1, first + per - 1) : (at?.page ?? n.pages.length - 1);
-    const { note, page: p } = two ? addSpread(n, after) : addPage(n, after);
+    const { note, page: p } = addPage(n, at?.page ?? n.pages.length - 1);
     onChange(note, true);
     pendingFocus.current = { id: p.blocks[0]!.id, pos: 0 };
     const index = note.pages.findIndex((x) => x.id === p.id);
-    if (book) setPage(index - (index % per));
-    else requestAnimationFrame(() => goPage(index));
+    requestAnimationFrame(() => goPage(index));
   };
   const canSplit = !!focused && (locate(body, focused)?.index ?? 0) > 0;
   const splitHere = () => {
@@ -506,9 +564,9 @@ export function NoteEditor({
     onChange(r.note, true);
     const firstBlock = r.note.pages[r.show]?.blocks[0];
     if (firstBlock) pendingFocus.current = { id: firstBlock.id, pos: r.cleared ? 0 : -1 };
-    if (book) setPage(r.show - (r.show % per));
-    else requestAnimationFrame(() => goPage(r.show));
+    requestAnimationFrame(() => goPage(r.show));
   };
+  const currentPage = Math.min(page, body.pages.length - 1);
   const deletePage = () => {
     const at = currentPage;
     if (pageHasContent(bodyRef.current, at)) setAskDelete(at);
@@ -522,20 +580,10 @@ export function NoteEditor({
     patch(current.id, { kind: current.kind === kind && kind !== "text" ? "text" : kind }, true);
     pendingFocus.current = { id: current.id, pos: -1 };
   };
-  const setSize = (size: number | null) => {
-    if (!current) return;
-    patch(current.id, { size: size ?? undefined }, true);
-    pendingFocus.current = { id: current.id, pos: -1 };
-  };
 
-
-  const placeholder = t("notes.placeholder");
   const firstId = body.pages[0]?.blocks[0]?.id;
-  const empty = allBlocks(body).every((b) => b.kind !== "image" && !b.text);
-
-  const renderImage = (b: NoteBlock, row?: { pos: "first" | "mid" | "last" }) => (
-    <ImageBlock key={b.id} b={b} row={row} selected={selectedImage === b.id} readOnly={readOnly} onSelect={() => setSelectedImage(b.id)} onPatch={(p, structural) => patch(b.id, p, structural)} />
-  );
+  const empty = body.pages.length === 1 && body.pages[0]!.blocks.every((b) => b.kind !== "image" && !b.text);
+  const placeholderId = empty ? (firstId ?? null) : null;
 
   // The selected picture's tools (a bar above the toolbar).
   const selAt = selectedImage ? locate(body, selectedImage) : null;
@@ -549,99 +597,17 @@ export function NoteEditor({
         b={sel}
         row={selInRow}
         canJoin={!selInRow && selList[selAt!.index - 1]?.kind === "image"}
-        onPatch={(p, structural) => patch(sel.id, p, structural)}
+        onPatch={(p) => patch(sel.id, p, true)}
+        onRowLook={(look) => rowLook(sel.id, look)}
         onMove={(d) => moveBlock(sel.id, d)}
         onRow={(join) => setRow(sel.id, join)}
         onRemove={() => removeBlock(sel.id)}
       />
     ) : null;
 
-  const renderText = (b: NoteBlock) => (
-    <div
-      key={b.id}
-      className={cx("vn2-b", `vn2-b-${b.kind}`, b.bold && "vn2-bold", b.italic && "vn2-italic", b.checked && "vn2-done")}
-      style={b.size ? { fontSize: b.size } : undefined}
-      data-block={b.id}
-      data-kind={b.kind}
-      data-size={b.size}
-      {...(HEADING_LEVEL[b.kind] ? { role: "heading", "aria-level": HEADING_LEVEL[b.kind] } : {})}
-    >
-      {b.kind === "checklist" && (
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={!!b.checked}
-          aria-label={b.text || t("notes.block.checklist")}
-          disabled={readOnly}
-          onClick={() => patch(b.id, { checked: !b.checked }, true)}
-          className="vn2-check"
-          data-testid="notes-check"
-        />
-      )}
-      {b.kind === "bullet" && <span className="vn2-dot" aria-hidden />}
-      <textarea
-        ref={(el) => {
-          if (el) {
-            areas.current.set(b.id, el);
-            fit(el);
-          } else areas.current.delete(b.id);
-        }}
-        rows={1}
-        value={b.text}
-        readOnly={readOnly}
-        spellCheck
-        placeholder={b.id === firstId && empty ? placeholder : undefined}
-        onChange={(e) => {
-          setText(b, e.target.value);
-          fit(e.target);
-        }}
-        onKeyDown={(e) => onKey(e, b)}
-        onFocus={() => {
-          setFocused(b.id);
-          setSelectedImage(null);
-        }}
-        className="vn2-text"
-        data-testid="notes-block"
-        aria-label={t(`notes.block.${b.kind}`)}
-      />
-    </div>
-  );
-
-  /** A page's blocks as laid out (Step 2.13: pictures side by side in rows, text beside a wrapped picture). */
-  const renderBlocks = (list: NoteBlock[]) =>
-    layoutBlocks(list).map((it) =>
-      it.kind === "row" ? (
-        <div key={`row-${it.id}-${it.blocks[0]!.id}`} className="vn2-img-row" data-testid="notes-image-row" data-row={it.id} data-count={it.blocks.length}>
-          {it.blocks.map((b, i) => renderImage(b, { pos: i === 0 ? "first" : i === it.blocks.length - 1 ? "last" : "mid" }))}
-        </div>
-      ) : it.block.kind === "image" ? (
-        renderImage(it.block)
-      ) : (
-        renderText(it.block)
-      ),
-    );
-
-
-  const tailClick = (p: { blocks: NoteBlock[] }) => {
-    const last = p.blocks.at(-1);
-    if (last && last.kind !== "image" && !last.text) focusBlock(last.id, 0);
-    else if (last) {
-      const nb = block();
-      insertAfter(last.id, [nb], { id: nb.id, pos: 0 });
-    }
-  };
-
   const paged = body.pages.length > 1;
-  const bookPages = book ? body.pages.slice(first, first + per) : [];
   return (
-    <div
-      className={cx("vn2-note relative flex min-h-0 flex-1 flex-col", book ? "vn2-book" : square ? "vn2-square" : "vn2-vertical")}
-      data-testid={book ? "notes-book-editor" : "notes-note-editor"}
-      data-format={body.format}
-      data-pages={body.pages.length}
-      data-spread={book ? (spread ? "two" : "one") : undefined}
-      data-first={book ? first : undefined}
-    >
+    <div className={cx("vn2-note relative flex min-h-0 flex-1 flex-col", square ? "vn2-square" : "vn2-vertical")} data-testid="notes-note-editor" data-format={body.format} data-pages={body.pages.length}>
       <div
         ref={scroller}
         onScroll={onScroll}
@@ -652,58 +618,10 @@ export function NoteEditor({
           if (!(e.target as HTMLElement).closest(".vn2-img, .vn2-img-tools")) setSelectedImage(null);
         }}
         className={cx("vn2-scroll min-h-0 flex-1", square ? "overflow-x-auto overflow-y-hidden" : "overflow-y-auto overflow-x-hidden")}
+        data-notes-scroller
         data-testid="notes-paper-scroller"
       >
-        {book ? (
-          <div className="flex min-h-full items-start justify-center px-3 pb-40 pt-16 sm:px-8 sm:pt-[72px]">
-            <div className={cx("vn2-spread flex", spread && "vn2-spread-two")} data-testid="book-spread">
-              {bookPages.map((p, k) => {
-                const i = first + k;
-                return (
-                  <div
-                    key={p.id}
-                    className={cx("vn2-book-page", spread && (k === 0 ? "vn2-book-left" : "vn2-book-right"))}
-                    style={{
-                      width: bookPageW,
-                      minHeight: Math.round(bookPageW * 1.414),
-                    }}
-                    data-page={i}
-                    data-testid="book-page"
-                  >
-                    <div className="vn2-book-content">
-                      {renderBlocks(p.blocks)}
-                      {!readOnly && <button type="button" aria-hidden tabIndex={-1} className="block h-12 w-full cursor-text [clear:both]" onClick={() => tailClick(p)} />}
-                    </div>
-                    <span className="vn2-book-number" data-testid="book-page-number">
-                      {i + 1}
-                    </span>
-                  </div>
-                );
-              })}
-              {spread && bookPages.length === 1 && (
-                <div
-                  className="vn2-book-page vn2-book-right vn2-book-blank grid place-items-center"
-                  style={{
-                    width: bookPageW,
-                    minHeight: Math.round(bookPageW * 1.414),
-                  }}
-                >
-                  {!readOnly && (
-                    <button
-                      type="button"
-                      onClick={() => newPage()}
-                      className="flex flex-col items-center gap-2 rounded-2xl px-5 py-4 text-[14px] font-medium text-text-tertiary hover:text-primary"
-                      data-testid="book-add-page-slot"
-                    >
-                      <RiAddLine className="size-7" />
-                      {t("notes.book.addPage")}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : square ? (
+        {square ? (
           <div className="flex h-full items-center px-3 sm:px-12" style={{ paddingTop: 64, paddingBottom: ff === "mobile" ? 86 : 96 }}>
             <div
               ref={sheet}
@@ -719,38 +637,39 @@ export function NoteEditor({
               data-testid="notes-paper"
             >
               {body.pages.map((p, i) => (
-                <div key={p.id} className="vn2-page-col" style={i > 0 ? { breakBefore: "column" } : undefined} data-page={i}>
-                  {renderBlocks(p.blocks)}
-                </div>
+                <Sheet
+                  key={p.id}
+                  page={p}
+                  index={i}
+                  mode="column"
+                  readOnly={readOnly}
+                  selected={selAt?.page === i ? selectedImage : null}
+                  placeholderId={i === 0 ? placeholderId : null}
+                  act={act}
+                />
               ))}
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex w-full max-w-[820px] flex-col gap-6 px-0 pb-40 pt-16 sm:px-6 sm:pt-[72px]">
+          <div className={cx("mx-auto flex w-full max-w-[820px] flex-col px-0 pt-16 sm:px-6 sm:pt-[72px]", paged ? "gap-6 pb-40" : "min-h-full")}>
             {body.pages.map((p, i) => (
-              <div key={p.id} className={cx("vn2-sheet", paged && "vn2-sheet-paged")} data-page={i} data-testid="notes-paper">
-                {renderBlocks(p.blocks)}
-                {!readOnly && <button type="button" aria-hidden tabIndex={-1} className="block h-16 w-full cursor-text [clear:both]" onClick={() => tailClick(p)} />}
-              </div>
+              <Sheet
+                key={p.id}
+                page={p}
+                index={i}
+                mode={paged ? "paged" : "open"}
+                readOnly={readOnly}
+                selected={selAt?.page === i ? selectedImage : null}
+                placeholderId={i === 0 ? placeholderId : null}
+                act={act}
+              />
             ))}
           </div>
         )}
       </div>
 
       {/* While a picture's tools are open they take the bottom; the page navigator steps aside. */}
-      {imageTools ? null : book ? (
-        <BookNav
-          first={first}
-          per={per}
-          count={body.pages.length}
-          onGo={goPage}
-          readOnly={readOnly}
-          clears={currentPage === 0}
-          onNewPage={() => newPage()}
-          onNewSpread={() => newPage(true)}
-          onDelete={deletePage}
-        />
-      ) : (
+      {imageTools ? null : (
         <PageNav
           page={page}
           count={pageCount}
@@ -758,8 +677,8 @@ export function NoteEditor({
           readOnly={readOnly}
           canSplit={canSplit}
           canDelete
-          clears={Math.min(page, body.pages.length - 1) === 0}
-          onNew={() => newPage()}
+          clears={currentPage === 0}
+          onNew={newPage}
           onSplit={splitHere}
           onDelete={deletePage}
           raised={!readOnly}
@@ -785,9 +704,7 @@ export function NoteEditor({
           above={imageTools}
           current={current}
           uploading={uploading > 0}
-          sizes={book}
           onKind={setKind}
-          onSize={setSize}
           onBold={() => current && patch(current.id, { bold: !current.bold }, true)}
           onItalic={() => current && patch(current.id, { italic: !current.italic }, true)}
           onImages={(files) => void uploadImages(files, focused)}
@@ -795,87 +712,310 @@ export function NoteEditor({
           onDeletePage={deletePage}
         />
       )}
+      {preview && <ImagePreview url={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }
 
-/** Step 2.13: the book's page navigator: ← 3–4 / 12 → and "+" (a page, a spread, delete the page). */
-function BookNav({
-  first,
-  per,
-  count,
-  onGo,
+/**
+ * One page. Memoised: typing in another page (or another block of this one)
+ * leaves it alone; its layout of rows is worked out only when its blocks change.
+ */
+const Sheet = memo(function Sheet({
+  page,
+  index,
+  mode,
   readOnly,
-  clears,
-  onNewPage,
-  onNewSpread,
-  onDelete,
+  selected,
+  placeholderId,
+  act,
 }: {
-  first: number;
-  per: number;
-  count: number;
-  onGo: (i: number) => void;
+  page: NotePage;
+  index: number;
+  /** open: the only page of a note (no page edge); paged: one of several; column: a square note's column. */
+  mode: "open" | "paged" | "column";
   readOnly: boolean;
-  clears: boolean;
-  onNewPage: () => void;
-  onNewSpread: () => void;
-  onDelete: () => void;
+  selected: string | null;
+  placeholderId: string | null;
+  act: Actions;
 }) {
   const t = useT();
-  const pop = usePopover();
-  const last = Math.min(count, first + per);
+  const laid = useMemo(() => layoutBlocks(page.blocks), [page.blocks]);
+  const placeholder = t("notes.placeholder");
+  const blocks = laid.map((it) =>
+    it.kind === "row" ? (
+      <ImageRow key={`row-${it.id}-${it.blocks[0]!.id}`} id={it.id} blocks={it.blocks} selected={selected} readOnly={readOnly} act={act} />
+    ) : it.block.kind === "image" ? (
+      <ImageBlock key={it.block.id} b={it.block} selected={selected === it.block.id} readOnly={readOnly} act={act} />
+    ) : (
+      <TextBlock key={it.block.id} b={it.block} placeholder={it.block.id === placeholderId ? placeholder : undefined} readOnly={readOnly} act={act} />
+    ),
+  );
+  if (mode === "column")
+    return (
+      <div className="vn2-page-col" style={index > 0 ? { breakBefore: "column" } : undefined} data-page={index}>
+        {blocks}
+      </div>
+    );
+  return (
+    <div className={cx("vn2-sheet", mode === "paged" ? "vn2-sheet-paged" : "vn2-sheet-open")} data-page={index} data-testid="notes-paper" data-open={mode === "open" || undefined}>
+      {blocks}
+      {!readOnly && <button type="button" aria-hidden tabIndex={-1} className="vn2-tail block w-full cursor-text [clear:both]" onClick={() => act.tail(index)} />}
+    </div>
+  );
+});
+
+/** A paragraph (any text style). Renders again only when its own block changes. */
+const TextBlock = memo(function TextBlock({ b, placeholder, readOnly, act }: { b: NoteBlock; placeholder?: string; readOnly: boolean; act: Actions }) {
+  const t = useT();
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  const setRef = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      ref.current = el;
+      act.register(b.id, el);
+    },
+    [act, b.id],
+  );
+  // Sized once when it appears and again only when its own text changes (see fit).
+  useLayoutEffect(() => fit(ref.current), [b.text, b.kind, b.size]);
   return (
     <div
-      className={cx(
-        "vn2-pagenav pointer-events-auto absolute right-3 z-20 flex items-center gap-0.5 rounded-full p-1",
-        readOnly ? "bottom-[max(env(safe-area-inset-bottom),14px)]" : "vn2-pagenav-raised",
-      )}
-      data-testid="notes-page-nav"
-      data-book
+      className={cx("vn2-b", `vn2-b-${b.kind}`, b.bold && "vn2-bold", b.italic && "vn2-italic", b.checked && "vn2-done")}
+      style={b.size ? { fontSize: b.size } : undefined}
+      data-block={b.id}
+      data-kind={b.kind}
+      data-size={b.size}
+      {...(HEADING_LEVEL[b.kind] ? { role: "heading", "aria-level": HEADING_LEVEL[b.kind] } : {})}
     >
-      <button type="button" onClick={() => onGo(first - per)} disabled={first <= 0} aria-label={t("notes.page.prev")} className="vn2-icon-btn size-9" data-testid="notes-page-prev">
-        <RiArrowLeftSLine className="size-5" />
-      </button>
-      <span className="min-w-[52px] text-center text-[13.5px] font-medium tabular-nums text-text" data-testid="notes-page-indicator" aria-live="polite">
-        {last - first > 1 ? `${first + 1}–${last}` : first + 1} / {count}
-      </span>
-      <button type="button" onClick={() => onGo(first + per)} disabled={first + per >= count} aria-label={t("notes.page.next")} className="vn2-icon-btn size-9" data-testid="notes-page-next">
-        <RiArrowRightSLine className="size-5" />
-      </button>
-      {!readOnly && (
-        <>
-          <button ref={pop.anchor} type="button" onClick={pop.toggle} aria-label={t("notes.book.addPage")} title={t("notes.book.addPage")} className="vn2-icon-btn size-9" data-testid="notes-page-add">
-            <RiAddLine className="size-5" />
-          </button>
-          <Popover open={pop.open} onClose={pop.close} anchor={pop.anchor} width={230} testId="notes-page-menu">
-            <Menu
-              onDone={pop.close}
-              items={[
-                {
-                  id: "page-new",
-                  label: t("notes.book.addPage"),
-                  icon: <RiAddLine className="size-[18px]" />,
-                  onSelect: onNewPage,
-                },
-                {
-                  id: "spread-new",
-                  label: t("notes.book.addSpread"),
-                  icon: <RiBookOpenLine className="size-[18px]" />,
-                  onSelect: onNewSpread,
-                },
-                {
-                  id: "page-delete",
-                  label: clears ? t("notes.page.clear") : t("notes.page.delete"),
-                  icon: clears ? <RiEraserLine className="size-[18px]" /> : <RiDeleteBinLine className="size-[18px]" />,
-                  onSelect: onDelete,
-                  danger: true,
-                  divider: true,
-                },
-              ]}
-            />
-          </Popover>
-        </>
+      {b.kind === "checklist" && (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={!!b.checked}
+          aria-label={b.text || t("notes.block.checklist")}
+          disabled={readOnly}
+          onClick={() => act.check(b)}
+          className="vn2-check"
+          data-testid="notes-check"
+        />
       )}
+      {b.kind === "bullet" && <span className="vn2-dot" aria-hidden />}
+      <textarea
+        ref={setRef}
+        rows={1}
+        value={b.text}
+        readOnly={readOnly}
+        spellCheck
+        placeholder={placeholder}
+        onChange={(e) => act.text(b, e.target.value)}
+        onKeyDown={(e) => act.key(e, b)}
+        onFocus={() => act.focused(b.id)}
+        className="vn2-text"
+        data-testid="notes-block"
+        aria-label={t(`notes.block.${b.kind}`)}
+      />
+    </div>
+  );
+});
+
+/**
+ * Step 2.16: pictures side by side. The row has one width (the first
+ * picture's, % of the line) and one shape; every picture takes an equal
+ * share of it at that shape, so they line up at one height and never cover
+ * one another. Resizing any of them resizes the row.
+ */
+const ImageRow = memo(function ImageRow({ id, blocks, selected, readOnly, act }: { id: string; blocks: NoteBlock[]; selected: string | null; readOnly: boolean; act: Actions }) {
+  const first = blocks[0]!;
+  const width = first.width ?? 100;
+  const shape = first.shape ?? DEFAULT_ROW_SHAPE;
+  const rowRef = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      ref={rowRef}
+      className="vn2-img-row"
+      style={{ width: `${width}%`, ["--vn2-row-ratio" as string]: SHAPE_RATIO[shape] } as CSSProperties}
+      data-testid="notes-image-row"
+      data-row={id}
+      data-count={blocks.length}
+      data-shape={shape}
+      data-width={width}
+    >
+      {blocks.map((b) => (
+        <ImageBlock key={b.id} b={b} row={{ el: rowRef, width }} selected={selected === b.id} readOnly={readOnly} act={act} />
+      ))}
+    </div>
+  );
+});
+
+/**
+ * A picture: tap to select (the tools open above the toolbar), drag the
+ * corner to resize (in a row: the whole row), long press to see it large.
+ */
+const ImageBlock = memo(function ImageBlock({
+  b,
+  row,
+  selected,
+  readOnly,
+  act,
+}: {
+  b: NoteBlock;
+  /** Set when it stands in a row of pictures: the row element and its width. */
+  row?: { el: React.RefObject<HTMLDivElement | null>; width: number };
+  selected: boolean;
+  readOnly: boolean;
+  act: Actions;
+}) {
+  const t = useT();
+  const url = useMediaUrl(b.src);
+  const box = useRef<HTMLDivElement>(null);
+  const width = row ? row.width : (b.width ?? 100);
+  const align = b.align ?? "center";
+  const wrap = !row && !!b.wrap && align !== "center";
+  const [live, setLive] = useState<number | null>(null);
+  const drag = useRef<{ x: number; w: number; box: number } | null>(null);
+  const pressed = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null);
+  const shown = live ?? width;
+
+  const startResize = (e: RPointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // A row and a wrapped picture are sized against the line, a picture of its own against its own box.
+    const host = row ? (row.el.current?.parentElement?.clientWidth ?? 600) : wrap ? (box.current?.parentElement?.clientWidth ?? 600) : (box.current?.clientWidth ?? 600);
+    drag.current = { x: e.clientX, w: width, box: host };
+  };
+  const moveResize = (e: RPointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const k = row ? 2 : align === "center" ? 2 : align === "right" ? -1 : 1;
+    const next = Math.round(Math.max(10, Math.min(100, d.w + (((e.clientX - d.x) * k) / d.box) * 100)));
+    // A row follows the finger as a whole, without rendering the note again.
+    if (row?.el.current) row.el.current.style.width = `${next}%`;
+    setLive(next);
+  };
+  const endResize = () => {
+    if (drag.current && live !== null) {
+      if (row) act.rowLook(b.id, { width: live });
+      else act.patchImage(b.id, { width: live });
+    }
+    drag.current = null;
+    setLive(null);
+  };
+
+  // Long press: the picture large in the middle of the screen (Step 2.16).
+  const pressStart = (e: RPointerEvent) => {
+    if (e.button !== 0 || !url) return;
+    const at = { x: e.clientX, y: e.clientY };
+    window.clearTimeout(pressed.current?.timer);
+    pressed.current = {
+      ...at,
+      fired: false,
+      timer: window.setTimeout(() => {
+        if (!pressed.current) return;
+        pressed.current.fired = true;
+        navigator.vibrate?.(8);
+        act.preview(url);
+      }, LONG_PRESS_MS),
+    };
+  };
+  const pressMove = (e: RPointerEvent) => {
+    const p = pressed.current;
+    if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) {
+      window.clearTimeout(p.timer);
+      pressed.current = null;
+    }
+  };
+  const pressEnd = () => {
+    const p = pressed.current;
+    if (p && !p.fired) {
+      window.clearTimeout(p.timer);
+      pressed.current = null;
+    }
+  };
+  useEffect(() => () => window.clearTimeout(pressed.current?.timer), []);
+
+  const ratio = row ? undefined : b.ratio;
+  const outerStyle = row ? undefined : wrap ? { width: `${shown}%` } : undefined;
+  return (
+    <div
+      ref={box}
+      className={cx("vn2-img", row ? "vn2-img-in-row" : `vn2-img-${align}`, wrap && `vn2-img-wrap vn2-img-wrap-${align}`)}
+      style={outerStyle}
+      data-block={b.id}
+      data-kind="image"
+      data-testid="notes-image-block"
+      data-width={shown}
+      data-align={align}
+      data-wrap={wrap || undefined}
+      data-row={b.row}
+      data-shape={row ? (b.shape ?? DEFAULT_ROW_SHAPE) : undefined}
+    >
+      <div className={cx("vn2-img-frame relative", row && "vn2-img-frame-row")} style={row ? undefined : { width: wrap ? "100%" : `${shown}%`, ...(ratio ? { aspectRatio: String(ratio) } : {}) }}>
+        {url ? (
+          <img
+            src={url}
+            alt={b.text}
+            draggable={false}
+            decoding="async"
+            onPointerDown={pressStart}
+            onPointerMove={pressMove}
+            onPointerUp={pressEnd}
+            onPointerCancel={pressEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            onClick={(e) => {
+              e.stopPropagation();
+              // The click that ends a long press is not a tap.
+              if (pressed.current?.fired) {
+                pressed.current = null;
+                return;
+              }
+              act.selectImage(b.id);
+            }}
+            className={cx("block size-full rounded-[10px]", selected && !readOnly && "outline outline-[3px] outline-offset-2 outline-primary")}
+            data-testid="notes-image"
+          />
+        ) : (
+          <div className={cx("grid w-full place-items-center rounded-[10px] bg-surface-secondary", !row && !ratio && "aspect-[4/3]", (row || ratio) && "h-full")}>
+            <Spinner />
+          </div>
+        )}
+        {selected && !readOnly && (
+          <span
+            onPointerDown={startResize}
+            onPointerMove={moveResize}
+            onPointerUp={endResize}
+            onPointerCancel={endResize}
+            className={cx(
+              "absolute bottom-[-10px] grid size-7 touch-none place-items-center rounded-full border-2 border-white bg-primary shadow",
+              align === "right" && !row ? "left-[-10px] cursor-nesw-resize" : "right-[-10px] cursor-nwse-resize",
+            )}
+            aria-label={t("notes.image.resize")}
+            data-testid="notes-image-resize"
+          />
+        )}
+      </div>
+    </div>
+  );
+});
+
+/** Step 2.16: a long-pressed picture, large in the middle over the note; a tap on the empty space around it closes it. */
+function ImagePreview({ url, onClose }: { url: string; onClose: () => void }) {
+  const t = useT();
+  useEffect(() => {
+    const key = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [onClose]);
+  return (
+    <div
+      className="vn2-preview absolute inset-0 z-40 flex items-center justify-center bg-black/40 p-5 backdrop-blur-md"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal
+      aria-label={t("notes.image.preview")}
+      data-testid="notes-image-preview"
+    >
+      <img src={url} alt="" draggable={false} className="max-h-[86%] max-w-full rounded-[18px] object-contain shadow-[0_24px_80px_-20px_rgba(0,0,0,0.55)]" data-testid="notes-image-preview-img" />
     </div>
   );
 }
@@ -962,17 +1102,15 @@ function PageNav({
 /**
  * The minimal toolbar: the block style selector (Step 2.13: Обычный,
  * Заголовок, Подзаголовок, Заголовок 2, Цитата, Код, for the paragraph the
- * cursor is in), text size (books), list, checklist, picture, bold, italic,
- * and delete page. On phones it rides on top of the keyboard (visual
- * viewport), never under it, and scrolls sideways when it doesn't fit.
+ * cursor is in), list, checklist, picture, bold, italic, and delete page. On
+ * phones it rides on top of the keyboard (visual viewport), never under it,
+ * and scrolls sideways when it doesn't fit.
  */
 function Toolbar({
   above,
   current,
   uploading,
-  sizes,
   onKind,
-  onSize,
   onBold,
   onItalic,
   onImages,
@@ -983,10 +1121,7 @@ function Toolbar({
   above?: ReactNode;
   current?: NoteBlock;
   uploading: boolean;
-  /** Books offer text sizes. */
-  sizes: boolean;
   onKind: (k: NoteBlockKind) => void;
-  onSize: (size: number | null) => void;
   onBold: () => void;
   onItalic: () => void;
   onImages: (files: File[]) => void;
@@ -996,7 +1131,6 @@ function Toolbar({
 }) {
   const t = useT();
   const pop = usePopover();
-  const sizePop = usePopover();
   const file = useRef<HTMLInputElement>(null);
   // Keep the text focused when a toolbar button is pressed.
   const keep = (e: RPointerEvent) => e.preventDefault();
@@ -1021,22 +1155,6 @@ function Toolbar({
           <span className="max-w-[112px] truncate">{t(styleKey as MessageKey)}</span>
           <RiArrowDownSLine className="size-4 shrink-0 opacity-70" />
         </button>
-        {sizes && (
-          <button
-            ref={sizePop.anchor}
-            type="button"
-            onClick={sizePop.toggle}
-            aria-label={t("notes.tool.size")}
-            aria-haspopup="menu"
-            title={t("notes.tool.size")}
-            className={cx("vn2-icon-btn h-11 shrink-0 grid-flow-col gap-0.5 px-2", current?.size && "text-primary")}
-            data-testid="notes-tool-size"
-            data-size={current?.size}
-          >
-            <RiFontSize className="size-[19px]" />
-            <span className="text-[12.5px] font-semibold tabular-nums">{current?.size ?? ""}</span>
-          </button>
-        )}
         <button
           type="button"
           onClick={() => onKind("bullet")}
@@ -1129,127 +1247,6 @@ function Toolbar({
             }))}
           />
         </Popover>
-        {sizes && (
-          <Popover open={sizePop.open} onClose={sizePop.close} anchor={sizePop.anchor} width={200} testId="notes-size-menu">
-            <Menu
-              onDone={sizePop.close}
-              items={[
-                {
-                  id: "size-default",
-                  label: t("notes.size.default"),
-                  checked: !current?.size,
-                  onSelect: () => onSize(null),
-                },
-                ...BOOK_FONT_SIZES.map((n, i) => ({
-                  id: `size-${n}`,
-                  label: `${n}`,
-                  checked: current?.size === n,
-                  onSelect: () => onSize(n),
-                  divider: i === 0,
-                })),
-              ]}
-            />
-          </Popover>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** A picture: tap to select (the tools open above the toolbar), drag the corner to resize. */
-function ImageBlock({
-  b,
-  row,
-  selected,
-  readOnly,
-  onSelect,
-  onPatch,
-}: {
-  b: NoteBlock;
-  /** Set when it stands in a row of pictures. */
-  row?: { pos: "first" | "mid" | "last" };
-  selected: boolean;
-  readOnly: boolean;
-  onSelect: () => void;
-  onPatch: (p: Partial<NoteBlock>, structural?: boolean) => void;
-}) {
-  const t = useT();
-  const url = useMediaUrl(b.src);
-  const box = useRef<HTMLDivElement>(null);
-  const width = b.width ?? 100;
-  const align = b.align ?? "center";
-  const wrap = !row && !!b.wrap && align !== "center";
-  const [live, setLive] = useState<number | null>(null);
-  const drag = useRef<{ x: number; w: number; box: number } | null>(null);
-  const shown = live ?? width;
-  const startResize = (e: RPointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    // A wrapped picture is sized against the page, not against its own box.
-    const host = wrap || row ? (box.current?.parentElement?.clientWidth ?? 600) : (box.current?.clientWidth ?? 600);
-    drag.current = { x: e.clientX, w: width, box: host };
-  };
-  const moveResize = (e: RPointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    const k = row ? 1 : align === "center" ? 2 : align === "right" ? -1 : 1;
-    setLive(Math.round(Math.max(10, Math.min(100, d.w + (((e.clientX - d.x) * k) / d.box) * 100))));
-  };
-  const endResize = () => {
-    if (drag.current && live !== null) onPatch({ width: live }, true);
-    drag.current = null;
-    setLive(null);
-  };
-  const outerStyle = row ? { flex: `${shown} 1 0%` } : wrap ? { width: `${shown}%` } : undefined;
-  return (
-    <div
-      ref={box}
-      className={cx("vn2-img", row ? "vn2-img-in-row" : `vn2-img-${align}`, wrap && `vn2-img-wrap vn2-img-wrap-${align}`)}
-      style={outerStyle}
-      data-block={b.id}
-      data-kind="image"
-      data-testid="notes-image-block"
-      data-width={shown}
-      data-align={align}
-      data-wrap={wrap || undefined}
-      data-row={b.row}
-    >
-      <div className="relative" style={{ width: row || wrap ? "100%" : `${shown}%` }}>
-        {url ? (
-          <img
-            src={url}
-            alt={b.text}
-            draggable={false}
-            loading="lazy"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect();
-            }}
-            className={cx("block w-full rounded-[10px]", selected && !readOnly && "outline outline-[3px] outline-offset-2 outline-primary")}
-            data-testid="notes-image"
-          />
-        ) : (
-          <div className="grid aspect-[4/3] w-full place-items-center rounded-[10px] bg-surface-secondary">
-            <Spinner />
-          </div>
-        )}
-        {selected && !readOnly && (
-          <>
-            <span
-              onPointerDown={startResize}
-              onPointerMove={moveResize}
-              onPointerUp={endResize}
-              onPointerCancel={endResize}
-              className={cx(
-                "absolute bottom-[-10px] grid size-7 touch-none place-items-center rounded-full border-2 border-white bg-primary shadow",
-                align === "right" && !row ? "left-[-10px] cursor-nesw-resize" : "right-[-10px] cursor-nwse-resize",
-              )}
-              aria-label={t("notes.image.resize")}
-              data-testid="notes-image-resize"
-            />
-          </>
-        )}
       </div>
     </div>
   );
@@ -1260,13 +1257,15 @@ function ImageBlock({
  * never cover the text beside a picture): width 25/50/75/100 %, alignment,
  * text flowing around it (left / right), beside the picture before it (a
  * row) or back on a line of its own, move (inside a row: left / right),
- * remove.
+ * remove. Step 2.16: in a row the width and the shape (square, portrait,
+ * landscape) are the row's: every picture of it takes them.
  */
 function ImageTools({
   b,
   row,
   canJoin,
   onPatch,
+  onRowLook,
   onMove,
   onRow,
   onRemove,
@@ -1274,7 +1273,8 @@ function ImageTools({
   b: NoteBlock;
   row: boolean;
   canJoin: boolean;
-  onPatch: (p: Partial<NoteBlock>, structural?: boolean) => void;
+  onPatch: (p: Partial<NoteBlock>) => void;
+  onRowLook: (look: { width?: number; shape?: NoteImageShape }) => void;
   onMove: (d: -1 | 1) => void;
   onRow: (join: boolean) => void;
   onRemove: () => void;
@@ -1283,6 +1283,7 @@ function ImageTools({
   const width = b.width ?? 100;
   const align = b.align ?? "center";
   const wrap = !row && !!b.wrap && align !== "center";
+  const shape = b.shape ?? DEFAULT_ROW_SHAPE;
   return (
     <div
       className="vn2-img-tools pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-[22px] p-1"
@@ -1294,13 +1295,32 @@ function ImageTools({
         <button
           key={w}
           type="button"
-          onClick={() => onPatch({ width: w }, true)}
+          onClick={() => (row ? onRowLook({ width: w }) : onPatch({ width: w }))}
           className={cx("h-8 rounded-full px-2 text-[12.5px] font-semibold", width === w ? "bg-primary text-white" : "text-text")}
           data-testid={`notes-image-w${w}`}
         >
           {w === 100 && !row ? t("notes.image.full") : `${w}%`}
         </button>
       ))}
+      {row && (
+        <>
+          <span className="mx-0.5 h-5 w-px bg-border" />
+          {(["square", "portrait", "landscape"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onRowLook({ shape: s })}
+              aria-label={t(`notes.image.shape.${s}`)}
+              title={t(`notes.image.shape.${s}`)}
+              aria-pressed={shape === s}
+              className={cx("vn2-icon-btn size-8", shape === s && "text-primary")}
+              data-testid={`notes-image-shape-${s}`}
+            >
+              <span className={cx("block rounded-[3px] border-[1.8px] border-current", s === "square" ? "size-[14px]" : s === "portrait" ? "h-[16px] w-[12px]" : "h-[12px] w-[16px]")} />
+            </button>
+          ))}
+        </>
+      )}
       {!row && (
         <>
           <span className="mx-0.5 h-5 w-px bg-border" />
@@ -1314,7 +1334,7 @@ function ImageTools({
             <button
               key={a}
               type="button"
-              onClick={() => onPatch({ align: a, ...(a === "center" ? { wrap: undefined } : {}) }, true)}
+              onClick={() => onPatch({ align: a, ...(a === "center" ? { wrap: undefined } : {}) })}
               aria-label={t(`notes.image.${a}`)}
               aria-pressed={align === a}
               className={cx("vn2-icon-btn size-8", align === a && "text-primary")}
@@ -1333,7 +1353,6 @@ function ImageTools({
                       wrap: !b.wrap,
                       ...(!b.wrap && width > 60 ? { width: 50 } : {}),
                     },
-                true,
               )
             }
             aria-label={t("notes.image.wrap")}

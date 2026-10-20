@@ -1578,4 +1578,8 @@ export const de: Record<MessageKey, string> = {
   "home.editPages": "Seiten bearbeiten",
   "home.editPagesDone": "Fertig",
   "home.pageN": "Seite {n}",
+  "notes.image.preview": "Bild",
+  "notes.image.shape.square": "Quadrat",
+  "notes.image.shape.portrait": "Hochformat",
+  "notes.image.shape.landscape": "Querformat",
 };

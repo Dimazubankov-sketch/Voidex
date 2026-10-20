@@ -1,6 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
 import {
-  RiBook2Line,
   RiDeleteBinLine,
   RiFileTextLine,
   RiGalleryView2,
@@ -403,7 +402,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
     try {
       const doc = await notesApi.createDocument(projectId, {
         kind,
-        name: kind === "presentation" ? t("notes.newPresentation") : kind === "book" ? t("notes.newBook") : t("notes.newNote"),
+        name: kind === "presentation" ? t("notes.newPresentation") : t("notes.newNote"),
         ...(kind === "presentation" ? { data: emptyPresentation("rect") } : {}),
       });
       await invalidateNotes();
@@ -495,7 +494,6 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
             ? [
                 { id: "new-note", label: t("notes.newNote"), icon: <RiFileTextLine className="size-[18px]" />, onSelect: () => void create("note") },
                 { id: "new-presentation", label: t("notes.newPresentation"), icon: <RiSlideshowLine className="size-[18px]" />, onSelect: () => void create("presentation") },
-                { id: "new-book", label: t("notes.newBook"), icon: <RiBook2Line className="size-[18px]" />, onSelect: () => void create("book") },
               ]
             : undefined
         }
@@ -518,7 +516,6 @@ function DocCard({ doc, view, menu, onOpen, drag }: { doc: NotesDocMetaDto; view
       badge={
         <>
           {doc.kind === "presentation" && <RiPresentationLine className="size-[15px] shrink-0 text-text-tertiary" aria-label={t("notes.presentation")} />}
-          {doc.kind === "book" && <RiBook2Line className="size-[15px] shrink-0 text-text-tertiary" aria-label={t("notes.book")} />}
           {doc.shared && <SharedBadge />}
         </>
       }
@@ -526,9 +523,7 @@ function DocCard({ doc, view, menu, onOpen, drag }: { doc: NotesDocMetaDto; view
         <>
           {doc.kind === "presentation"
             ? t("notes.count.slides", { n: doc.pages })
-            : doc.kind === "book"
-              ? t("notes.count.pages", { n: doc.pages })
-              : doc.pages > 1
+            : doc.pages > 1
                 ? t("notes.count.pages", { n: doc.pages })
                 : notesExt(doc.kind)}{" "}
           · {ago(doc.updatedAt)}

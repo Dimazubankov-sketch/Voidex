@@ -1609,6 +1609,10 @@ export const en = {
   "home.editPages": "Edit pages",
   "home.editPagesDone": "Done",
   "home.pageN": "Page {n}",
+  "notes.image.preview": "Picture",
+  "notes.image.shape.square": "Square",
+  "notes.image.shape.portrait": "Vertical",
+  "notes.image.shape.landscape": "Horizontal",
 } as const;
 
 

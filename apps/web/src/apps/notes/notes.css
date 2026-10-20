@@ -107,6 +107,25 @@
   scroll-padding-top: 64px;
 }
 
+/*
+ * Step 2.16: a note with one page is one open sheet: it runs on past the
+ * bottom of the screen (no page edge in view while you write) and grows with
+ * the text. Page edges only show once the person makes pages.
+ */
+.vn2-sheet-open {
+  aspect-ratio: auto;
+  flex: 1 0 auto;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+.vn2-tail {
+  height: 64px;
+}
+.vn2-sheet-open .vn2-tail {
+  height: auto;
+  min-height: max(40vh, 180px);
+}
+
 /* Square: pages run sideways and text flows on to the next page by itself. */
 .vn2-columns {
   color: var(--vn2-ink);
@@ -141,6 +160,8 @@
 }
 .vn2-text {
   display: block;
+  /* Step 2.16: the field is as tall as its text by itself (no script, no extra layout pass). */
+  field-sizing: content;
   flex: 1;
   min-width: 0;
   resize: none;
@@ -407,21 +428,41 @@
   display: flow-root;
 }
 
-/* Pictures side by side: one row, small gaps, each as wide as its share. */
+/*
+ * Pictures side by side (Step 2.16): the row has one width and one shape;
+ * every picture takes an equal share at that shape, so they stand at one
+ * height and never cover one another.
+ */
 .vn2-img-row {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   padding: 8px 0;
+  margin: 0 auto;
+  max-width: 100%;
   break-inside: avoid-column;
 }
 .vn2-img.vn2-img-in-row {
+  flex: 1 1 0;
   min-width: 0;
   padding: 0;
 }
-.vn2-img-in-row img {
-  max-height: 60vh;
+.vn2-img-frame-row {
+  width: 100%;
+  aspect-ratio: var(--vn2-row-ratio, 1 / 1);
+}
+.vn2-img-frame-row img {
+  height: 100%;
+  max-height: none;
   object-fit: cover;
+}
+/* A picture of its own keeps its place while it loads (its proportions are known). */
+.vn2-img-frame[style*="aspect-ratio"] {
+  max-height: 80vh;
+}
+.vn2-img-frame[style*="aspect-ratio"] img {
+  height: 100%;
+  object-fit: contain;
 }
 @container (max-width: 480px) {
   .vn2-img-row {
@@ -453,75 +494,4 @@
   .vn2-img-wrap-right {
     margin-left: 12px;
   }
-}
-
-/* ---------------------------------------------------------------- Step 2.13: books */
-
-.vn2-spread {
-  position: relative;
-}
-.vn2-book-page {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--vn2-paper);
-  color: var(--vn2-ink);
-  border-radius: 6px;
-  padding: 44px 40px 40px;
-  box-shadow:
-    0 1px 2px rgba(30, 20, 80, 0.05),
-    0 18px 46px -24px rgba(40, 30, 120, 0.3);
-  container-type: inline-size;
-}
-.vn2-book-content {
-  flex: 1;
-  min-height: 0;
-}
-.vn2-book-blank {
-  opacity: 0.7;
-}
-.vn2-spread-two .vn2-book-left {
-  border-radius: 8px 2px 2px 8px;
-  box-shadow:
-    inset -18px 0 22px -20px rgba(40, 30, 120, 0.28),
-    0 18px 46px -24px rgba(40, 30, 120, 0.3);
-}
-.vn2-spread-two .vn2-book-right {
-  border-radius: 2px 8px 8px 2px;
-  box-shadow:
-    inset 18px 0 22px -20px rgba(40, 30, 120, 0.28),
-    0 18px 46px -24px rgba(40, 30, 120, 0.3);
-}
-.vn2-book-number {
-  position: absolute;
-  bottom: 14px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--vn2-ink-soft);
-  pointer-events: none;
-}
-@media (max-width: 520px) {
-  .vn2-book-page {
-    padding: 30px 22px 36px;
-  }
-}
-
-/* Reading mode: the same paper and type, nothing to edit. */
-.vn2-reader {
-  background: var(--background);
-}
-.vn2-r-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.vn2-r-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.vn2-reader-page img {
-  cursor: default;
 }
