@@ -147,6 +147,8 @@ async function zoomBlocked(page: Page, selector: string) {
 test("A4: a pinch on the shell is not a page zoom (one-finger scrolling untouched); Settings can allow it", async ({ page }) => {
   test.skip(!isMobile(page), "touch screens");
   await signUpViaApi(page, "Без", "Масштаба");
+  // The home page is on screen before events are sent to it (slow runners render it a little later).
+  await expect(page.getByTestId("home-page-0")).toBeVisible();
   expect(await zoomBlocked(page, '[data-testid="home-page-0"]')).toEqual({ pinch: true, gesture: true, oneFinger: false });
   // Double tap never zooms: touch-action manipulation everywhere (utilities like touch-none still win).
   expect(await page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="home-page-0"]')!).touchAction)).toMatch(/manipulation|none|pan/);
