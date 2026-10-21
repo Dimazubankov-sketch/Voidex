@@ -380,3 +380,25 @@ purpose with its own quota).
 * **One glass token**: `--glass-*` is the material of the Vibex tab bar (mostly white, the app
   or wallpaper only just visible through it, blur 18 px); the dock, the system bar, the
   Notification Center, menus and the Vibex / Clock tab bars all use it.
+
+## Stage E: widget stacks and horizontal carousels
+
+Model (synced layout, `packages/shared/src/workspace.ts`): a widget may carry `items` (+ `active`) — a
+**stack** of 2–10 widgets switched vertically in one 2 × 2 place — and `items2` (+ `active2`) — the right
+half of a **horizontal carousel**, a 4 × 2 block whose halves are each a widget or a stack. Items are plain
+widgets, so a stack can never hold a carousel and nothing nests. Older apps ignore the new fields and show
+the first widget. `normalizeLayout` keeps them consistent (known types, unique ids, ≤ 10, one item = no stack).
+
+- **Make a stack**: drag a widget onto the middle of another (a ring marks the target), or «Добавить
+  виджет» in a widget's menu (the catalogue, then it goes on that stack). The dropped / added widget is
+  in view. More than 10, or a carousel into a stack, is refused with a short message.
+- **Stack**: vertical swipe / mouse wheel, one widget in view, snapping; the one in view is saved. Dots (≤ 10)
+  show only while it moves and ~1 s after; on the left half of a carousel they are on the left.
+- **Make a carousel**: while dragging a widget next to another, a small «+» appears on a side where the
+  4 × 2 block fits (`carouselSpot`); dropping on the «+» joins them (`joinWidgets`). No room: no «+».
+- **Menus** (long press; PC right click): Добавить виджет · Убрать из стопки (the widget in view takes the
+  nearest free place; no room → message, nothing changes) · Убрать карусель (halves part in their places) ·
+  Изменить · Удалить стопку (asks first) / Удалить виджет (in a carousel the other half stays). Moving the
+  finger after the menu opened picks the widget up as before.
+- Removing a stack or carousel from edit mode asks first; apps and their data are never removed.
+- Phone pages stay bounded (stage A2): stacks and carousels are placed only where they are fully visible.

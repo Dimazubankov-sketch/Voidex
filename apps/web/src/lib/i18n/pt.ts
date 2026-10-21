@@ -1628,4 +1628,12 @@ export const pt: Record<MessageKey, string> = {
   "notes.image.carouselOn": "Adicionar carrossel",
   "notes.image.carouselOff": "Remover carrossel",
   "notes.image.swapText": "Trocar imagem e texto",
+  "widgets.stackFull": "Uma pilha tem até 10 widgets",
+  "widgets.noCarouselInStack": "Um carrossel não pode entrar numa pilha",
+  "widgets.takeOut": "Tirar da pilha",
+  "widgets.deleteStack": "Apagar pilha",
+  "widgets.splitCarousel": "Desfazer carrossel",
+  "widgets.deleteStackTitle": "Apagar esta pilha?",
+  "widgets.deleteCarouselTitle": "Apagar este carrossel?",
+  "widgets.deleteStackBody": "Todos os widgets saem da tela inicial. Os apps e seus dados ficam.",
 };

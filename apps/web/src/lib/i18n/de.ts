@@ -1628,4 +1628,12 @@ export const de: Record<MessageKey, string> = {
   "notes.image.carouselOn": "Karussell hinzufügen",
   "notes.image.carouselOff": "Karussell entfernen",
   "notes.image.swapText": "Bild und Text tauschen",
+  "widgets.stackFull": "Ein Stapel fasst höchstens 10 Widgets",
+  "widgets.noCarouselInStack": "Ein Karussell kann nicht in einen Stapel",
+  "widgets.takeOut": "Aus dem Stapel nehmen",
+  "widgets.deleteStack": "Stapel löschen",
+  "widgets.splitCarousel": "Karussell auflösen",
+  "widgets.deleteStackTitle": "Diesen Stapel löschen?",
+  "widgets.deleteCarouselTitle": "Dieses Karussell löschen?",
+  "widgets.deleteStackBody": "Alle Widgets verschwinden vom Home-Bildschirm. Die Apps und ihre Daten bleiben.",
 };

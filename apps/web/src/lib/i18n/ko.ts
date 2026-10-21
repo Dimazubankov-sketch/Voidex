@@ -1628,4 +1628,12 @@ export const ko: Record<MessageKey, string> = {
   "notes.image.carouselOn": "캐러셀 추가",
   "notes.image.carouselOff": "캐러셀 해제",
   "notes.image.swapText": "사진과 텍스트 바꾸기",
+  "widgets.stackFull": "스택에는 위젯을 10개까지 넣을 수 있습니다",
+  "widgets.noCarouselInStack": "캐러셀은 스택에 넣을 수 없습니다",
+  "widgets.takeOut": "스택에서 빼기",
+  "widgets.deleteStack": "스택 삭제",
+  "widgets.splitCarousel": "캐러셀 해제",
+  "widgets.deleteStackTitle": "이 스택을 삭제할까요?",
+  "widgets.deleteCarouselTitle": "이 캐러셀을 삭제할까요?",
+  "widgets.deleteStackBody": "모든 위젯이 홈 화면에서 사라집니다. 앱과 데이터는 남습니다.",
 };

@@ -1659,6 +1659,14 @@ export const en = {
   "notes.image.carouselOn": "Add carousel",
   "notes.image.carouselOff": "Remove carousel",
   "notes.image.swapText": "Swap picture and text",
+  "widgets.stackFull": "A stack holds up to 10 widgets",
+  "widgets.noCarouselInStack": "A carousel can't go into a stack",
+  "widgets.takeOut": "Take out of the stack",
+  "widgets.deleteStack": "Delete stack",
+  "widgets.splitCarousel": "Remove carousel",
+  "widgets.deleteStackTitle": "Delete this stack?",
+  "widgets.deleteCarouselTitle": "Delete this carousel?",
+  "widgets.deleteStackBody": "All its widgets leave the home screen. The apps and their data stay.",
 } as const;
 
 

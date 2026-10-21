@@ -1628,4 +1628,12 @@ export const fr: Record<MessageKey, string> = {
   "notes.image.carouselOn": "Ajouter un carrousel",
   "notes.image.carouselOff": "Retirer le carrousel",
   "notes.image.swapText": "Échanger image et texte",
+  "widgets.stackFull": "Une pile contient au plus 10 widgets",
+  "widgets.noCarouselInStack": "Un carrousel ne peut pas aller dans une pile",
+  "widgets.takeOut": "Retirer de la pile",
+  "widgets.deleteStack": "Supprimer la pile",
+  "widgets.splitCarousel": "Retirer le carrousel",
+  "widgets.deleteStackTitle": "Supprimer cette pile ?",
+  "widgets.deleteCarouselTitle": "Supprimer ce carrousel ?",
+  "widgets.deleteStackBody": "Tous ses widgets quittent l'écran d'accueil. Les apps et leurs données restent.",
 };

@@ -1643,4 +1643,12 @@ export const ru: Record<MessageKey, string> = {
   "notes.image.carouselOn": "Добавить карусель",
   "notes.image.carouselOff": "Убрать карусель",
   "notes.image.swapText": "Поменять местами с текстом",
+  "widgets.stackFull": "В стопке не больше 10 виджетов",
+  "widgets.noCarouselInStack": "Карусель нельзя положить в стопку",
+  "widgets.takeOut": "Убрать из стопки",
+  "widgets.deleteStack": "Удалить стопку",
+  "widgets.splitCarousel": "Убрать карусель",
+  "widgets.deleteStackTitle": "Удалить стопку?",
+  "widgets.deleteCarouselTitle": "Удалить карусель?",
+  "widgets.deleteStackBody": "Все виджеты в ней уйдут с рабочего стола. Приложения и их данные останутся.",
 };

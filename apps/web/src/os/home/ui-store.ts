@@ -12,7 +12,8 @@ export type ContextTarget =
   | { kind: "launcher-app"; id: AppId }
   | { kind: "dock-app"; id: AppId }
   | { kind: "dock-desktops" }
-  | { kind: "widget"; id: string }
+  /** Stage E: `half` is the half of a horizontal carousel that was pressed (0: left / a widget or stack). */
+  | { kind: "widget"; id: string; half?: 0 | 1 }
   | { kind: "space"; id: string };
 
 export type RenameTarget = { kind: "app"; id: AppId } | { kind: "space"; id: string };
@@ -63,6 +64,11 @@ interface HomeUi {
   /** The brush menu (Wallpaper / View / Widgets), anchored at the brush. */
   brushOpen: boolean;
   widgetsOpen: boolean;
+  /** Stage E: «Добавить виджет» from a widget's menu: the new widget goes on that stack (half of a carousel). */
+  widgetsStack: { id: string; half: 0 | 1 } | null;
+  /** Stage E: a stack / carousel waiting for its removal to be confirmed. */
+  widgetConfirm: { id: string; half: 0 | 1; kind: "stack" | "carousel" } | null;
+  setWidgetConfirm: (c: HomeUi["widgetConfirm"]) => void;
   /** Step 2.16: «Изменить страницы» (phone): the overview of all pages. */
   pagesOpen: boolean;
   setPagesOpen: (v: boolean) => void;
@@ -96,7 +102,7 @@ interface HomeUi {
   setSearch: (s: Partial<HomeUi["search"]>) => void;
   setAppearanceOpen: (v: boolean) => void;
   setBrushOpen: (v: boolean) => void;
-  setWidgetsOpen: (v: boolean, at?: { x: number; y: number } | null) => void;
+  setWidgetsOpen: (v: boolean, at?: { x: number; y: number } | null, stack?: HomeUi["widgetsStack"]) => void;
   setLauncherOpen: (v: boolean) => void;
   setDrag: (d: DragState | null) => void;
   patchDrag: (d: Partial<DragState>) => void;
@@ -113,6 +119,9 @@ export const useHomeUi = create<HomeUi>((set) => ({
   appearanceOpen: false,
   brushOpen: false,
   widgetsOpen: false,
+  widgetsStack: null,
+  widgetConfirm: null,
+  setWidgetConfirm: (widgetConfirm) => set({ widgetConfirm, menu: null }),
   pagesOpen: false,
   setPagesOpen: (pagesOpen) => set({ pagesOpen, menu: null, launcherOpen: false, brushOpen: false }),
   widgetsAt: null,
@@ -140,7 +149,8 @@ export const useHomeUi = create<HomeUi>((set) => ({
   setSearch: (s) => set((st) => ({ search: { ...st.search, ...s } })),
   setAppearanceOpen: (appearanceOpen) => set({ appearanceOpen, menu: null, launcherOpen: false, brushOpen: false }),
   setBrushOpen: (brushOpen) => set({ brushOpen, menu: null, launcherOpen: false }),
-  setWidgetsOpen: (widgetsOpen, at = null) => set({ widgetsOpen, widgetsAt: widgetsOpen ? at : null, menu: null, launcherOpen: false, brushOpen: false }),
+  setWidgetsOpen: (widgetsOpen, at = null, stack = null) =>
+    set({ widgetsOpen, widgetsAt: widgetsOpen ? at : null, widgetsStack: widgetsOpen ? stack : null, menu: null, launcherOpen: false, brushOpen: false }),
   setLauncherOpen: (launcherOpen) => set({ launcherOpen, menu: null }),
   setDrag: (drag) => set({ drag }),
   patchDrag: (d) => set((st) => (st.drag ? { drag: { ...st.drag, ...d } } : {})),

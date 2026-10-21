@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { WIDGET_CELLS, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type GridGeometry, type PlacedCell, type WidgetType, type WorkspaceLayout } from "@voidex/shared";
+import { widgetCells, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type GridGeometry, type PlacedCell, type WorkspaceLayout } from "@voidex/shared";
 import type { DesktopGrid } from "./desktop-geometry";
 import type { IconMetrics, LabelStyle } from "./icons";
 import { useHomeUi } from "./ui-store";
@@ -86,7 +86,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
   const placed: Map<string, PlacedCell> = useMemo(() => {
     // PC: stored cells outside the screen area move to the nearest free cell inside it.
     if (!sorted) return placementOf(layout, place, geometry);
-    const blocks = widgets.map((w) => ({ key: widgetKey(w.id), ...WIDGET_CELLS[w.type as WidgetType] }));
+    const blocks = widgets.map((w) => ({ key: widgetKey(w.id), ...widgetCells(w) }));
     const cells = Object.fromEntries(widgets.flatMap((w) => {
       const all = place.surface === "mobile" ? layout.mobile.cells : layout.desktop.cells;
       const c = all[widgetKey(w.id)];

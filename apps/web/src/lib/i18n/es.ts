@@ -1628,4 +1628,12 @@ export const es: Record<MessageKey, string> = {
   "notes.image.carouselOn": "Añadir carrusel",
   "notes.image.carouselOff": "Quitar carrusel",
   "notes.image.swapText": "Intercambiar imagen y texto",
+  "widgets.stackFull": "Una pila admite hasta 10 widgets",
+  "widgets.noCarouselInStack": "Un carrusel no puede ir en una pila",
+  "widgets.takeOut": "Sacar de la pila",
+  "widgets.deleteStack": "Eliminar pila",
+  "widgets.splitCarousel": "Quitar carrusel",
+  "widgets.deleteStackTitle": "¿Eliminar esta pila?",
+  "widgets.deleteCarouselTitle": "¿Eliminar este carrusel?",
+  "widgets.deleteStackBody": "Todos sus widgets salen de la pantalla de inicio. Las apps y sus datos se quedan.",
 };

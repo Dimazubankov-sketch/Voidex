@@ -27,7 +27,7 @@ import { RenameSheet } from "./rename-sheet";
 import { MobileSearch } from "./search";
 import { RemoveSpaceConfirm } from "./spaces";
 import { useHomeUi } from "./ui-store";
-import { GridWidget, WidgetStrip, WidgetsPanel } from "./widgets";
+import { GridWidget, WidgetConfirm, WidgetStrip, WidgetsPanel } from "./widgets";
 import { SYSTEM_BAR_H } from "../metrics";
 import { HomeGestureBar, NavButtons } from "../phone-nav";
 
@@ -233,6 +233,7 @@ export function HomeScreen({
 
       <BrushMenu anchor={brushBtn} layout={layout} />
       <WidgetsPanel />
+      <WidgetConfirm />
       {ff === "mobile" && <PagesEditor layout={layout} />}
       <Launcher apps={apps} layout={layout} />
       <FolderOverlay layout={layout} editing={editing} onOpen={onOpen} tone={tone} />

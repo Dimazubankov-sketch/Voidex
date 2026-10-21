@@ -1628,4 +1628,12 @@ export const zh: Record<MessageKey, string> = {
   "notes.image.carouselOn": "添加轮播",
   "notes.image.carouselOff": "取消轮播",
   "notes.image.swapText": "图片与文字互换",
+  "widgets.stackFull": "一个堆叠最多 10 个小组件",
+  "widgets.noCarouselInStack": "轮播不能放入堆叠",
+  "widgets.takeOut": "移出堆叠",
+  "widgets.deleteStack": "删除堆叠",
+  "widgets.splitCarousel": "取消轮播",
+  "widgets.deleteStackTitle": "删除此堆叠？",
+  "widgets.deleteCarouselTitle": "删除此轮播？",
+  "widgets.deleteStackBody": "其中所有小组件都会从主屏幕移除，应用及其数据会保留。",
 };

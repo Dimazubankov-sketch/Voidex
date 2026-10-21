@@ -1628,4 +1628,12 @@ export const ja: Record<MessageKey, string> = {
   "notes.image.carouselOn": "カルーセルにする",
   "notes.image.carouselOff": "カルーセルを解除",
   "notes.image.swapText": "画像と文字を入れ替え",
+  "widgets.stackFull": "スタックは最大 10 個です",
+  "widgets.noCarouselInStack": "カルーセルはスタックに入れられません",
+  "widgets.takeOut": "スタックから出す",
+  "widgets.deleteStack": "スタックを削除",
+  "widgets.splitCarousel": "カルーセルを解除",
+  "widgets.deleteStackTitle": "このスタックを削除しますか？",
+  "widgets.deleteCarouselTitle": "このカルーセルを削除しますか？",
+  "widgets.deleteStackBody": "中のウィジェットはすべてホーム画面から外れます。アプリとデータは残ります。",
 };

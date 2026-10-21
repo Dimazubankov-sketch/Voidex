@@ -1628,4 +1628,12 @@ export const tr: Record<MessageKey, string> = {
   "notes.image.carouselOn": "Karusel ekle",
   "notes.image.carouselOff": "Karuseli kaldır",
   "notes.image.swapText": "Görsel ve metnin yerini değiştir",
+  "widgets.stackFull": "Bir yığında en fazla 10 widget olur",
+  "widgets.noCarouselInStack": "Karusel bir yığına konamaz",
+  "widgets.takeOut": "Yığından çıkar",
+  "widgets.deleteStack": "Yığını sil",
+  "widgets.splitCarousel": "Karuseli kaldır",
+  "widgets.deleteStackTitle": "Bu yığın silinsin mi?",
+  "widgets.deleteCarouselTitle": "Bu karusel silinsin mi?",
+  "widgets.deleteStackBody": "Tüm widget'ları ana ekrandan kalkar. Uygulamalar ve verileri kalır.",
 };
