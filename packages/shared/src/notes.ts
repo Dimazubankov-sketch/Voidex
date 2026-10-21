@@ -75,6 +75,10 @@ export interface NoteBlock {
   shape?: NoteImageShape;
   /** Step 2.16: a picture's width / height, known when it is added (its place is kept while it loads). */
   ratio?: number;
+  /** Stage D: the pictures of this row scroll as a carousel (all its pictures carry it). */
+  carousel?: boolean;
+  /** Stage D: the picture's last tool in its panel (remembered with the note). */
+  tool?: "move" | "scale";
 }
 export const NOTE_IMAGE_SHAPES = ["square", "portrait", "landscape"] as const;
 export type NoteImageShape = (typeof NOTE_IMAGE_SHAPES)[number];
@@ -172,7 +176,9 @@ function validBlock(b: unknown) {
     opt(b.wrap, bool) &&
     opt(b.row, (v) => str(v, 64)) &&
     opt(b.shape, (v) => (NOTE_IMAGE_SHAPES as readonly string[]).includes(v as string)) &&
-    opt(b.ratio, (v) => num(v, 0.05, 20))
+    opt(b.ratio, (v) => num(v, 0.05, 20)) &&
+    opt(b.carousel, bool) &&
+    opt(b.tool, (v) => v === "move" || v === "scale")
   );
 }
 
