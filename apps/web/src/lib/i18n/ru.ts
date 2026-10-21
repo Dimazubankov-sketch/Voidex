@@ -157,6 +157,11 @@ export const ru: Record<MessageKey, string> = {
   "os.sessionExpired": "Сеанс истёк. Войдите снова.",
   "os.signedOutRemotely": "Вы вышли из аккаунта на этом устройстве.",
   "os.restoring": "Восстанавливаем ваше пространство…",
+  "os.updateAvailable": "Новая версия VOIDEX",
+  "os.updateNow": "Обновить",
+  "os.updateUnsaved": "Не удалось сохранить изменения — обновление отложено",
+  "os.loadFailed": "Не удалось загрузить VOIDEX",
+  "os.reloadPage": "Перезагрузить",
 
   // home screen / desktop
   "home.saveFailed": "Не удалось сохранить рабочий стол. Повторим позже.",

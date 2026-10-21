@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { lazyWithRecovery, registerUpdateSaver } from "@/lib/app-update";
 import { RiLockLine } from "@remixicon/react";
 import { useT } from "@/lib/i18n";
 import { Button, Spinner } from "@/ui/controls";
@@ -14,7 +15,7 @@ import { ShareLanding } from "./share-landing";
 import { useNotesSync } from "./sync";
 import "./notes.css";
 
-const DocScreen = lazy(() => import("./doc-screen").then((m) => ({ default: m.DocScreen })));
+const DocScreen = lazyWithRecovery(() => import("./doc-screen").then((m) => ({ default: m.DocScreen })));
 
 /**
  * Voidex Notes (Step 2.6): Projects → a project's notes and presentations →
@@ -57,6 +58,9 @@ export function NotesApp() {
     });
     return () => setBeforeClose(win.windowId, null);
   }, [win.windowId, t]);
+
+  // A1: «Обновить» saves the open note first (and stays if that fails).
+  useEffect(() => registerUpdateSaver(async () => !activeDoc.current?.isDirty() || (await activeDoc.current.flush())), []);
 
   // Realtime: access removed / resource deleted → close what is open right away and say why.
   const seq = useNotesSync((s) => s.seq);

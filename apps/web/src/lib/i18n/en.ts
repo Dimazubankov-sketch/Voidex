@@ -168,6 +168,11 @@ export const en = {
   "os.sessionExpired": "Your session has expired. Please sign in again.",
   "os.signedOutRemotely": "You were signed out on this device.",
   "os.restoring": "Restoring your space…",
+  "os.updateAvailable": "New version of VOIDEX",
+  "os.updateNow": "Update",
+  "os.updateUnsaved": "Couldn't save your changes — update postponed",
+  "os.loadFailed": "VOIDEX couldn't load",
+  "os.reloadPage": "Reload",
 
   // home screen / desktop
   "home.saveFailed": "Couldn't save the desktop. Will retry.",

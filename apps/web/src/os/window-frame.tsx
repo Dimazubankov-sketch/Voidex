@@ -3,6 +3,7 @@ import { animate, motion, useMotionValue, useReducedMotion } from "motion/react"
 import { RiErrorWarningLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
+import { resetFailedChunks } from "@/lib/app-update";
 import { cx } from "@/lib/cx";
 import { Button, Spinner } from "@/ui/controls";
 import { CLIENT_APPS } from "./app-registry";
@@ -470,7 +471,15 @@ class AppBoundary extends Component<{ children: ReactNode }, { error: Error | nu
     console.error("App crashed", error, info.componentStack);
   }
   override render() {
-    if (this.state.error) return <AppCrashed onRetry={() => this.setState({ error: null })} />;
+    if (this.state.error)
+      return (
+        <AppCrashed
+          onRetry={() => {
+            resetFailedChunks();
+            this.setState({ error: null });
+          }}
+        />
+      );
     return this.props.children;
   }
 }

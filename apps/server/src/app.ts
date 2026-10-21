@@ -5,6 +5,7 @@ import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
+import { isSpaRoute, webCacheControl } from "./lib/web-cache.js";
 import { ErrorCode, type ApiErrorBody } from "@voidex/shared";
 import type { Config } from "./config.js";
 import { createDb, type Db } from "./db/client.js";
@@ -260,9 +261,15 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
   // Production: serve the built web client (single origin => simple cookies & CSP).
   const webDist = config.webDist ? resolve(config.webDist) : null;
   if (webDist && existsSync(resolve(webDist, "index.html"))) {
-    await app.register(fastifyStatic, { root: webDist, wildcard: false, index: ["index.html"] });
+    await app.register(fastifyStatic, {
+      root: webDist,
+      wildcard: false,
+      index: ["index.html"],
+      setHeaders: (reply, path) => reply.header("Cache-Control", webCacheControl(path)),
+    });
     app.setNotFoundHandler((req, reply) => {
-      if ((req.method === "GET" || req.method === "HEAD") && !req.url.startsWith("/api/")) return reply.sendFile("index.html");
+      if ((req.method === "GET" || req.method === "HEAD") && isSpaRoute(req.url)) return reply.sendFile("index.html");
+      reply.header("Cache-Control", "no-store");
       return reply.status(404).send({ error: { code: ErrorCode.NotFound, message: "Not found." } });
     });
   } else {

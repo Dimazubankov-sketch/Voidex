@@ -17,3 +17,6 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// A1: the bundle runs — the boot guard (public/boot-guard.js) must not show its fallback.
+(window as unknown as { __vxBoot?: { dismiss?: () => void; ok?: boolean } }).__vxBoot?.dismiss?.();

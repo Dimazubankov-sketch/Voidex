@@ -8,6 +8,7 @@ import { errorMessage } from "@/lib/errors";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { qk, queryClient } from "@/lib/query";
+import { registerUpdateSaver } from "@/lib/app-update";
 import { Button, IconButton, Notice, Spinner, TextField } from "@/ui/controls";
 import { Sheet, toast } from "@/ui/overlays";
 import { AttachSourceSheet } from "@/os/share/attach-source";
@@ -45,6 +46,8 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
   const [body, setBody] = useState(initial.body);
   const [collapsed, setCollapsed] = useState(false);
   const [save, setSave] = useState<SaveState>(initial.draftId ? "saved" : "idle");
+  const saveRef = useRef(save);
+  saveRef.current = save;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invalid, setInvalid] = useState<string[]>([]);
@@ -103,6 +106,19 @@ function ComposerInner({ initial }: { initial: ComposerState }) {
       throw err;
     }
   }, [ensureDraft]);
+
+  // A1: an update reload saves an edited draft first.
+  useEffect(
+    () =>
+      registerUpdateSaver(async () => {
+        if (saveRef.current !== "dirty" && saveRef.current !== "error") return true;
+        return flush().then(
+          () => true,
+          () => false,
+        );
+      }),
+    [flush],
+  );
 
   // Autosave on every change (debounced).
   const first = useRef(true);

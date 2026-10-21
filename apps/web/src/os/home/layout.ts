@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { normalizeLayout, type AppId, type InstalledAppDto, type MeDto, type WorkspaceLayout } from "@voidex/shared";
 import { api } from "@/lib/api";
+import { registerUpdateSaver } from "@/lib/app-update";
 import { t } from "@/lib/i18n";
 import { qk } from "@/lib/query";
 import { useSession } from "@/lib/session";
@@ -60,16 +61,18 @@ export function updateLayout(edit: (l: WorkspaceLayout) => WorkspaceLayout) {
   saveTimer = window.setTimeout(flush, 350);
 }
 
-async function flush() {
+async function flush(): Promise<boolean> {
   const layout = pending;
-  if (!layout) return;
+  if (!layout) return true;
   try {
     await api.patch("/api/preferences", { workspace: { layout } });
     savedEpoch++;
     if (pending === layout) pending = null;
+    return true;
   } catch {
     toast({ title: t("home.saveFailed"), tone: "danger" });
     // Keep the local edit; the next change (or reload) retries.
+    return false;
   }
 }
 
@@ -80,6 +83,11 @@ export function flushLayout() {
 }
 
 if (typeof window !== "undefined") window.addEventListener("pagehide", flushLayout);
+// A1: an update reload waits until the desktop arrangement is saved.
+registerUpdateSaver(() => {
+  window.clearTimeout(saveTimer);
+  return flush();
+});
 
 /** Call before fetching the account from the server; pass the value to `mergeServerUser`. */
 export function layoutEpoch() {
