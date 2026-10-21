@@ -167,6 +167,8 @@ function hasPending(s: ClockState) {
   return s.alarms.some((a) => a.enabled) || s.timers.some((t) => t.running) || s.snoozes.length > 0;
 }
 
+const GESTURES = ["pointerdown", "touchend", "pointerup", "click", "keydown"] as const;
+
 /** Starts the loop (every 250 ms, and as soon as the tab is visible again). Returns its stop. */
 export function startClockLoop(): () => void {
   const id = window.setInterval(pass, 250);
@@ -179,13 +181,12 @@ export function startClockLoop(): () => void {
     if (rings.length && !useClockAudio.getState().ringing && !(e.target as Element | null)?.closest?.("[data-clock-ring] button")) void enableRingSound();
   };
   document.addEventListener("visibilitychange", onVisible);
-  document.addEventListener("pointerdown", onTap, { capture: true, passive: true });
-  document.addEventListener("keydown", onTap, { capture: true, passive: true });
+  // B2: touchend / click are the gestures iPhone accepts for sound (a touch's pointerdown is not one).
+  for (const type of GESTURES) document.addEventListener(type, onTap, { capture: true, passive: true });
   pass();
   return () => {
     window.clearInterval(id);
     document.removeEventListener("visibilitychange", onVisible);
-    document.removeEventListener("pointerdown", onTap, { capture: true });
-    document.removeEventListener("keydown", onTap, { capture: true });
+    for (const type of GESTURES) document.removeEventListener(type, onTap, { capture: true });
   };
 }

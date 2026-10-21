@@ -37,6 +37,7 @@ const buffers = new Map<string, Promise<AudioBuffer>>();
 let tickBuffer: AudioBuffer | null = null;
 let tickLoading = false;
 let lastTick = 0;
+const TICK_GAP = 0.045;
 let preview: { id: string; source: AudioBufferSourceNode; gain: GainNode; endsAt: number } | null = null;
 let previewSafety: number | undefined;
 let previewToken = 0;
@@ -48,15 +49,39 @@ function syncRunning() {
   if (useClockAudio.getState().running !== running) useClockAudio.setState({ running });
 }
 
-/** Creates / resumes the context. Call it from a user gesture. */
+function createContext(): Ctx {
+  const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AC) throw new Error("no-audio");
+  const ctx = new AC();
+  ctx.addEventListener?.("statechange", syncRunning);
+  lastTick = 0; // a new context counts its time from 0
+  return ctx;
+}
+
+/** Resolves when the context runs, or after `ms` (iOS can leave resume() pending forever after an interruption). */
+function resumeWithin(ctx: Ctx, ms: number): Promise<void> {
+  if (ctx.state === "running") return Promise.resolve();
+  return Promise.race([ctx.resume().catch(() => {}), new Promise<void>((r) => window.setTimeout(r, ms))]);
+}
+
+/**
+ * Creates / resumes the context. Call it from a user gesture.
+ *
+ * B2: iOS Safari puts the context into "interrupted" / "suspended" after the app was in the background, a
+ * call or another tab played sound, and resume() then sometimes never settles. Such a context is replaced
+ * by a new one (decoded sounds are kept: an AudioBuffer works with any context).
+ */
 export async function enableAudio(): Promise<Ctx> {
-  if (!context) {
-    const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AC) throw new Error("no-audio");
-    context = new AC();
-    context.addEventListener?.("statechange", syncRunning);
+  if (!context || context.state === "closed") context = createContext();
+  if (context.state !== "running") {
+    const stale = context;
+    await resumeWithin(stale, 400);
+    if (stale.state !== "running" && stale === context) {
+      context = createContext();
+      void stale.close?.().catch(() => {});
+      await resumeWithin(context, 400);
+    }
   }
-  if (context.state !== "running") await context.resume();
   syncRunning();
   warmTick();
   return context;
@@ -66,6 +91,50 @@ export async function enableAudio(): Promise<Ctx> {
 export function unlockAudio() {
   if (context?.state === "running") return warmTick();
   enableAudio().catch(() => {});
+}
+
+/*
+ * B2: what counts as a user gesture for sound. On iPhone a touch's pointerdown / touchstart do NOT unlock
+ * audio (only touchend / pointerup / click / keydown do), so a drum that unlocked on pointerdown stayed
+ * silent until some later tap. These listeners cover every kind of gesture while Clock is interested in
+ * sound (its window is open, or something is set to ring).
+ */
+let interest = 0;
+let gestureListeners = false;
+function onGesture() {
+  if (interest > 0) unlockAudio();
+}
+function onVisibility() {
+  if (document.visibilityState === "hidden") {
+    // Nothing keeps playing behind the person's back, and nothing replays later by surprise.
+    stopPreview();
+    return;
+  }
+  // Back in front: a context the system paused can often resume without a new gesture.
+  if (context && context.state !== "running" && context.state !== "closed") void resumeWithin(context, 400).then(syncRunning);
+}
+export function wantAudio(): () => void {
+  interest++;
+  if (!gestureListeners && typeof document !== "undefined") {
+    gestureListeners = true;
+    for (const type of ["touchend", "pointerup", "click", "keydown"]) document.addEventListener(type, onGesture, { capture: true, passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", stopPreview);
+  }
+  return () => {
+    interest = Math.max(0, interest - 1);
+  };
+}
+
+/** Safari 16.4+: alarms and previews play even with the ring / silent switch on; the drums' click does not. */
+function audioSession(type: "playback" | "auto") {
+  const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+  if (!session) return;
+  try {
+    session.type = type;
+  } catch {
+    /* unsupported value */
+  }
 }
 
 function warmTick() {
@@ -91,7 +160,8 @@ function warmTick() {
 export function playWheelTick() {
   if (!context || context.state !== "running") return;
   const now = context.currentTime;
-  if (now - lastTick < 0.028) return;
+  // B2: one click per row, but never closer than 45 ms: a fast spin ticks like a ratchet, not a buzz.
+  if (now - lastTick < TICK_GAP) return;
   lastTick = now;
   if (!tickBuffer) {
     warmTick();
@@ -163,6 +233,7 @@ function fadeStop(source: AudioBufferSourceNode, gain: GainNode) {
 
 export function stopPreview() {
   previewToken++;
+  if (preview && !ring) audioSession("auto");
   window.clearTimeout(previewSafety);
   if (preview) {
     preview.source.onended = null;
@@ -187,9 +258,10 @@ export async function previewSound(id: string): Promise<void> {
     const buffer = await loadSound(id);
     if (token !== previewToken) return;
     const ctx = context!;
-    if (ctx.state !== "running") await ctx.resume().catch(() => {});
+    if (ctx.state !== "running") await resumeWithin(ctx, 400);
     if (token !== previewToken) return;
     if (ctx.state !== "running") throw new Error("audio-blocked");
+    audioSession("playback");
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
     source.buffer = buffer;
@@ -199,6 +271,7 @@ export async function previewSound(id: string): Promise<void> {
       if (token !== previewToken) return;
       window.clearTimeout(previewSafety);
       preview = null;
+      if (!ring) audioSession("auto");
       useClockAudio.setState({ previewId: null });
     };
     source.onended = done;
@@ -218,6 +291,7 @@ export function stopRing() {
   if (ring) {
     fadeStop(ring.source, ring.gain);
     ring = null;
+    audioSession("auto");
   }
   if (useClockAudio.getState().ringing) useClockAudio.setState({ ringing: false });
 }
@@ -237,6 +311,7 @@ export async function ringSound(id: string, opts: { force?: boolean } = {}): Pro
     const ctx = context!;
     if (ctx.state !== "running") return false;
     if (ring) fadeStop(ring.source, ring.gain);
+    audioSession("playback");
     const source = ctx.createBufferSource();
     const gain = ctx.createGain();
     source.buffer = buffer;

@@ -99,3 +99,21 @@ logo inside. A tap opens Clock on the world clock.
 - **Stopwatch** ticks quietly while it runs and Clock is in front; it stops in the background.
 - **New alarms** have no day chosen: they ring once at the next such time (today or tomorrow).
 - Timer setup centred on a PC; grey round Сброс / + / × buttons; fields without a focus frame.
+
+## Stage B (drums and sound)
+- **Momentum** (`wheels.ts`, `flingTarget` / `glideDuration` / `releaseVelocity`, all pure and tested): the
+  release speed of the finger (its last ~100 ms) decides. Slow: no spin, the nearest row (one value at a
+  time); a quick nudge under half a row: exactly one row; otherwise the drum glides on (projection with a
+  325 ms time constant, up to 80 rows) and slows down on a cubic curve whose first speed is the finger's,
+  so there is no jump at the release; it lands exactly on a row and stays endless (recentred while it coasts).
+- **Touch fix**: the pressed row button held the touch pointer first (implicit capture); its
+  `lostpointercapture` bubbled to the drum and ended the drag. Only the drum's own lost capture counts now
+  (same fix as the glass tab bar, stage A3).
+- **Sound**: on iPhone a touch's pointerdown is not a gesture that may start audio (touchend / pointerup /
+  click / keydown are); Clock now unlocks on all of them while it is open or something is set to ring. A
+  context the system left suspended / interrupted (background, a call) whose `resume()` never settles is
+  replaced by a new one (decoded sounds are kept). Previews stop when the page is hidden. Safari 16.4+:
+  previews and rings use the `playback` audio session (heard with the silent switch on); the drum click does
+  not. The click is at most one per 45 ms (a fast spin sounds like a ratchet, not a buzz).
+- Time format: Clock is 24-hour everywhere (there is no 12-hour setting); hours wrap 23 → 00, minutes and
+  seconds 59 → 00.

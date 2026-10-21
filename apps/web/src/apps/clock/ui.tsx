@@ -88,6 +88,8 @@ export function Wheel({
         data-testid={testId}
         // Step 2.16: the touch that turns the drum also lets it click (audio may start inside a gesture).
         onPointerDownCapture={unlockAudio}
+        onPointerUpCapture={unlockAudio}
+        onTouchEndCapture={unlockAudio}
         onKeyDownCapture={unlockAudio}
         onWheelCapture={unlockAudio}
       >
