@@ -127,3 +127,30 @@ for (const app of ["clock", "vibex"] as const) {
     }
   });
 }
+
+/** Is a two-finger move / a Safari pinch on this element cancelled (= no page zoom)? */
+async function zoomBlocked(page: Page, selector: string) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel)!;
+    const r = el.getBoundingClientRect();
+    const t = (id: number, dx: number) => new Touch({ identifier: id, target: el, clientX: r.left + r.width / 2 + dx, clientY: r.top + r.height / 2 });
+    const move = new TouchEvent("touchmove", { touches: [t(1, -40), t(2, 40)], cancelable: true, bubbles: true });
+    el.dispatchEvent(move);
+    const gesture = new Event("gesturestart", { cancelable: true, bubbles: true });
+    el.dispatchEvent(gesture);
+    const one = new TouchEvent("touchmove", { touches: [t(1, 0)], cancelable: true, bubbles: true });
+    el.dispatchEvent(one);
+    return { pinch: move.defaultPrevented, gesture: gesture.defaultPrevented, oneFinger: one.defaultPrevented };
+  }, selector);
+}
+
+test("A4: a pinch on the shell is not a page zoom (one-finger scrolling untouched); Settings can allow it", async ({ page }) => {
+  test.skip(!isMobile(page), "touch screens");
+  await signUpViaApi(page, "Без", "Масштаба");
+  expect(await zoomBlocked(page, '[data-testid="home-page-0"]')).toEqual({ pinch: true, gesture: true, oneFinger: false });
+  // Double tap never zooms: touch-action manipulation everywhere (utilities like touch-none still win).
+  expect(await page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="home-page-0"]')!).touchAction)).toMatch(/manipulation|none|pan/);
+  // Settings → Персонализация: on for this device, the browser zooms as usual.
+  await page.evaluate(() => localStorage.setItem("vx.pageZoom", "1"));
+  expect(await zoomBlocked(page, '[data-testid="home-page-0"]')).toEqual({ pinch: false, gesture: false, oneFinger: false });
+});

@@ -159,7 +159,7 @@ export const ru: Record<MessageKey, string> = {
   "os.restoring": "Восстанавливаем ваше пространство…",
   "os.updateAvailable": "Новая версия VOIDEX",
   "os.updateNow": "Обновить",
-  "os.updateUnsaved": "Не удалось сохранить изменения — обновление отложено",
+  "os.updateUnsaved": "Не удалось сохранить изменения: обновление отложено",
   "os.loadFailed": "Не удалось загрузить VOIDEX",
   "os.reloadPage": "Перезагрузить",
 
@@ -1613,4 +1613,7 @@ export const ru: Record<MessageKey, string> = {
   "sound.notify.spark": "Искра",
   "sound.notify.drop": "Капля",
   "widgets.noRoom": "На этой странице не хватает места",
+  "personalization.pageZoom": "Масштаб страницы двумя пальцами",
+  "personalization.pageZoomOn": "Вкл.",
+  "personalization.pageZoomHint": "Выключено: интерфейс не увеличивается случайно, фотографии по-прежнему масштабируются. Системное увеличение для доступности работает всегда. Только на этом устройстве.",
 };

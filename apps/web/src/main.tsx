@@ -6,9 +6,11 @@ import { App } from "./app";
 import "./styles/index.css";
 import { applyStoredTheme } from "@/lib/theme";
 import { trackKeyboard } from "@/lib/keyboard";
+import { installZoomGuard } from "@/lib/zoom-guard";
 
 applyStoredTheme();
 trackKeyboard();
+installZoomGuard();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

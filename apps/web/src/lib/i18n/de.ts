@@ -1598,4 +1598,7 @@ export const de: Record<MessageKey, string> = {
   "sound.notify.spark": "Funke",
   "sound.notify.drop": "Tropfen",
   "widgets.noRoom": "Auf dieser Seite ist kein Platz",
+  "personalization.pageZoom": "Seitenzoom mit zwei Fingern",
+  "personalization.pageZoomOn": "Ein",
+  "personalization.pageZoomHint": "Aus: Die Oberfläche vergrößert sich nicht versehentlich, Bilder schon. Der Bedienungshilfen-Zoom des Systems funktioniert immer. Nur auf diesem Gerät.",
 };

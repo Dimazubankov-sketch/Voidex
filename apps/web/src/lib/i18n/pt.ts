@@ -153,7 +153,7 @@ export const pt: Record<MessageKey, string> = {
   "os.restoring": "Restaurando seu espaço…",
   "os.updateAvailable": "Nova versão do VOIDEX",
   "os.updateNow": "Atualizar",
-  "os.updateUnsaved": "Não foi possível salvar as alterações — atualização adiada",
+  "os.updateUnsaved": "Não foi possível salvar as alterações: atualização adiada",
   "os.loadFailed": "Não foi possível carregar o VOIDEX",
   "os.reloadPage": "Recarregar",
   "home.saveFailed": "Não foi possível salvar a área de trabalho. Tentaremos de novo.",
@@ -1598,4 +1598,7 @@ export const pt: Record<MessageKey, string> = {
   "sound.notify.spark": "Faísca",
   "sound.notify.drop": "Gota",
   "widgets.noRoom": "Não há espaço nesta página",
+  "personalization.pageZoom": "Zoom da página com dois dedos",
+  "personalization.pageZoomOn": "Ligado",
+  "personalization.pageZoomHint": "Desligado: a interface não amplia por acidente; as fotos continuam ampliando. O zoom de acessibilidade do sistema sempre funciona. Só neste dispositivo.",
 };

@@ -1,6 +1,8 @@
 import { RiCheckLine, RiComputerLine, RiMoonLine, RiSunLine } from "@remixicon/react";
 import type { Theme, WorkspaceLayout } from "@voidex/shared";
+import { useState } from "react";
 import { cx } from "@/lib/cx";
+import { pageZoomAllowed, setPageZoomAllowed } from "@/lib/zoom-guard";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
 import { Block, Segmented } from "@/os/home/appearance-panel";
@@ -27,6 +29,7 @@ export function PersonalizationSection(_: SectionProps) {
   const ff = useFormFactor();
   const { layout } = useWorkspaceLayout();
   const a = layout.appearance;
+  const [zoom, setZoom] = useState(pageZoomAllowed);
   const set = (patch: Partial<WorkspaceLayout["appearance"]>) => updateLayout((l) => ({ ...l, appearance: { ...l.appearance, ...patch } }));
   return (
     <div data-testid="settings-personalization" className="space-y-6">
@@ -72,6 +75,25 @@ export function PersonalizationSection(_: SectionProps) {
         </Row>
         <VoidexSearchField value="" onChange={() => undefined} placeholder={t("home.search")} readOnly tabIndex={-1} testId="personal-search-preview" />
       </Block>
+
+      {ff === "mobile" && (
+        <Block title={t("personalization.pageZoom")} hint={t("personalization.pageZoomHint")}>
+          <Row label={t("personalization.pageZoom")}>
+            <Segmented
+              value={zoom ? "on" : "off"}
+              options={[
+                ["off", "appearance.systemBarOff"],
+                ["on", "personalization.pageZoomOn"],
+              ]}
+              onChange={(v) => {
+                setPageZoomAllowed(v === "on");
+                setZoom(v === "on");
+              }}
+              testId="personal-page-zoom"
+            />
+          </Row>
+        </Block>
+      )}
 
       <Block title={t("appearance.glass")} hint={t("appearance.glassHint")}>
         <Row label={t("appearance.glass")}>

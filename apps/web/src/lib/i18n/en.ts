@@ -170,7 +170,7 @@ export const en = {
   "os.restoring": "Restoring your space…",
   "os.updateAvailable": "New version of VOIDEX",
   "os.updateNow": "Update",
-  "os.updateUnsaved": "Couldn't save your changes — update postponed",
+  "os.updateUnsaved": "Couldn't save your changes: update postponed",
   "os.loadFailed": "VOIDEX couldn't load",
   "os.reloadPage": "Reload",
 
@@ -1629,6 +1629,9 @@ export const en = {
   "sound.notify.spark": "Spark",
   "sound.notify.drop": "Drop",
   "widgets.noRoom": "Not enough room on this page",
+  "personalization.pageZoom": "Page zoom with two fingers",
+  "personalization.pageZoomOn": "On",
+  "personalization.pageZoomHint": "Off: the interface doesn't zoom by accident; pictures still zoom. System accessibility zoom always works. Only on this device.",
 } as const;
 
 

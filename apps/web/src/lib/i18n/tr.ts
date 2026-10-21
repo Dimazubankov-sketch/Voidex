@@ -153,7 +153,7 @@ export const tr: Record<MessageKey, string> = {
   "os.restoring": "Alanın geri yükleniyor…",
   "os.updateAvailable": "VOIDEX'in yeni sürümü",
   "os.updateNow": "Güncelle",
-  "os.updateUnsaved": "Değişiklikler kaydedilemedi — güncelleme ertelendi",
+  "os.updateUnsaved": "Değişiklikler kaydedilemedi: güncelleme ertelendi",
   "os.loadFailed": "VOIDEX yüklenemedi",
   "os.reloadPage": "Yeniden yükle",
   "home.saveFailed": "Masaüstü kaydedilemedi. Yeniden denenecek.",
@@ -1598,4 +1598,7 @@ export const tr: Record<MessageKey, string> = {
   "sound.notify.spark": "Kıvılcım",
   "sound.notify.drop": "Damla",
   "widgets.noRoom": "Bu sayfada yeterli yer yok",
+  "personalization.pageZoom": "İki parmakla sayfa yakınlaştırma",
+  "personalization.pageZoomOn": "Açık",
+  "personalization.pageZoomHint": "Kapalı: arayüz yanlışlıkla büyümez, fotoğraflar yine yakınlaşır. Sistem erişilebilirlik yakınlaştırması her zaman çalışır. Yalnızca bu cihazda.",
 };

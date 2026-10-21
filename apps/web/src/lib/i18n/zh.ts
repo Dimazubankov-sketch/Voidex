@@ -1598,4 +1598,7 @@ export const zh: Record<MessageKey, string> = {
   "sound.notify.spark": "火花",
   "sound.notify.drop": "水滴",
   "widgets.noRoom": "此页面空间不足",
+  "personalization.pageZoom": "双指缩放页面",
+  "personalization.pageZoomOn": "开",
+  "personalization.pageZoomHint": "关闭：界面不会被意外放大，照片仍可缩放。系统辅助功能缩放始终可用。仅限此设备。",
 };

@@ -206,6 +206,9 @@
 * {
   border-color: var(--border);
   -webkit-tap-highlight-color: transparent;
+  /* A4: no double-tap zoom of the shell anywhere (touch-action is not inherited, scroll areas reset it).
+     Utilities (touch-none, touch-pan-y, …) still win: they are in a later layer. */
+  touch-action: manipulation;
 }
 
 html,

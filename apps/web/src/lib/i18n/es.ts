@@ -1598,4 +1598,7 @@ export const es: Record<MessageKey, string> = {
   "sound.notify.spark": "Chispa",
   "sound.notify.drop": "Gota",
   "widgets.noRoom": "No hay espacio en esta página",
+  "personalization.pageZoom": "Zoom de página con dos dedos",
+  "personalization.pageZoomOn": "Sí",
+  "personalization.pageZoomHint": "Desactivado: la interfaz no se amplía por accidente; las fotos sí. El zoom de accesibilidad del sistema siempre funciona. Solo en este dispositivo.",
 };

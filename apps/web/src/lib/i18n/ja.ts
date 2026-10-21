@@ -153,7 +153,7 @@ export const ja: Record<MessageKey, string> = {
   "os.restoring": "空間を復元しています…",
   "os.updateAvailable": "VOIDEX の新しいバージョン",
   "os.updateNow": "更新",
-  "os.updateUnsaved": "変更を保存できませんでした — 更新を延期しました",
+  "os.updateUnsaved": "変更を保存できませんでした: 更新を延期しました",
   "os.loadFailed": "VOIDEX を読み込めませんでした",
   "os.reloadPage": "再読み込み",
   "home.saveFailed": "デスクトップを保存できませんでした。再試行します。",
@@ -1598,4 +1598,7 @@ export const ja: Record<MessageKey, string> = {
   "sound.notify.spark": "スパーク",
   "sound.notify.drop": "しずく",
   "widgets.noRoom": "このページには空きがありません",
+  "personalization.pageZoom": "2本指でページを拡大",
+  "personalization.pageZoomOn": "オン",
+  "personalization.pageZoomHint": "オフ：画面が誤って拡大されません。写真は拡大できます。システムのアクセシビリティズームは常に使えます。この端末のみ。",
 };
