@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { normalizeLayout } from "@voidex/shared";
-import { addWidgetFromPicker, apiAs, reloadUnlocked, signUpViaApi } from "./helpers";
+import { addWidgetFromPicker, apiAs, openApp, reloadUnlocked, signUpViaApi } from "./helpers";
 
 /** Stage A: stability — A2 desktop bounds, A3 bottom bars vs. side menus, A4 page zoom. */
 const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) < 700;
@@ -86,3 +86,44 @@ test("A2: a widget dropped below the page snaps back whole into the page", async
   const maxRows = Number(await page.locator('[data-home-grid="mobile:0"]').getAttribute("data-max-rows"));
   expect(layout.mobile.cells[`widget:${id}`].r + 2).toBeLessThanOrEqual(maxRows);
 });
+
+/** A real touch swipe (pointerType "touch", implicit capture), which mouse events do not reproduce. */
+async function touchSwipe(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, steps = 12) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: from.x, y: from.y }] });
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: from.x + ((to.x - from.x) * i) / steps, y: from.y + ((to.y - from.y) * i) / steps }] });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.detach();
+}
+
+for (const app of ["clock", "vibex"] as const) {
+  test(`A3: ${app}: a swipe along the bottom bar moves the tab, never the side menu; taps still work`, async ({ page }) => {
+    test.skip(!isMobile(page), "phone tab bar");
+    await signUpViaApi(page, "Нижняя", "Панель");
+    await openApp(page, app);
+    const nav = page.getByTestId(app === "clock" ? "clock-bottom-nav" : "vibex-tabbar");
+    await expect(nav).toBeVisible();
+    await page.waitForTimeout(500);
+    const first = await nav.getAttribute("data-active");
+    const b = (await nav.boundingBox())!;
+    await touchSwipe(page, { x: b.x + 30, y: b.y + b.height / 2 }, { x: b.x + b.width - 30, y: b.y + b.height / 2 });
+    await expect(nav).not.toHaveAttribute("data-active", first!);
+    if (app === "vibex") await expect(page.getByTestId("vibex-drawer")).not.toHaveAttribute("data-open", /.*/);
+    // And back with a swipe the other way.
+    await touchSwipe(page, { x: b.x + b.width - 30, y: b.y + b.height / 2 }, { x: b.x + 30, y: b.y + b.height / 2 });
+    await expect(nav).toHaveAttribute("data-active", first!);
+    // A tap opens its tab.
+    await nav.locator("button[role=tab]").nth(1).tap();
+    await expect(nav).toHaveAttribute("data-active", (await nav.locator("button[role=tab]").nth(1).getAttribute("data-tab"))!);
+    if (app === "vibex") {
+      // The side menu still opens with a swipe on the screen above the bar.
+      await nav.locator("button[role=tab]").first().tap();
+      const vp = page.viewportSize()!;
+      await touchSwipe(page, { x: 30, y: vp.height * 0.45 }, { x: vp.width * 0.8, y: vp.height * 0.45 });
+      await expect(page.getByTestId("vibex-drawer")).toHaveAttribute("data-open", "true");
+    }
+  });
+}
