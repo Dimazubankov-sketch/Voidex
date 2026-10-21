@@ -208,9 +208,9 @@ export function reflowPresentation(p: PresentationBody, format: SlideFormat): Pr
  * from the box width, lines from its height) — used to warn, never to cut.
  * The editor measures real text too; this keeps the warning testable.
  */
-export function textFits(l: SlideLayer, format: SlideFormat): boolean {
+export function textFits(l: SlideLayer, format: SlideFormat | number): boolean {
   if (l.kind === "image") return true;
-  const ratio = slideRatio(format);
+  const ratio = typeof format === "number" ? format : slideRatio(format);
   const base = l.kind === "title" ? 5.2 : 3.2; // font size in % of the slide height
   const font = base * (l.scale ?? 1);
   const charsPerLine = Math.max(1, Math.floor((l.w * ratio) / (font * 0.55)));
@@ -218,7 +218,7 @@ export function textFits(l: SlideLayer, format: SlideFormat): boolean {
   return lines * font * 1.3 <= l.h + 0.5;
 }
 
-export function slideOverflows(s: Slide, format: SlideFormat): boolean {
+export function slideOverflows(s: Slide, format: SlideFormat | number): boolean {
   return s.layers.some((l) => !l.hidden && (l.y + l.h > 101 || l.x + l.w > 101 || !textFits(l, format)));
 }
 

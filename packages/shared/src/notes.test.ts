@@ -144,3 +144,20 @@ describe("Step 2.5 workspace → projects with documents (no spaces)", () => {
     expect(uniqueNames([{ name: "A" }, { name: "a" }, { name: "A" }, { name: "B" }]).map((x) => x.name)).toEqual(["A", "a (2)", "A (3)", "B"]);
   });
 });
+
+describe("Stage C: presentation canvas and picture fit", () => {
+  const IMG = "/api/notes/media?id=0b9d6f7e-3a8e-4b0e-9a1a-2f2b4c5d6e7f";
+  const img = { id: "i", kind: "image", text: "", src: IMG, x: 0, y: 0, w: 100, h: 100 };
+  const pres = (extra: Record<string, unknown>, layer: Record<string, unknown> = img) => ({ kind: "presentation", format: "rect", slides: [{ id: "s", transition: "none", layers: [layer] }], ...extra });
+  it("accepts a canvas, cover fit, ratio and pixel size; older bodies without them stay valid", () => {
+    expect(validPresentationBody(pres({}))).toBe(true);
+    expect(validPresentationBody(pres({ canvas: { w: 1440, h: 1080 } }, { ...img, fit: "cover", ratio: 4 / 3, px: { w: 4032, h: 3024 } }))).toBe(true);
+    expect(validPresentationBody(pres({ format: "square", canvas: { w: 1080, h: 1080 } }))).toBe(true);
+  });
+  it("refuses broken canvases and unknown fits", () => {
+    expect(validPresentationBody(pres({ canvas: { w: 10, h: 10 } }))).toBe(false);
+    expect(validPresentationBody(pres({ canvas: { w: 1920.5, h: 1080 } }))).toBe(false);
+    expect(validPresentationBody(pres({ canvas: { w: 8000, h: 100 } }))).toBe(false);
+    expect(validPresentationBody(pres({}, { ...img, fit: "fill" }))).toBe(false);
+  });
+});

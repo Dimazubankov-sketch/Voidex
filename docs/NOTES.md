@@ -154,3 +154,21 @@ PATCH name/cover/position, DELETE), `/access/:type/:id` (members),
     «.book», preview, pages to read). Mail / Vibex accept `.book` attachments, checked
     by content on the server.
   - Store: Notes' description now names books (it is part of Notes, not an app).
+
+## Stage C: presentations — pictures on the whole slide, the canvas
+
+- **Canvas** (`PresentationBody.canvas`, px; absent = 1920×1080 for `rect`, 1080×1080 for `square`):
+  the document «…» lists 16:9, 4:3, 9:16, 1:1 (the current one shows its pixels) and «Свой размер…»
+  (64–8192 px, proportions up to 8:1). `format` stays in step (`square` iff the canvas is square), so
+  older apps still read a presentation as 16:9 / 1:1. No migration: the field is optional.
+- **Changing the canvas** (`setCanvas`, `canvasChangeImpact` in `packages/notes/src/slides.ts`):
+  pictures keep their own proportions and place, a filling picture keeps filling, text boxes keep
+  their text. When a picture would have to shrink to stay whole or text would no longer fit, it asks
+  first; nothing is cut and Undo brings it back.
+- **Picture menu** (the «…» on a selected picture, nothing else added): Вписать целиком, Заполнить
+  слайд (`fit: "cover"`, cropped on screen only, the file is untouched), Исходные пропорции (shown when
+  they are off), Холст по изображению (the canvas takes the picture's proportions, long side ≤ 1920 px,
+  and the picture fills it), and the picture's own pixels and the canvas size. New pictures keep their
+  proportions (`ratio`, `px` saved when added; older ones are measured when shown).
+- **Invisible grid**: pictures move and resize on a 2.5 % grid (nothing drawn), keep their proportions
+  while resized and stay on the slide.

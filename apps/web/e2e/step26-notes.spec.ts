@@ -433,7 +433,7 @@ test("Deep links: #notes/doc/<id> opens my note; someone else's note (or a revok
 
 // ------------------------------------------------------------------ presentations
 
-test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 with an overflow warning, fullscreen show with arrows; a note turns into a presentation and stays", async ({ page }) => {
+test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 asking first when text would no longer fit, fullscreen show with arrows; a note turns into a presentation and stays", async ({ page }) => {
   await signUpViaApi(page, "Пётр", "Слайд");
   const s = await seed(page, "Доклад", [{ name: "Тезисы", data: note("Введение", "Первый тезис", "Второй тезис") }]);
   await openApp(page, "notes");
@@ -464,10 +464,12 @@ test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 with an overflow 
   await page.getByTestId("notes-layer-input").fill("Очень длинный текст слайда. ".repeat(14));
   // PC: the window "…" (app actions + window actions); phones: the app's own "…" (Step 2.7).
   await page.getByTestId("notes-doc").getByTestId(/^(window-menu|notes-more)$/).click();
-  await page.getByTestId("notes-menu-format-square").click();
+  // Stage C: the canvas presets live in the same menu; text that would no longer fit asks first.
+  await page.getByTestId("notes-menu-canvas-1x1").click();
+  await expect(page.getByTestId("notes-canvas-confirm")).toBeVisible();
+  await page.getByTestId("notes-canvas-confirm").getByTestId("confirm-action").click();
   await expect(ed).toHaveAttribute("data-format", "square");
   await expect(page.getByTestId("notes-slide-overflow")).toBeVisible();
-  await expect(page.getByTestId("toast").filter({ hasText: "Формат изменён" })).toBeVisible();
   await expect(page.getByTestId("notes-save-status")).toHaveAttribute("data-status", "saved", { timeout: 15_000 });
 
   // The show: fullscreen viewer, arrows, Esc.

@@ -17,18 +17,36 @@ import {
   RiLayoutGridLine,
   RiLockLine,
   RiLockUnlockLine,
+  RiMoreFill,
   RiPlayFill,
   RiStackLine,
   RiText,
 } from "@remixicon/react";
 import type { PresentationBody, Slide, SlideLayer, SlideTransition } from "@voidex/shared";
 import { SLIDE_TRANSITIONS, titleSlide } from "@voidex/shared";
-import { newId, slideOverflows, slideRatio } from "@voidex/notes";
+import {
+  canvasChangeImpact,
+  canvasForImage,
+  canvasOf,
+  canvasRatio,
+  cleanCanvas,
+  fitImage,
+  keepsProportions,
+  moveImage,
+  newId,
+  resizeImage,
+  setCanvas,
+  slideOverflows,
+  textFits,
+  type Canvas,
+  type ImageFit,
+} from "@voidex/notes";
 import { cx } from "@/lib/cx";
 import { prefersReducedMotion, useFormFactor } from "@/lib/form-factor";
 import { useT } from "@/lib/i18n";
-import { Spinner } from "@/ui/controls";
-import { ConfirmDialog, toast } from "@/ui/overlays";
+import { Button, Spinner, TextField } from "@/ui/controls";
+import { ConfirmDialog, Popover, Sheet, toast, usePopover } from "@/ui/overlays";
+import { Menu, type MenuEntry } from "./kit";
 import { downscale, notesApi, useMediaUrl } from "./data";
 
 type Change = (next: PresentationBody, structural?: boolean) => void;
@@ -39,9 +57,94 @@ const FONT = { title: 0.075, text: 0.045, image: 0.045 } as const;
 
 // ---------------------------------------------------------------- rendering
 
-function LayerImage({ src, alt }: { src?: string; alt: string }) {
+function LayerImage({ src, alt, fit, onSize }: { src?: string; alt: string; fit?: "cover"; onSize?: (w: number, h: number) => void }) {
   const url = useMediaUrl(src);
-  return url ? <img src={url} alt={alt} draggable={false} className="size-full object-contain" /> : <span className="grid size-full place-items-center rounded-lg bg-black/5" />;
+  // Stage C: "cover" fills the box (cropped on screen only); otherwise the whole picture is shown.
+  return url ? (
+    <img
+      src={url}
+      alt={alt}
+      draggable={false}
+      className={cx("size-full", fit === "cover" ? "object-cover" : "object-contain")}
+      onLoad={onSize ? (e) => onSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight) : undefined}
+    />
+  ) : (
+    <span className="grid size-full place-items-center rounded-lg bg-black/5" />
+  );
+}
+
+/** A picture file's own size in pixels (before it is downscaled for upload). */
+async function imageSize(file: Blob): Promise<Canvas | null> {
+  try {
+    if (typeof createImageBitmap === "function") {
+      const b = await createImageBitmap(file);
+      const out = { w: b.width, h: b.height };
+      b.close?.();
+      return out;
+    }
+  } catch {
+    /* fall back to an <img> */
+  }
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      resolve({ w: im.naturalWidth, h: im.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    im.onerror = () => {
+      resolve(null);
+      URL.revokeObjectURL(url);
+    };
+    im.src = url;
+  });
+}
+
+/**
+ * Stage C: changing the canvas. Pictures keep their proportions; when any would have to shrink to stay
+ * whole, or text would no longer fit its box, it asks first (nothing is ever cut, and Undo brings it back).
+ */
+export function useCanvasChange(body: PresentationBody | null, change: (next: PresentationBody, structural?: boolean) => void) {
+  const t = useT();
+  type Prepare = (b: PresentationBody) => PresentationBody;
+  const [ask, setAsk] = useState<{ next: Canvas; prepare?: Prepare; resized: number; text: number } | null>(null);
+  const latest = useRef(body);
+  latest.current = body;
+  const apply = (next: Canvas, prepare?: Prepare) => {
+    const b = latest.current;
+    if (!b) return;
+    change(setCanvas(prepare ? prepare(b) : b, next), true);
+  };
+  /** `prepare` runs first, in the same step (e.g. a picture that will fill the new canvas). */
+  const request = (next: Canvas, prepare?: Prepare) => {
+    const b0 = latest.current;
+    if (!b0) return;
+    const b = prepare ? prepare(b0) : b0;
+    const cur = canvasOf(b);
+    if (cur.w === next.w && cur.h === next.h) {
+      if (prepare) change(b, true);
+      return;
+    }
+    const impact = canvasChangeImpact(b, next, textFits);
+    if (impact.resized || impact.textOverflow) setAsk({ next, prepare, resized: impact.resized, text: impact.textOverflow });
+    else apply(next, prepare);
+  };
+  const dialog = (
+    <ConfirmDialog
+      open={!!ask}
+      onClose={() => setAsk(null)}
+      onConfirm={() => {
+        const a = ask;
+        setAsk(null);
+        if (a) apply(a.next, a.prepare);
+      }}
+      title={t("notes.canvas.askTitle")}
+      message={[ask?.resized ? t("notes.canvas.askImages", { n: ask.resized }) : "", ask?.text ? t("notes.canvas.askText", { n: ask.text }) : "", t("notes.canvas.askSafe")].filter(Boolean).join(" ")}
+      confirmLabel={t("notes.canvas.change")}
+      testId="notes-canvas-confirm"
+    />
+  );
+  return { request, dialog };
 }
 
 /** One slide at a given pixel width (thumbnails, the stage, the viewer). */
@@ -62,7 +165,7 @@ export function SlideView({ slide, width, ratio, children, className }: { slide:
         if (children) return children(l, style);
         return (
           <div key={l.id} className={cx("vn2-layer absolute", `vn2-layer-${l.kind}`)} style={style}>
-            {l.kind === "image" ? <LayerImage src={l.src} alt={l.text} /> : <div className="vn2-layer-text">{l.text}</div>}
+            {l.kind === "image" ? <LayerImage src={l.src} alt={l.text} fit={l.fit} /> : <div className="vn2-layer-text">{l.text}</div>}
           </div>
         );
       })}
@@ -106,14 +209,16 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
   // Step 2.8: the toolbar's delete asks first when the slide has something on it.
   const [askDelete, setAskDelete] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
-  const ratio = slideRatio(body.format);
+  const ratio = canvasRatio(body);
+  const canvas = canvasOf(body);
+  const canvasChange = useCanvasChange(body, onChange);
   const i = Math.min(index, body.slides.length - 1);
   const slide = body.slides[i]!;
   const bodyRef = useRef(body);
   bodyRef.current = body;
   const [stageRef, stage] = useSize<HTMLDivElement>();
   const width = Math.max(120, Math.min(stage.w - (ff === "mobile" ? 24 : 64), (stage.h - (ff === "mobile" ? 24 : 56)) * ratio));
-  const overflow = slideOverflows(slide, body.format);
+  const overflow = slideOverflows(slide, ratio);
 
   const setSlide = (fn: (s: Slide) => Slide, structural = true) => onChange({ ...bodyRef.current, slides: bodyRef.current.slides.map((s, k) => (k === i ? fn(s) : s)) }, structural);
   const setLayer = (id: string, p: Partial<SlideLayer>, structural = true) => setSlide((s) => ({ ...s, layers: s.layers.map((l) => (l.id === id ? { ...l, ...p } : l)) }), structural);
@@ -160,8 +265,15 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
     setUploading(true);
     try {
       for (const f of files) {
+        const px = await imageSize(f);
         const src = await notesApi.upload(f.type === "image/gif" ? f : await downscale(f, 2000));
-        const l: SlideLayer = { id: newId(), kind: "image", text: "", src, x: 20, y: 18, w: 60, h: 64 };
+        const base: SlideLayer = { id: newId(), kind: "image", text: "", src, x: 20, y: 18, w: 60, h: 64, ...(px ? { ratio: px.w / px.h, px } : {}) };
+        // Stage C: a new picture keeps its own proportions, 60 % wide (less when it is tall), centred.
+        const l = px ? fitImage({ ...base, w: 60 }, "original", bodyRef.current ? canvasRatio(bodyRef.current) : ratio) : base;
+        if (px) {
+          l.x = Math.round(((100 - l.w) / 2) * 100) / 100;
+          l.y = Math.round(((100 - l.h) / 2) * 100) / 100;
+        }
         setSlide((s) => ({ ...s, layers: [...s.layers, l] }));
         setSelected(l.id);
       }
@@ -364,6 +476,17 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
                     key={l.id}
                     l={l}
                     style={style}
+                    ratio={ratio}
+                    canvas={canvas}
+                    onFit={(mode, natural) => setLayer(l.id, fitImage({ ...l, ...(natural && !l.ratio ? { ratio: natural.w / natural.h, px: natural } : {}) }, mode, ratio))}
+                    onCanvasToImage={(natural) => {
+                      const px = l.px ?? natural;
+                      const next = px ? canvasForImage(px) : null;
+                      if (!next || !px) return;
+                      // The picture fills the new canvas exactly; other slides adapt (asking first if needed).
+                      const filled = fitImage({ ...l, ratio: px.w / px.h, px }, "cover", next.w / next.h);
+                      canvasChange.request(next, (b) => ({ ...b, slides: b.slides.map((s, k) => (k === i ? { ...s, layers: s.layers.map((x) => (x.id === l.id ? filled : x)) } : s)) }));
+                    }}
                     readOnly={readOnly}
                     selected={selected === l.id}
                     editing={editing === l.id}
@@ -447,6 +570,7 @@ export function PresentationEditor({ body, onChange, readOnly, onPlay }: { body:
           </div>
         </div>
       </div>
+      {canvasChange.dialog}
       <ConfirmDialog
         open={askDelete !== null}
         onClose={() => setAskDelete(null)}
@@ -481,6 +605,10 @@ function EditableLayer({
   onSelect,
   onPatch,
   onRemove,
+  ratio,
+  canvas,
+  onFit,
+  onCanvasToImage,
 }: {
   l: SlideLayer;
   style: React.CSSProperties;
@@ -490,9 +618,18 @@ function EditableLayer({
   onSelect: () => void;
   onPatch: (p: Partial<SlideLayer>, structural?: boolean) => void;
   onRemove: () => void;
+  ratio: number;
+  canvas: Canvas;
+  onFit: (mode: ImageFit, natural: Canvas | null) => void;
+  onCanvasToImage: (natural: Canvas | null) => void;
 }) {
   const t = useT();
   const el = useRef<HTMLDivElement>(null);
+  // The picture's own size, read from the file when the layer was saved without it (older presentations).
+  const [natural, setNatural] = useState<Canvas | null>(l.px ?? null);
+  const menu = usePopover();
+  const isImage = l.kind === "image";
+  const cover = isImage && l.fit === "cover";
   const drag = useRef<{ mode: "move" | "size"; x: number; y: number; l: SlideLayer; w: number; h: number; moved: boolean } | null>(null);
   const [live, setLive] = useState<Partial<SlideLayer> | null>(null);
   const start = (mode: "move" | "size") => (e: RPointerEvent) => {
@@ -510,7 +647,10 @@ function EditableLayer({
     const dy = ((e.clientY - d.y) / d.h) * 100;
     if (Math.abs(dx) + Math.abs(dy) > 0.6) d.moved = true;
     if (!d.moved) return;
-    if (d.mode === "move") setLive({ x: Math.round(clamp(d.l.x + dx, -d.l.w + 5, 95) * 10) / 10, y: Math.round(clamp(d.l.y + dy, -d.l.h + 5, 95) * 10) / 10 });
+    // Stage C: pictures snap to an invisible 2.5 % grid and keep their proportions while resized.
+    if (isImage && d.mode === "move") setLive(moveImage(d.l, d.l.x + dx, d.l.y + dy));
+    else if (isImage) setLive(resizeImage({ ...d.l, ratio: d.l.ratio ?? (natural ? natural.w / natural.h : undefined) }, d.l.w + dx, ratio));
+    else if (d.mode === "move") setLive({ x: Math.round(clamp(d.l.x + dx, -d.l.w + 5, 95) * 10) / 10, y: Math.round(clamp(d.l.y + dy, -d.l.h + 5, 95) * 10) / 10 });
     else setLive({ w: Math.round(clamp(d.l.w + dx, 5, 100 - d.l.x) * 10) / 10, h: Math.round(clamp(d.l.h + dy, 4, 100 - d.l.y) * 10) / 10 });
   };
   const end = () => {
@@ -527,7 +667,7 @@ function EditableLayer({
       ref={el}
       className={cx("vn2-layer absolute", `vn2-layer-${l.kind}`, !readOnly && "vn2-layer-edit", selected && "vn2-layer-selected", l.locked && "vn2-layer-locked")}
       style={box}
-      onPointerDown={readOnly ? undefined : (e) => (selected && !l.locked ? start("move")(e) : (e.stopPropagation(), onSelect()))}
+      onPointerDown={readOnly ? undefined : (e) => (selected && !l.locked && !cover ? start("move")(e) : (e.stopPropagation(), selected ? undefined : onSelect()))}
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
@@ -536,7 +676,7 @@ function EditableLayer({
       data-selected={selected}
     >
       {l.kind === "image" ? (
-        <LayerImage src={l.src} alt={l.text} />
+        <LayerImage src={l.src} alt={l.text} fit={l.fit} onSize={(w, h) => !l.px && setNatural({ w, h })} />
       ) : editing ? (
         <textarea
           autoFocus
@@ -553,8 +693,9 @@ function EditableLayer({
       )}
       {selected && !readOnly && !l.locked && (
         <>
-          <span onPointerDown={start("size")} className="absolute -bottom-2.5 -right-2.5 size-5 cursor-nwse-resize touch-none rounded-full border-2 border-white bg-primary shadow" data-testid="notes-layer-resize" />
-          <div className="absolute -top-11 left-0 z-10 flex items-center gap-0.5 rounded-full bg-surface p-0.5 shadow-float" onPointerDown={(e) => e.stopPropagation()}>
+          {!cover && <span onPointerDown={start("size")} className="absolute -bottom-2.5 -right-2.5 size-5 cursor-nwse-resize touch-none rounded-full border-2 border-white bg-primary shadow" data-testid="notes-layer-resize" />}
+          {/* Near the top of the slide (or filling it) the tools sit inside the layer: the slide clips anything above it. */}
+          <div className={cx("absolute left-0 z-10 flex items-center gap-0.5 rounded-full bg-surface p-0.5 shadow-float", shown.y < 22 ? "left-2 top-2" : "-top-11")} onPointerDown={(e) => e.stopPropagation()} data-testid="notes-layer-tools">
             {l.kind !== "image" &&
               (["left", "center", "right"] as const).map((a) => (
                 <button key={a} type="button" onClick={() => onPatch({ align: a })} className={cx("h-8 rounded-full px-2 text-[12px] font-medium", (l.align ?? "left") === a ? "bg-primary text-white" : "text-text")} data-testid={`notes-layer-align-${a}`}>
@@ -571,10 +712,39 @@ function EditableLayer({
                 </button>
               </>
             )}
+            {isImage && (
+              <button ref={menu.anchor} type="button" onClick={menu.toggle} className="grid size-8 place-items-center rounded-full text-text" aria-label={t("notes.image.menu")} aria-expanded={menu.open} data-testid="notes-image-menu">
+                <RiMoreFill className="size-4" />
+              </button>
+            )}
             <button type="button" onClick={onRemove} className="grid size-8 place-items-center rounded-full text-danger" aria-label={t("notes.delete")} data-testid="notes-layer-remove">
               <RiDeleteBinLine className="size-4" />
             </button>
           </div>
+          {isImage && (
+            <Popover open={menu.open} onClose={menu.close} anchor={menu.anchor} align="start" width={250} testId="notes-image-menu-popover">
+              {/* The menu is portalled but its events still bubble through the layer: they must not start a drag. */}
+              <div onPointerDown={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+              <Menu
+                onDone={menu.close}
+                items={(
+                  [
+                    { id: "fit-contain", label: t("notes.image.fitContain"), onSelect: () => onFit("contain", natural) },
+                    { id: "fit-cover", label: t("notes.image.fitCover"), checked: cover, onSelect: () => onFit("cover", natural) },
+                    ...(cover || !keepsProportions({ ...l, ratio: l.ratio ?? (natural ? natural.w / natural.h : undefined) }, ratio)
+                      ? [{ id: "fit-original", label: t("notes.image.fitOriginal"), onSelect: () => onFit("original", natural) }]
+                      : []),
+                    ...((l.px ?? natural) ? [{ id: "canvas-to-image", label: t("notes.image.canvasToImage"), divider: true, onSelect: () => onCanvasToImage(natural) }] : []),
+                  ] as MenuEntry[]
+                )}
+              />
+              <div className="mx-2 mt-1 border-t border-border/80 px-3 pb-1 pt-2 text-[12.5px] leading-5 text-text-tertiary" data-testid="notes-image-info">
+                {(l.px ?? natural) && <div>{t("notes.image.pixels", { w: (l.px ?? natural)!.w, h: (l.px ?? natural)!.h })}</div>}
+                <div>{t("notes.canvas.pixels", { w: canvas.w, h: canvas.h })}</div>
+              </div>
+              </div>
+            </Popover>
+          )}
         </>
       )}
     </div>
@@ -607,7 +777,7 @@ export function PresentationViewer({ body, start, onClose }: { body: Presentatio
   const [dir, setDir] = useState(1);
   const root = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
-  const ratio = slideRatio(body.format);
+  const ratio = canvasRatio(body);
   const go = (d: number) => {
     setDir(d);
     setI((x) => clamp(x + d, 0, body.slides.length - 1));
@@ -677,5 +847,45 @@ export function PresentationViewer({ body, start, onClose }: { body: Presentatio
       </button>
     </div>,
     document.body,
+  );
+}
+
+/** Stage C: «Свой размер…» — the canvas in pixels (whole numbers; proportions up to 8:1). */
+export function CanvasSizeSheet({ open, current, onClose, onApply }: { open: boolean; current: Canvas; onClose: () => void; onApply: (c: Canvas) => void }) {
+  const t = useT();
+  const [w, setW] = useState(String(current.w));
+  const [h, setH] = useState(String(current.h));
+  useEffect(() => {
+    if (open) {
+      setW(String(current.w));
+      setH(String(current.h));
+    }
+  }, [open, current.w, current.h]);
+  const next = cleanCanvas(Number(w), Number(h));
+  return (
+    <Sheet open={open} onClose={onClose} title={t("notes.canvas.custom")} width={380} centered testId="notes-canvas-sheet">
+      <div className="flex items-center gap-2">
+        <TextField compact label={t("notes.canvas.width")} inputMode="numeric" value={w} onChange={(e) => setW(e.target.value.replace(/\D/g, "").slice(0, 4))} data-testid="notes-canvas-w" />
+        <span className="text-text-tertiary">×</span>
+        <TextField compact label={t("notes.canvas.height")} inputMode="numeric" value={h} onChange={(e) => setH(e.target.value.replace(/\D/g, "").slice(0, 4))} data-testid="notes-canvas-h" />
+      </div>
+      <p className="mt-2 px-1 text-[12.5px] text-text-tertiary">{next ? t("notes.canvas.pixels", { w: next.w, h: next.h }) : t("notes.canvas.invalid")}</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose}>
+          {t("common.cancel")}
+        </Button>
+        <Button
+          disabled={!next}
+          onClick={() => {
+            if (!next) return;
+            onClose();
+            onApply(next);
+          }}
+          data-testid="notes-canvas-apply"
+        >
+          {t("notes.canvas.change")}
+        </Button>
+      </div>
+    </Sheet>
   );
 }

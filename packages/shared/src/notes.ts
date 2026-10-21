@@ -104,6 +104,15 @@ export interface SlideLayer {
   scale?: number;
   hidden?: boolean;
   locked?: boolean;
+  /**
+   * Stage C (images): "cover" = the picture fills the whole slide, cropped only on screen (the file is
+   * untouched). Unset = the picture is shown whole inside its box.
+   */
+  fit?: "cover";
+  /** Stage C: the picture's own width / height (to restore its proportions and fit it). */
+  ratio?: number;
+  /** Stage C: the picture's size in pixels when it was added (shown in its menu). */
+  px?: { w: number; h: number };
 }
 export interface Slide {
   id: string;
@@ -112,9 +121,17 @@ export interface Slide {
 }
 export interface PresentationBody {
   kind: "presentation";
+  /** "square" when the canvas is square, else "rect" (older apps read only this: 16:9 / 1:1). */
   format: SlideFormat;
   slides: Slide[];
+  /**
+   * Stage C: the canvas in pixels (16:9 1920×1080, 4:3, 9:16, a custom size, a picture's proportions).
+   * Absent in presentations made before it: 1920×1080 for "rect", 1080×1080 for "square".
+   */
+  canvas?: { w: number; h: number };
 }
+export const CANVAS_MIN = 64;
+export const CANVAS_MAX = 8192;
 /**
  * Step 2.13: a book. Fixed pages (shown as spreads on wide screens) holding
  * the same blocks as a note; pages are only added by the person ("+"), never
@@ -186,7 +203,10 @@ function validLayer(l: unknown) {
     opt(l.align, (v) => ALIGN.includes(v as string)) &&
     opt(l.scale, (v) => num(v, 0.3, 4)) &&
     opt(l.hidden, bool) &&
-    opt(l.locked, bool)
+    opt(l.locked, bool) &&
+    opt(l.fit, (v) => v === "cover") &&
+    opt(l.ratio, (v) => num(v, 0.01, 100)) &&
+    opt(l.px, (v) => isObj(v) && num(v.w, 1, 100_000) && num(v.h, 1, 100_000))
   );
 }
 
@@ -195,6 +215,7 @@ export function validPresentationBody(x: unknown): x is PresentationBody {
     isObj(x) &&
     x.kind === "presentation" &&
     (x.format === "rect" || x.format === "square") &&
+    opt(x.canvas, (c) => isObj(c) && Number.isInteger(c.w) && Number.isInteger(c.h) && num(c.w, CANVAS_MIN, CANVAS_MAX) && num(c.h, CANVAS_MIN, CANVAS_MAX) && (c.w as number) / (c.h as number) <= 8 && (c.h as number) / (c.w as number) <= 8) &&
     Array.isArray(x.slides) &&
     x.slides.length >= 1 &&
     x.slides.length <= 300 &&

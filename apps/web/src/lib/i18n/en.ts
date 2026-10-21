@@ -1632,6 +1632,23 @@ export const en = {
   "personalization.pageZoom": "Page zoom with two fingers",
   "personalization.pageZoomOn": "On",
   "personalization.pageZoomHint": "Off: the interface doesn't zoom by accident; pictures still zoom. System accessibility zoom always works. Only on this device.",
+  "notes.canvas.askTitle": "Change the slide format?",
+  "notes.canvas.askImages": "{n} pictures get smaller to stay whole on their slides.",
+  "notes.canvas.askText": "On {n} slides the text will no longer fit its box.",
+  "notes.canvas.askSafe": "Nothing is cut, and Undo brings everything back.",
+  "notes.canvas.change": "Change",
+  "notes.canvas.custom": "Custom size",
+  "notes.canvas.customMenu": "Custom size…",
+  "notes.canvas.width": "Width, px",
+  "notes.canvas.height": "Height, px",
+  "notes.canvas.pixels": "Canvas: {w} × {h} px",
+  "notes.canvas.invalid": "From 64 to 8192 px, proportions up to 8:1",
+  "notes.image.menu": "Picture options",
+  "notes.image.fitContain": "Fit whole",
+  "notes.image.fitCover": "Fill the slide",
+  "notes.image.fitOriginal": "Original proportions",
+  "notes.image.canvasToImage": "Canvas to this picture",
+  "notes.image.pixels": "Picture: {w} × {h} px",
 } as const;
 
 
