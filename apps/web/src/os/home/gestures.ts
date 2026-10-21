@@ -2,7 +2,7 @@ import { useCallback, useRef, type MouseEvent as ReactMouseEvent, type PointerEv
 import { MOBILE_PAGES_MAX, moveItem, pinToDock, placeGroup, placeInCell, removeFromFolder, reorderInFolder, sameItem, type LayoutItem, type Place } from "@voidex/shared";
 import type { FormFactor } from "@/lib/form-factor";
 import { useWM } from "../window-manager";
-import { desktopGeometry } from "./desktop-geometry";
+import { geometryFor } from "./desktop-geometry";
 import { itemKey, mergeInto, parseItem } from "./actions";
 import { dockIndexAt } from "./dock";
 import { cellAt, placeOfGrid } from "./grid";
@@ -313,7 +313,7 @@ export function useHomeGestures(opts: GestureOptions) {
         const cell = { c: d.cell.c, r: d.cell.r };
         const group = d.group;
         const anchor = itemKey(d.item);
-        if (place) updateLayout((l) => placeGroup(l, group, anchor, place, cell, desktopGeometry()));
+        if (place) updateLayout((l) => placeGroup(l, group, anchor, place, cell, geometryFor(place)));
       } else if (d && commit && d.mergeWith && d.item.kind === "app") {
         const target = parseItem(d.mergeWith);
         if (target) mergeInto(d.item.id, target);
@@ -321,7 +321,7 @@ export function useHomeGestures(opts: GestureOptions) {
         const place = placeOfGrid(d.cell.grid);
         const key = itemKey(d.item);
         const cell = { c: d.cell.c, r: d.cell.r };
-        if (place) updateLayout((l) => placeInCell(l, key, place, cell, desktopGeometry()));
+        if (place) updateLayout((l) => placeInCell(l, key, place, cell, geometryFor(place)));
       }
       ui().setDrag(null);
     };

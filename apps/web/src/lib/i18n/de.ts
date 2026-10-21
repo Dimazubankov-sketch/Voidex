@@ -1597,4 +1597,5 @@ export const de: Record<MessageKey, string> = {
   "sound.notify.mention": "Erwähnung",
   "sound.notify.spark": "Funke",
   "sound.notify.drop": "Tropfen",
+  "widgets.noRoom": "Auf dieser Seite ist kein Platz",
 };

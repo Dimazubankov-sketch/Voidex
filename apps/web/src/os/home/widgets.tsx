@@ -22,13 +22,13 @@ import {
 } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { getFormFactor, useFormFactor } from "@/lib/form-factor";
-import { useLanguage, useT, type MessageKey } from "@/lib/i18n";
+import { t as translateNow, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { Button, IconButton } from "@/ui/controls";
-import { Sheet } from "@/ui/overlays";
+import { Sheet, toast } from "@/ui/overlays";
 import { useWM } from "../window-manager";
 import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
 import { cityClock, localZone } from "@voidex/clock";
-import { desktopGeometry } from "./desktop-geometry";
+import { desktopGeometry, geometryFor } from "./desktop-geometry";
 import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
 import { currentLayout, updateLayout, useWorkspaceLayout } from "./layout";
@@ -337,8 +337,14 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       updateLayout((cur) => {
         const n = create ? { ...cur, mobile: { ...cur.mobile, pages: [...cur.mobile.pages, []] } } : cur;
         const moved = moveWidget(n, widget.id, { container: String(to) });
-        const cell = freeBlock(moved, { surface: "mobile", page: to }, WIDGET_CELLS[widget.type as WidgetType]) ?? { c: 0, r: 0 };
-        return placeInCell(moved, widgetKey(widget.id), { surface: "mobile", page: to }, cell);
+        const dest = { surface: "mobile" as const, page: to };
+        const cell = freeBlock(moved, dest, WIDGET_CELLS[widget.type as WidgetType], undefined, geometryFor(dest));
+        // A2: no room on that page: the widget stays where it was.
+        if (!cell) {
+          toast({ title: translateNow("widgets.noRoom") });
+          return cur;
+        }
+        return placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest));
       });
       x.set(0);
       y.set(0);
@@ -375,7 +381,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const current = el.parentElement?.dataset.cell;
       if (!place || current === `${target.c},${target.r}`) return settleBack();
       snap.current = { from: box, cell: `${target.c},${target.r}` };
-      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, desktopGeometry()));
+      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, geometryFor(place)));
       // The cell was refused (an icon never pushes a widget away, a full area…): glide back.
       window.setTimeout(() => {
         if (snap.current) {
@@ -495,7 +501,14 @@ export function WidgetsPanel() {
       });
     } else {
       const p = Math.min(page, layout.mobile.pages.length - 1);
-      updateLayout((l) => addWidget(l, type, { surface: "mobile", page: p, cell: freeBlock(l, { surface: "mobile", page: p }, size) ?? undefined }));
+      const dest = { surface: "mobile" as const, page: p };
+      // A2: only where the whole widget is visible; a full page says so instead of adding it out of sight.
+      const cell = freeBlock(currentLayout(), dest, size, undefined, geometryFor(dest));
+      if (!cell) {
+        toast({ title: t("widgets.noRoom") });
+        return;
+      }
+      updateLayout((l) => addWidget(l, type, { surface: "mobile", page: p, cell: freeBlock(l, dest, size, undefined, geometryFor(dest)) ?? cell }));
     }
     setOpen(false);
   };

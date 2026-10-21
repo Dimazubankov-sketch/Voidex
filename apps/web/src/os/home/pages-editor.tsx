@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValue } from "motion/react";
 import { RiCheckLine } from "@remixicon/react";
 import { CLIENT_APPS } from "../app-registry";
+import { usePhoneGrid } from "./desktop-geometry";
 import { placementOf, reorderPages, widgetKey, type WorkspaceLayout } from "@voidex/shared";
 import { useT } from "@/lib/i18n";
 import { cx } from "@/lib/cx";
@@ -172,7 +173,8 @@ function PagesGrid({ layout }: { layout: WorkspaceLayout }) {
 
 /** A page in small: its icons, folders and widgets in their cells. */
 function MiniPage({ layout, page, lifted }: { layout: WorkspaceLayout; page: number; lifted: boolean }) {
-  const cells = useMemo(() => placementOf(layout, { surface: "mobile", page }), [layout, page]);
+  const phone = usePhoneGrid((s) => s.grid);
+  const cells = useMemo(() => placementOf(layout, { surface: "mobile", page }, phone ?? undefined), [layout, page, phone]);
   const widgets = useMemo(() => new Set(layout.widgets.filter((w) => w.surface === "mobile" && w.container === String(page)).map((w) => widgetKey(w.id))), [layout.widgets, page]);
   return (
     <div

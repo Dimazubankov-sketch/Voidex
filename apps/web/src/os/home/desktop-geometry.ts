@@ -18,6 +18,21 @@ export const useDesktopGrid = create<{ grid: DesktopGrid | null; set: (g: Deskto
   set: (grid) => set((s) => (s.grid && s.grid.cols === grid.cols && s.grid.rows === grid.rows && s.grid.cellW === grid.cellW && s.grid.rowH === grid.rowH ? s : { grid })),
 }));
 
+/**
+ * A2: the phone page as this screen shows it — 4 columns × the rows that fit between the header and the
+ * page dots / navigation. Measured by the phone pager; every phone drop and widget placement uses it, so
+ * nothing lands below the visible page (where it could no longer be moved or removed).
+ */
+export const usePhoneGrid = create<{ grid: GridGeometry | null; set: (g: GridGeometry) => void }>((set) => ({
+  grid: null,
+  set: (grid) => set((s) => (s.grid && s.grid.cols === grid.cols && s.grid.rows === grid.rows ? s : { grid })),
+}));
+
+/** The geometry for layout operations on this surface (undefined until measured). */
+export function geometryFor(place: { surface: "mobile" | "desktop" }): GridGeometry | undefined {
+  return place.surface === "mobile" ? (usePhoneGrid.getState().grid ?? undefined) : desktopGeometry();
+}
+
 /** The geometry for layout operations on a PC desktop (undefined until measured / on phones). */
 export function desktopGeometry(): GridGeometry | undefined {
   const g = useDesktopGrid.getState().grid;

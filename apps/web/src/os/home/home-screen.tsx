@@ -18,7 +18,7 @@ import { ContextMenu } from "./context-menu";
 import { FolderOverlay } from "./folder-overlay";
 import { useHomeGestures } from "./gestures";
 import { dockZone } from "./dock";
-import { fitGrid, useDesktopGrid } from "./desktop-geometry";
+import { fitGrid, useDesktopGrid, usePhoneGrid } from "./desktop-geometry";
 import { HomeGrid, rowHeight } from "./grid";
 import { DragGhost, HomeItem, SelectionFrame, type IconMetrics, type LabelStyle } from "./icons";
 import { Launcher } from "./launcher";
@@ -317,10 +317,30 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
   useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => el.isConnected && setSize({ w: el.clientWidth, h: el.clientHeight }));
+    // A2: on iPhone Safari the toolbar can cover the bottom of a box sized by the layout viewport; only
+    // the part inside the visual viewport counts, so the last row is never under the toolbar.
+    const measure = () => {
+      if (!el.isConnected) return;
+      const r = el.getBoundingClientRect();
+      const vv = window.visualViewport;
+      const visibleBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const h = Math.max(0, Math.min(el.clientHeight, Math.floor(visibleBottom - r.top)));
+      setSize((s) => (s.w === el.clientWidth && s.h === h ? s : { w: el.clientWidth, h }));
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setSize({ w: el.clientWidth, h: el.clientHeight });
-    return () => ro.disconnect();
+    measure();
+    // Keyboard / pinch zoom change the visual viewport too: only a taller toolbar may shrink the page.
+    const onVv = () => {
+      if (window.visualViewport && window.visualViewport.scale > 1.01) return;
+      if (document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement) return;
+      measure();
+    };
+    window.visualViewport?.addEventListener("resize", onVv);
+    return () => {
+      ro.disconnect();
+      window.visualViewport?.removeEventListener("resize", onVv);
+    };
     // The measured box changes with the view (pages ↔ categories).
   }, [layout.mobile.view]);
 
@@ -354,6 +374,11 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
   const rowH = rowHeight(metrics, label);
   // The page offers empty cells all the way down (drop targets in edit mode).
   const minRows = size.h ? Math.max(1, Math.floor((size.h - 12 + metrics.gapY) / (rowH + metrics.gapY))) : 0;
+  // A2: the page is exactly this many rows; drops, widgets and stored cells all stay inside it.
+  const bounds = useMemo(() => (minRows > 0 ? { cols, rows: minRows } : undefined), [cols, minRows]);
+  useEffect(() => {
+    if (bounds) usePhoneGrid.getState().set(bounds);
+  }, [bounds]);
 
   if (layout.mobile.view === "categories") {
     // Apps grouped by category, scrolling vertically (arranging happens in the grid view).
@@ -392,6 +417,7 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
                   label={label}
                   editing={editing}
                   minRows={minRows}
+                  bounds={bounds}
                   renderWidget={(id, sz) => {
                     const w = layout.widgets.find((x) => x.id === id)!;
                     return <GridWidget widget={w} size={sz} editing={editing} />;

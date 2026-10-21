@@ -1597,4 +1597,5 @@ export const zh: Record<MessageKey, string> = {
   "sound.notify.mention": "提及",
   "sound.notify.spark": "火花",
   "sound.notify.drop": "水滴",
+  "widgets.noRoom": "此页面空间不足",
 };

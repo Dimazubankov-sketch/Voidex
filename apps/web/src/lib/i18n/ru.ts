@@ -1612,4 +1612,5 @@ export const ru: Record<MessageKey, string> = {
   "sound.notify.mention": "Упоминание",
   "sound.notify.spark": "Искра",
   "sound.notify.drop": "Капля",
+  "widgets.noRoom": "На этой странице не хватает места",
 };

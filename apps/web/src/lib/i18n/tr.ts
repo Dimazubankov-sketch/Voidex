@@ -1597,4 +1597,5 @@ export const tr: Record<MessageKey, string> = {
   "sound.notify.mention": "Bahsetme",
   "sound.notify.spark": "Kıvılcım",
   "sound.notify.drop": "Damla",
+  "widgets.noRoom": "Bu sayfada yeterli yer yok",
 };

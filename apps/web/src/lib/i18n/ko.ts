@@ -1597,4 +1597,5 @@ export const ko: Record<MessageKey, string> = {
   "sound.notify.mention": "멘션",
   "sound.notify.spark": "불꽃",
   "sound.notify.drop": "물방울",
+  "widgets.noRoom": "이 페이지에 공간이 부족합니다",
 };

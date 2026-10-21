@@ -1628,6 +1628,7 @@ export const en = {
   "sound.notify.mention": "Mention",
   "sound.notify.spark": "Spark",
   "sound.notify.drop": "Drop",
+  "widgets.noRoom": "Not enough room on this page",
 } as const;
 
 

@@ -1597,4 +1597,5 @@ export const ja: Record<MessageKey, string> = {
   "sound.notify.mention": "メンション",
   "sound.notify.spark": "スパーク",
   "sound.notify.drop": "しずく",
+  "widgets.noRoom": "このページには空きがありません",
 };

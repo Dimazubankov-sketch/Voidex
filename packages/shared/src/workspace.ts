@@ -910,7 +910,9 @@ const cellsOf = (l: WorkspaceLayout, surface: Place["surface"]) => (surface === 
 /**
  * Step 2.5.1: the size of a PC desktop grid as this screen shows it — columns
  * and rows that fit the free area (the stored column count is only a
- * fallback). Phone pages ignore it.
+ * fallback). A2: phone pages pass it too (4 columns × the rows that fit the
+ * page), so nothing is ever placed below the visible page. Stored cells are
+ * not rewritten for the screen: a taller phone still shows them where they were.
  */
 export interface GridGeometry {
   cols: number;
@@ -920,7 +922,7 @@ export interface GridGeometry {
 /** Where everything on one page / desktop is right now. */
 export function placementOf(l: WorkspaceLayout, place: Place, geometry?: GridGeometry): Map<string, PlacedCell> {
   const { items, blocks } = surfaceKeys(l, place);
-  const g = place.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   return gridPlacement(g ? g.cols : columnsOf(l, place.surface), items, cellsOf(l, place.surface), blocks, g?.rows);
 }
 
@@ -955,7 +957,7 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
   if (!from) return l;
   const n = clone(l);
   const same = JSON.stringify(from) === JSON.stringify(to);
-  const g = to.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   pin(n, from, g);
   if (!same) pin(n, to, g);
   const cells = cellsOf(n, to.surface);
@@ -1001,10 +1003,10 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
  * A free block of `size` cells on a page / desktop where nothing has to move.
  * Without `near`: the first one from the top (reading order). With `near`:
  * the one closest to that cell (PC: where the desktop menu was opened).
- * Phone pages grow downwards, so there is always one; a full PC desktop: null.
+ * Without geometry the grid grows downwards, so there is always one; a full bounded page / desktop: null.
  */
 export function freeBlock(l: WorkspaceLayout, place: Place, size: { w: number; h: number }, near?: Cell, geometry?: GridGeometry): Cell | null {
-  const g = place.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   const cols = Math.max(1, g ? g.cols : columnsOf(l, place.surface));
   const placed = placementOf(l, place, g);
   const taken = new Set<string>();
@@ -1044,7 +1046,7 @@ export function freeBlock(l: WorkspaceLayout, place: Place, size: { w: number; h
 export function placeGroup(l: WorkspaceLayout, keys: string[], anchor: string, to: Place, cell: Cell, geometry?: GridGeometry): WorkspaceLayout {
   const group = [anchor, ...keys.filter((k) => k !== anchor && !k.startsWith("widget:"))];
   const n = clone(l);
-  const g = to.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   const cols = Math.max(1, g ? g.cols : columnsOf(n, to.surface));
   const froms = new Map<string, Place>();
   for (const k of group) {
