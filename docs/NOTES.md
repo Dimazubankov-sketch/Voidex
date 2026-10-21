@@ -172,3 +172,37 @@ PATCH name/cover/position, DELETE), `/access/:type/:id` (members),
   proportions (`ratio`, `px` saved when added; older ones are measured when shown).
 - **Invisible grid**: pictures move and resize on a 2.5 % grid (nothing drawn), keep their proportions
   while resized and stay on the slide.
+
+## Stage D: text and pictures in one flow (ordinary notes)
+
+Model: `packages/notes/src/flow.ts` (pure, tested, fuzzed). Rendering and gestures:
+`apps/web/src/apps/notes/flow-view.tsx`; the editor glue is `note-editor.tsx`.
+
+- **Rows.** Blocks sharing a `row` id form a row: pictures of one size — 100 % (one), 50 % (two) or
+  25 % (four) — and at most one text column taking the rest of the line (≥ 25 %), about one character
+  (`--vn2-gap`) between text and picture. Overfull lines carry on below in order. A picture alone at
+  50 / 25 % leaves the rest of its line as a place to write (a tap there starts the text column).
+- **Sizes** (D4): only 100 / 50 / 25 %. «Масштаб»: drag sideways, the corner or two fingers; on release it
+  settles on the nearest size (a badge shows it while sizing). The old 25 / 50 / 75 / «Во всю», alignment,
+  wrap and up / down buttons are gone.
+- **Panel** (D9, above the toolbar): Передвижение / Масштаб (remembered per picture: `tool`), Формат (rows
+  of 50 / 25 % and carousels: square → portrait → landscape for all of them), carousel on / off, ← → (only
+  with a neighbour), picture ⇄ text (only beside the text column), delete.
+- **Display** (D8): 100 % keeps the picture's proportions; 50 % shows it whole in the row's frame (soft
+  empty sides); 25 % fills the frame (cropped preview only; the file is untouched). A long press shows the
+  whole picture.
+- **Gestures**: a picture that isn't chosen lets the page scroll; tap chooses it; long press previews.
+  Chosen + Передвижение: a drag lifts it (scale ~1.035, soft shadow, its place faded until the drop),
+  holding still previews. Chosen + Масштаб: drags size it. Drop places: a line above / below a block,
+  beside a picture or the text column (when it fits, taking the row's size), onto a picture (a carousel).
+  Only a thin mark shows the place; no grid is drawn. Near the top / the toolbar the note scrolls.
+- **Insert** (D1): new pictures go where the cursor was (the paragraph splits at the caret), 100 % each;
+  with a carousel picture chosen they join that carousel next to it and scroll into view.
+- **Carousels** (D7): «Добавить карусель» or a picture dropped onto another; one carousel per row;
+  pictures stay separate with the same gap; swipe on phones, arrows on PC (one picture per step); any
+  number of pictures (100 / size in view). «Убрать карусель» keeps every picture: the ones in view form a
+  row, the others go into rows before / after in order.
+- **Compatibility**: older notes (widths 10–100 %, left / right pictures with text around them, rows of
+  four) are brought into the model by `normalizeBlocks` when shown and on edit — nothing is lost and no
+  migration step runs; the stored form changes only with the next edit. New fields (`carousel`, `tool`)
+  are optional; older apps ignore them and show the pictures as before.

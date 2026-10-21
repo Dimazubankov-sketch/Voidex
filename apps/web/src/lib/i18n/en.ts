@@ -1649,6 +1649,16 @@ export const en = {
   "notes.image.fitOriginal": "Original proportions",
   "notes.image.canvasToImage": "Canvas to this picture",
   "notes.image.pixels": "Picture: {w} × {h} px",
+  "notes.image.chosen": "Picture chosen",
+  "notes.carousel.prev": "Previous picture",
+  "notes.carousel.next": "Next picture",
+  "notes.image.tool": "Picture tool",
+  "notes.image.toolMove": "Move",
+  "notes.image.toolScale": "Size",
+  "notes.image.format": "Format",
+  "notes.image.carouselOn": "Add carousel",
+  "notes.image.carouselOff": "Remove carousel",
+  "notes.image.swapText": "Swap picture and text",
 } as const;
 
 

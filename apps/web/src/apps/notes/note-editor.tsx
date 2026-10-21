@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type ClipboardEvent,
-  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
   type PointerEvent as RPointerEvent,
@@ -15,36 +14,49 @@ import {
 } from "react";
 import {
   RiAddLine,
-  RiAlignCenter,
-  RiAlignLeft,
-  RiAlignRight,
-  RiArrowDownLine,
   RiArrowDownSLine,
-  RiArrowLeftLine,
   RiArrowLeftSLine,
-  RiArrowRightLine,
   RiArrowRightSLine,
-  RiArrowUpLine,
   RiBold,
   RiCheckboxLine,
   RiDeleteBinLine,
   RiEraserLine,
   RiImageAddLine,
   RiItalic,
-  RiLayoutColumnLine,
-  RiLayoutRowLine,
   RiListUnordered,
   RiScissorsCutLine,
-  RiTextWrap,
 } from "@remixicon/react";
-import type { NoteBlock, NoteBlockKind, NoteBody, NoteImageShape, NotePage } from "@voidex/shared";
-import { addPage, asRow, block, deleteOrClearPage, joinRow, layoutBlocks, leaveRow, moveInPage, newId, pageHasContent, removePage, setRowLook, splitAt, DEFAULT_ROW_SHAPE } from "@voidex/notes";
+import type { NoteBlock, NoteBlockKind, NoteBody, NotePage } from "@voidex/shared";
+import {
+  addCarousel,
+  addPage,
+  addTextBeside,
+  block,
+  cycleShape,
+  deleteOrClearPage,
+  dropImage,
+  insertImages,
+  layoutFlow,
+  normalizeBlocks,
+  pageHasContent,
+  removeCarousel,
+  removeFromFlow,
+  removePage,
+  setImageSize,
+  setTool,
+  splitAt,
+  swapInRow,
+  swapWithText,
+  type DropTarget,
+  type ImageSize,
+} from "@voidex/notes";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
 import { ConfirmDialog, Popover, toast, usePopover } from "@/ui/overlays";
-import { downscale, notesApi, useMediaUrl } from "./data";
+import { downscale, notesApi } from "./data";
+import { FlowRow, ImagePanel, useFlowDragController, type FlowActions } from "./flow-view";
 import { Menu } from "./kit";
 
 type Change = (next: NoteBody, structural?: boolean) => void;
@@ -72,11 +84,6 @@ const SHORTCUTS: [RegExp, NoteBlockKind][] = [
   [/^>\s$/, "quote"],
   [/^```$/, "code"],
 ];
-/** Step 2.16: the shapes a row of pictures can take, as CSS aspect ratios. */
-const SHAPE_RATIO: Record<NoteImageShape, string> = { square: "1 / 1", portrait: "3 / 4", landscape: "4 / 3" };
-/** Pictures added together stand in rows of at most this many. */
-const ROW_MAX = 4;
-const LONG_PRESS_MS = 450;
 
 /**
  * Step 2.16 (performance): text fields size themselves to their text
@@ -134,17 +141,15 @@ async function ratioOf(file: Blob): Promise<number | undefined> {
 }
 
 /** What the blocks may ask of the editor; one object for the editor's whole life (so blocks never render again just because the editor did). */
-interface Actions {
+interface Actions extends FlowActions {
   register(id: string, el: HTMLTextAreaElement | null): void;
   text(b: NoteBlock, text: string): void;
   key(e: KeyboardEvent<HTMLTextAreaElement>, b: NoteBlock): void;
   focused(id: string): void;
+  /** D1: where the cursor is (pictures are inserted there). */
+  caret(id: string, pos: number): void;
   check(b: NoteBlock): void;
-  selectImage(id: string): void;
-  patchImage(id: string, p: Partial<NoteBlock>): void;
-  rowLook(id: string, look: { width?: number; shape?: NoteImageShape }): void;
   tail(page: number): void;
-  preview(src: string): void;
 }
 
 /**
@@ -177,10 +182,20 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
   const [columns, setColumns] = useState(body.pages.length);
   const [side, setSide] = useState(600);
   const [preview, setPreview] = useState<string | null>(null);
+  // D1: the last place of the cursor (or a tap on a picture of a carousel): new pictures go there.
+  const caret = useRef<{ id: string; pos: number } | null>(null);
+  // D7: a picture just added to a carousel is scrolled into view; the window of each carousel is kept.
+  const [reveal, setReveal] = useState<string | null>(null);
+  const carouselStarts = useRef(new Map<string, number>());
   const square = body.format === "square";
+  const selectedRef = useRef<string | null>(null);
+  selectedRef.current = selectedImage;
   const bodyRef = useRef(body);
   bodyRef.current = body;
   const pageCount = square ? columns : body.pages.length;
+
+  const dragCtl = useFlowDragController(scroller, (id, target) => impl.current && dropPictureRef.current(id, target));
+  const dropPictureRef = useRef<(id: string, target: DropTarget) => void>(() => {});
 
   // ------------------------------------------------------------ focus
   useLayoutEffect(() => {
@@ -230,7 +245,7 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
   useLayoutEffect(() => {
     if (!square) return;
     const s = sheet.current;
-    const last = s?.querySelector<HTMLElement>("[data-page]:last-child > [data-block]:last-child");
+    const last = s?.querySelector<HTMLElement>("[data-page]:last-child > .vn2-flow-item:last-child");
     const max = last ? last.offsetLeft + 1 : 0;
     const n = Math.max(1, Math.floor(max / (side + GAP)) + 1, body.pages.length);
     if (n !== columns) setColumns(n);
@@ -379,6 +394,17 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
   };
 
   // ------------------------------------------------------------ images
+  /** Applies a flow edit to the page holding `id` (the page is normalized first: older notes too). */
+  const editPage = (id: string, fn: (blocks: NoteBlock[]) => NoteBlock[]) => {
+    const n = bodyRef.current;
+    const at = locate(n, id);
+    if (!at) return;
+    onChange(
+      withPage(n, at.page, (l) => fn(normalizeBlocks(l))),
+      true,
+    );
+  };
+
   const uploadImages = async (files: File[], afterId: string | null) => {
     const images = files.filter((f) => /^image\/(jpeg|png|webp|gif)$/.test(f.type));
     if (!images.length || readOnly) return;
@@ -388,17 +414,25 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
       for (const f of images) {
         const data = f.type === "image/gif" ? f : await downscale(f, 2000);
         const [src, ratio] = await Promise.all([notesApi.upload(data), ratioOf(data)]);
-        added.push({ ...block("image"), src, width: 100, align: "center", ...(ratio ? { ratio } : {}) });
+        // D1: 100 % of the line to start with.
+        added.push({ ...block("image"), src, width: 100, ...(ratio ? { ratio } : {}) });
       }
-      // Step 2.16: pictures added together stand side by side (rows of up to four).
-      const blocks: NoteBlock[] = [];
-      for (let i = 0; i < added.length; i += ROW_MAX) blocks.push(...asRow(added.slice(i, i + ROW_MAX), newId()));
       const n = bodyRef.current;
-      const anchor = afterId ?? focused ?? n.pages[Math.min(page, n.pages.length - 1)]!.blocks.at(-1)?.id ?? null;
-      const tail = block("text");
-      if (anchor && locate(n, anchor)) insertAfter(anchor, [...blocks, tail]);
-      else onChange(withPage(n, n.pages.length - 1, (l) => [...l, ...blocks, tail]), true);
-      setSelectedImage(blocks[0]!.id);
+      // D1: where the cursor was last (or the chosen picture of a carousel: they join it).
+      const sel = selectedRef.current ? allBlocks(n).find((b) => b.id === selectedRef.current) : undefined;
+      const place = sel?.carousel ? { id: sel.id } : afterId ? { id: afterId, pos: caret.current?.id === afterId ? caret.current.pos : undefined } : caret.current;
+      const at = place ? locate(n, place.id) : null;
+      const pageIndex = at?.page ?? Math.min(page, n.pages.length - 1);
+      onChange(
+        withPage(n, pageIndex, (l) => {
+          const next = insertImages(normalizeBlocks(l), added, at ? place : null, (text) => block("text", text));
+          // A line to write on after pictures at the very end of the page.
+          return next.at(-1)?.kind === "image" ? [...next, block("text")] : next;
+        }),
+        true,
+      );
+      setSelectedImage(added[0]!.id);
+      if (sel?.carousel) setReveal(added[0]!.id);
     } catch {
       toast({ title: t("notes.imageFailed"), tone: "danger" });
     } finally {
@@ -420,69 +454,45 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
     void uploadImages([...e.dataTransfer.files], target);
   };
 
-  const moveBlock = (id: string, delta: -1 | 1) => {
+  /** D2: a dropped picture (it may land on another page). */
+  const dropPicture = (id: string, target: DropTarget) => {
     const n = bodyRef.current;
-    const at = locate(n, id);
-    if (!at) return;
-    const list = n.pages[at.page]!.blocks;
-    // Inside the page (Step 2.13: within a row, out of a row at its edge, over a whole row).
-    const moved = moveInPage(list, at.index, delta);
-    if (moved) {
+    const from = locate(n, id);
+    const to = locate(n, target.id);
+    if (!from || !to) return;
+    if (from.page === to.page) editPage(id, (l) => dropImage(l, id, target));
+    else {
+      const pic = { ...n.pages[from.page]!.blocks[from.index]! };
+      delete pic.row;
+      delete pic.carousel;
+      const without = withPage(n, from.page, (l) => removeFromFlow(normalizeBlocks(l), id, () => block()));
       onChange(
-        withPage(n, at.page, () => moved),
+        withPage(without, to.page, (l) => dropImage([...normalizeBlocks(l), pic], id, target)),
         true,
       );
-      return;
     }
-    // Over the page edge: onto the neighbouring page.
-    const p2 = at.page + delta;
-    if (p2 < 0 || p2 >= n.pages.length) return;
-    const it = { ...list[at.index]! };
-    delete it.row;
-    const without = withPage(n, at.page, (l) => l.filter((x) => x.id !== id));
-    onChange(
-      withPage(without, p2, (l) => (delta < 0 ? [...l, it] : [it, ...l])),
-      true,
-    );
+    setSelectedImage(id);
   };
 
-  /** Step 2.13: beside the picture before it (a row), or back on a line of its own. */
-  const setRow = (id: string, join: boolean) => {
-    const n = bodyRef.current;
-    const at = locate(n, id);
-    if (!at) return;
-    onChange(
-      withPage(n, at.page, (l) => (join ? joinRow(l, at.index, newId()) : leaveRow(l, at.index))),
-      true,
-    );
-  };
-
-  /** Step 2.16: one size / one shape for every picture of the row. */
-  const rowLook = (id: string, look: { width?: number; shape?: NoteImageShape }) => {
-    const n = bodyRef.current;
-    const at = locate(n, id);
-    if (!at) return;
-    onChange(
-      withPage(n, at.page, (l) => setRowLook(l, at.index, look)),
-      true,
-    );
-  };
+  dropPictureRef.current = dropPicture;
 
   const removeBlock = (id: string) => {
-    const n = bodyRef.current;
-    const at = locate(n, id);
-    if (!at) return;
-    onChange(
-      withPage(n, at.page, (l) => {
-        const gone = l[at.index];
-        let out = l.filter((x) => x.id !== id);
-        // A row left with one picture is no row any more.
-        if (gone?.row && out.filter((x) => x.row === gone.row).length === 1) out = out.map((x) => (x.row === gone.row ? { ...x, row: undefined } : x));
-        return out.length ? out : [block()];
-      }),
-      true,
-    );
+    editPage(id, (l) => removeFromFlow(l, id, () => block()));
     setSelectedImage(null);
+  };
+
+  /** D3: a tap beside a picture: a text column there, with the cursor in it. */
+  const addTextBesideImage = (imageId: string) => {
+    let created: string | null = null;
+    editPage(imageId, (l) => {
+      const r = addTextBeside(l, imageId, () => block("text"));
+      created = r.textId;
+      return r.blocks;
+    });
+    if (created) {
+      pendingFocus.current = { id: created, pos: 0 };
+      setSelectedImage(null);
+    }
   };
 
   const tailClick = (pageIndex: number) => {
@@ -518,12 +528,20 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
       setFocused(id);
       setSelectedImage(null);
     },
+    caret: (id, pos) => {
+      caret.current = { id, pos };
+    },
     check: (b) => patch(b.id, { checked: !b.checked }, true),
-    selectImage: (id) => setSelectedImage(id),
-    patchImage: (id, p) => patch(id, p, true),
-    rowLook,
+    selectImage: (id) => {
+      setSelectedImage(id);
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    },
     tail: tailClick,
     preview: (src) => setPreview(src),
+    beginDrag: (id, frame, at, url) => dragCtl.begin(id, frame, at, url),
+    size: (id, size: ImageSize) => editPage(id, (l) => setImageSize(l, id, size)),
+    addText: addTextBesideImage,
+    carouselStart: (rowId, start) => carouselStarts.current.set(rowId, start),
   };
   const act = useMemo<Actions>(
     () => ({
@@ -531,12 +549,15 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
       text: (...a) => impl.current.text(...a),
       key: (...a) => impl.current.key(...a),
       focused: (...a) => impl.current.focused(...a),
+      caret: (...a) => impl.current.caret(...a),
       check: (...a) => impl.current.check(...a),
       selectImage: (...a) => impl.current.selectImage(...a),
-      patchImage: (...a) => impl.current.patchImage(...a),
-      rowLook: (...a) => impl.current.rowLook(...a),
       tail: (...a) => impl.current.tail(...a),
       preview: (...a) => impl.current.preview(...a),
+      beginDrag: (...a) => impl.current.beginDrag(...a),
+      size: (...a) => impl.current.size(...a),
+      addText: (...a) => impl.current.addText(...a),
+      carouselStart: (...a) => impl.current.carouselStart(...a),
     }),
     [],
   );
@@ -585,22 +606,23 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
   const empty = body.pages.length === 1 && body.pages[0]!.blocks.every((b) => b.kind !== "image" && !b.text);
   const placeholderId = empty ? (firstId ?? null) : null;
 
-  // The selected picture's tools (a bar above the toolbar).
+  // D9: the chosen picture's panel (a bar above the toolbar).
   const selAt = selectedImage ? locate(body, selectedImage) : null;
-  const selList = selAt ? body.pages[selAt.page]!.blocks : [];
-  const sel = selAt ? selList[selAt.index] : undefined;
-  const selInRow = !!sel?.row && (selList[selAt!.index - 1]?.row === sel.row || selList[selAt!.index + 1]?.row === sel.row);
+  const selList = selAt ? normalizeBlocks(body.pages[selAt.page]!.blocks) : [];
+  const sel = selAt ? selList.find((x) => x.id === selectedImage) : undefined;
   const imageTools =
     sel && sel.kind === "image" && !readOnly ? (
-      <ImageTools
+      <ImagePanel
         key={sel.id}
         b={sel}
-        row={selInRow}
-        canJoin={!selInRow && selList[selAt!.index - 1]?.kind === "image"}
-        onPatch={(p) => patch(sel.id, p, true)}
-        onRowLook={(look) => rowLook(sel.id, look)}
-        onMove={(d) => moveBlock(sel.id, d)}
-        onRow={(join) => setRow(sel.id, join)}
+        blocks={selList}
+        onTool={(tool) => editPage(sel.id, (l) => setTool(l, sel.id, tool))}
+        onShape={() => editPage(sel.id, (l) => cycleShape(l, sel.id))}
+        onCarousel={(on) =>
+          editPage(sel.id, (l) => (on ? addCarousel(l, sel.id) : removeCarousel(l, sel.id, sel.row ? (carouselStarts.current.get(sel.row) ?? 0) : 0)))
+        }
+        onSwap={(d) => editPage(sel.id, (l) => swapInRow(l, sel.id, d))}
+        onSwapText={() => editPage(sel.id, (l) => swapWithText(l, sel.id))}
         onRemove={() => removeBlock(sel.id)}
       />
     ) : null;
@@ -615,7 +637,7 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
         onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
         onDrop={onDrop}
         onPointerDown={(e) => {
-          if (!(e.target as HTMLElement).closest(".vn2-img, .vn2-img-tools")) setSelectedImage(null);
+          if (!(e.target as HTMLElement).closest(".vn2-cell, .vn2-img-tools, .vn2-carousel-arrow")) setSelectedImage(null);
         }}
         className={cx("vn2-scroll min-h-0 flex-1", square ? "overflow-x-auto overflow-y-hidden" : "overflow-y-auto overflow-x-hidden")}
         data-notes-scroller
@@ -645,6 +667,7 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
                   readOnly={readOnly}
                   selected={selAt?.page === i ? selectedImage : null}
                   placeholderId={i === 0 ? placeholderId : null}
+                  reveal={reveal}
                   act={act}
                 />
               ))}
@@ -661,6 +684,7 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
                 readOnly={readOnly}
                 selected={selAt?.page === i ? selectedImage : null}
                 placeholderId={i === 0 ? placeholderId : null}
+                reveal={reveal}
                 act={act}
               />
             ))}
@@ -713,6 +737,7 @@ export function NoteEditor({ body, onChange, readOnly }: { body: NoteBody; onCha
         />
       )}
       {preview && <ImagePreview url={preview} onClose={() => setPreview(null)} />}
+      {dragCtl.overlay}
     </div>
   );
 }
@@ -728,6 +753,7 @@ const Sheet = memo(function Sheet({
   readOnly,
   selected,
   placeholderId,
+  reveal,
   act,
 }: {
   page: NotePage;
@@ -737,28 +763,33 @@ const Sheet = memo(function Sheet({
   readOnly: boolean;
   selected: string | null;
   placeholderId: string | null;
+  reveal: string | null;
   act: Actions;
 }) {
   const t = useT();
-  const laid = useMemo(() => layoutBlocks(page.blocks), [page.blocks]);
+  // Stage D: the page in the layout model (older notes are brought into it here, nothing is lost).
+  const laid = useMemo(() => layoutFlow(normalizeBlocks(page.blocks)), [page.blocks]);
   const placeholder = t("notes.placeholder");
-  const blocks = laid.map((it) =>
-    it.kind === "row" ? (
-      <ImageRow key={`row-${it.id}-${it.blocks[0]!.id}`} id={it.id} blocks={it.blocks} selected={selected} readOnly={readOnly} act={act} />
-    ) : it.block.kind === "image" ? (
-      <ImageBlock key={it.block.id} b={it.block} selected={selected === it.block.id} readOnly={readOnly} act={act} />
-    ) : (
-      <TextBlock key={it.block.id} b={it.block} placeholder={it.block.id === placeholderId ? placeholder : undefined} readOnly={readOnly} act={act} />
-    ),
-  );
+  const renderText = (b: NoteBlock) => <TextBlock key={b.id} b={b} placeholder={b.id === placeholderId ? placeholder : undefined} readOnly={readOnly} act={act} />;
+  const blocks = laid.map((it) => {
+    const first = it.kind === "row" ? (it.cells[0]!.kind === "image" ? it.cells[0]!.block.id : it.cells[0]!.blocks[0]!.id) : it.block.id;
+    const lastCell = it.kind === "row" ? it.cells.at(-1)! : null;
+    const last = it.kind === "row" ? (lastCell!.kind === "image" ? lastCell!.block.id : lastCell!.blocks.at(-1)!.id) : it.block.id;
+    return (
+      <div key={it.kind === "row" ? `row-${it.id}` : it.block.id} className="vn2-flow-item" data-flow-item={first} data-flow-last={last}>
+        {it.kind === "row" ? <FlowRow item={it} selected={selected} readOnly={readOnly} act={act} renderText={renderText} reveal={reveal} /> : renderText(it.block)}
+      </div>
+    );
+  });
+  const lastId = page.blocks.at(-1)?.id;
   if (mode === "column")
     return (
-      <div className="vn2-page-col" style={index > 0 ? { breakBefore: "column" } : undefined} data-page={index}>
+      <div className="vn2-page-col" style={index > 0 ? { breakBefore: "column" } : undefined} data-page={index} data-page-last={lastId}>
         {blocks}
       </div>
     );
   return (
-    <div className={cx("vn2-sheet", mode === "paged" ? "vn2-sheet-paged" : "vn2-sheet-open")} data-page={index} data-testid="notes-paper" data-open={mode === "open" || undefined}>
+    <div className={cx("vn2-sheet", mode === "paged" ? "vn2-sheet-paged" : "vn2-sheet-open")} data-page={index} data-page-last={lastId} data-testid="notes-paper" data-open={mode === "open" || undefined}>
       {blocks}
       {!readOnly && <button type="button" aria-hidden tabIndex={-1} className="vn2-tail block w-full cursor-text [clear:both]" onClick={() => act.tail(index)} />}
     </div>
@@ -809,191 +840,17 @@ const TextBlock = memo(function TextBlock({ b, placeholder, readOnly, act }: { b
         placeholder={placeholder}
         onChange={(e) => act.text(b, e.target.value)}
         onKeyDown={(e) => act.key(e, b)}
-        onFocus={() => act.focused(b.id)}
+        onFocus={(e) => {
+          act.focused(b.id);
+          act.caret(b.id, e.currentTarget.selectionStart);
+        }}
+        onSelect={(e) => act.caret(b.id, e.currentTarget.selectionStart)}
+        onKeyUp={(e) => act.caret(b.id, e.currentTarget.selectionStart)}
+        onPointerUp={(e) => act.caret(b.id, e.currentTarget.selectionStart)}
         className="vn2-text"
         data-testid="notes-block"
         aria-label={t(`notes.block.${b.kind}`)}
       />
-    </div>
-  );
-});
-
-/**
- * Step 2.16: pictures side by side. The row has one width (the first
- * picture's, % of the line) and one shape; every picture takes an equal
- * share of it at that shape, so they line up at one height and never cover
- * one another. Resizing any of them resizes the row.
- */
-const ImageRow = memo(function ImageRow({ id, blocks, selected, readOnly, act }: { id: string; blocks: NoteBlock[]; selected: string | null; readOnly: boolean; act: Actions }) {
-  const first = blocks[0]!;
-  const width = first.width ?? 100;
-  const shape = first.shape ?? DEFAULT_ROW_SHAPE;
-  const rowRef = useRef<HTMLDivElement>(null);
-  return (
-    <div
-      ref={rowRef}
-      className="vn2-img-row"
-      style={{ width: `${width}%`, ["--vn2-row-ratio" as string]: SHAPE_RATIO[shape] } as CSSProperties}
-      data-testid="notes-image-row"
-      data-row={id}
-      data-count={blocks.length}
-      data-shape={shape}
-      data-width={width}
-    >
-      {blocks.map((b) => (
-        <ImageBlock key={b.id} b={b} row={{ el: rowRef, width }} selected={selected === b.id} readOnly={readOnly} act={act} />
-      ))}
-    </div>
-  );
-});
-
-/**
- * A picture: tap to select (the tools open above the toolbar), drag the
- * corner to resize (in a row: the whole row), long press to see it large.
- */
-const ImageBlock = memo(function ImageBlock({
-  b,
-  row,
-  selected,
-  readOnly,
-  act,
-}: {
-  b: NoteBlock;
-  /** Set when it stands in a row of pictures: the row element and its width. */
-  row?: { el: React.RefObject<HTMLDivElement | null>; width: number };
-  selected: boolean;
-  readOnly: boolean;
-  act: Actions;
-}) {
-  const t = useT();
-  const url = useMediaUrl(b.src);
-  const box = useRef<HTMLDivElement>(null);
-  const width = row ? row.width : (b.width ?? 100);
-  const align = b.align ?? "center";
-  const wrap = !row && !!b.wrap && align !== "center";
-  const [live, setLive] = useState<number | null>(null);
-  const drag = useRef<{ x: number; w: number; box: number } | null>(null);
-  const pressed = useRef<{ timer: number; x: number; y: number; fired: boolean } | null>(null);
-  const shown = live ?? width;
-
-  const startResize = (e: RPointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    // A row and a wrapped picture are sized against the line, a picture of its own against its own box.
-    const host = row ? (row.el.current?.parentElement?.clientWidth ?? 600) : wrap ? (box.current?.parentElement?.clientWidth ?? 600) : (box.current?.clientWidth ?? 600);
-    drag.current = { x: e.clientX, w: width, box: host };
-  };
-  const moveResize = (e: RPointerEvent) => {
-    const d = drag.current;
-    if (!d) return;
-    const k = row ? 2 : align === "center" ? 2 : align === "right" ? -1 : 1;
-    const next = Math.round(Math.max(10, Math.min(100, d.w + (((e.clientX - d.x) * k) / d.box) * 100)));
-    // A row follows the finger as a whole, without rendering the note again.
-    if (row?.el.current) row.el.current.style.width = `${next}%`;
-    setLive(next);
-  };
-  const endResize = () => {
-    if (drag.current && live !== null) {
-      if (row) act.rowLook(b.id, { width: live });
-      else act.patchImage(b.id, { width: live });
-    }
-    drag.current = null;
-    setLive(null);
-  };
-
-  // Long press: the picture large in the middle of the screen (Step 2.16).
-  const pressStart = (e: RPointerEvent) => {
-    if (e.button !== 0 || !url) return;
-    const at = { x: e.clientX, y: e.clientY };
-    window.clearTimeout(pressed.current?.timer);
-    pressed.current = {
-      ...at,
-      fired: false,
-      timer: window.setTimeout(() => {
-        if (!pressed.current) return;
-        pressed.current.fired = true;
-        navigator.vibrate?.(8);
-        act.preview(url);
-      }, LONG_PRESS_MS),
-    };
-  };
-  const pressMove = (e: RPointerEvent) => {
-    const p = pressed.current;
-    if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) {
-      window.clearTimeout(p.timer);
-      pressed.current = null;
-    }
-  };
-  const pressEnd = () => {
-    const p = pressed.current;
-    if (p && !p.fired) {
-      window.clearTimeout(p.timer);
-      pressed.current = null;
-    }
-  };
-  useEffect(() => () => window.clearTimeout(pressed.current?.timer), []);
-
-  const ratio = row ? undefined : b.ratio;
-  const outerStyle = row ? undefined : wrap ? { width: `${shown}%` } : undefined;
-  return (
-    <div
-      ref={box}
-      className={cx("vn2-img", row ? "vn2-img-in-row" : `vn2-img-${align}`, wrap && `vn2-img-wrap vn2-img-wrap-${align}`)}
-      style={outerStyle}
-      data-block={b.id}
-      data-kind="image"
-      data-testid="notes-image-block"
-      data-width={shown}
-      data-align={align}
-      data-wrap={wrap || undefined}
-      data-row={b.row}
-      data-shape={row ? (b.shape ?? DEFAULT_ROW_SHAPE) : undefined}
-    >
-      <div className={cx("vn2-img-frame relative", row && "vn2-img-frame-row")} style={row ? undefined : { width: wrap ? "100%" : `${shown}%`, ...(ratio ? { aspectRatio: String(ratio) } : {}) }}>
-        {url ? (
-          <img
-            src={url}
-            alt={b.text}
-            draggable={false}
-            decoding="async"
-            onPointerDown={pressStart}
-            onPointerMove={pressMove}
-            onPointerUp={pressEnd}
-            onPointerCancel={pressEnd}
-            onContextMenu={(e) => e.preventDefault()}
-            onClick={(e) => {
-              e.stopPropagation();
-              // The click that ends a long press is not a tap.
-              if (pressed.current?.fired) {
-                pressed.current = null;
-                return;
-              }
-              act.selectImage(b.id);
-            }}
-            className={cx("block size-full rounded-[10px]", selected && !readOnly && "outline outline-[3px] outline-offset-2 outline-primary")}
-            data-testid="notes-image"
-          />
-        ) : (
-          <div className={cx("grid w-full place-items-center rounded-[10px] bg-surface-secondary", !row && !ratio && "aspect-[4/3]", (row || ratio) && "h-full")}>
-            <Spinner />
-          </div>
-        )}
-        {selected && !readOnly && (
-          <span
-            onPointerDown={startResize}
-            onPointerMove={moveResize}
-            onPointerUp={endResize}
-            onPointerCancel={endResize}
-            className={cx(
-              "absolute bottom-[-10px] grid size-7 touch-none place-items-center rounded-full border-2 border-white bg-primary shadow",
-              align === "right" && !row ? "left-[-10px] cursor-nesw-resize" : "right-[-10px] cursor-nwse-resize",
-            )}
-            aria-label={t("notes.image.resize")}
-            data-testid="notes-image-resize"
-          />
-        )}
-      </div>
     </div>
   );
 });
@@ -1248,143 +1105,6 @@ function Toolbar({
           />
         </Popover>
       </div>
-    </div>
-  );
-}
-
-/**
- * The selected picture's tools (Step 2.13: a bar above the toolbar, so they
- * never cover the text beside a picture): width 25/50/75/100 %, alignment,
- * text flowing around it (left / right), beside the picture before it (a
- * row) or back on a line of its own, move (inside a row: left / right),
- * remove. Step 2.16: in a row the width and the shape (square, portrait,
- * landscape) are the row's: every picture of it takes them.
- */
-function ImageTools({
-  b,
-  row,
-  canJoin,
-  onPatch,
-  onRowLook,
-  onMove,
-  onRow,
-  onRemove,
-}: {
-  b: NoteBlock;
-  row: boolean;
-  canJoin: boolean;
-  onPatch: (p: Partial<NoteBlock>) => void;
-  onRowLook: (look: { width?: number; shape?: NoteImageShape }) => void;
-  onMove: (d: -1 | 1) => void;
-  onRow: (join: boolean) => void;
-  onRemove: () => void;
-}) {
-  const t = useT();
-  const width = b.width ?? 100;
-  const align = b.align ?? "center";
-  const wrap = !row && !!b.wrap && align !== "center";
-  const shape = b.shape ?? DEFAULT_ROW_SHAPE;
-  return (
-    <div
-      className="vn2-img-tools pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-0.5 rounded-[22px] p-1"
-      onPointerDown={(e) => e.preventDefault()}
-      data-testid="notes-image-tools"
-      data-image={b.id}
-    >
-      {[25, 50, 75, 100].map((w) => (
-        <button
-          key={w}
-          type="button"
-          onClick={() => (row ? onRowLook({ width: w }) : onPatch({ width: w }))}
-          className={cx("h-8 rounded-full px-2 text-[12.5px] font-semibold", width === w ? "bg-primary text-white" : "text-text")}
-          data-testid={`notes-image-w${w}`}
-        >
-          {w === 100 && !row ? t("notes.image.full") : `${w}%`}
-        </button>
-      ))}
-      {row && (
-        <>
-          <span className="mx-0.5 h-5 w-px bg-border" />
-          {(["square", "portrait", "landscape"] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => onRowLook({ shape: s })}
-              aria-label={t(`notes.image.shape.${s}`)}
-              title={t(`notes.image.shape.${s}`)}
-              aria-pressed={shape === s}
-              className={cx("vn2-icon-btn size-8", shape === s && "text-primary")}
-              data-testid={`notes-image-shape-${s}`}
-            >
-              <span className={cx("block rounded-[3px] border-[1.8px] border-current", s === "square" ? "size-[14px]" : s === "portrait" ? "h-[16px] w-[12px]" : "h-[12px] w-[16px]")} />
-            </button>
-          ))}
-        </>
-      )}
-      {!row && (
-        <>
-          <span className="mx-0.5 h-5 w-px bg-border" />
-          {(
-            [
-              ["left", <RiAlignLeft key="l" className="size-[17px]" />],
-              ["center", <RiAlignCenter key="c" className="size-[17px]" />],
-              ["right", <RiAlignRight key="r" className="size-[17px]" />],
-            ] as const
-          ).map(([a, icon]) => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => onPatch({ align: a, ...(a === "center" ? { wrap: undefined } : {}) })}
-              aria-label={t(`notes.image.${a}`)}
-              aria-pressed={align === a}
-              className={cx("vn2-icon-btn size-8", align === a && "text-primary")}
-              data-testid={`notes-image-${a}`}
-            >
-              {icon}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() =>
-              onPatch(
-                align === "center"
-                  ? { wrap: true, align: "left", width: Math.min(width, 50) }
-                  : {
-                      wrap: !b.wrap,
-                      ...(!b.wrap && width > 60 ? { width: 50 } : {}),
-                    },
-              )
-            }
-            aria-label={t("notes.image.wrap")}
-            title={t("notes.image.wrap")}
-            aria-pressed={wrap}
-            className={cx("vn2-icon-btn size-8", wrap && "text-primary")}
-            data-testid="notes-image-wrap"
-          >
-            <RiTextWrap className="size-[17px]" />
-          </button>
-        </>
-      )}
-      <span className="mx-0.5 h-5 w-px bg-border" />
-      {canJoin && (
-        <button type="button" onClick={() => onRow(true)} aria-label={t("notes.image.beside")} title={t("notes.image.beside")} className="vn2-icon-btn size-8" data-testid="notes-image-join">
-          <RiLayoutColumnLine className="size-[17px]" />
-        </button>
-      )}
-      {row && (
-        <button type="button" onClick={() => onRow(false)} aria-label={t("notes.image.ownLine")} title={t("notes.image.ownLine")} className="vn2-icon-btn size-8" data-testid="notes-image-leave">
-          <RiLayoutRowLine className="size-[17px]" />
-        </button>
-      )}
-      <button type="button" onClick={() => onMove(-1)} aria-label={row ? t("notes.image.moveLeft") : t("notes.moveUp")} className="vn2-icon-btn size-8" data-testid="notes-image-up">
-        {row ? <RiArrowLeftLine className="size-[17px]" /> : <RiArrowUpLine className="size-[17px]" />}
-      </button>
-      <button type="button" onClick={() => onMove(1)} aria-label={row ? t("notes.image.moveRight") : t("notes.moveDown")} className="vn2-icon-btn size-8" data-testid="notes-image-down">
-        {row ? <RiArrowRightLine className="size-[17px]" /> : <RiArrowDownLine className="size-[17px]" />}
-      </button>
-      <button type="button" onClick={onRemove} aria-label={t("notes.delete")} className="vn2-icon-btn size-8 text-danger" data-testid="notes-image-remove">
-        <RiDeleteBinLine className="size-[17px]" />
-      </button>
     </div>
   );
 }
