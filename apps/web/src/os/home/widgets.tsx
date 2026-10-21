@@ -291,11 +291,18 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       window.removeEventListener("pointercancel", stop);
     };
     let menuOpen = false;
+    // F: held, the widget grows a little; it settles back when let go or picked up.
+    const glass = ref.current?.querySelector<HTMLElement>("[data-widget-press]");
+    glass?.setAttribute("data-pressed", "");
+    const unpress = () => glass?.removeAttribute("data-pressed");
+    window.addEventListener("pointerup", unpress, { once: true });
+    window.addEventListener("pointercancel", unpress, { once: true });
     const track = (ev: PointerEvent) => {
       if (ev.pointerId !== id) return;
       at = { x: ev.clientX, y: ev.clientY };
       if (Math.hypot(at.x - from.x, at.y - from.y) <= PRESS_SLOP) return;
       stop();
+      unpress();
       if (!menuOpen) return;
       // E: the finger moves on after the menu opened: the menu goes and the widget is picked up instead.
       useHomeUi.getState().closeMenu();
@@ -476,7 +483,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       }}
     >
       {/* The wiggle is its own layer: the drag moves the outer one, so the two never fight over the transform. */}
-      <div className={cx("vx-glass relative size-full rounded-[24px]", editing && !dragging && "vx-wiggle", dragging && "scale-[1.03] shadow-float transition-transform")}>
+      <div className={cx("vx-glass vx-press relative size-full rounded-[24px]", editing && !dragging && "vx-wiggle", dragging && "scale-[1.03] shadow-float transition-transform")} data-widget-press>
         {editing && !dragging && (
           <RemoveBadge
             onRemove={() =>

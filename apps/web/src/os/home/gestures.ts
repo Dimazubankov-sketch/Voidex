@@ -119,6 +119,11 @@ export function useHomeGestures(opts: GestureOptions) {
     }
     // A plain press on an icon outside the selection, or on free space, starts over.
     if (pcMouse && (!item || !ui().selected.includes(itemKey(item)))) ui().setSelected([]);
+    // F: the pressed icon grows a little while it is held and settles back when let go (CSS `scale`,
+    // so the grid, the wiggle and the hit area never change).
+    const pressedTile = item && itemEl ? (itemEl.querySelector<HTMLElement>("[data-tile]") ?? null) : null;
+    pressedTile?.setAttribute("data-pressed", "");
+    const unpress = () => pressedTile?.removeAttribute("data-pressed");
     const start = { x: e.clientX, y: e.clientY };
     let last = { x: e.clientX, t: performance.now() };
     let vx = 0;
@@ -388,6 +393,7 @@ export function useHomeGestures(opts: GestureOptions) {
       }
       if (Math.hypot(dx, dy) < SLOP) return;
       window.clearTimeout(timer);
+      unpress();
       if (mode === "armed") {
         if (canPick()) startDrag(ev.clientX, ev.clientY);
         else mode = "done";
@@ -418,6 +424,7 @@ export function useHomeGestures(opts: GestureOptions) {
     };
 
     const detach = () => {
+      unpress();
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);

@@ -279,7 +279,7 @@ export function DragGhost({ layout }: { layout: WorkspaceLayout }) {
       style={{ x: ghost.x, y: ghost.y, marginLeft: -drag.size / 2, marginTop: -drag.size / 2 }}
       data-testid="drag-ghost"
     >
-      <div className="relative scale-110 drop-shadow-2xl">
+      <div className="relative scale-[1.06] [filter:drop-shadow(0_14px_22px_rgba(20,16,50,0.26))]">
         {drag.group && drag.group.length > 1 && (
           <span className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-semibold text-white shadow-glow" data-testid="drag-group-count">
             {drag.group.length}

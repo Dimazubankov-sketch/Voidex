@@ -154,3 +154,27 @@ test("A4: a pinch on the shell is not a page zoom (one-finger scrolling untouche
   await page.evaluate(() => localStorage.setItem("vx.pageZoom", "1"));
   expect(await zoomBlocked(page, '[data-testid="home-page-0"]')).toEqual({ pinch: false, gesture: false, oneFinger: false });
 });
+
+test("F: a held icon / widget grows a little and settles back; reduced motion keeps it still; the grid never moves", async ({ page }) => {
+  await signUpViaApi(page, "Нажатие", "Иконки");
+  const tile = page.getByTestId("app-notes").locator("[data-tile]");
+  const cellBefore = await page.locator('[data-cell]:has([data-testid="app-notes"])').getAttribute("data-cell");
+  const b = (await tile.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(300);
+  await expect(tile).toHaveAttribute("data-pressed", "");
+  const scale = await tile.evaluate((el) => getComputedStyle(el).scale);
+  expect(Number(scale)).toBeGreaterThan(1.03);
+  expect(Number(scale)).toBeLessThan(1.06);
+  await page.mouse.up();
+  await expect(tile).not.toHaveAttribute("data-pressed", "");
+  expect(await page.locator('[data-cell]:has([data-testid="app-notes"])').getAttribute("data-cell")).toBe(cellBefore);
+  await page.keyboard.press("Escape");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(200);
+  expect(await tile.evaluate((el) => getComputedStyle(el).scale)).toMatch(/^(none|1)$/);
+  await page.mouse.up();
+});
