@@ -41,10 +41,12 @@ test("A1: a tap on a city puts it on top (name, time, analog hands of its zone);
     return ((p.hour! % 12) * 30 + p.minute! / 2) % 360;
   });
   await expect.poll(async () => Math.abs((await angle(page, "clock-hand-hour")) - expected)).toBeLessThan(1.5);
-  const s1 = await angle(page, "clock-hand-second");
-  await page.waitForTimeout(400);
-  const s2 = await angle(page, "clock-hand-second");
-  expect((s2 - s1 + 360) % 360).toBeGreaterThan(0.5);
+  // The second hand turns (on the compositor): its on-screen rotation changes between two looks.
+  const rot = () => page.getByTestId("clock-hand-second").evaluate((el) => getComputedStyle(el).rotate);
+  const r1 = await rot();
+  await page.waitForTimeout(500);
+  expect(await rot()).not.toBe(r1);
+  expect(await page.getByTestId("clock-hand-second").evaluate((el) => getComputedStyle(el).animationName)).toBe("vx-hand-spin");
   // Another city replaces it (one at a time).
   const kgd = clock(page).getByTestId("clock-city-select").and(page.locator('[data-zone="Europe/Kaliningrad"]'));
   await kgd.click();

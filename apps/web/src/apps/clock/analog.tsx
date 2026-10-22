@@ -12,45 +12,62 @@ export function useShownZone(): string {
 }
 
 /**
- * Drives the hands of an analog clock straight on the DOM, once per frame (no React render per
- * frame): the hour, minute and second hands glide. Reduced motion: one step per second. Paused while
- * the page is hidden; the hands are right the moment it shows again.
+ * Drives the hands of an analog clock with CSS animations (Update 2 · D): each hand turns once per
+ * minute / hour / 12 hours on the compositor, started at the right phase, so no JavaScript runs per
+ * frame. It re-syncs once a minute (summer time, drift), when the page shows again and when the zone
+ * changes. Reduced motion: the second hand ticks once per second. `data-angle` follows once a second
+ * (for tests and accessibility tools).
  */
 export function useHands(zone: string, hands: { hour: React.RefObject<SVGElement | HTMLElement | null>; minute: React.RefObject<SVGElement | HTMLElement | null>; second?: React.RefObject<SVGElement | HTMLElement | null> }, svg = false) {
   const reduced = useReducedMotion();
   useEffect(() => {
-    let raf = 0;
-    let timer = 0;
-    const set = (el: SVGElement | HTMLElement | null | undefined, deg: number) => {
-      if (!el) return;
-      if (svg) el.setAttribute("transform", `rotate(${deg.toFixed(3)} 100 100)`);
-      else (el as HTMLElement).style.transform = `rotate(${deg.toFixed(3)}deg)`;
-      el.setAttribute("data-angle", deg.toFixed(1));
+    let sync = 0;
+    let tick = 0;
+    const list: [React.RefObject<SVGElement | HTMLElement | null> | undefined, "hour" | "minute" | "second", number][] = [
+      [hands.hour, "hour", 43_200],
+      [hands.minute, "minute", 3_600],
+      [hands.second, "second", 60],
+    ];
+    const start = () => {
+      const a = handAngles(zone, Date.now());
+      for (const [ref, key, period] of list) {
+        const el = ref?.current;
+        if (!el) continue;
+        const s = (el as HTMLElement).style;
+        if (svg) {
+          s.transformOrigin = "100px 100px";
+          s.transformBox = "view-box";
+        }
+        // Restart from the current phase: a negative delay puts the animation where the hand is now.
+        const steps = key === "second" && reduced ? "steps(60, end)" : "linear";
+        s.animation = `vx-hand-spin ${period}s ${steps} ${(-(a[key] / 360) * period).toFixed(3)}s infinite`;
+      }
+      angles();
     };
-    const draw = () => {
-      const now = reduced ? Math.floor(Date.now() / 1000) * 1000 : Date.now();
-      const a = handAngles(zone, now);
-      set(hands.hour.current, a.hour);
-      set(hands.minute.current, a.minute);
-      set(hands.second?.current, a.second);
+    const angles = () => {
+      const a = handAngles(zone, Date.now());
+      for (const [ref, key] of list) ref?.current?.setAttribute("data-angle", a[key].toFixed(1));
     };
-    const loop = () => {
-      draw();
-      if (reduced) timer = window.setTimeout(loop, 1000 - (Date.now() % 1000) + 5);
-      else raf = requestAnimationFrame(loop);
-    };
-    const stop = () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timer);
+    const schedule = () => {
+      window.clearTimeout(sync);
+      sync = window.setTimeout(() => {
+        start();
+        schedule();
+      }, 60_000 - (Date.now() % 60_000) + 20);
     };
     const onVisible = () => {
-      stop();
-      if (document.visibilityState === "visible") loop();
+      if (document.visibilityState === "visible") {
+        start();
+        schedule();
+      }
     };
-    loop();
+    start();
+    schedule();
+    tick = window.setInterval(angles, 1000);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      stop();
+      window.clearTimeout(sync);
+      window.clearInterval(tick);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [zone, reduced, svg, hands.hour, hands.minute, hands.second]);

@@ -919,3 +919,13 @@ img[data-system-asset] { pointer-events: none; }
     transform: none;
   }
 }
+
+/* Update 2 · D: clock hands turn on the compositor (see apps/clock/analog.tsx). */
+@keyframes vx-hand-spin {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: 360deg;
+  }
+}
