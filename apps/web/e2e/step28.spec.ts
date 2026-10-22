@@ -182,6 +182,13 @@ test("Notes (Step 2.16): a narrower search field with the \"+\" as its own round
   const add = page.getByTestId("notes-add");
   await expect(add).toBeVisible();
   await expect(field.getByTestId("notes-add")).toHaveCount(0);
+  // The window may still be opening on a slow machine: measure once the pair has settled.
+  await expect
+    .poll(async () => {
+      const [f, a] = [(await field.boundingBox())!, (await add.boundingBox())!];
+      return Math.abs(a.y + a.height / 2 - (f.y + f.height / 2));
+    })
+    .toBeLessThan(3);
   const [fb, ab] = [(await field.boundingBox())!, (await add.boundingBox())!];
   // Beside the field, on the right, round, at the field's height.
   expect(ab.x).toBeGreaterThanOrEqual(fb.x + fb.width);
