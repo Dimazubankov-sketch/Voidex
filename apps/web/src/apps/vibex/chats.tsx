@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, Reorder, motion, useDragControls } from "motion/react";
 import {
-  RiArrowLeftSLine,
   RiAttachment2,
   RiCheckDoubleLine,
   RiCheckLine,
@@ -15,26 +14,22 @@ import {
   RiSendPlaneFill,
   RiShareForwardLine,
   RiPencilLine,
-  RiPhoneLine,
   RiReplyLine,
-  RiVidiconLine,
   RiVolumeMuteFill,
 } from "@remixicon/react";
 import { VIBEX_FILES_MAX, VIBEX_MESSAGE_MAX, chatSections, type VibexChatDto, type VibexChatOrder, type VibexFileDto, type VibexMessageDto } from "@voidex/shared";
-import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
 import { useFormFactor } from "@/lib/form-factor";
 import { formatDate, formatShortDate, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { ATTACHMENT_ACCEPT } from "@/apps/mail/attachments";
 import { NotesFileCard } from "@/apps/notes/card";
-import { WindowHeader } from "@/os/window-context";
 import { EmptyState, IconButton, Skeleton, Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
 import { UploadCancelled, checkVibexFile, filesApi, markRead, uploadWithProgress, useChat, useChats, useEditMessage, useFileUrl, useMessages, useSendMessage, useSetPins } from "./data";
 import { FileChip, Lightbox } from "./media";
 import { VideoMessageGlyph, VoiceBubble } from "./media-bubbles";
-import { ForwardSheet, MessageMenu, PinnedBar, SelectDot, SelectionBar, SwipeReplyIcon, useSwipeReply, type MessageMenuState } from "./message-actions";
+import { ForwardSheet, MessageMenu, SelectDot, SelectionBar, SwipeReplyIcon, useSwipeReply, type MessageMenuState } from "./message-actions";
 import { CircleBubble } from "./circle-player";
 import { type RecordKind, type Recording } from "./recorder";
 import { RecordButton } from "./record-button";
@@ -42,10 +37,14 @@ import { CallSheet, type CallKind } from "./calls";
 import { useSession } from "@/lib/session";
 import { NestedPost, UnavailablePost } from "./posts";
 import { markVisible, useVibex } from "./store";
-import { ChatAvatar, GroupAvatar, GroupInfoSheet, chatTitle } from "./groups";
+import { ChatAvatar, GroupInfoSheet, chatTitle } from "./groups";
 import { StoryHalo } from "./stories";
 import { MediaMosaic } from "./mosaic";
 import { AttachSourceSheet } from "@/os/share/attach-source";
+import { ChatHeader } from "./chat-header";
+import { ChatInfo } from "./chat-info";
+import { ChatTopPanel } from "./chat-top-panel";
+import { PresenceDot } from "./presence";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 /** Press-and-hold before a pinned chat lifts (touch and mouse alike). */
@@ -99,6 +98,8 @@ function ChatRowBody({ chat, active }: { chat: VibexChatDto; active: boolean }) 
     <>
       <StoryHalo personId={chat.peer?.id} gap="ring-[var(--chat-card)]">
         <ChatAvatar chat={chat} size={50} />
+        {/* Update 2 · C3: in the list only «online» shows (a green dot); offline / hidden: nothing. */}
+        {chat.peer?.presence?.state === "online" && <PresenceDot presence={chat.peer.presence} size={13} className="bottom-[1px] right-[1px]" ring="var(--chat-card, var(--surface))" />}
       </StoryHalo>
       <span className="min-w-0 flex-1 self-stretch py-[9px] pr-3">
         <span className="flex items-center gap-1">
@@ -637,7 +638,7 @@ function Bubble({
       <div ref={bubble} className="flex flex-col items-end gap-1">
         {forwarded}
         {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} nameOf={nameOf} />}
-        <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} />
+        <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} playback={{ chatId: msg.conversationId, messageId: msg.id, senderName: nameOf(msg.senderId) }} />
         <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
       </div>
     ) : mediaOnly ? (
@@ -671,7 +672,7 @@ function Bubble({
             {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={mine} nameOf={nameOf} />}
           </div>
         )}
-        {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} />}
+        {msg.kind === "voice" && msg.files[0] && <VoiceBubble file={msg.files[0]} durationMs={msg.durationMs} mine={mine} playback={{ chatId: msg.conversationId, messageId: msg.id, senderName: nameOf(msg.senderId) }} />}
         {images.length > 0 && (
           // Step 2.11: a Telegram-like mosaic (one outer radius, thin gaps, no empty cells).
           <MediaMosaic items={images.map((f) => ({ key: f.id, kind: f.kind === "video" ? "video" : "image", file: f }))} onOpen={setViewer} fill flat />
@@ -906,6 +907,7 @@ function MessageComposer({
   const send = useSendMessage(chatId);
   // Step 2.9: one button for voice and video circles (a tap switches; hold to record).
   const [recMode, setRecMode] = useState<RecordKind>("voice");
+  const recControl = useRef<((kind: RecordKind) => void) | null>(null);
   const [row, setRow] = useState<HTMLDivElement | null>(null);
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -1100,7 +1102,9 @@ function MessageComposer({
           </button>
         </div>
       )}
-      <div ref={setRow} className="vx-glass-strong relative flex items-end gap-1 rounded-[26px] p-1.5" data-testid="composer-row">
+      {/* Update 2 · C7: a round attach button, the field (a pill that grows with the text), a round
+          microphone / video circle button that becomes «send» once there is text. */}
+      <div ref={setRow} className="relative flex items-end gap-2" data-testid="composer-row">
         <input
           ref={input}
           type="file"
@@ -1119,10 +1123,27 @@ function MessageComposer({
           onDevice={() => input.current?.click()}
           onPick={(picked) => void add(picked)}
           max={Math.max(0, VIBEX_FILES_MAX - files.length - pending.length)}
+          extra={
+            editing
+              ? []
+              : [
+                  { id: "voice-hands-free", icon: <RiMic2Fill className="size-6 text-primary" />, label: t("vibex.chat.recordHandsFree"), hint: t("vibex.voice.message"), run: () => recControl.current?.("voice") },
+                  { id: "circle-hands-free", icon: <VideoMessageGlyph className="size-7 text-primary" />, label: t("vibex.chat.recordCircleHandsFree"), hint: t("vibex.circle.message"), run: () => recControl.current?.("circle") },
+                ]
+          }
         />
-        <IconButton label={t("vibex.chat.attach")} onClick={() => setChooser(true)} disabled={!!editing || files.length + pending.length >= VIBEX_FILES_MAX} data-testid="chat-attach">
-          <RiAttachment2 className="size-5" />
-        </IconButton>
+        <button
+          type="button"
+          onClick={() => setChooser(true)}
+          disabled={!!editing || files.length + pending.length >= VIBEX_FILES_MAX}
+          aria-label={t("vibex.chat.attach")}
+          title={t("vibex.chat.attach")}
+          className="vx-glass-strong flex size-11 shrink-0 items-center justify-center rounded-full text-text-secondary transition-transform active:scale-95 disabled:opacity-40"
+          data-testid="chat-attach"
+        >
+          <RiAttachment2 className="size-[21px]" />
+        </button>
+        <div className="vx-glass-strong flex min-h-11 min-w-0 flex-1 items-end rounded-[22px] px-3.5" data-testid="composer-field">
         <textarea
           ref={area}
           rows={1}
@@ -1137,15 +1158,17 @@ function MessageComposer({
             }
           }}
           placeholder={t("vibex.chat.placeholder")}
-          className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-1 py-2.5 text-[15px] leading-[1.35] outline-none placeholder:text-text-tertiary"
+          className="max-h-40 min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] text-[16px] leading-[1.35] outline-none placeholder:text-text-tertiary"
+          enterKeyHint={ff === "desktop" ? "send" : "enter"}
           data-testid="chat-input"
         />
+        </div>
         {editing ? (
           <motion.button
             type="button"
             onClick={() => void submit()}
             disabled={!text.trim() || edit.isPending}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
             whileTap={{ scale: 0.9 }}
             aria-label={t("common.save")}
             data-testid="chat-edit-save"
@@ -1153,13 +1176,16 @@ function MessageComposer({
             {edit.isPending ? <Spinner size={16} /> : <RiCheckLine className="size-[18px]" />}
           </motion.button>
         ) : empty ? (
-          <RecordButton mode={recMode} onMode={setRecMode} onRecorded={sendRecording} barHost={row} />
+          <RecordButton mode={recMode} onMode={setRecMode} onRecorded={sendRecording} barHost={row} control={recControl} />
         ) : (
           <motion.button
             type="button"
             onClick={submit}
             disabled={!canSend}
-            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-[0_6px_16px_-6px_rgba(108,92,255,0.65)] transition-opacity disabled:opacity-35"
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             whileTap={{ scale: 0.9 }}
             aria-label={t("vibex.chat.send")}
             data-testid="chat-send"
@@ -1244,48 +1270,39 @@ function ConversationView({
     menuId: menu?.msg.id ?? null,
     onItems: setItems,
   };
-  const jump = (id: string) => {
-    const el = host?.querySelector<HTMLElement>(`[data-message-id="${id}"]`);
-    if (!el) return;
+  // Update 2 · C1: going to a message (a pin, a search result, an info tab item) loads older pages
+  // until it is there (bounded), scrolls it to the middle and highlights it briefly.
+  const history = useMessages(chatId);
+  const jumping = useRef(0);
+  const jump = async (id: string) => {
+    const run = ++jumping.current;
+    const find = () => host?.querySelector<HTMLElement>(`[data-message-id="${id}"]`) ?? null;
+    let el = find();
+    for (let i = 0; !el && i < 40 && run === jumping.current; i++) {
+      if (!history.hasNextPage) break;
+      const r = await history.fetchNextPage();
+      if (!r.hasNextPage && !r.data?.pages.some((p) => p.items.some((m) => m.id === id))) break;
+      await new Promise((ok) => requestAnimationFrame(() => ok(null)));
+      el = find();
+    }
+    if (run !== jumping.current) return;
+    el = find();
+    if (!el) {
+      toast({ title: t("vibex.pins.notLoaded") });
+      return;
+    }
     el.scrollIntoView({ block: "center", behavior: "smooth" });
-    el.animate([{ backgroundColor: "rgba(127,114,255,0.18)" }, { backgroundColor: "transparent" }], { duration: 1200 });
+    el.animate([{ backgroundColor: "rgba(127,114,255,0.22)" }, { backgroundColor: "rgba(127,114,255,0.22)", offset: 0.4 }, { backgroundColor: "transparent" }], { duration: 1500 });
+    el.setAttribute("data-jumped", "");
+    window.setTimeout(() => el?.removeAttribute("data-jumped"), 1600);
   };
+  const [chatInfo, setChatInfo] = useState(false);
+  const closeChat = useVibex((s) => s.openChat);
   const selected = selection ? items.filter((m) => selection.has(m.id)) : [];
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-testid="conversation" data-chat-id={chatId}>
-      <WindowHeader className="border-b px-2 sm:px-3">
-        {onBack && (
-          <IconButton label={t("common.back")} onClick={onBack} data-testid="chat-back">
-            <RiArrowLeftSLine className="size-7" />
-          </IconButton>
-        )}
-        {c.group ? (
-          <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setInfo(true)} data-testid="group-header">
-            <GroupAvatar title={c.group.title} fileId={c.group.avatarFileId} size={38} />
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] font-semibold">{c.group.title}</span>
-              <span className="block truncate text-[12px] text-text-tertiary">{t("vibex.group.members", { n: c.group.members.length })}</span>
-            </span>
-          </button>
-        ) : (
-          <>
-            <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => push({ kind: "person", id: c.peer!.id })}>
-              <Avatar name={c.peer!.name} userId={c.peer!.id} version={c.peer!.avatarVersion} size={38} />
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-semibold">{c.peer!.name}</span>
-                <span className="block truncate text-[12px] text-text-tertiary">{c.peer!.address}</span>
-              </span>
-            </button>
-            <IconButton label={t("vibex.call.audio")} onClick={() => setCall("audio")} data-testid="chat-call-audio">
-              <RiPhoneLine className="size-5" />
-            </IconButton>
-            <IconButton label={t("vibex.call.video")} onClick={() => setCall("video")} data-testid="chat-call-video">
-              <RiVidiconLine className="size-5" />
-            </IconButton>
-          </>
-        )}
-      </WindowHeader>
-      <PinnedBar chat={c} onJump={jump} />
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="conversation" data-chat-id={chatId}>
+      <ChatHeader chat={c} onBack={onBack} onInfo={() => (c.group ? setInfo(true) : setChatInfo(true))} onProfile={() => c.peer && push({ kind: "person", id: c.peer.id })} />
+      <ChatTopPanel chat={c} onJump={(id) => void jump(id)} nameOf={nameOf} />
       <div ref={setHost} className="relative flex min-h-0 flex-1 flex-col bg-surface-secondary/50">
         <Messages chat={c} actions={listActions} />
         {selection ? (
@@ -1315,6 +1332,25 @@ function ConversationView({
       <ForwardSheet ids={forwarding} onClose={() => setForwarding(null)} onDone={() => setSelection(null)} />
       {c.peer && <CallSheet kind={call} peer={c.peer} onClose={() => setCall(null)} />}
       {c.group && <GroupInfoSheet key={c.group.title + c.group.avatarFileId} chat={c} open={info} onClose={() => setInfo(false)} />}
+      <AnimatePresence>
+        {chatInfo && c.peer && (
+          <ChatInfo
+            chat={c}
+            onClose={() => setChatInfo(false)}
+            onJump={(id) => void jump(id)}
+            onCall={(k) => setCall(k)}
+            onProfile={() => {
+              setChatInfo(false);
+              push({ kind: "person", id: c.peer!.id });
+            }}
+            onDeleted={() => {
+              setChatInfo(false);
+              if (onBack) onBack();
+              else closeChat(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

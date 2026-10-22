@@ -5,7 +5,8 @@ import type { VibexFileDto } from "@voidex/shared";
 import { useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
 import { useFileUrl, useVibexMe } from "./data";
-import { takeOver } from "./media-bubbles";
+import { takeOver, type PlaybackMeta } from "./media-bubbles";
+import { claimPlayback, pausedPlayback, releasePlayback } from "./playback";
 import { usePinch } from "./pinch";
 import { formatDuration } from "./recorder";
 import { useVibex } from "./store";
@@ -48,7 +49,7 @@ function useNearViewport<T extends Element>(margin = "160px") {
  * animates width / height / border-radius; the video inside fills it with
  * object-fit: cover and has its own transform (the zoom).
  */
-export function CircleBubble({ file, durationMs }: { file: VibexFileDto; durationMs: number | null }) {
+export function CircleBubble({ file, durationMs, playback }: { file: VibexFileDto; durationMs: number | null; playback?: PlaybackMeta }) {
   const t = useT();
   const autoplay = useVibexMe().data?.settings.media.autoplay ?? true;
   const [box, near] = useNearViewport<HTMLDivElement>();
@@ -68,7 +69,7 @@ export function CircleBubble({ file, durationMs }: { file: VibexFileDto; duratio
   return (
     <div ref={box} className="relative shrink-0" data-gesture-owner="circle-seek">
       {open ? (
-        <InlineCircle file={file} src={src ?? null} durationMs={durationMs} from={open} onClose={() => setOpen(null)} />
+        <InlineCircle file={file} src={src ?? null} durationMs={durationMs} from={open} onClose={() => setOpen(null)} playback={playback} />
       ) : (
         <button
           ref={small}
@@ -123,8 +124,16 @@ const GROW = { type: "spring", stiffness: 380, damping: 36, mass: 0.9 } as const
  * under it (1x → 1.5x → 2x, kept while Vibex is open). A tap on the video
  * plays / pauses; at the end it closes by itself.
  */
-function InlineCircle({ file, src, durationMs, from, onClose }: { file: VibexFileDto; src: string | null; durationMs: number | null; from: DOMRect; onClose: () => void }) {
+function InlineCircle({ file, src, durationMs, from, onClose, playback }: { file: VibexFileDto; src: string | null; durationMs: number | null; from: DOMRect; onClose: () => void; playback?: PlaybackMeta }) {
   const t = useT();
+  /** Update 2 · C8: the playing element, released when this view goes. */
+  const played0 = useRef<HTMLMediaElement | null>(null);
+  useEffect(
+    () => () => {
+      if (played0.current) releasePlayback(played0.current);
+    },
+    [],
+  );
   const reduced = useReducedMotion();
   // Step 2.12: the move from the small circle: transform only (see CircleBubble).
   const scale = useMotionValue(1);
@@ -288,10 +297,16 @@ function InlineCircle({ file, src, durationMs, from, onClose }: { file: VibexFil
             onClick={toggle}
             onPlay={(e) => {
               takeOver(e.currentTarget);
+              played0.current = e.currentTarget;
+              if (playback) claimPlayback({ ...playback, kind: "circle", el: e.currentTarget });
               setPlaying(true);
             }}
-            onPause={() => setPlaying(false)}
-            onEnded={() => {
+            onPause={(e) => {
+              setPlaying(false);
+              pausedPlayback(e.currentTarget);
+            }}
+            onEnded={(e) => {
+              releasePlayback(e.currentTarget);
               setPlaying(false);
               setPos(1);
               // Step 2.10: at the end it closes by itself; Step 2.12: not while the picture is being zoomed (it stops at the end).

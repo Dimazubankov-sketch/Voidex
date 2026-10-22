@@ -260,7 +260,8 @@ test("Vibex: the pencil starts a group (people, name) and a direct chat as befor
   await pullChats(page);
   await page.getByTestId("chat-search").fill(c.username);
   await page.getByTestId("chat-search-person").first().click();
-  await expect(page.getByTestId("chat-call-audio")).toBeVisible();
+  // A direct chat opened (Update 2: its header shows the person's name and presence).
+  await expect(page.getByTestId("chat-header-title")).toBeVisible();
 });
 
 test("PC dock: an open app that isn't pinned shows while it runs and leaves when closed; pinned apps always stay", async ({ page }) => {

@@ -19,6 +19,7 @@ import {
   type VibexMessageDto,
   type VibexPage,
   type VibexPersonDto,
+  type VibexChatMediaKind,
   type VibexPostDto,
   type VibexProfileDto,
   type VibexChatSearchDto,
@@ -784,6 +785,72 @@ export const forwardMessages = (messageIds: string[], conversationIds: string[])
       return r;
     });
 
+
+/** Update 2 · C1: pin one more message (the chat comes back with every pin). */
+export function useAddPin(chatId: string) {
+  return useMutation({
+    mutationFn: (messageId: string) => api.post<VibexChatDto>(`/api/vibex/chats/${chatId}/pins`, { messageId }),
+    onSuccess: (chat) => {
+      queryClient.setQueryData(vk.chat(chatId), chat);
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
+}
+
+/** Update 2 · C1: unpin one message. */
+export function useRemovePin(chatId: string) {
+  return useMutation({
+    mutationFn: (messageId: string) => api.delete<VibexChatDto>(`/api/vibex/chats/${chatId}/pins/${messageId}`),
+    onMutate: (messageId) => {
+      queryClient.setQueryData<VibexChatDto>(vk.chat(chatId), (c) => (c ? { ...c, pins: c.pins?.filter((p) => p.id !== messageId) } : c));
+    },
+    onSuccess: (chat) => {
+      queryClient.setQueryData(vk.chat(chatId), chat);
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+    onError: () => void queryClient.invalidateQueries({ queryKey: vk.chat(chatId) }),
+  });
+}
+
+/** Update 2 · C4: clear a chat's history for me / for everyone (the chat stays). */
+export function useClearChat() {
+  return useMutation({
+    mutationFn: (v: { id: string; scope: "me" | "all" }) => api.post(`/api/vibex/chats/${v.id}/clear`, { scope: v.scope }),
+    onSuccess: (_r, v) => {
+      queryClient.removeQueries({ queryKey: vk.messages(v.id) });
+      void queryClient.invalidateQueries({ queryKey: vk.messages(v.id) });
+      void queryClient.invalidateQueries({ queryKey: vk.chat(v.id) });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chat-media", v.id] });
+      void queryClient.invalidateQueries({ queryKey: vk.chats });
+    },
+  });
+}
+
+/** Update 2 · C4: search in one chat, newest first, a page at a time. */
+export function useChatSearchIn(chatId: string, q: string) {
+  return useInfiniteQuery({
+    queryKey: ["vibex", "chat-search-in", chatId, q],
+    enabled: q.length > 0,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexPage<VibexMessageDto>>(`/api/vibex/chats/${chatId}/search${qs({ q, cursor: pageParam })}`),
+    getNextPageParam: (last) => last.next,
+    staleTime: 10_000,
+  });
+}
+
+/** Update 2 · C5: one tab of a chat's info page (media, files, music, voice, links, GIFs), a page at a time. */
+export function useChatMedia(chatId: string, kind: VibexChatMediaKind) {
+  return useInfiniteQuery({
+    queryKey: ["vibex", "chat-media", chatId, kind],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => api.get<VibexPage<VibexMessageDto>>(`/api/vibex/chats/${chatId}/media${qs({ kind, cursor: pageParam })}`),
+    getNextPageParam: (last) => last.next,
+    staleTime: 30_000,
+  });
+}
+
+/** Update 2 · C6: the person behind a profile link (@username). */
+export const personByHandle = (handle: string) => api.get<VibexPersonDto>(`/api/vibex/people/by-handle/${encodeURIComponent(handle)}`);
 
 export function usePinMessage(chatId: string) {
   return useMutation({

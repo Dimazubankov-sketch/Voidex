@@ -253,6 +253,8 @@ export type ServerEvent =
   | { type: "vibex.message"; conversationId: string; messageId: string; senderId: string; senderName: string; snippet: string }
   /** Vibex: chats changed (read receipts, pins) — refresh the list. */
   | { type: "vibex.chats"; conversationId?: string }
+  /** Update 2 · C3: someone went online / offline (only to people allowed to see it). */
+  | { type: "vibex.presence"; userId: string }
   /** Vibex: a post was created / edited / liked / commented / removed — refresh feeds. */
   | { type: "vibex.feed"; postId?: string }
   /** Step 2.5 Vibex: a chat message was deleted by its sender (the chat shows a placeholder). */

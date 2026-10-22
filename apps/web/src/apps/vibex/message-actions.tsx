@@ -7,7 +7,6 @@ import {
   RiDeleteBinLine,
   RiFileCopyLine,
   RiPencilLine,
-  RiPushpin2Line,
   RiPushpinLine,
   RiReplyLine,
   RiShareForwardLine,
@@ -18,10 +17,10 @@ import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
 import { useT } from "@/lib/i18n";
 import { mayStart } from "@/os/gesture-priority";
-import { Button, Spinner } from "@/ui/controls";
+import { Button } from "@/ui/controls";
 import { Sheet, toast } from "@/ui/overlays";
 import { VoidexSearchField } from "@/ui/search-field";
-import { forwardMessages, useChats, useDeleteMessages, usePinMessage } from "./data";
+import { forwardMessages, useChats, useDeleteMessages, useAddPin, useRemovePin } from "./data";
 import { ChatAvatar, chatTitle } from "./groups";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -65,7 +64,8 @@ export function MessageMenu({
 }) {
   const t = useT();
   const reduced = useReducedMotion();
-  const pin = usePinMessage(chat.id);
+  const addPin = useAddPin(chat.id);
+  const removePin = useRemovePin(chat.id);
   const del = useDeleteMessages(chat.id);
   const [deleting, setDeleting] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
@@ -93,7 +93,8 @@ export function MessageMenu({
   }, [state, host, deleting]);
 
   const m = state?.msg;
-  const pinned = !!m && chat.pinnedMessage?.id === m.id;
+  // Update 2 · C1: several pins — this message is one of them or not.
+  const pinned = !!m && (chat.pins ? chat.pins.some((p) => p.id === m.id) : chat.pinnedMessage?.id === m.id);
   const item = (id: string, icon: ReactNode, label: string, onClick: () => void, danger = false) => (
     <button
       key={id}
@@ -160,7 +161,7 @@ export function MessageMenu({
                 {chat.canPin &&
                   item(pinned ? "unpin" : "pin", pinned ? <RiUnpinLine className="size-5" /> : <RiPushpinLine className="size-5" />, t(pinned ? "vibex.msg.unpin" : "vibex.msg.pin"), () => {
                     onClose();
-                    pin.mutate(pinned ? null : m.id, { onError: (e) => toast({ title: errorMessage(t, e), tone: "danger" }) });
+                    (pinned ? removePin : addPin).mutate(m.id, { onError: (e) => toast({ title: errorMessage(t, e), tone: "danger" }) });
                   })}
                 {item("forward", <RiShareForwardLine className="size-5" />, t("vibex.msg.forward"), () => (onClose(), onForward([m.id])))}
                 {item("delete", <RiDeleteBinLine className="size-5" />, t("vibex.chat.delete"), () => setDeleting(true), true)}
@@ -333,42 +334,6 @@ export function ForwardSheet({ ids, onClose, onDone }: { ids: string[] | null; o
         </div>
       </div>
     </Sheet>
-  );
-}
-
-/** Step 2.10 — the pinned message under the chat's header: a tap finds it, X unpins (when allowed). */
-export function PinnedBar({ chat, onJump }: { chat: VibexChatDto; onJump: (id: string) => void }) {
-  const t = useT();
-  const pin = usePinMessage(chat.id);
-  const p = chat.pinnedMessage;
-  if (!p) return null;
-  const what = p.kind === "voice" ? t("vibex.voice.message") : p.kind === "circle" ? t("vibex.circle.message") : p.text || t("vibex.chats.file");
-  return (
-    <div className="flex shrink-0 items-center gap-2 border-b bg-surface px-3 py-1.5" data-testid="pinned-bar">
-      <button type="button" onClick={() => onJump(p.id)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
-        <span className="h-8 w-[3px] shrink-0 rounded-full bg-primary" aria-hidden />
-        <span className="min-w-0">
-          <span className="flex items-center gap-1 text-[12.5px] font-semibold text-primary">
-            <RiPushpin2Line className="size-3.5" /> {t("vibex.msg.pinned")}
-          </span>
-          <span className="block truncate text-[13.5px] text-text-secondary" data-testid="pinned-text">
-            {what}
-          </span>
-        </span>
-      </button>
-      {chat.canPin && (
-        <button
-          type="button"
-          onClick={() => pin.mutate(null)}
-          aria-label={t("vibex.msg.unpin")}
-          title={t("vibex.msg.unpin")}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover"
-          data-testid="pinned-unpin"
-        >
-          {pin.isPending ? <Spinner size={14} /> : <RiCloseLine className="size-4" />}
-        </button>
-      )}
-    </div>
   );
 }
 

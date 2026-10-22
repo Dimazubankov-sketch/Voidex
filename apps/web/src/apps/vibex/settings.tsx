@@ -3,6 +3,7 @@ import { RiChat3Line, RiImageLine, RiLockLine, RiNotification3Line, RiUserForbid
 import type { VibexAudience, VibexSettings } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
+import { toast } from "@/ui/overlays";
 import { useT, type MessageKey } from "@/lib/i18n";
 import { Skeleton, Switch } from "@/ui/controls";
 import { useProfile, useUpdateSettings, useVibexMe } from "./data";
@@ -58,6 +59,26 @@ export function VibexSettingsScreen() {
           testId="vs-posts"
         />
         <Toggle label={t("vibex.settings.readReceipts")} hint={t("vibex.settings.readReceiptsHint")} checked={s.privacy.readReceipts} onChange={(readReceipts) => privacy({ readReceipts })} testId="vs-receipts" />
+        {/* Update 2 · C3: who sees my presence (enforced by the server: «nobody» shows «был(а) недавно» to all). */}
+        <Choice<"everyone" | "nobody">
+          label={t("vibex.settings.presence")}
+          value={s.privacy.presence ?? "everyone"}
+          options={[
+            ["everyone", "vibex.settings.everyone"],
+            ["nobody", "vibex.settings.nobody"],
+          ]}
+          onChange={(presence) => privacy({ presence })}
+          testId="vs-presence"
+        />
+        <p className="-mt-1 px-4 pb-2 text-[12.5px] text-text-tertiary">{t("vibex.settings.presenceHint")}</p>
+        {/* A future paid feature for bots: not available yet, nothing can turn it on. */}
+        <div onClick={() => toast({ title: t("vibex.inDevelopment") })} className="flex w-full cursor-default items-center gap-3 px-4 py-3 text-left opacity-70" data-testid="vs-always-online">
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14.5px] text-text">{t("vibex.settings.alwaysOnline")}</span>
+            <span className="block text-[12.5px] text-text-tertiary">{t("vibex.settings.alwaysOnlineHint")}</span>
+          </span>
+          <Switch checked={false} onChange={() => undefined} label={t("vibex.settings.alwaysOnline")} />
+        </div>
         <Blocked ids={s.privacy.blocked} onUnblock={(id) => privacy({ blocked: s.privacy.blocked.filter((x) => x !== id) })} />
       </Group>
 

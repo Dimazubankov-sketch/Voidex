@@ -55,6 +55,8 @@ export const users = pgTable(
     passcodeSetupRequired: boolean("passcode_setup_required").notNull().default(false),
     /** Auto-lock after this many minutes without activity (0 = only on start / manually). */
     autoLockMinutes: integer("auto_lock_minutes").notNull().default(5),
+    /** Update 2 · C3: when the account's last device went offline (presence; shown only as its privacy allows). */
+    lastSeenAt: ts("last_seen_at"),
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
@@ -476,6 +478,25 @@ export const vibexConversations = pgTable(
     pinnedMessageId: uuid("pinned_message_id").references((): AnyPgColumn => vibexMessages.id, { onDelete: "set null" }),
   },
   (t) => [uniqueIndex("vibex_conversations_direct_uq").on(t.directKey)],
+);
+
+/**
+ * Update 2 · C1: the messages pinned in a chat (several; for everyone in it). The conversation's
+ * `pinned_message_id` keeps the newest one, so an older app still shows a pin.
+ */
+export const vibexPins = pgTable(
+  "vibex_pins",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => vibexConversations.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references((): AnyPgColumn => vibexMessages.id, { onDelete: "cascade" }),
+    pinnedBy: uuid("pinned_by").references(() => users.id, { onDelete: "set null" }),
+    pinnedAt: ts("pinned_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.messageId] })],
 );
 
 /** Membership, with each member's read marker and their own pinned order. */

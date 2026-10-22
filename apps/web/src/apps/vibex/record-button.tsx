@@ -45,6 +45,7 @@ export function RecordButton({
   onMode,
   onRecorded,
   barHost,
+  control,
 }: {
   mode: RecordKind;
   onMode: (m: RecordKind) => void;
@@ -52,6 +53,8 @@ export function RecordButton({
   onRecorded: (kind: RecordKind, rec: Recording) => Promise<void>;
   /** The composer row: the recording bar is drawn over it. */
   barHost: HTMLElement | null;
+  /** Update 2 · C7: lets the composer start a hands-free (locked) recording without any gesture. */
+  control?: React.MutableRefObject<((kind: RecordKind) => void) | null>;
 }) {
   const t = useT();
   const ff = useFormFactor();
@@ -84,6 +87,13 @@ export function RecordButton({
     },
     [voice, circle, t],
   );
+  if (control) {
+    control.current = (kind) => {
+      if (stateRef.current !== "idle") return;
+      onMode(kind);
+      void begin(kind, true);
+    };
+  }
   const cancel = useCallback(() => {
     rec.cancel();
     setState("idle");
@@ -222,7 +232,7 @@ export function RecordButton({
       <motion.button
         type="button"
         className={cx(
-          "relative z-20 flex size-10 shrink-0 touch-none select-none items-center justify-center rounded-full text-white",
+          "relative z-20 flex size-11 shrink-0 touch-none select-none items-center justify-center rounded-full text-white shadow-[0_6px_16px_-6px_rgba(108,92,255,0.65)]",
           state === "cancel-zone" ? "bg-danger" : "bg-primary",
         )}
         style={{ x: drag.x * 0.5, y: drag.y * 0.5 }}

@@ -17,6 +17,8 @@ import {
   RiUserFollowLine,
   RiUserForbidLine,
   RiUserSearchLine,
+  RiQrCodeLine,
+  RiShareForwardLine,
 } from "@remixicon/react";
 import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -47,6 +49,8 @@ import { PublicationsGrid } from "./publications";
 import { useVibex } from "./store";
 import { StoryHalo, StoryViewer } from "./stories";
 import { AvatarViewer } from "./avatar-viewer";
+import { PresenceDot, PresenceLine } from "./presence";
+import { ProfileQrSheet, shareProfile } from "./qr";
 
 /** Soft VOIDEX cover when the person has none (no stock photos): milk and two violets. */
 const COVER = "radial-gradient(80% 120% at 85% 0%, #cbbffb 0%, rgba(203,191,251,0) 60%), radial-gradient(60% 90% at 10% 100%, #e6dffb 0%, rgba(230,223,251,0) 70%), #f6f4fc";
@@ -109,6 +113,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
   const [busy, setBusy] = useState(false);
   const [list, setList] = useState<"followers" | "following" | null>(null);
   const [menu, setMenu] = useState(false);
+  const [qr, setQr] = useState(false);
   const [photo, setPhoto] = useState<{ file: File; shape: PhotoShape } | null>(null);
   const [uploading, setUploading] = useState<PhotoShape | null>(null);
   // Step 2.11: the person's unseen story, opened from the ring on the avatar.
@@ -181,6 +186,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                 <Avatar name={person.name} userId={person.id} version={person.avatarVersion} size={104} />
               </span>
             </StoryHalo>
+            {!profile.me && <PresenceDot presence={person.presence} size={20} className="bottom-[9px] right-[9px]" />}
             {uploading === "circle" && (
               <span className="absolute inset-[5px] grid place-items-center rounded-full bg-black/30">
                 <Spinner size={18} />
@@ -226,6 +232,15 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                 <>
                   <button type="button" aria-hidden tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setMenu(false)} />
                   <div className="vx-glass-strong absolute right-0 top-12 z-20 w-56 rounded-2xl p-1.5" role="menu" data-testid="profile-menu">
+                    {/* Update 2 · C6: the profile's link and its QR code (mine and other people's). */}
+                    <button type="button" role="menuitem" onClick={() => (setMenu(false), void shareProfile(t, person))} className={menuItem} data-testid="profile-menu-share">
+                      <RiShareForwardLine className="size-[18px] text-text-secondary" />
+                      {t("vibex.qr.share")}
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => (setMenu(false), setQr(true))} className={menuItem} data-testid="profile-menu-qr">
+                      <RiQrCodeLine className="size-[18px] text-text-secondary" />
+                      {t("vibex.qr.title")}
+                    </button>
                     {profile.me ? (
                       <>
                         <button type="button" role="menuitem" onClick={() => (setMenu(false), coverInput.current?.click())} className={menuItem} data-testid="profile-menu-cover">
@@ -271,6 +286,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
           <p className="mt-0.5 break-all text-[15px] text-text-secondary" data-selectable data-testid="profile-email">
             {person.address}
           </p>
+          {!profile.me && <PresenceLine presence={person.presence} className="mt-1 text-[13px]" />}
           {profile.followsMe && <span className="mt-1.5 inline-block rounded-full bg-surface-secondary px-2.5 py-0.5 text-[12px] text-text-secondary">{t("vibex.profile.followsYou")}</span>}
           {profile.city && (
             <p className="mt-2 flex items-center gap-1.5 text-[15px] text-text-secondary" data-testid="profile-city">
@@ -330,6 +346,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
       )}
       <StoryViewer groups={storyGroups} startPerson={story} onClose={() => setStory(null)} onArchive={() => setStory(null)} />
       <AvatarViewer person={photoOpen ? person : null} onClose={() => setPhotoOpen(false)} />
+      <ProfileQrSheet person={qr ? person : null} onClose={() => setQr(false)} />
     </div>
   );
 }
