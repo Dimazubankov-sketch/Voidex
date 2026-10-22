@@ -166,9 +166,10 @@ test("F: a held icon / widget grows a little and settles back; reduced motion ke
   await page.mouse.down();
   await page.waitForTimeout(300);
   await expect(tile).toHaveAttribute("data-pressed", "");
-  const scale = await tile.evaluate((el) => getComputedStyle(el).scale);
-  expect(Number(scale)).toBeGreaterThan(1.03);
-  expect(Number(scale)).toBeLessThan(1.06);
+  // The scale eases in (420 ms) from the moment the press is noticed; slow runners notice it later.
+  const scaleNow = () => tile.evaluate((el) => Number(getComputedStyle(el).scale));
+  await expect.poll(scaleNow, { timeout: 3000 }).toBeGreaterThan(1.03);
+  expect(await scaleNow()).toBeLessThan(1.06);
   await page.mouse.up();
   await expect(tile).not.toHaveAttribute("data-pressed", "");
   expect(await page.locator('[data-cell]:has([data-testid="app-notes"])').getAttribute("data-cell")).toBe(cellBefore);
