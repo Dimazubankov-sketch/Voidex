@@ -127,6 +127,8 @@ export function useHomeGestures(opts: GestureOptions) {
     const start = { x: e.clientX, y: e.clientY };
     let last = { x: e.clientX, t: performance.now() };
     let vx = 0;
+    /** B8: the finger's speed over its last ~80 ms (one sample is too noisy for a flick). */
+    const samples: { x: number; t: number }[] = [{ x: e.clientX, t: performance.now() }];
     let mode: Mode = "pending";
 
     // Dwell timers: an action fires when the pointer rests on the same target.
@@ -356,7 +358,10 @@ export function useHomeGestures(opts: GestureOptions) {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
       const now = performance.now();
-      vx = ((ev.clientX - last.x) / Math.max(1, now - last.t)) * 1000;
+      samples.push({ x: ev.clientX, t: now });
+      while (samples.length > 2 && now - samples[0]!.t > 80) samples.shift();
+      const first = samples[0]!;
+      vx = now - first.t > 4 ? ((ev.clientX - first.x) / (now - first.t)) * 1000 : vx;
       last = { x: ev.clientX, t: now };
       const o = optsRef.current;
       switch (mode) {
@@ -437,7 +442,7 @@ export function useHomeGestures(opts: GestureOptions) {
       else if (mode === "marquee") ui().setMarquee(null);
       // A plain click on a selected icon opens it and ends the selection.
       else if (pcMouse && (mode === "pending" || mode === "armed") && item && ui().selected.length) ui().setSelected([]);
-      else if (mode === "swipe") optsRef.current.pager?.end(ev.clientX - start.x, vx);
+      else if (mode === "swipe") optsRef.current.pager?.end(ev.clientX - start.x, performance.now() - last.t > 90 ? 0 : vx);
     };
     // Esc during a drag cancels it: the pending drop (dock, cell, folder) is dropped.
     const key = (ev: KeyboardEvent) => {

@@ -81,8 +81,11 @@ test("a sideways swipe: the neighbour comes in from where it was peeking (no jum
     w.__xs = [];
     const el = document.querySelector('[data-testid="window-settings"]') as HTMLElement;
     const tick = () => {
-      const m = getComputedStyle(el).transform;
-      w.__xs.push(m === "none" ? 0 : Number(m.match(/matrix\(([^)]+)\)/)![1]!.split(",")[4]));
+      const cs = getComputedStyle(el);
+      const m = cs.transform;
+      // Frames before the release show its hidden pose (by its icon, transparent): not part of the slide-in.
+      if (Number(cs.opacity) > 0.5) w.__xs.push(m === "none" ? 0 : Number(m.match(/matrix\(([^)]+)\)/)![1]!.split(",")[4]));
+      else w.__xs.push(0);
       if (w.__xs.length < 30) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);

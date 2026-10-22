@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { RiArrowLeftSLine, RiCheckLine, RiCloudOffLine, RiComputerLine, RiSmartphoneLine } from "@remixicon/react";
 import { serialize } from "@voidex/files/model";
 import type { MediaItem } from "@voidex/media/model";
@@ -33,6 +33,7 @@ export function AttachSourceSheet({
   max,
   testId = "attach-source",
   sources = ["files", "media", "device"],
+  extra = [],
 }: {
   open: boolean;
   onClose: () => void;
@@ -41,6 +42,8 @@ export function AttachSourceSheet({
   max: number;
   testId?: string;
   sources?: AttachSource[];
+  /** Update 2 · C7: more rows of the caller's own (e.g. Vibex's hands-free recording), after the sources. */
+  extra?: { id: string; icon: ReactNode; label: string; hint: string; run: () => void }[];
 }) {
   const t = useT();
   // One VOIDEX source alone opens straight on it (no way back to a chooser it doesn't have).
@@ -61,7 +64,19 @@ export function AttachSourceSheet({
   return (
     <Sheet open={open} onClose={onClose} title={title} width={460} testId={testId} centered>
       {step === "choose" ? (
-        <Choose testId={testId} onStep={setStep} onDevice={device} sources={sources} />
+        <Choose
+          testId={testId}
+          onStep={setStep}
+          onDevice={device}
+          sources={sources}
+          extra={extra.map((x) => ({
+            ...x,
+            run: () => {
+              onClose();
+              x.run();
+            },
+          }))}
+        />
       ) : step === "files" ? (
         <FilesSource
           testId={testId}
@@ -89,10 +104,10 @@ export function AttachSourceSheet({
   );
 }
 
-function Choose({ onStep, onDevice, testId, sources }: { onStep: (s: Step) => void; onDevice?: () => void; testId: string; sources: AttachSource[] }) {
+function Choose({ onStep, onDevice, testId, sources, extra = [] }: { onStep: (s: Step) => void; onDevice?: () => void; testId: string; sources: AttachSource[]; extra?: { id: string; icon: ReactNode; label: string; hint: string; run: () => void }[] }) {
   const t = useT();
   const ff = useFormFactor();
-  const rows = [
+  const rows: { id: string; icon: ReactNode; label: string; hint: string; run: () => void }[] = [
     { id: "files", icon: <FilesGlyph className="size-8" />, label: t("attach.files"), hint: t("attach.filesHint"), run: () => onStep("files") },
     { id: "media", icon: <MediaGlyph className="size-8" />, label: t("attach.media"), hint: t("attach.mediaHint"), run: () => onStep("media") },
     {
@@ -103,6 +118,7 @@ function Choose({ onStep, onDevice, testId, sources }: { onStep: (s: Step) => vo
       run: () => onDevice?.(),
     },
   ].filter((r) => sources.includes(r.id as AttachSource));
+  rows.push(...extra);
   return (
     <div className="flex flex-col gap-2" data-testid={`${testId}-options`}>
       {rows.map((r) => (

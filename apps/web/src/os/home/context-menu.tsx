@@ -22,7 +22,7 @@ import {
   RiUnpinLine,
   RiImageLine,
   RiApps2Fill,
-  RiArrowGoBackLine,
+  RiSubtractLine,
   RiLayoutColumnLine,
 } from "@remixicon/react";
 import {
@@ -35,10 +35,16 @@ import {
   STACK_MAX,
   deleteWidgetHalf,
   splitWidgetCarousel,
-  unstackActive,
+  deleteStackItem,
   widgetColumns,
   sameItem,
   unpinFromDock,
+  isWidgetCarousel,
+  isWidgetStack,
+  resizeWidget,
+  widgetSizesOf,
+  widgetKey,
+  type WidgetSize,
   type AppId,
   type LayoutItem,
   type WorkspaceLayout,
@@ -51,6 +57,7 @@ import { currentView, setView } from "./brush-menu";
 import { addToDesktop, openWallpapers, addToFolder, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { geometryFor } from "./desktop-geometry";
+import { captureGridFlip, removeAnimated } from "./grid-flip";
 import { toast } from "@/ui/overlays";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
@@ -234,26 +241,21 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         const isStack = col.length > 1;
         const geometry = geometryFor({ surface: w.surface });
         const list: Entry[] = [];
-        if (col.length < STACK_MAX)
+        if (col.length < STACK_MAX && w.size !== "w")
           list.push({ id: "stack-add", label: t("widgets.add"), icon: <RiAddLine />, onSelect: () => ui().setWidgetsOpen(true, null, { id, half }) });
         if (isStack)
           list.push({
-            id: "stack-take-out",
-            label: t("widgets.takeOut"),
-            icon: <RiArrowGoBackLine />,
-            onSelect: () => {
-              let failed = false;
-              updateLayout((l) => {
-                const r = unstackActive(l, id, half, geometry);
-                failed = !!r.error;
-                return r.layout ?? l;
-              });
-              if (failed) toast({ title: t("widgets.noRoom") });
-            },
+            // B3: the widget in view leaves the stack and is gone (its app and data stay); the rest stay.
+            id: "stack-remove-item",
+            label: t("widgets.removeFromStack"),
+            icon: <RiSubtractLine />,
+            onSelect: () =>
+              removeAnimated([document.querySelector<HTMLElement>(`[data-widget="${id}"] [data-widget-half="${half}"] [data-stack-pos="0"], [data-widget="${id}"] [data-stack-pos="0"]`)], () =>
+                updateLayout((l) => deleteStackItem(l, id, half).layout ?? l),
+              ),
           });
         if (cols.length > 1)
           list.push({ id: "carousel-split", label: t("widgets.splitCarousel"), icon: <RiLayoutColumnLine />, onSelect: () => updateLayout((l) => splitWidgetCarousel(l, id, geometry)) });
-        list.push({ id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) });
         if (isStack) list.push({ id: "stack-delete", label: t("widgets.deleteStack"), icon: <RiDeleteBinLine />, danger: true, onSelect: () => ui().setWidgetConfirm({ id, half, kind: "stack" }) });
         else
           list.push({
@@ -262,7 +264,11 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
             icon: <RiDeleteBinLine />,
             danger: true,
             // A single widget in a carousel leaves it; the other half stays where it is.
-            onSelect: () => updateLayout((l) => (cols.length > 1 ? deleteWidgetHalf(l, id, half, geometry) : removeWidget(l, id))),
+            onSelect: () =>
+              removeAnimated(
+                [cols.length > 1 ? document.querySelector<HTMLElement>(`[data-widget="${id}"] [data-widget-half="${half}"]`) : widgetKey(id)],
+                () => updateLayout((l) => (cols.length > 1 ? deleteWidgetHalf(l, id, half, geometry) : removeWidget(l, id))),
+              ),
           });
         return list;
       }
@@ -345,6 +351,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
   }
 
   const shown = sub ? subEntries() : entries;
+  const sizeBlock = target.kind === "widget" ? <WidgetSizes id={target.id} layout={layout} onDone={close} /> : null;
   const subTitle =
     sub === "folders" ? t("home.addToFolder") : sub === "spaces" ? t("home.moveToSpace") : sub === "view" ? t("appearance.view") : "";
 
@@ -371,6 +378,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
             {subTitle}
           </button>
         )}
+        {!sub && sizeBlock}
         {shown.map((e) => (
           <button
             key={e.id}
@@ -395,5 +403,53 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           </button>
         ))}
     </motion.div>
+  );
+}
+
+/**
+ * A2: the size picker at the top of a widget's menu: only the sizes this widget really has (none
+ * when it has one). The widget and its neighbours glide to the new layout; no room: a short note and
+ * nothing changes.
+ */
+function WidgetSizes({ id, layout, onDone }: { id: string; layout: WorkspaceLayout; onDone: () => void }) {
+  const t = useT();
+  const w = layout.widgets.find((x) => x.id === id);
+  if (!w || isWidgetStack(w) || isWidgetCarousel(w)) return null;
+  const sizes = widgetSizesOf(w.type);
+  if (sizes.length < 2) return null;
+  const current = w.size ?? "s";
+  const pick = (size: WidgetSize) => {
+    onDone();
+    if (size === current) return;
+    let failed = false;
+    captureGridFlip();
+    updateLayout((l) => {
+      const r = resizeWidget(l, id, size, geometryFor({ surface: w.surface }));
+      failed = !!r.error;
+      return r.layout ?? l;
+    });
+    if (failed) toast({ title: t("widgets.noRoomResize") });
+  };
+  return (
+    <div role="group" aria-label={t("widgets.size")} className="mb-1 flex gap-1.5 border-b border-[var(--glass-border)] px-1.5 pb-2 pt-1" data-testid="widget-sizes">
+      {sizes.map((size) => {
+        const on = size === current;
+        return (
+          <button
+            key={size}
+            type="button"
+            role="menuitemradio"
+            aria-checked={on}
+            aria-label={t(size === "w" ? "widgets.sizeWide" : "widgets.sizeSmall")}
+            onClick={() => pick(size)}
+            className={cx("flex h-12 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors", on ? "bg-primary/12 text-primary" : "text-text-secondary hover:bg-surface-hover")}
+            data-testid={`widget-size-${size}`}
+          >
+            <span aria-hidden className={cx("block rounded-[4px] border-[1.5px] border-current", size === "w" ? "h-[12px] w-[24px]" : "h-[12px] w-[12px]")} />
+            {size === "w" ? "4 × 2" : "2 × 2"}
+          </button>
+        );
+      })}
+    </div>
   );
 }

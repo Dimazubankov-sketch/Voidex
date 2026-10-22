@@ -11,6 +11,7 @@ import { appLabel, removeAppsFromDesktop } from "./actions";
 import { AppGlyph } from "./icons";
 import { useWorkspaceLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
+import { removeAnimated } from "./grid-flip";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 /** The second step's "Удалить" ignores taps this soon after it appears (no accidental double click). */
@@ -110,7 +111,11 @@ export function RemoveAppsConfirm() {
     if (Date.now() - armedAt.current < ARM_MS) return;
     const remove: AppId[] = [...ids];
     useHomeUi.setState((s) => ({ removeConfirm: null, removeSel: s.removeSel.filter((a) => !remove.includes(a)) }));
-    removeAppsFromDesktop(remove);
+    // B7: the icons shrink away, then the others glide into their cells.
+    removeAnimated(
+      remove.map((id) => `app:${id}`),
+      () => removeAppsFromDesktop(remove),
+    );
   };
 
   return createPortal(

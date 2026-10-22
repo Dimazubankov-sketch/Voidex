@@ -402,3 +402,28 @@ the first widget. `normalizeLayout` keeps them consistent (known types, unique i
   finger after the menu opened picks the widget up as before.
 - Removing a stack or carousel from edit mode asks first; apps and their data are never removed.
 - Phone pages stay bounded (stage A2): stacks and carousels are placed only where they are fully visible.
+
+## Update 2 — stage B: widgets on the home screen
+
+- **B1 · phone edges.** On a phone page a widget narrower than the page stands at its left or right edge
+  only (`gridPlacement(…, { edges })`, `freeBlock`, `placeInCell`). A drop goes to the side the widget's
+  centre is over; a widget stored in the middle by an older version is shown at the nearest edge. PC
+  desktops keep any column.
+- **B2 · endless stacks.** The stack is a small pager (no native scroll, no scrollbar): every widget
+  stays mounted on a ring and only transforms move, so 1 → 2 → 3 → 1 and back runs with no jump. One
+  swipe or one wheel gesture is one step; the click that ends a swipe is swallowed. Echoes of this
+  device's own saves never jump the stack back.
+- **B3 · menu.** Widgets have no «Изменить рабочий стол». «Удалить из стопки» (`deleteStackItem`) removes
+  the widget in view (it is not put on the desktop; the app and its data stay); one left = a widget.
+- **B4 · no loss.** A widget dropped on one of its size swaps with it; a drop that would push anything
+  below a bounded page is refused (`placeInCell`). Joining (stack / «+») glides into place.
+- **B5 · across pages.** Held at a phone page's edge (600 ms) or over a PC desktop tab (420 ms), a widget
+  goes to that page / desktop and stays in the hand there (the drag is handed to its card on the new page).
+  No room there: it stays where it was, still held, with a short note.
+- **B6 · calculator.** A press on a widget key is the key's own: the widget does not grow, no menu, no
+  drag; keys answer at once (110 ms scale). A sideways swipe from a key still turns the page.
+- **B7 · removal.** A confirmed removal shrinks the app / widget away (180 ms, scale + fade), then the
+  neighbours glide into the free cells (`removeAnimated`, `captureGridFlip`). Reduced motion: at once.
+- **B8 · pages.** The page follows the finger; on release the glide starts at once with the finger's
+  speed (a spring), the speed is measured over the last 80 ms; a flick turns the page with little
+  travel, a slow short drag does not. A sideways swipe that starts on a widget turns the page too.

@@ -1,9 +1,10 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { widgetCells, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type GridGeometry, type PlacedCell, type WorkspaceLayout } from "@voidex/shared";
 import type { DesktopGrid } from "./desktop-geometry";
 import type { IconMetrics, LabelStyle } from "./icons";
 import { useHomeUi } from "./ui-store";
+import { useGridFlip } from "./grid-flip";
 
 /**
  * The home grid (Step 2.3) — phone pages and PC desktops alike. Every icon and
@@ -92,10 +93,12 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
       const c = all[widgetKey(w.id)];
       return c ? [[widgetKey(w.id), c]] : [];
     }));
-    return gridPlacement(cols, items.map(layoutItemKey), cells, blocks, geometry?.rows);
+    return gridPlacement(cols, items.map(layoutItemKey), cells, blocks, geometry?.rows, { edges: place.surface === "mobile" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, sorted, items, cols, geometry?.rows, JSON.stringify(place)]);
 
+  const gridRef = useRef<HTMLDivElement>(null);
+  useGridFlip(gridRef, placed);
   let rows = 0;
   for (const p of placed.values()) rows = Math.max(rows, p.r + p.h);
   // While something is dragged here the grid grows to the row under the pointer (PC desktops grow downwards).
@@ -112,6 +115,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
 
   return (
     <div
+      ref={gridRef}
       className={cx("relative grid", fixed ? "size-full" : "mx-auto")}
       style={
         fixed
@@ -138,7 +142,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         const p = placed.get(widgetKey(w.id));
         if (!p) return null;
         return (
-          <div key={w.id} style={area(p)} className={cx("relative min-h-0 min-w-0", fixed ? "flex items-start justify-center" : "flex items-center justify-center")} data-widget-cell={w.id} data-cell={`${p.c},${p.r}`}>
+          <div key={w.id} style={area(p)} className={cx("relative min-h-0 min-w-0", fixed ? "flex items-start justify-center" : "flex items-center justify-center")} data-widget-cell={w.id} data-flip={widgetKey(w.id)} data-cell={`${p.c},${p.r}`}>
             {renderWidget(
               w.id,
               // PC: a widget fills its cells (with a small inset), like the icons spread over theirs.
@@ -153,7 +157,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
         const p = placed.get(layoutItemKey(item));
         if (!p) return null;
         return (
-          <div key={layoutItemKey(item)} style={{ ...area(p), ...(fixed ? { paddingTop: spread(p.r) } : {}) }} className={cx("flex min-h-0 min-w-0 justify-center", fixed && "items-start")} data-cell={`${p.c},${p.r}`}>
+          <div key={layoutItemKey(item)} style={{ ...area(p), ...(fixed ? { paddingTop: spread(p.r) } : {}) }} className={cx("flex min-h-0 min-w-0 justify-center", fixed && "items-start")} data-flip={layoutItemKey(item)} data-cell={`${p.c},${p.r}`}>
             {renderItem(item, j)}
           </div>
         );

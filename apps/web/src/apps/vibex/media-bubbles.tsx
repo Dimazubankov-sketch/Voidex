@@ -4,6 +4,7 @@ import type { VibexFileDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useT } from "@/lib/i18n";
 import { Spinner } from "@/ui/controls";
+import { claimPlayback, pausedPlayback, releasePlayback } from "./playback";
 import { useFileUrl } from "./data";
 import { formatDuration } from "./recorder";
 
@@ -101,12 +102,27 @@ function usePeaks(src: string | undefined, fallback: number[]) {
 }
 
 /** Voice message: play / pause, waveform with progress, duration. */
-export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; durationMs: number | null; mine: boolean }) {
+/** Update 2 · C8: which message a player belongs to (for the playback bar of its chat). */
+export interface PlaybackMeta {
+  chatId: string;
+  messageId: string;
+  senderName: string;
+}
+
+export function VoiceBubble({ file, durationMs, mine, playback }: { file: VibexFileDto; durationMs: number | null; mine: boolean; playback?: PlaybackMeta }) {
   const t = useT();
   const { data: src } = useFileUrl(file.id);
   const fallback = useMemo(() => seededBars(file.id), [file.id]);
   const peaks = usePeaks(src, fallback);
   const audio = useRef<HTMLAudioElement>(null);
+  /** The element that played (refs are already cleared when the cleanup runs). */
+  const played0 = useRef<HTMLMediaElement | null>(null);
+  useEffect(
+    () => () => {
+      if (played0.current) releasePlayback(played0.current);
+    },
+    [],
+  );
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
   const [played, setPlayed] = useState(() => mine || playedSet().has(file.id));
@@ -201,16 +217,22 @@ export function VoiceBubble({ file, durationMs, mine }: { file: VibexFileDto; du
           }}
           onPlay={(e) => {
             takeOver(e.currentTarget);
+            played0.current = e.currentTarget;
+            if (playback) claimPlayback({ ...playback, kind: "voice", el: e.currentTarget });
             setPlaying(true);
             if (!played) {
               markPlayed(file.id);
               setPlayed(true);
             }
           }}
-          onPause={() => setPlaying(false)}
-          onEnded={() => {
+          onPause={(e) => {
+            setPlaying(false);
+            pausedPlayback(e.currentTarget);
+          }}
+          onEnded={(e) => {
             setPlaying(false);
             setPos(0);
+            releasePlayback(e.currentTarget);
           }}
           onTimeUpdate={(e) => {
             const a = e.currentTarget;

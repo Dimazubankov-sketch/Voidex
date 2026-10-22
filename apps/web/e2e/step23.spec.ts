@@ -448,10 +448,12 @@ test("vibex chat: text, file, voice message recorded from the microphone; reply;
   await page.getByTestId("chat-input").fill("Это ответ");
   await page.getByTestId("chat-send").click();
   await expect(page.getByTestId("message-reply-quote")).toHaveCount(1);
-  // Calls: honest "not available", no call state.
-  await page.getByTestId("chat-call-audio").click();
+  // Calls: honest "not available", no call state (Update 2: from the chat's info page).
+  await page.getByTestId("chat-header-title").click();
+  await page.getByTestId("info-call").click();
   await expect(page.getByTestId("call-unavailable")).toBeVisible();
   await page.keyboard.press("Escape");
+  await page.getByTestId("chat-info-back").click();
 
   // B: one collapsed notification for the chat; it opens the conversation.
   await bPage.getByTestId("bell").click();

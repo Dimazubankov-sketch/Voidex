@@ -44,14 +44,14 @@ test("Mail: an edge swipe pulls the folders drawer out with the finger; a small 
   // Swipe left on the screen closes it.
   await page.getByTestId("mail-drawer-root-catcher").click({ position: { x: 40, y: 300 } });
   await expect(root).not.toHaveAttribute("data-open", "true");
-  await page.waitForTimeout(600);
-  expect((await screen.boundingBox())!.x).toBeLessThan(2);
+  // The screen springs back; on a slow machine it can still be settling, so wait for it.
+  await expect.poll(async () => (await screen.boundingBox())!.x).toBeLessThan(2);
 
   // A small move: back to its place, the drawer stays closed.
   await edgeDrag(page, 40);
   await page.waitForTimeout(500);
   await expect(root).not.toHaveAttribute("data-open", "true");
-  expect((await screen.boundingBox())!.x).toBeLessThan(2);
+  await expect.poll(async () => (await screen.boundingBox())!.x).toBeLessThan(2);
 });
 
 test("Mail: the search button grows into the field in place; X clears and folds it back", async ({ page }) => {

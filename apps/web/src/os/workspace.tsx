@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { RiWifiOffLine } from "@remixicon/react";
 import { useFormFactor } from "@/lib/form-factor";
-import { useT } from "@/lib/i18n";
+import { t as translate, useT } from "@/lib/i18n";
+import { toast } from "@/ui/overlays";
+import { api } from "@/lib/api";
 import { takeReopenApp } from "@/lib/known-accounts";
 import { useSession } from "@/lib/session";
 import { ApprovalPrompt } from "./approval-prompt";
@@ -94,6 +96,20 @@ export function Workspace() {
     window.addEventListener("hashchange", follow);
     return () => window.removeEventListener("hashchange", follow);
   }, [hydrated]);
+
+  // Update 2 · C6: profile links / QR codes (/u/<username>) open that person in Vibex. Signed out, the
+  // link waits through the sign-in (the path stays) and opens right after.
+  useEffect(() => {
+    if (!hydrated) return;
+    const m = /^\/u\/([^/?#]+)\/?$/.exec(window.location.pathname);
+    if (!m) return;
+    history.replaceState(null, "", "/" + window.location.search + window.location.hash);
+    const handle = decodeURIComponent(m[1]!);
+    api
+      .get<{ id: string }>(`/api/vibex/people/by-handle/${encodeURIComponent(handle)}`)
+      .then((p) => useWM.getState().open("vibex", { params: { userId: p.id } }))
+      .catch(() => toast({ title: translate("vibex.qr.notFound"), tone: "danger" }));
+  }, [hydrated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Notes deep links (Step 2.6): #notes/share/<token>, #notes/project/<id>, #notes/doc/<id>.
   // Opening still needs the session and access on the server (else Notes says so).

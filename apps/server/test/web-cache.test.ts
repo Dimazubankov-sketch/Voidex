@@ -65,3 +65,12 @@ describe("serving the built client", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
   });
 });
+
+describe("Update 2 · C6: profile links", () => {
+  it("/u/<username> is a page (a dot in the username included); nothing else under /u changes", () => {
+    expect(isSpaRoute("/u/ivan")).toBe(true);
+    expect(isSpaRoute("/u/ivan.petrov")).toBe(true);
+    expect(isSpaRoute("/u/ivan/")).toBe(true);
+    expect(isSpaRoute("/u/ivan/photo.png")).toBe(false);
+  });
+});

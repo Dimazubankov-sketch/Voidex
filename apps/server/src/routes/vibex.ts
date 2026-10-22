@@ -32,6 +32,10 @@ import {
   VibexStoryReactSchema,
   VibexStoryReplySchema,
   VibexDeleteChatSchema,
+  VibexAddPinSchema,
+  VibexClearChatSchema,
+  VibexChatMessageSearchSchema,
+  VibexChatMediaQuerySchema,
 } from "@voidex/shared";
 import { z } from "zod";
 import { parse } from "../http.js";
@@ -41,6 +45,8 @@ import { sniffImage } from "../lib/file-types.js";
 const UPLOAD_KEY = /^[A-Za-z0-9_-]{16,64}$/;
 const uploadKeyParam = z.object({ key: z.string().regex(UPLOAD_KEY) });
 const idParam = z.object({ id: z.string().uuid() });
+const pinParam = z.object({ id: z.string().uuid(), messageId: z.string().uuid() });
+const handleParam = z.object({ handle: z.string().trim().min(1).max(64).regex(/^@?[A-Za-z0-9._-]+$/) });
 const purposeQuery = z.object({ purpose: VibexUploadPurposeSchema.default("message") });
 
 /**
@@ -89,6 +95,8 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
 
   // Step 2.16: people to follow (before /people/:id, which would take "suggested" for an id).
   app.get("/people/suggested", async (req) => vibex.suggested(req.auth!.userId));
+  // Update 2 · C6: a profile link / QR code (@handle) → the person.
+  app.get("/people/by-handle/:handle", limit(120), async (req) => vibex.personByHandle(req.auth!.userId, parse(handleParam, req.params).handle));
   app.get("/people/:id", async (req) => vibex.profile(req.auth!.userId, parse(idParam, req.params).id));
 
   app.get("/people/:id/cover", async (req, reply) => {
@@ -180,6 +188,22 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
     return vibex.forward(req.auth!.userId, body.messageIds, body.conversationIds);
   });
   app.put("/chats/:id/pin", limit(60), async (req) => vibex.pinMessage(req.auth!.userId, parse(idParam, req.params).id, parse(VibexPinMessageSchema, req.body).messageId));
+  // Update 2 · C1: several pinned messages.
+  app.post("/chats/:id/pins", limit(60), async (req) => vibex.addPin(req.auth!.userId, parse(idParam, req.params).id, parse(VibexAddPinSchema, req.body).messageId));
+  app.delete("/chats/:id/pins/:messageId", limit(60), async (req) => {
+    const p = parse(pinParam, req.params);
+    return vibex.removePin(req.auth!.userId, p.id, p.messageId);
+  });
+  // Update 2 · C4 / C5: clear the history, search in a chat, the info tabs.
+  app.post("/chats/:id/clear", limit(30), async (req) => vibex.clearChat(req.auth!.userId, parse(idParam, req.params).id, parse(VibexClearChatSchema, req.body).scope));
+  app.get("/chats/:id/search", limit(120), async (req) => {
+    const q = parse(VibexChatMessageSearchSchema, req.query);
+    return vibex.searchInChat(req.auth!.userId, parse(idParam, req.params).id, q.q, q.cursor);
+  });
+  app.get("/chats/:id/media", limit(240), async (req) => {
+    const q = parse(VibexChatMediaQuerySchema, req.query);
+    return vibex.chatMedia(req.auth!.userId, parse(idParam, req.params).id, q.kind, q.cursor);
+  });
 
   // Step 2.10: the activity tab (read on the server) and the Search tab.
   app.get("/activity", async (req) => {

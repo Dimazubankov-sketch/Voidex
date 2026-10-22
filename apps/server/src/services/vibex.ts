@@ -43,6 +43,10 @@ import {
   type VibexActivityPageDto,
   type VibexActivityType,
   type VibexSearchDto,
+  VIBEX_PINS_MAX,
+  type VibexChatMediaKind,
+  type VibexPinDto,
+  type VibexPresenceDto,
 } from "@voidex/shared";
 import type { Db, Tx } from "../db/client.js";
 import {
@@ -65,6 +69,7 @@ import {
   vibexStoryViews,
   vibexMessageHides,
   vibexActivity,
+  vibexPins,
 } from "../db/schema.js";
 import { looksLike } from "../lib/file-types.js";
 import { fail, notFound } from "../lib/errors.js";
@@ -155,7 +160,48 @@ export class VibexService {
   constructor(
     private readonly ctx: Ctx,
     private readonly notifications?: NotificationService,
-  ) {}
+  ) {
+    // Update 2 · C3: presence follows the account's live connections.
+    ctx.events.onPresence?.((userId, online) => void this.presenceChanged(userId, online).catch(() => undefined));
+  }
+
+  // ---------------------------------------------------------------- presence (Update 2 · C3)
+
+  /** Saves "last seen" when the last device goes, and tells the people who may see it. */
+  private async presenceChanged(userId: string, online: boolean) {
+    if (!online) await this.ctx.db.update(users).set({ lastSeenAt: this.ctx.now() }).where(eq(users.id, userId));
+    const settings = await this.settings(userId);
+    // Hidden presence: nobody is told anything (not even that something changed).
+    if (settings.privacy.presence === "nobody") return;
+    for (const peer of await this.directPeers(userId)) {
+      if (settings.privacy.blocked.includes(peer)) continue;
+      this.ctx.events.toUser(peer, { type: "vibex.presence", userId });
+    }
+  }
+
+  /**
+   * What `viewerId` may see of these people's presence: their own is always real; someone who hides it
+   * (or blocked the viewer) is "hidden" — the server never sends more than that.
+   */
+  private async presenceOf(viewerId: string, ids: string[]): Promise<Map<string, VibexPresenceDto>> {
+    const unique = [...new Set(ids)];
+    const out = new Map<string, VibexPresenceDto>();
+    if (!unique.length) return out;
+    const [settings, rows] = await Promise.all([
+      this.settingsOf(unique),
+      this.ctx.db.select({ id: users.id, lastSeenAt: users.lastSeenAt }).from(users).where(inArray(users.id, unique)),
+    ]);
+    const seen = new Map(rows.map((r) => [r.id, r.lastSeenAt]));
+    for (const id of unique) {
+      const s = settings.get(id)!;
+      if (id !== viewerId && (s.privacy.presence === "nobody" || s.privacy.blocked.includes(viewerId))) {
+        out.set(id, { state: "hidden" });
+        continue;
+      }
+      out.set(id, this.ctx.events.isOnline?.(id) ? { state: "online" } : { state: "offline", lastSeenAt: seen.get(id)?.toISOString() ?? null });
+    }
+    return out;
+  }
 
   /** Translations cache: post id + edit time + target → text (bounded). */
   private readonly translations = new Map<string, VibexTranslationDto>();
@@ -451,8 +497,9 @@ export class VibexService {
     ])) as [[{ n: number }], [typeof vibexProfiles.$inferSelect | undefined], [{ followers: number }], [{ following: number }], boolean, boolean];
     const visible = await this.canSee(viewerId, userId, "profile", settings);
     const postsVisible = await this.canSee(viewerId, userId, "posts", settings);
+    const presence = (await this.presenceOf(viewerId, [userId])).get(userId);
     return {
-      person,
+      person: { ...person, presence },
       posts: postsVisible ? n : 0,
       me: userId === viewerId,
       bio: visible ? (p?.bio ?? "") : "",
@@ -1189,12 +1236,14 @@ export class VibexService {
   async chats(userId: string): Promise<VibexChatDto[]> {
     // Step 2.9: a chat I deleted for myself stays out of my list until a new message arrives.
     const mine = await this.ctx.db
-      .select({ id: vibexMembers.conversationId })
+      .select({ id: vibexMembers.conversationId, clearedAt: vibexMembers.clearedAt })
       .from(vibexMembers)
       .where(and(eq(vibexMembers.userId, userId), eq(vibexMembers.hidden, false)));
+    // Update 2 · C4: a chat whose history I cleared stays in my list, empty.
+    const cleared = new Set(mine.filter((m) => m.clearedAt).map((m) => m.id));
     const list = await this.chatDtos(userId, mine.map((m) => m.id));
     return list
-      .filter((c) => c.lastMessage || c.pinnedPosition !== null || c.kind === "group")
+      .filter((c) => c.lastMessage || c.pinnedPosition !== null || c.kind === "group" || cleared.has(c.id))
       .sort((a, b) => {
         if (a.pinnedPosition !== null || b.pinnedPosition !== null) {
           if (a.pinnedPosition === null) return 1;
@@ -1247,18 +1296,25 @@ export class VibexService {
       )
       .groupBy(vibexMessages.conversationId);
     const unreadBy = new Map(unread.map((u) => [u.id, u.n]));
-    // Step 2.10: each chat's pinned message (unless deleted, or deleted for me / before my "delete for me").
-    const pinIds = convs.map((c) => c.pinnedMessageId).filter((x): x is string => !!x);
-    const pinRows = pinIds.length
-      ? await this.ctx.db.select().from(vibexMessages).where(and(inArray(vibexMessages.id, pinIds), isNull(vibexMessages.deletedAt), this.notHiddenFor(userId)))
-      : [];
-    const pinBy = new Map(pinRows.map((m) => [m.id, m]));
-    const pinnedOf = (c: (typeof convs)[number]) => {
-      const m = c.pinnedMessageId ? pinBy.get(c.pinnedMessageId) : undefined;
+    // Update 2 · C1: each chat's pinned messages (not deleted, not deleted for me, not before my "delete for me").
+    const pinRows = await this.ctx.db
+      .select({ conv: vibexPins.conversationId, pinnedAt: vibexPins.pinnedAt, m: vibexMessages })
+      .from(vibexPins)
+      .innerJoin(vibexMessages, eq(vibexMessages.id, vibexPins.messageId))
+      .where(and(inArray(vibexPins.conversationId, ids), isNull(vibexMessages.deletedAt), this.notHiddenFor(userId)));
+    const pinsOf = (c: (typeof convs)[number]): VibexPinDto[] => {
       const cleared = mineByConv.get(c.id)?.clearedAt;
-      if (!m || (cleared && m.createdAt <= cleared)) return null;
-      return { id: m.id, senderId: m.senderId, text: m.text.slice(0, 160), kind: m.kind };
+      return pinRows
+        .filter((r) => r.conv === c.id && (!cleared || r.m.createdAt > cleared))
+        .sort((a, b) => a.m.createdAt.getTime() - b.m.createdAt.getTime() || a.m.id.localeCompare(b.m.id))
+        .map((r) => ({ id: r.m.id, senderId: r.m.senderId, text: r.m.text.slice(0, 160), kind: r.m.kind, createdAt: r.m.createdAt.toISOString(), pinnedAt: r.pinnedAt.toISOString() }));
     };
+    /** For older apps: the most recently pinned one. */
+    const pinnedOf = (pins: VibexPinDto[]) => {
+      const last = [...pins].sort((a, b) => b.pinnedAt.localeCompare(a.pinnedAt))[0];
+      return last ? { id: last.id, senderId: last.senderId, text: last.text, kind: last.kind } : null;
+    };
+    const presence = await this.presenceOf(userId, [...peerByConv.values()].filter((m) => convs.find((c) => c.id === m.conversationId)?.kind === "direct").map((m) => m.userId));
     const out: VibexChatDto[] = [];
     for (const c of convs) {
       const me = mineByConv.get(c.id);
@@ -1286,7 +1342,8 @@ export class VibexService {
           peerReadAt: null,
           muted: me.muted,
           canDeleteForAll: me.role === "owner",
-          pinnedMessage: pinnedOf(c),
+          pinnedMessage: pinnedOf(pinsOf(c)),
+          pins: pinsOf(c),
           canPin: me.role === "owner",
         });
         continue;
@@ -1297,7 +1354,7 @@ export class VibexService {
         id: c.id,
         kind: "direct",
         group: null,
-        peer: people.get(peer.userId)!,
+        peer: { ...people.get(peer.userId)!, presence: presence.get(peer.userId) },
         lastMessage: lastByConv.get(c.id) ?? null,
         lastMessageAt: c.lastMessageAt.toISOString(),
         unread: unreadBy.get(c.id) ?? 0,
@@ -1306,7 +1363,8 @@ export class VibexService {
         peerReadAt: myReceipts && settings.get(peer.userId)!.privacy.readReceipts ? (peer.lastReadAt?.toISOString() ?? null) : null,
         muted: me.muted,
         canDeleteForAll: true,
-        pinnedMessage: pinnedOf(c),
+        pinnedMessage: pinnedOf(pinsOf(c)),
+        pins: pinsOf(c),
         canPin: true,
       });
     }
@@ -1628,22 +1686,177 @@ export class VibexService {
     return { ok: true, sent };
   }
 
-  /** Step 2.10: pin a message at the top of the chat (direct: either person; groups: the owner); null unpins. */
-  async pinMessage(userId: string, conversationId: string, messageId: string | null): Promise<VibexChatDto> {
+  /** Who may pin in this chat (direct: either person; groups: the owner). */
+  private async pinRights(userId: string, conversationId: string) {
     const me = await this.membership(userId, conversationId);
     const [conv] = await this.ctx.db.select({ kind: vibexConversations.kind }).from(vibexConversations).where(eq(vibexConversations.id, conversationId));
-    if (conv?.kind === "group" && me.role !== "owner") throw fail(ErrorCode.Forbidden, "Only the group's creator can pin messages.", { status: 403 });
-    if (messageId) {
-      const [m] = await this.ctx.db
-        .select({ id: vibexMessages.id })
-        .from(vibexMessages)
-        .where(and(eq(vibexMessages.id, messageId), eq(vibexMessages.conversationId, conversationId), isNull(vibexMessages.deletedAt)));
-      if (!m) throw notFound("Message");
-    }
-    await this.ctx.db.update(vibexConversations).set({ pinnedMessageId: messageId }).where(eq(vibexConversations.id, conversationId));
+    if (!conv) throw notFound("Chat");
+    if (conv.kind === "group" && me.role !== "owner") throw fail(ErrorCode.Forbidden, "Only the group's creator can pin messages.", { status: 403 });
+  }
+
+  /** The conversation keeps its newest pin in `pinned_message_id` (older apps show that one). */
+  private async syncNewestPin(conversationId: string, db: Db | Tx = this.ctx.db) {
+    const [last] = await db
+      .select({ id: vibexPins.messageId })
+      .from(vibexPins)
+      .innerJoin(vibexMessages, eq(vibexMessages.id, vibexPins.messageId))
+      .where(and(eq(vibexPins.conversationId, conversationId), isNull(vibexMessages.deletedAt)))
+      .orderBy(desc(vibexPins.pinnedAt))
+      .limit(1);
+    await db.update(vibexConversations).set({ pinnedMessageId: last?.id ?? null }).where(eq(vibexConversations.id, conversationId));
+  }
+
+  private async pinsChanged(conversationId: string) {
     const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
     for (const u of members) this.ctx.events.toUser(u.userId, { type: "vibex.chats", conversationId });
+  }
+
+  /** Update 2 · C1: pins one more message in the chat (at most 100; pinning a pinned one changes nothing). */
+  async addPin(userId: string, conversationId: string, messageId: string): Promise<VibexChatDto> {
+    await this.pinRights(userId, conversationId);
+    const [m] = await this.ctx.db
+      .select({ id: vibexMessages.id })
+      .from(vibexMessages)
+      .where(and(eq(vibexMessages.id, messageId), eq(vibexMessages.conversationId, conversationId), isNull(vibexMessages.deletedAt)));
+    if (!m) throw notFound("Message");
+    await this.ctx.db.transaction(async (tx) => {
+      const [count] = await tx.select({ n: sql<number>`count(*)::int` }).from(vibexPins).where(eq(vibexPins.conversationId, conversationId));
+      const n = count?.n ?? 0;
+      const exists = await tx.select({ id: vibexPins.messageId }).from(vibexPins).where(and(eq(vibexPins.conversationId, conversationId), eq(vibexPins.messageId, messageId)));
+      if (exists.length) return;
+      if (n >= VIBEX_PINS_MAX) throw fail(ErrorCode.ValidationFailed, `At most ${VIBEX_PINS_MAX} pinned messages in a chat.`);
+      await tx.insert(vibexPins).values({ conversationId, messageId, pinnedBy: userId, pinnedAt: this.ctx.now() }).onConflictDoNothing();
+      await this.syncNewestPin(conversationId, tx);
+    });
+    await this.pinsChanged(conversationId);
     return this.chat(userId, conversationId);
+  }
+
+  /** Update 2 · C1: unpins one message. */
+  async removePin(userId: string, conversationId: string, messageId: string): Promise<VibexChatDto> {
+    await this.pinRights(userId, conversationId);
+    await this.ctx.db.transaction(async (tx) => {
+      await tx.delete(vibexPins).where(and(eq(vibexPins.conversationId, conversationId), eq(vibexPins.messageId, messageId)));
+      await this.syncNewestPin(conversationId, tx);
+    });
+    await this.pinsChanged(conversationId);
+    return this.chat(userId, conversationId);
+  }
+
+  /** Step 2.10 (older apps): a message adds a pin; null unpins every one. */
+  async pinMessage(userId: string, conversationId: string, messageId: string | null): Promise<VibexChatDto> {
+    if (messageId) return this.addPin(userId, conversationId, messageId);
+    await this.pinRights(userId, conversationId);
+    await this.ctx.db.transaction(async (tx) => {
+      await tx.delete(vibexPins).where(eq(vibexPins.conversationId, conversationId));
+      await tx.update(vibexConversations).set({ pinnedMessageId: null }).where(eq(vibexConversations.id, conversationId));
+    });
+    await this.pinsChanged(conversationId);
+    return this.chat(userId, conversationId);
+  }
+
+  /**
+   * Update 2 · C4: clear a chat's history. "me": it is gone for me only (the chat stays in my list);
+   * "all" (direct: either person; groups: the owner): every message and its files are deleted for
+   * everyone, the chat itself stays.
+   */
+  async clearChat(userId: string, conversationId: string, scope: "me" | "all") {
+    const me = await this.membership(userId, conversationId);
+    const now = this.ctx.now();
+    if (scope === "me") {
+      await this.ctx.db.update(vibexMembers).set({ clearedAt: now, lastReadAt: now }).where(and(eq(vibexMembers.conversationId, conversationId), eq(vibexMembers.userId, userId)));
+      this.ctx.events.toUser(userId, { type: "vibex.chats", conversationId });
+      await this.notifications?.markTargetRead(userId, "chatId", conversationId);
+      return { ok: true };
+    }
+    const [conv] = await this.ctx.db.select().from(vibexConversations).where(eq(vibexConversations.id, conversationId));
+    if (!conv) throw notFound("Chat");
+    if (!canDeleteChatForAll({ kind: conv.kind, group: conv.kind === "group" ? ({ role: me.role } as VibexChatDto["group"]) : null })) {
+      throw fail(ErrorCode.Forbidden, "Only the group's owner can clear it for everyone.", { status: 403 });
+    }
+    await this.ctx.db.transaction(async (tx) => {
+      const files = await tx
+        .select({ key: vibexFiles.storageKey })
+        .from(vibexFiles)
+        .innerJoin(vibexMessages, eq(vibexMessages.id, vibexFiles.messageId))
+        .where(eq(vibexMessages.conversationId, conversationId));
+      await tx.update(vibexConversations).set({ pinnedMessageId: null }).where(eq(vibexConversations.id, conversationId));
+      // Files, pins and hides of these messages go with them (ON DELETE cascade).
+      await tx.delete(vibexMessages).where(eq(vibexMessages.conversationId, conversationId));
+      await this.ctx.blobs.delete(files.map((f) => f.key), tx);
+    });
+    const members = await this.ctx.db.select({ userId: vibexMembers.userId }).from(vibexMembers).where(eq(vibexMembers.conversationId, conversationId));
+    for (const m of members) this.ctx.events.toUser(m.userId, { type: "vibex.chats", conversationId });
+    await this.notifications?.removeTarget("chatId", conversationId);
+    return { ok: true };
+  }
+
+  /** What of a chat's history I can see (not deleted, not deleted for me, after my "delete for me"). */
+  private async visibleIn(userId: string, conversationId: string): Promise<SQL> {
+    const me = await this.membership(userId, conversationId);
+    return and(eq(vibexMessages.conversationId, conversationId), isNull(vibexMessages.deletedAt), me.clearedAt ? gt(vibexMessages.createdAt, me.clearedAt) : undefined, this.notHiddenFor(userId))!;
+  }
+
+  /** Update 2 · C4: messages of one chat whose text contains `q`, newest first. */
+  async searchInChat(userId: string, conversationId: string, q: string, cursor?: string, limit = 30): Promise<VibexPage<VibexMessageDto>> {
+    const where = await this.visibleIn(userId, conversationId);
+    const c = decodeCursor(cursor);
+    const needle = `%${q.trim().replace(/[\\%_]/g, (x) => `\\${x}`)}%`;
+    const rows = await this.ctx.db
+      .select()
+      .from(vibexMessages)
+      .where(and(where, ilike(vibexMessages.text, needle), olderThan(vibexMessages, c)))
+      .orderBy(desc(vibexMessages.createdAt), desc(vibexMessages.id))
+      .limit(limit + 1);
+    const more = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const dtos = await this.messageDtos(userId, items);
+    return { items: items.map((r) => dtos.get(r.id)!), next: more ? encodeCursor(items.at(-1)!.createdAt, items.at(-1)!.id) : null };
+  }
+
+  /**
+   * Update 2 · C5: one page of a chat info tab, newest first — the messages carrying that kind of
+   * content (pictures and videos, files, music, voice and video circles, links, GIFs).
+   */
+  async chatMedia(userId: string, conversationId: string, kind: VibexChatMediaKind, cursor?: string, limit = 30): Promise<VibexPage<VibexMessageDto>> {
+    const where = await this.visibleIn(userId, conversationId);
+    const c = decodeCursor(cursor);
+    const hasFile = (cond: SQL) => sql`EXISTS (SELECT 1 FROM vibex_files f WHERE f.message_id = ${vibexMessages.id} AND ${cond})`;
+    const filter: SQL =
+      kind === "media"
+        ? hasFile(sql`(f.mime_type LIKE 'image/%' OR f.mime_type LIKE 'video/%') AND f.mime_type <> 'image/gif'`)
+        : kind === "gifs"
+          ? hasFile(sql`f.mime_type = 'image/gif'`)
+          : kind === "music"
+            ? and(eq(vibexMessages.kind, "text"), hasFile(sql`f.mime_type LIKE 'audio/%'`))!
+            : kind === "voice"
+              ? inArray(vibexMessages.kind, ["voice", "circle"])
+              : kind === "links"
+                ? sql`${vibexMessages.text} ~* 'https?://[^[:space:]]+'`
+                : and(eq(vibexMessages.kind, "text"), hasFile(sql`f.mime_type NOT LIKE 'image/%' AND f.mime_type NOT LIKE 'video/%' AND f.mime_type NOT LIKE 'audio/%'`))!;
+    const rows = await this.ctx.db
+      .select()
+      .from(vibexMessages)
+      .where(and(where, filter, olderThan(vibexMessages, c)))
+      .orderBy(desc(vibexMessages.createdAt), desc(vibexMessages.id))
+      .limit(limit + 1);
+    const more = rows.length > limit;
+    const items = rows.slice(0, limit);
+    const dtos = await this.messageDtos(userId, items);
+    return { items: items.map((r) => dtos.get(r.id)!), next: more ? encodeCursor(items.at(-1)!.createdAt, items.at(-1)!.id) : null };
+  }
+
+  /** Update 2 · C6: the person behind a profile link (@handle); someone who blocked the viewer is not found. */
+  async personByHandle(viewerId: string, handle: string): Promise<VibexPersonDto> {
+    const local = handle.replace(/^@/, "").trim().toLowerCase();
+    const [row] = await this.ctx.db
+      .select({ id: mailAccounts.userId })
+      .from(mailAccounts)
+      .innerJoin(users, eq(users.id, mailAccounts.userId))
+      .where(and(eq(mailAccounts.localPart, local), eq(mailAccounts.isPrimary, true), eq(users.status, "active")));
+    if (!row) throw notFound("User");
+    if (row.id !== viewerId && (await this.settings(row.id)).privacy.blocked.includes(viewerId)) throw notFound("User");
+    return this.person(row.id);
   }
 
   /**

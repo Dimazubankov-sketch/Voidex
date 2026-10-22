@@ -15,11 +15,38 @@ interface Subscription {
  */
 export class EventHub {
   private readonly subs = new Set<Subscription>();
+  /** Update 2 · C3: told when an account's first device connects and when its last one goes. */
+  private readonly presence = new Set<(userId: string, online: boolean) => void>();
 
   subscribe(userId: string, sessionId: string, listener: Listener): () => void {
     const sub = { userId, sessionId, listener };
+    const first = this.connectionCount(userId) === 0;
     this.subs.add(sub);
-    return () => this.subs.delete(sub);
+    if (first) this.presenceChanged(userId, true);
+    return () => {
+      if (!this.subs.delete(sub)) return;
+      if (this.connectionCount(userId) === 0) this.presenceChanged(userId, false);
+    };
+  }
+
+  onPresence(fn: (userId: string, online: boolean) => void): () => void {
+    this.presence.add(fn);
+    return () => this.presence.delete(fn);
+  }
+
+  private presenceChanged(userId: string, online: boolean) {
+    for (const fn of this.presence) {
+      try {
+        fn(userId, online);
+      } catch {
+        /* a presence listener never breaks the stream */
+      }
+    }
+  }
+
+  /** Update 2 · C3: a device of this account is connected right now. */
+  isOnline(userId: string) {
+    return this.connectionCount(userId) > 0;
   }
 
   toUser(userId: string, event: ServerEvent, opts: { exceptSessionId?: string } = {}) {

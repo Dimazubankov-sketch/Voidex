@@ -22,6 +22,8 @@ export function isSpaRoute(url: string): boolean {
   const path = url.split(/[?#]/)[0] ?? "/";
   if (path.startsWith("/api/") || path === "/api") return false;
   if (path.startsWith("/assets/")) return false;
+  // Update 2 · C6: profile links (/u/<username>) are pages, even when a username has a dot in it.
+  if (/^\/u\/[^/]+\/?$/.test(path)) return true;
   const last = path.slice(path.lastIndexOf("/") + 1);
   return !/\.[a-z0-9]{1,8}$/i.test(last);
 }

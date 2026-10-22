@@ -900,3 +900,32 @@ img[data-system-asset] { pointer-events: none; }
     scale: 1;
   }
 }
+
+/* Update 2 · B6: a calculator widget key answers on its own, softly and at once (the widget stays still). */
+.vx-calc-key {
+  transition:
+    transform 110ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    filter 110ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.vx-calc-key:active {
+  transform: scale(0.94);
+  filter: brightness(0.94);
+  transition-duration: 40ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vx-calc-key:active {
+    transform: none;
+  }
+}
+
+/* Update 2 · D: clock hands turn on the compositor (see apps/clock/analog.tsx). */
+@keyframes vx-hand-spin {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: 360deg;
+  }
+}

@@ -34,11 +34,34 @@ export interface VibexPersonDto {
   firstName: string;
   lastName: string;
   name: string;
-  /** VOIDEX Mail local part — the @handle. */
+  /** VOIDEX Mail local part — the @handle (Update 2: also the stable public id in profile links and QR codes). */
   handle: string;
   address: string;
   avatarVersion: number;
+  /**
+   * Update 2 · C3: online / last seen, as this person's privacy allows the viewer to see it ("hidden":
+   * they don't show it). Only on chat headers, the chat list and profiles; absent elsewhere.
+   */
+  presence?: VibexPresenceDto;
 }
+
+/** Update 2 · C3: presence as the server lets the viewer see it (never more). */
+export type VibexPresenceDto = { state: "online" } | { state: "offline"; lastSeenAt: string | null } | { state: "hidden" };
+/** Online: a device of the account is connected right now. */
+export const VIBEX_PRESENCE_AUDIENCES = ["everyone", "nobody"] as const;
+
+/** Update 2 · C1: one pinned message of a chat. */
+export interface VibexPinDto {
+  id: string;
+  senderId: string;
+  text: string;
+  kind: VibexMessageKind;
+  /** When the message was written (pins are in this order). */
+  createdAt: string;
+  pinnedAt: string;
+}
+/** Update 2 · C1: at most this many pinned messages in one chat. */
+export const VIBEX_PINS_MAX = 100;
 
 export interface VibexFileDto {
   id: string;
@@ -134,6 +157,8 @@ export interface VibexChatDto {
   pinnedMessage?: { id: string; senderId: string; text: string; kind: VibexMessageKind } | null;
   /** Step 2.10: I may pin a message (direct chats: either person; groups: the owner). */
   canPin?: boolean;
+  /** Update 2 · C1: every pinned message, oldest first (`pinnedMessage` is the newest, for older apps). */
+  pins?: VibexPinDto[];
 }
 
 export interface VibexHistoryItemDto {
@@ -223,7 +248,9 @@ export const VibexSettingsSchema = z.object({
     readReceipts: z.boolean().default(true),
     /** People who can't write to me or follow me. */
     blocked: z.array(z.string().uuid()).max(500).default([]),
-  }).default({ messages: "everyone", profile: "everyone", posts: "everyone", readReceipts: true, blocked: [] }),
+    /** Update 2 · C3: who sees that I'm online / when I was last seen («nobody»: «был(а) недавно» for all). */
+    presence: z.enum(VIBEX_PRESENCE_AUDIENCES).default("everyone"),
+  }).default({ messages: "everyone", profile: "everyone", posts: "everyone", readReceipts: true, blocked: [], presence: "everyone" }),
   notifications: z.object({
     messages: z.boolean().default(true),
     comments: z.boolean().default(true),
@@ -496,6 +523,19 @@ export const VibexForwardSchema = z.object({
 
 /** Step 2.10: pin a message at the top of the chat (null: unpin). */
 export const VibexPinMessageSchema = z.object({ messageId: z.string().uuid().nullable() });
+/** Update 2 · C1: pin one more message / unpin one. */
+export const VibexAddPinSchema = z.object({ messageId: z.string().uuid() });
+/** Update 2 · C4: clear a chat's history only for me, or for everyone (direct chats: either person; groups: the owner). */
+export const VibexClearChatSchema = z.object({ scope: z.enum(["me", "all"]) });
+/** Update 2 · C4: search inside one chat (newest first; `cursor` continues a page). */
+export const VibexChatMessageSearchSchema = z.object({ q: z.string().trim().min(1).max(80), cursor: z.string().max(200).optional() });
+/** Update 2 · C5: the chat info tabs. */
+export const VIBEX_CHAT_MEDIA_KINDS = ["media", "files", "music", "voice", "links", "gifs"] as const;
+export type VibexChatMediaKind = (typeof VIBEX_CHAT_MEDIA_KINDS)[number];
+/** One page of a chat info tab: the messages that carry such content, newest first (a VibexPage). */
+export const VibexChatMediaQuerySchema = z.object({ kind: z.enum(VIBEX_CHAT_MEDIA_KINDS), cursor: z.string().max(200).optional() });
+/** Update 2 · C6: the link a profile's QR code opens (no private data in it). */
+export const vibexProfileLink = (origin: string, handle: string) => `${origin.replace(/\/+$/, "")}/u/${encodeURIComponent(handle)}`;
 
 /** Step 2.10: what the Vibex activity tab shows. */
 export const VIBEX_ACTIVITY_TYPES = ["follow", "like", "repost", "comment", "reply", "group", "post", "story"] as const;

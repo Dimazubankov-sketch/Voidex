@@ -80,7 +80,18 @@ function handle(event: ServerEvent) {
       break;
     case "vibex.chats":
       void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
-      if (event.conversationId) void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
+      if (event.conversationId) {
+        void queryClient.invalidateQueries({ queryKey: ["vibex", "chat", event.conversationId] });
+        // Update 2 · C4: a cleared history (pins, info tabs) shows at once.
+        void queryClient.invalidateQueries({ queryKey: ["vibex", "messages", event.conversationId] });
+        void queryClient.invalidateQueries({ queryKey: ["vibex", "chat-media", event.conversationId] });
+      }
+      break;
+    case "vibex.presence":
+      // Update 2 · C3: someone went online / offline (sent only to people allowed to see it).
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chats"] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "chat"] });
+      void queryClient.invalidateQueries({ queryKey: ["vibex", "profile", event.userId] });
       break;
     case "notification.new": {
       receiveNotification(event.notification);

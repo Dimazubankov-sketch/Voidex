@@ -90,7 +90,7 @@ export function LoginFlow({ onExit, onForgot, onCreate, reason }: { onExit: () =
               void signIn();
             }}
           >
-            <StepBody icon={<VoidexMark className="size-12" />} title={t("login.title")} subtitle={t("login.subtitle")}>
+            <StepBody icon={<VoidexMark className="size-12" />} title={t("login.title")} subtitle={/^\/u\/[^/]+\/?$/.test(window.location.pathname) ? t("vibex.qr.openSignIn") : t("login.subtitle")}>
               {reason === "expired" && <Notice tone="info" className="mb-4">{t("os.sessionExpired")}</Notice>}
               {reason === "revoked" && <Notice tone="info" className="mb-4">{t("os.signedOutRemotely")}</Notice>}
               <div key={shake} className={shake ? "animate-shake space-y-3" : "space-y-3"}>

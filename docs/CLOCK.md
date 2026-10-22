@@ -117,3 +117,22 @@ logo inside. A tap opens Clock on the world clock.
   not. The click is at most one per 45 ms (a fast spin sounds like a ratchet, not a buzz).
 - Time format: Clock is 24-hour everywhere (there is no 12-hour setting); hours wrap 23 → 00, minutes and
   seconds 59 → 00.
+
+## Update 2 — world clock selection and the Clock widget's sizes
+
+- **Selected city (A1).** A tap on a city of «Ваши города» puts it in the top panel (name, time, date,
+  analog clock). One city at a time; `ClockState.selected` (optional, one of `cities`) is saved with
+  the rest of Clock on the device. Without a selection the panel shows the device's zone as before.
+  Removing the selected city falls back to the device's zone. Only Clock and its widget follow the
+  selection: the system time, alarms, Calendar and Vibex keep their own zones.
+- **Hands.** `handAngles` returns hour, minute and second angles with milliseconds, from the city's IANA
+  zone (`Intl`), so summer time is applied wherever it exists. `useHands` (apps/clock/analog.tsx) turns
+  them on the DOM once per frame (one step per second with reduced motion); React does not render per frame.
+- **Widget (A2).** The Clock widget reads the same store (`useShownZone`) and the same functions. Two
+  sizes: 2 × 2 (face, city, time) and 4 × 2 (city, time, date, face). `Widget.size` ("w" = 4 × 2) is
+  optional; `WIDGET_SIZE_OPTIONS` lists the sizes a type really draws (Clock: s, w; Calculator: s), and
+  the size picker at the top of the widget's menu shows only those. `resizeWidget` keeps the widget's
+  top-left cell when it can, moves icons and widgets under the new block to the nearest free cells and
+  refuses when the page has no room. A wide widget stands alone (no stack, no carousel).
+- **Reflow animation.** `captureGridFlip()` before a layout change + `useGridFlip` in the grid: moved
+  cells glide (transform), a resized card eases to its size, ≈ 280 ms; reduced motion: none.

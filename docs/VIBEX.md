@@ -503,3 +503,41 @@ Long press (phones) or right click (PC) opens the actions. The chat dims and the
   «Рекомендации». Publications are shown only in profiles; their data is unchanged.
 - **Чаты** lie on the app background like Главная and Профиль; the cards stand out by a shadow.
 - The phone tab bar is the system glass tab bar and can be swiped.
+
+## Update 2 — stage C: chat header, pins, info page, presence, QR codes, composer, playback
+
+- **Header (C2).** Back to the list (phones) · the name with the presence under it (green dot + «в сети»,
+  else «был(а) …») — a tap opens the info page · the avatar with its presence dot — a tap opens the
+  profile. Groups keep their info sheet. Long names are cut; the buttons always keep their place.
+- **Pins (C1).** A chat can hold up to 100 pinned messages (`vibex_pins`, migration 0015; the
+  conversation's `pinned_message_id` keeps the newest one so an older app still shows a pin). Rights:
+  direct chats either person, groups the owner. API: `POST /api/vibex/chats/:id/pins`, `DELETE
+  /api/vibex/chats/:id/pins/:messageId` (the old `PUT …/pin` still works: a message adds, null clears).
+  `VibexChatDto.pins` is oldest first. The strip under the header shows the newest; a tap goes to it
+  (older pages load until it is there, it is highlighted) and shows the next older one; after the oldest
+  it starts again from the newest. Deleted messages leave the list.
+- **Presence (C3).** Online = a device of the account holds the live events stream; `users.last_seen_at`
+  is written when the last one goes. `privacy.presence` («everyone» / «nobody»): the server computes
+  what each viewer may see (`presenceOf`) — «hidden» is all that leaves the server, and presence events
+  (`vibex.presence`) go only to direct-chat peers allowed to see them. Someone who blocked the viewer
+  is «hidden» too. «Постоянно в сети» is a placeholder for a future bot feature: the switch can't be
+  turned on and the API has no such value.
+- **Info page (C4 / C5).** Avatar (full-screen viewer), name, presence, @username with its QR code, «о
+  себе», «Открыть профиль»; actions: call / video (the existing honest «not available» sheet), sound
+  (this chat's notifications), search in this chat (`GET …/search`, paged), more — block / unblock,
+  clear the history for me (`POST …/clear {scope:"me"}`: gone for me, the chat stays) or for everyone
+  (`{scope:"all"}`: every message and file deleted for both; direct chats either person, groups the
+  owner; asked first), delete the chat, share the profile. Tabs (`GET …/media?kind=`): media, files,
+  music, voice + video circles, links, GIFs — a page of 30 at a time, a tap goes to the message.
+- **QR codes and links (C6).** The public id is the @username (the VOIDEX Mail local part — unique and
+  stable from sign-up). A code holds only `https://<host>/u/<username>`; it is drawn from the username
+  each time. `/u/<username>` is served as an app page; signed out, the sign-in screen says why and the
+  link opens right after; `GET /api/vibex/people/by-handle/:handle` resolves it (blocked viewers: 404).
+  Own profile and others': «Поделиться» (system share / copy) and «QR-код» (save or send the card).
+- **Composer (C7).** A round attach button · a pill-shaped field that grows · a round microphone /
+  video-circle button that becomes «send» with text. The existing gestures stay (hold to record, slide
+  left to cancel, up to lock; PC click = hands-free); the attach sheet also offers hands-free voice and
+  video recording (no gesture). Permissions are asked by the recorder; nothing is sent without an action.
+- **Playback (C8).** One voice message / video circle with sound at a time (starting another pauses it).
+  While one of this chat plays, a bar takes the pins' place (play / pause, a tap goes to the message,
+  close stops it); it goes at the end and the pins come back. Leaving the chat stops its playback.
