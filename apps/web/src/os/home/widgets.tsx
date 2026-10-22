@@ -27,6 +27,7 @@ import {
   removeWidget,
   widgetKey,
   type Widget,
+  type WidgetSize,
   type WidgetType,
   type WorkspaceLayout,
 } from "@voidex/shared";
@@ -38,7 +39,8 @@ import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
 import { createPortal } from "react-dom";
 import { useWM } from "../window-manager";
 import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
-import { cityClock, localZone } from "@voidex/clock";
+import { cityClock, cityName } from "@voidex/clock";
+import { useHands, useShownZone } from "@/apps/clock/analog";
 import { desktopGeometry, geometryFor } from "./desktop-geometry";
 import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
@@ -66,7 +68,7 @@ interface WidgetDef {
   description: MessageKey;
   keywords: string;
   Icon: ComponentType<{ className?: string }>;
-  Body: ComponentType<{ preview?: boolean }>;
+  Body: ComponentType<{ preview?: boolean; size?: WidgetSize }>;
 }
 
 const KEYS = ["C", "±", "%", "÷", "7", "8", "9", "×", "4", "5", "6", "−", "1", "2", "3", "+", "0", ".", "⌫", "="] as const;
@@ -132,46 +134,81 @@ function useSecond(active: boolean) {
   return now;
 }
 
-/**
- * Step 2.14: Clock widget (2 × 2): a large analog clock of this device's
- * time, in the system's colours (light and dark), no logo. A tap opens
- * Clock on the world clock.
- */
-function ClockWidget({ preview }: { preview?: boolean }) {
-  const t = useT();
-  const now = useSecond(true);
-  const d = new Date(now);
-  const s = d.getSeconds();
-  const m = d.getMinutes() + s / 60;
-  const h = (d.getHours() % 12) + m / 60;
-  const label = t("widgets.clockNow", { time: cityClock(localZone(), now) });
-  const hand = (deg: number, len: number, width: number, cls: string, tail = 0) => (
-    <line x1={100} y1={100 + tail} x2={100} y2={100 - len} strokeWidth={width} strokeLinecap="round" className={cls} transform={`rotate(${deg} 100 100)`} />
+/** The Clock widget's analog face (SVG): its hands glide, driven per frame without React renders. */
+function ClockFace({ zone, className }: { zone: string; className?: string }) {
+  const hour = useRef<SVGGElement>(null);
+  const minute = useRef<SVGGElement>(null);
+  const second = useRef<SVGGElement>(null);
+  useHands(zone, { hour, minute, second }, true);
+  const hand = (len: number, width: number, cls: string, tail = 0) => <line x1={100} y1={100 + tail} x2={100} y2={100 - len} strokeWidth={width} strokeLinecap="round" className={cls} />;
+  return (
+    <svg viewBox="0 0 200 200" className={cx("drop-shadow-[0_6px_14px_rgba(20,16,50,0.16)]", className)} aria-hidden>
+      <circle cx={100} cy={100} r={98} className="fill-[var(--surface)]" />
+      {Array.from({ length: 12 }, (_, i) => (
+        <line key={i} x1={100} y1={13} x2={100} y2={i % 3 === 0 ? 33 : 28} strokeWidth={i % 3 === 0 ? 6 : 4.5} strokeLinecap="round" className="stroke-[color-mix(in_srgb,var(--text)_70%,transparent)]" transform={`rotate(${i * 30} 100 100)`} />
+      ))}
+      <g ref={hour}>{hand(46, 7, "stroke-[var(--text)]")}</g>
+      <g ref={minute}>{hand(70, 5.5, "stroke-[var(--text)]")}</g>
+      <g ref={second} data-testid="clock-widget-second">
+        {hand(78, 2, "stroke-[var(--primary)]", 16)}
+      </g>
+      <circle cx={100} cy={100} r={6} className="fill-[var(--text)]" />
+      <circle cx={100} cy={100} r={3} className="fill-[var(--primary)]" />
+    </svg>
   );
+}
+
+/**
+ * A2: Clock widget, the world clock's top panel on the home screen. It shows the city selected in
+ * Clock (else this device's zone), from the same store and the same time functions as the app, so the
+ * two never disagree. 2 × 2: the analog face with the city and the time under it; 4 × 2: the city, the
+ * time, the date and the face. A tap opens Clock on the world clock.
+ */
+function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }) {
+  const t = useT();
+  const lang = useLanguage();
+  const now = useSecond(true);
+  const zone = useShownZone();
+  const city = cityName(zone, lang);
+  const time = cityClock(zone, now);
+  const label = t("widgets.clockNow", { time: `${city}, ${time}` });
+  const wide = size === "w";
+  const date = new Intl.DateTimeFormat(lang === "ru" ? "ru-RU" : lang, { weekday: "short", day: "numeric", month: "long", timeZone: zone }).format(now);
   return (
     <button
       type="button"
       tabIndex={preview ? -1 : 0}
       onClick={(e) => openApp("clock", e.currentTarget, { tab: "world" })}
-      className={cx("flex size-full items-center justify-center rounded-[24px] p-[7%]", preview && "pointer-events-none")}
+      className={cx("flex size-full rounded-[24px] text-left", wide ? "items-center gap-[5%] px-[6%] py-[5%]" : "flex-col items-center justify-center gap-[4%] p-[7%]", preview && "pointer-events-none")}
       aria-label={label}
       title={label}
       data-testid="clock-widget"
-      data-time={cityClock(localZone(), now)}
+      data-size={size ?? "s"}
+      data-zone={zone}
+      data-time={time}
     >
-      <svg viewBox="0 0 200 200" className="size-full max-h-full drop-shadow-[0_6px_14px_rgba(20,16,50,0.16)]" aria-hidden>
-        <circle cx={100} cy={100} r={98} className="fill-[var(--surface)]" />
-        {Array.from({ length: 12 }, (_, i) => (
-          <line key={i} x1={100} y1={13} x2={100} y2={i % 3 === 0 ? 33 : 28} strokeWidth={i % 3 === 0 ? 6 : 4.5} strokeLinecap="round" className="stroke-[color-mix(in_srgb,var(--text)_70%,transparent)]" transform={`rotate(${i * 30} 100 100)`} />
-        ))}
-        {hand(h * 30, 46, 7, "stroke-[var(--text)]")}
-        {hand(m * 6, 70, 5.5, "stroke-[var(--text)]")}
-        <g data-testid="clock-widget-second" data-angle={s * 6}>
-          {hand(s * 6, 78, 2, "stroke-[var(--primary)]", 16)}
-        </g>
-        <circle cx={100} cy={100} r={6} className="fill-[var(--text)]" />
-        <circle cx={100} cy={100} r={3} className="fill-[var(--primary)]" />
-      </svg>
+      {wide ? (
+        <>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[15px] font-semibold text-text" data-testid="clock-widget-city">
+              {city}
+            </span>
+            <span className="text-[44px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary tabular-nums">{time}</span>
+            <span className="truncate text-[12px] text-text-secondary">{date}</span>
+          </span>
+          <ClockFace zone={zone} className="aspect-square h-full max-h-full shrink-0" />
+        </>
+      ) : (
+        <>
+          <ClockFace zone={zone} className="min-h-0 w-full flex-1" />
+          <span className="flex w-full min-w-0 items-baseline justify-center gap-1.5 text-[12px] leading-none">
+            <span className="min-w-0 truncate font-medium text-text" data-testid="clock-widget-city">
+              {city}
+            </span>
+            <span className="shrink-0 font-semibold text-primary tabular-nums">{time}</span>
+          </span>
+        </>
+      )}
     </button>
   );
 }
@@ -469,6 +506,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       data-no-home-gesture
       data-system-ui
       data-widget={widget.id}
+      data-widget-card
       data-dragging={dragging || undefined}
       data-testid={`widget-${widget.type}`}
       onPointerDown={pressStart}
@@ -505,7 +543,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
               ))}
             </div>
           ) : (
-            <WidgetColumn widgetId={widget.id} items={columns[0]!} half={0} active={widget.active ?? 0} side="right" />
+            <WidgetColumn widgetId={widget.id} items={columns[0]!} half={0} active={widget.active ?? 0} side="right" size={widget.size} />
           )}
         </div>
         {hover && createPortal(<HoverMark hover={hover} />, document.body)}
@@ -591,10 +629,10 @@ function HoverMark({ hover }: { hover: Hover }) {
 }
 
 /** One half of a widget block: a single widget, or a stack scrolled vertically (E1, E3). */
-function WidgetColumn({ widgetId, items, half, active, side }: { widgetId: string; items: WidgetItem[]; half: 0 | 1; active: number; side: "left" | "right" }) {
+function WidgetColumn({ widgetId, items, half, active, side, size }: { widgetId: string; items: WidgetItem[]; half: 0 | 1; active: number; side: "left" | "right"; size?: WidgetSize }) {
   if (items.length === 1) {
     const d = defOf(items[0]!.type);
-    return d ? <d.Body /> : null;
+    return d ? <d.Body size={size} /> : null;
   }
   return <WidgetStack widgetId={widgetId} items={items} half={half} active={active} side={side} />;
 }

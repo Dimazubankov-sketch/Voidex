@@ -39,6 +39,11 @@ import {
   widgetColumns,
   sameItem,
   unpinFromDock,
+  isWidgetCarousel,
+  isWidgetStack,
+  resizeWidget,
+  widgetSizesOf,
+  type WidgetSize,
   type AppId,
   type LayoutItem,
   type WorkspaceLayout,
@@ -51,6 +56,7 @@ import { currentView, setView } from "./brush-menu";
 import { addToDesktop, openWallpapers, addToFolder, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { geometryFor } from "./desktop-geometry";
+import { captureGridFlip } from "./grid-flip";
 import { toast } from "@/ui/overlays";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
@@ -345,6 +351,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
   }
 
   const shown = sub ? subEntries() : entries;
+  const sizeBlock = target.kind === "widget" ? <WidgetSizes id={target.id} layout={layout} onDone={close} /> : null;
   const subTitle =
     sub === "folders" ? t("home.addToFolder") : sub === "spaces" ? t("home.moveToSpace") : sub === "view" ? t("appearance.view") : "";
 
@@ -371,6 +378,7 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
             {subTitle}
           </button>
         )}
+        {!sub && sizeBlock}
         {shown.map((e) => (
           <button
             key={e.id}
@@ -395,5 +403,53 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
           </button>
         ))}
     </motion.div>
+  );
+}
+
+/**
+ * A2: the size picker at the top of a widget's menu: only the sizes this widget really has (none
+ * when it has one). The widget and its neighbours glide to the new layout; no room: a short note and
+ * nothing changes.
+ */
+function WidgetSizes({ id, layout, onDone }: { id: string; layout: WorkspaceLayout; onDone: () => void }) {
+  const t = useT();
+  const w = layout.widgets.find((x) => x.id === id);
+  if (!w || isWidgetStack(w) || isWidgetCarousel(w)) return null;
+  const sizes = widgetSizesOf(w.type);
+  if (sizes.length < 2) return null;
+  const current = w.size ?? "s";
+  const pick = (size: WidgetSize) => {
+    onDone();
+    if (size === current) return;
+    let failed = false;
+    captureGridFlip();
+    updateLayout((l) => {
+      const r = resizeWidget(l, id, size, geometryFor({ surface: w.surface }));
+      failed = !!r.error;
+      return r.layout ?? l;
+    });
+    if (failed) toast({ title: t("widgets.noRoomResize") });
+  };
+  return (
+    <div role="group" aria-label={t("widgets.size")} className="mb-1 flex gap-1.5 border-b border-[var(--glass-border)] px-1.5 pb-2 pt-1" data-testid="widget-sizes">
+      {sizes.map((size) => {
+        const on = size === current;
+        return (
+          <button
+            key={size}
+            type="button"
+            role="menuitemradio"
+            aria-checked={on}
+            aria-label={t(size === "w" ? "widgets.sizeWide" : "widgets.sizeSmall")}
+            onClick={() => pick(size)}
+            className={cx("flex h-12 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors", on ? "bg-primary/12 text-primary" : "text-text-secondary hover:bg-surface-hover")}
+            data-testid={`widget-size-${size}`}
+          >
+            <span aria-hidden className={cx("block rounded-[4px] border-[1.5px] border-current", size === "w" ? "h-[12px] w-[24px]" : "h-[12px] w-[12px]")} />
+            {size === "w" ? "4 × 2" : "2 × 2"}
+          </button>
+        );
+      })}
+    </div>
   );
 }

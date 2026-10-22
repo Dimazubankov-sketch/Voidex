@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { addCity, cityClock, cityName, handAngles, isDaytime, localZone, offsetFromMoscow, removeCity, searchCities } from "@voidex/clock";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { addCity, cityClock, cityName, isDaytime, offsetFromMoscow, removeCity, searchCities, selectCity } from "@voidex/clock";
+import { AnalogFace, useShownZone } from "./analog";
 import { useLanguage } from "@/lib/i18n";
 import { ClockIcon } from "./icons";
 import { change, useClock } from "./runtime";
@@ -12,46 +14,34 @@ function offsetText(t: ReturnType<typeof useClockT>, zone: string, now: number) 
   return t("world.diff", { sign: d > 0 ? "+" : "−", n: String(Math.abs(d)).replace(".", ",") });
 }
 
-export function AnalogClock({ zone, now, size = "m" }: { zone: string; now: number; size?: "s" | "m" }) {
-  const t = useClockT();
-  const a = handAngles(zone, now);
-  return (
-    <div className={size === "s" ? "vc-analog vc-analog-s" : "vc-analog"} role="img" aria-label={t("world.clock", { time: cityClock(zone, now) })} data-testid="clock-analog">
-      <div className="vc-face">
-        {Array.from({ length: 12 }, (_, i) => (
-          <i key={i} style={{ transform: `rotate(${i * 30}deg)` }} />
-        ))}
-        <span className="n12">12</span>
-        <span className="n3">3</span>
-        <span className="n6">6</span>
-        <span className="n9">9</span>
-        <div className="vc-hand hour" style={{ transform: `rotate(${a.hour}deg)` }} data-testid="clock-hand-hour" />
-        <div className="vc-hand minute" style={{ transform: `rotate(${a.minute}deg)` }} />
-        <div className="vc-pin" />
-      </div>
-    </div>
-  );
-}
-
 export function WorldPage({ wide }: { wide: boolean }) {
   const t = useClockT();
   const lang = useLanguage();
   const cities = useClock((s) => s.state.cities);
+  const selected = useClock((s) => s.state.selected);
   const now = useNow(1000);
-  const here = localZone();
-  const date = new Intl.DateTimeFormat(lang === "ru" ? "ru-RU" : lang, { weekday: "long", day: "numeric", month: "long" }).format(now);
+  const zone = useShownZone();
+  const reduced = useReducedMotion();
+  const locale = lang === "ru" ? "ru-RU" : lang;
+  const date = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", timeZone: zone }).format(now);
+  // A1: the new city comes in with a short rise and fade; the panel keeps its height (no jump, no flash).
+  const enter = reduced ? { opacity: 1 } : { opacity: 0, y: 8 };
   return (
     <div className="vc-page" data-testid="clock-world">
-      <section className="vc-hero vc-world-hero">
-        <div className="vc-hero-copy">
-          <span className="vc-eyebrow">{t("world.eyebrow")}</span>
-          <h2 data-testid="clock-here-name">{cityName(here, lang)}</h2>
-          <div className="vc-hero-time" data-testid="clock-here-time">
-            {cityClock(here, now)}
-          </div>
-          <p className="vc-hero-date">{date}</p>
+      <section className="vc-hero vc-world-hero" data-testid="clock-world-hero" data-zone={zone}>
+        <div className="vc-hero-copy vc-hero-swap">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div key={zone} initial={enter} animate={{ opacity: 1, y: 0 }} exit={reduced ? { opacity: 0 } : { opacity: 0, y: -6 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
+              <span className="vc-eyebrow">{t(selected ? "world.selected" : "world.eyebrow")}</span>
+              <h2 data-testid="clock-here-name">{cityName(zone, lang)}</h2>
+              <div className="vc-hero-time" data-testid="clock-here-time">
+                {cityClock(zone, now)}
+              </div>
+              <p className="vc-hero-date">{date}</p>
+            </motion.div>
+          </AnimatePresence>
         </div>
-        <AnalogClock zone={here} now={now} size={wide ? "m" : "s"} />
+        <AnalogFace zone={zone} size={wide ? "m" : "s"} label={t("world.clock", { time: `${cityName(zone, lang)}, ${cityClock(zone, now)}` })} />
       </section>
       <div className="vc-section-title">
         <h2>{t("world.cities")}</h2>
@@ -59,23 +49,32 @@ export function WorldPage({ wide }: { wide: boolean }) {
       </div>
       {cities.length ? (
         <SwipeList className="vc-grid vc-city-grid" testId="clock-city-list">
-          {cities.map((zone) => {
-            const name = cityName(zone, lang);
-            const day = isDaytime(zone, now);
+          {cities.map((c) => {
+            const name = cityName(c, lang);
+            const day = isDaytime(c, now);
+            const on = c === zone && !!selected;
             return (
-              <SwipeRow key={zone} id={zone} label={t("swipeHint", { name })} deleteLabel={t("deleteNamed", { name })} onDelete={() => change((s) => removeCity(s, zone))} testId="clock-city">
-                <article className="vc-card vc-city-card" data-zone={zone}>
+              <SwipeRow key={c} id={c} label={t("swipeHint", { name })} deleteLabel={t("deleteNamed", { name })} onDelete={() => change((s) => removeCity(s, c))} testId="clock-city">
+                <button
+                  type="button"
+                  className={on ? "vc-card vc-city-card is-selected" : "vc-card vc-city-card"}
+                  data-zone={c}
+                  aria-pressed={on}
+                  aria-label={t("world.select", { name })}
+                  onClick={() => change((s) => selectCity(s, c))}
+                  data-testid="clock-city-select"
+                >
                   <span className="vc-city-symbol" title={t(day ? "world.day" : "world.night")}>
                     <ClockIcon name={day ? "sun" : "moon"} />
                   </span>
                   <span className="vc-city-copy">
                     <h3>{name}</h3>
-                    <p data-testid="clock-city-offset">{offsetText(t, zone, now)}</p>
+                    <p data-testid="clock-city-offset">{offsetText(t, c, now)}</p>
                   </span>
                   <time className="vc-city-time" data-testid="clock-city-time">
-                    {cityClock(zone, now)}
+                    {cityClock(c, now)}
                   </time>
-                </article>
+                </button>
               </SwipeRow>
             );
           })}

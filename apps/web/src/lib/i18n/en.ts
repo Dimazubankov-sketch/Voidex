@@ -1667,6 +1667,10 @@ export const en = {
   "widgets.deleteStackTitle": "Delete this stack?",
   "widgets.deleteCarouselTitle": "Delete this carousel?",
   "widgets.deleteStackBody": "All its widgets leave the home screen. The apps and their data stay.",
+  "widgets.size": "Size",
+  "widgets.sizeSmall": "Small, 2 × 2",
+  "widgets.sizeWide": "Wide, 4 × 2",
+  "widgets.noRoomResize": "Not enough room on this page for that size",
 } as const;
 
 

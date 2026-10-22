@@ -1651,4 +1651,8 @@ export const ru: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "Удалить стопку?",
   "widgets.deleteCarouselTitle": "Удалить карусель?",
   "widgets.deleteStackBody": "Все виджеты в ней уйдут с рабочего стола. Приложения и их данные останутся.",
+  "widgets.size": "Размер",
+  "widgets.sizeSmall": "Маленький, 2 × 2",
+  "widgets.sizeWide": "Широкий, 4 × 2",
+  "widgets.noRoomResize": "На этой странице не хватает места для такого размера",
 };

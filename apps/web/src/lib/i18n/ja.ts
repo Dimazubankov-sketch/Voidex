@@ -1636,4 +1636,8 @@ export const ja: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "このスタックを削除しますか？",
   "widgets.deleteCarouselTitle": "このカルーセルを削除しますか？",
   "widgets.deleteStackBody": "中のウィジェットはすべてホーム画面から外れます。アプリとデータは残ります。",
+  "widgets.size": "サイズ",
+  "widgets.sizeSmall": "小、2 × 2",
+  "widgets.sizeWide": "ワイド、4 × 2",
+  "widgets.noRoomResize": "このページにはそのサイズの空きがありません",
 };

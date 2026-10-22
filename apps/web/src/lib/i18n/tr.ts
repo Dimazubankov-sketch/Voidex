@@ -1636,4 +1636,8 @@ export const tr: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "Bu yığın silinsin mi?",
   "widgets.deleteCarouselTitle": "Bu karusel silinsin mi?",
   "widgets.deleteStackBody": "Tüm widget'ları ana ekrandan kalkar. Uygulamalar ve verileri kalır.",
+  "widgets.size": "Boyut",
+  "widgets.sizeSmall": "Küçük, 2 × 2",
+  "widgets.sizeWide": "Geniş, 4 × 2",
+  "widgets.noRoomResize": "Bu sayfada bu boyut için yeterli yer yok",
 };

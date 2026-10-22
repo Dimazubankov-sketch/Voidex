@@ -1401,3 +1401,33 @@
     animation: none;
   }
 }
+
+/* A1: world clock — the selected city on top, a gliding second hand, cards that select */
+.vc-hand.second {
+  height: 40%;
+  width: 2px;
+  left: calc(50% - 1px);
+  background: var(--primary);
+  border-radius: 2px;
+}
+.vc-hero-swap {
+  position: relative;
+  flex: 1;
+}
+button.vc-city-card {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.vc-city-card.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--primary) 40%, transparent), 0 8px 22px -14px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+@media (hover: hover) {
+  button.vc-city-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 30%, var(--vc-line));
+  }
+}

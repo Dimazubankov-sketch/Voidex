@@ -1636,4 +1636,8 @@ export const fr: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "Supprimer cette pile ?",
   "widgets.deleteCarouselTitle": "Supprimer ce carrousel ?",
   "widgets.deleteStackBody": "Tous ses widgets quittent l'écran d'accueil. Les apps et leurs données restent.",
+  "widgets.size": "Taille",
+  "widgets.sizeSmall": "Petit, 2 × 2",
+  "widgets.sizeWide": "Large, 4 × 2",
+  "widgets.noRoomResize": "Pas assez de place sur cette page pour cette taille",
 };

@@ -1636,4 +1636,8 @@ export const de: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "Diesen Stapel löschen?",
   "widgets.deleteCarouselTitle": "Dieses Karussell löschen?",
   "widgets.deleteStackBody": "Alle Widgets verschwinden vom Home-Bildschirm. Die Apps und ihre Daten bleiben.",
+  "widgets.size": "Größe",
+  "widgets.sizeSmall": "Klein, 2 × 2",
+  "widgets.sizeWide": "Breit, 4 × 2",
+  "widgets.noRoomResize": "Auf dieser Seite ist nicht genug Platz für diese Größe",
 };

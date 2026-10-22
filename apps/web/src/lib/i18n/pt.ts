@@ -1636,4 +1636,8 @@ export const pt: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "Apagar esta pilha?",
   "widgets.deleteCarouselTitle": "Apagar este carrossel?",
   "widgets.deleteStackBody": "Todos os widgets saem da tela inicial. Os apps e seus dados ficam.",
+  "widgets.size": "Tamanho",
+  "widgets.sizeSmall": "Pequeno, 2 × 2",
+  "widgets.sizeWide": "Largo, 4 × 2",
+  "widgets.noRoomResize": "Não há espaço suficiente nesta página para esse tamanho",
 };

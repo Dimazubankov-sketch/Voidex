@@ -88,6 +88,14 @@ export const WIDGET_TYPES = ["calculator", "clock"] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 /** Step 2.14: Clock, large analog clock, the place of four icons (2 × 2). */
 export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 }, clock: { w: 2, h: 2 } };
+/**
+ * A2: widget sizes. "s" is the type's base block (2 × 2, four icon cells); "w" is twice as wide
+ * (4 × 2, eight cells). Each type lists only the sizes it really draws: the menu never offers more.
+ */
+export const WIDGET_SIZES = ["s", "w"] as const;
+export type WidgetSize = (typeof WIDGET_SIZES)[number];
+export const WIDGET_SIZE_OPTIONS: Record<WidgetType, readonly WidgetSize[]> = { calculator: ["s"], clock: ["s", "w"] };
+export const widgetSizesOf = (type: string): readonly WidgetSize[] => WIDGET_SIZE_OPTIONS[type as WidgetType] ?? ["s"];
 /** Background of the PC system bar (top): real glass, or none. */
 export const SYSTEM_BAR_STYLES = ["glass", "off"] as const;
 export type SystemBarStyle = (typeof SYSTEM_BAR_STYLES)[number];
@@ -249,6 +257,8 @@ export const WidgetSchema = z.object({
    */
   items2: z.array(WidgetItemSchema).min(1).max(STACK_MAX).optional(),
   active2: z.number().int().min(0).max(STACK_MAX - 1).optional(),
+  /** A2: a single widget's size ("w" = 4 × 2). Absent: its base size. Older apps ignore it (2 × 2). */
+  size: z.enum(WIDGET_SIZES).optional(),
 });
 export type Widget = z.infer<typeof WidgetSchema>;
 
@@ -468,7 +478,7 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
       container = String(at ?? (Number.isInteger(page) ? Math.max(0, Math.min(pages.length - 1, page)) : 0));
     }
     widgetIds.add(w.id);
-    widgets.push(normalizeWidget({ id: w.id, type: w.type, surface: w.surface === "mobile" ? "mobile" : "desktop", container, x: clamp01(w.x), y: clamp01(w.y), items: w.items, active: w.active, items2: w.items2, active2: w.active2 }, widgetIds));
+    widgets.push(normalizeWidget({ id: w.id, type: w.type, surface: w.surface === "mobile" ? "mobile" : "desktop", container, x: clamp01(w.x), y: clamp01(w.y), items: w.items, active: w.active, items2: w.items2, active2: w.active2, size: w.size }, widgetIds));
   }
 
   // Grid cells: only keys that still exist (items on that surface, widgets of that surface).
@@ -1149,11 +1159,13 @@ export function widgetColumns(w: Pick<Widget, "id" | "type" | "items" | "items2"
 }
 export const isWidgetCarousel = (w: Pick<Widget, "items2">) => !!w.items2?.length;
 export const isWidgetStack = (w: Pick<Widget, "items">) => (w.items?.length ?? 0) > 1;
-/** Grid cells a widget covers (a carousel: two widths). */
-export function widgetCells(w: Pick<Widget, "type" | "items2">): { w: number; h: number } {
+/** Grid cells a widget covers (a carousel or a wide widget: two widths). */
+export function widgetCells(w: Pick<Widget, "type" | "items2"> & { size?: WidgetSize }): { w: number; h: number } {
   const base = WIDGET_CELLS[w.type as WidgetType] ?? { w: 2, h: 2 };
-  return isWidgetCarousel(w) ? { w: base.w * 2, h: base.h } : base;
+  return isWidgetCarousel(w) || w.size === "w" ? { w: base.w * 2, h: base.h } : base;
 }
+/** A2: a wide widget stands alone: it is never part of a stack or a carousel. */
+export const isWideWidget = (w: Pick<Widget, "size">) => w.size === "w";
 
 /** The consistency rule for one widget: known types, unique ids, at most 10 per stack, one item = no stack. */
 export function normalizeWidget(w: Widget, taken: Set<string> = new Set([w.id])): Widget {
@@ -1181,6 +1193,8 @@ export function normalizeWidget(w: Widget, taken: Set<string> = new Set([w.id]))
     out.items2 = b;
     if (b.length > 1) out.active2 = Math.max(0, Math.min(b.length - 1, w.active2 ?? 0));
   }
+  // A2: a size the type really has, on a single widget only (stacks and carousels keep the base size).
+  if (w.size && w.size !== "s" && a.length === 1 && !b.length && widgetSizesOf(out.type).includes(w.size)) out.size = w.size;
   void taken;
   return out;
 }
@@ -1191,7 +1205,7 @@ function withColumns(w: Widget, cols: WidgetItem[][], active?: [number | undefin
 
 const placeOfWidget = (w: Widget): Place => (w.surface === "mobile" ? { surface: "mobile", page: Number(w.container) } : { surface: "desktop", space: w.container });
 
-export type StackResult = { layout: WorkspaceLayout; error?: undefined } | { layout?: undefined; error: "full" | "carousel" | "room" | "missing" };
+export type StackResult = { layout: WorkspaceLayout; error?: undefined } | { layout?: undefined; error: "full" | "carousel" | "room" | "missing" | "wide" };
 
 /**
  * E1: a widget (or a stack) dropped on the middle of another widget: they become one stack there.
@@ -1202,6 +1216,7 @@ export function stackWidgets(l: WorkspaceLayout, draggedId: string, targetId: st
   const t = l.widgets.find((w) => w.id === targetId);
   if (!d || !t || d.id === t.id) return { error: "missing" };
   if (isWidgetCarousel(d)) return { error: "carousel" };
+  if (isWideWidget(d) || isWideWidget(t)) return { error: "wide" };
   const cols = widgetColumns(t).map((c) => [...c]);
   const h = cols[half] ? half : 0;
   const added = widgetColumns(d)[0]!;
@@ -1219,6 +1234,7 @@ export function stackWidgets(l: WorkspaceLayout, draggedId: string, targetId: st
 export function addToStack(l: WorkspaceLayout, id: string, half: 0 | 1, type: WidgetType, newId = newWidgetId()): StackResult {
   const i = l.widgets.findIndex((w) => w.id === id);
   if (i < 0) return { error: "missing" };
+  if (isWideWidget(l.widgets[i]!)) return { error: "wide" };
   const cols = widgetColumns(l.widgets[i]!).map((c) => [...c]);
   const h = cols[half] ? half : 0;
   if (cols[h]!.length >= STACK_MAX) return { error: "full" };
@@ -1296,7 +1312,7 @@ export function deleteWidgetHalf(l: WorkspaceLayout, id: string, half: 0 | 1, ge
 export function carouselSpot(l: WorkspaceLayout, draggedId: string, targetId: string, side: "left" | "right", geometry?: GridGeometry): Cell | null {
   const d = l.widgets.find((w) => w.id === draggedId);
   const t = l.widgets.find((w) => w.id === targetId);
-  if (!d || !t || d.id === t.id || isWidgetCarousel(d) || isWidgetCarousel(t)) return null;
+  if (!d || !t || d.id === t.id || isWidgetCarousel(d) || isWidgetCarousel(t) || isWideWidget(d) || isWideWidget(t)) return null;
   if (d.surface !== t.surface) return null;
   const place = placeOfWidget(t);
   const placed = placementOf(l, place, geometry);
@@ -1349,4 +1365,76 @@ export function splitWidgetCarousel(l: WorkspaceLayout, id: string, geometry?: G
   n.widgets.push(normalizeWidget({ id: rid, type: right![0]!.type, surface: w.surface, container: w.container, x: w.x, y: w.y, items: right!.length > 1 ? right : undefined, active: w.active2 }));
   cells[widgetKey(rid)] = { c: cell.c + 2, r: cell.r };
   return n;
+}
+
+// ---------------------------------------------------------------------------
+// A2: widget sizes.
+
+/**
+ * A2: a single widget changes size in place. It keeps its top-left cell when it can (pulled left / up
+ * to stay inside the grid); icons and widgets under its new block move to the free cells nearest to
+ * where they were, in reading order. Refused when the page / desktop has no room for all of them
+ * ("room"): nothing changes and nothing is ever lost.
+ */
+export function resizeWidget(l: WorkspaceLayout, id: string, size: WidgetSize, geometry?: GridGeometry): StackResult {
+  const i = l.widgets.findIndex((w) => w.id === id);
+  if (i < 0) return { error: "missing" };
+  const w = l.widgets[i]!;
+  if (isWidgetStack(w) || isWidgetCarousel(w)) return { error: "carousel" };
+  if (!widgetSizesOf(w.type).includes(size)) return { error: "missing" };
+  if ((w.size ?? "s") === size) return { layout: l };
+  const place = placeOfWidget(w);
+  const g = geometry;
+  const n = clone(l);
+  pin(n, place, g);
+  const key = widgetKey(id);
+  const cells = cellsOf(n, w.surface);
+  const cur = cells[key] ?? { c: 0, r: 0 };
+  const next = normalizeWidget({ ...n.widgets[i]!, size });
+  n.widgets[i] = next;
+  const dim = widgetCells(next);
+  const cols = Math.max(1, g ? g.cols : columnsOf(n, w.surface));
+  if (dim.w > cols || (g && dim.h > g.rows)) return { error: "room" };
+  const c = Math.max(0, Math.min(cols - dim.w, cur.c));
+  const r = Math.max(0, g ? Math.min(g.rows - dim.h, cur.r) : cur.r);
+  cells[key] = { c, r };
+  // Everything else as it stands now, and who is under the new block.
+  const before = placementOf(l, place, g);
+  const inBlock = (p: PlacedCell) => p.c < c + dim.w && p.c + p.w > c && p.r < r + dim.h && p.r + p.h > r;
+  const displaced = [...before.entries()].filter(([k, p]) => k !== key && inBlock(p)).sort(([, a], [, b]) => a.r - b.r || a.c - b.c);
+  if (!displaced.length) return { layout: n };
+  const taken = new Set<string>();
+  const mark = (p: { c: number; r: number; w: number; h: number }) => {
+    for (let y = p.r; y < p.r + p.h; y++) for (let x = p.c; x < p.c + p.w; x++) taken.add(`${x},${y}`);
+  };
+  mark({ c, r, ...dim });
+  for (const [k, p] of before) if (k !== key && !displaced.some(([d]) => d === k)) mark(p);
+  const maxRows = g ? g.rows : Infinity;
+  let used = 0;
+  for (const p of before.values()) used = Math.max(used, p.r + p.h);
+  const rowsLimit = Number.isFinite(maxRows) ? maxRows : used + dim.h + displaced.reduce((s, [, p]) => s + p.h, 0);
+  const free = (x0: number, y0: number, ww: number, hh: number) => {
+    if (x0 < 0 || y0 < 0 || x0 + ww > cols || y0 + hh > rowsLimit) return false;
+    for (let y = y0; y < y0 + hh; y++) for (let x = x0; x < x0 + ww; x++) if (taken.has(`${x},${y}`)) return false;
+    return true;
+  };
+  // Widgets first (they need whole blocks), then icons; each to the free spot nearest its old one.
+  const order = [...displaced.filter(([k]) => k.startsWith("widget:")), ...displaced.filter(([k]) => !k.startsWith("widget:"))];
+  for (const [k, p] of order) {
+    let best: Cell | null = null;
+    let dist = Infinity;
+    for (let y = 0; y + p.h <= rowsLimit; y++)
+      for (let x = 0; x + p.w <= cols; x++) {
+        if (!free(x, y, p.w, p.h)) continue;
+        const d = (x - p.c) ** 2 + (y - p.r) ** 2 * 1.01;
+        if (d < dist) {
+          dist = d;
+          best = { c: x, r: y };
+        }
+      }
+    if (!best) return { error: "room" };
+    cells[k] = best;
+    mark({ ...best, w: p.w, h: p.h });
+  }
+  return { layout: n };
 }

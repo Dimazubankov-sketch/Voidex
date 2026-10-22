@@ -1636,4 +1636,8 @@ export const zh: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "删除此堆叠？",
   "widgets.deleteCarouselTitle": "删除此轮播？",
   "widgets.deleteStackBody": "其中所有小组件都会从主屏幕移除，应用及其数据会保留。",
+  "widgets.size": "尺寸",
+  "widgets.sizeSmall": "小，2 × 2",
+  "widgets.sizeWide": "宽，4 × 2",
+  "widgets.noRoomResize": "此页面没有足够空间放置该尺寸",
 };

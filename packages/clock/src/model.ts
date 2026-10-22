@@ -73,6 +73,11 @@ export interface ClockState {
   snoozes: Snooze[];
   stopwatch: StopwatchState;
   timerSetup: TimerSetup;
+  /**
+   * The city shown in the world clock's top panel and in the Clock widget (one of `cities`).
+   * Absent: this device's own zone. Only Clock and its widget follow it: nothing else's time changes.
+   */
+  selected?: string;
 }
 
 /** One ring of the alarm/timer sheet. */
@@ -190,7 +195,9 @@ export function normalizeState(saved: unknown): ClockState {
   const stopwatch: StopwatchState = { elapsed: num(sw.elapsed, 0, Number.MAX_SAFE_INTEGER, 0), running: sw.running === true && typeof sw.startedAt === "number", startedAt: num(sw.startedAt, 0, Number.MAX_SAFE_INTEGER, 0) };
   const ts = isObj(saved.timerSetup) ? saved.timerSetup : {};
   const timerSetup: TimerSetup = { hours: num(ts.hours, 0, 23, 0), minutes: num(ts.minutes, 0, 59, 25), seconds: num(ts.seconds, 0, 59, 0), name: str(ts.name), sound: sound(ts.sound) };
-  return { version: 1, cities, alarms, timers, history, snoozes, stopwatch, timerSetup };
+  const out: ClockState = { version: 1, cities, alarms, timers, history, snoozes, stopwatch, timerSetup };
+  if (typeof saved.selected === "string" && cities.includes(saved.selected)) out.selected = saved.selected;
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +310,21 @@ export function addCity(state: ClockState, zone: string): ClockState {
 }
 
 export function removeCity(state: ClockState, zone: string): ClockState {
-  return { ...state, cities: state.cities.filter((c) => c !== zone) };
+  const next: ClockState = { ...state, cities: state.cities.filter((c) => c !== zone) };
+  // The removed city is no longer shown on top: the device's own time is.
+  if (next.selected === zone) delete next.selected;
+  return next;
+}
+
+/** A1: one city at a time in the top panel; a city that is not in the list is ignored. */
+export function selectCity(state: ClockState, zone: string): ClockState {
+  if (!state.cities.includes(zone) || state.selected === zone) return state;
+  return { ...state, selected: zone };
+}
+
+/** The zone the top panel and the widget show: the selected city, else this device's zone. */
+export function shownZone(state: Pick<ClockState, "selected" | "cities">, deviceZone: string): string {
+  return state.selected && state.cities.includes(state.selected) ? state.selected : deviceZone;
 }
 
 // ---------------------------------------------------------------------------

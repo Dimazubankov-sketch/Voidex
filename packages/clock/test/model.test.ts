@@ -255,3 +255,22 @@ test("Step 2.15: a new alarm has no day chosen: it rings once, at the next such 
   assert.equal(nextAlarm({ ...draft, time: "07:00", days: [1] }, evening), new Date(2026, 9, 19, 7, 0, 0).getTime());
   assert.equal(nextAlarm({ ...draft, time: "07:00", days: [1] }, new Date(2026, 9, 19, 8, 0, 0).getTime()), new Date(2026, 9, 26, 7, 0, 0).getTime());
 });
+
+test("A1: one selected city, saved and restored; removing it falls back to the device zone", async () => {
+  const { selectCity, shownZone, removeCity, normalizeState, defaultState } = await import("../src/model.ts");
+  let s = defaultState();
+  assert.equal(shownZone(s, "Europe/Moscow"), "Europe/Moscow");
+  const other = s.cities.find((c) => c !== "Europe/Moscow")!;
+  s = selectCity(s, other);
+  assert.equal(s.selected, other);
+  assert.equal(shownZone(s, "Europe/Moscow"), other);
+  // Only a city of the list can be selected.
+  assert.equal(selectCity(s, "Pacific/Nowhere"), s);
+  // Survives a reload (and junk is dropped).
+  assert.equal(normalizeState(JSON.parse(JSON.stringify(s))).selected, other);
+  assert.equal(normalizeState({ ...s, selected: "Mars/Base" }).selected, undefined);
+  // Removing it: the device's zone is shown again.
+  const r = removeCity(s, other);
+  assert.equal(r.selected, undefined);
+  assert.equal(shownZone(r, "Asia/Omsk"), "Asia/Omsk");
+});

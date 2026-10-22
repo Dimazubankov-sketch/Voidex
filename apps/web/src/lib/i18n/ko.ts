@@ -1636,4 +1636,8 @@ export const ko: Record<MessageKey, string> = {
   "widgets.deleteStackTitle": "이 스택을 삭제할까요?",
   "widgets.deleteCarouselTitle": "이 캐러셀을 삭제할까요?",
   "widgets.deleteStackBody": "모든 위젯이 홈 화면에서 사라집니다. 앱과 데이터는 남습니다.",
+  "widgets.size": "크기",
+  "widgets.sizeSmall": "작게, 2 × 2",
+  "widgets.sizeWide": "넓게, 4 × 2",
+  "widgets.noRoomResize": "이 페이지에 해당 크기를 놓을 공간이 없습니다",
 };

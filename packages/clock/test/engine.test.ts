@@ -100,3 +100,24 @@ test("cities: one row per zone, search in both languages, names per language", (
   assert.equal(cityName("Asia/Shanghai", "en"), "Beijing");
   assert.equal(cityName("America/Argentina/Buenos_Aires", "en"), "Buenos Aires");
 });
+
+test("A1: hands of a city glide with seconds and follow its zone, summer time included", () => {
+  // 12:30:15.500 in Moscow (UTC+3): hour hand past 12:30 a little, minute past 30, second at 15.5 s.
+  const at = Date.UTC(2026, 9, 22, 9, 30, 15, 500);
+  const m = handAngles("Europe/Moscow", at);
+  assert.ok(Math.abs(m.second - 15.5 * 6) < 1e-9);
+  assert.ok(Math.abs(m.minute - (30 * 6 + 15.5 / 10)) < 1e-9);
+  assert.ok(Math.abs(m.hour - (0 * 30 + 15 + 15.5 / 120)) < 1e-9);
+  // New York: UTC−4 in summer, UTC−5 in winter (the same UTC hour shows different local hours).
+  const summer = handAngles("America/New_York", Date.UTC(2026, 6, 1, 16, 0, 0));
+  const winter = handAngles("America/New_York", Date.UTC(2026, 0, 15, 16, 0, 0));
+  assert.equal(summer.hour, 0 * 30); // 12:00 local
+  assert.equal(winter.hour, 11 * 30); // 11:00 local
+  // The second hand never jumps back within a minute.
+  let prev = -1;
+  for (let ms = 0; ms < 60_000; ms += 250) {
+    const s = handAngles("Asia/Omsk", Date.UTC(2026, 9, 22, 9, 31, 0) + ms).second;
+    assert.ok(s > prev);
+    prev = s;
+  }
+});

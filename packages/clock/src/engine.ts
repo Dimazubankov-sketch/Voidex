@@ -83,9 +83,12 @@ export function isDaytime(zone: string, now = Date.now()): boolean {
 }
 
 /** Angles of the analog clock hands (degrees) for a zone. */
-export function handAngles(zone: string, now = Date.now()): { hour: number; minute: number } {
+export function handAngles(zone: string, now = Date.now()): { hour: number; minute: number; second: number } {
   const p = zoneParts(zone, now);
-  return { hour: (p.hour % 12) * 30 + p.minute / 2, minute: p.minute * 6 + p.second / 10 };
+  // Milliseconds are the same in every zone (offsets are whole minutes): they make the hands glide.
+  const ms = ((now % 1000) + 1000) % 1000;
+  const sec = p.second + ms / 1000;
+  return { hour: (p.hour % 12) * 30 + p.minute / 2 + sec / 120, minute: p.minute * 6 + sec / 10, second: sec * 6 };
 }
 
 /** The device's own zone (falls back to Moscow when the browser does not tell). */
