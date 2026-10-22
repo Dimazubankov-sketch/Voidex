@@ -202,14 +202,23 @@ test("B7: a removed widget shrinks away quickly; the layout changes once it is g
   await saveLayout(page, (l) => addWidget(noIcons(page, l), "clock", where(page, l, 0, 0), "w_clock0001"));
   const w = page.locator('[data-widget="w_clock0001"]');
   await longPress(page, w);
+  // Watch the widget every frame until it is gone: it must fade on the way out (not just vanish).
+  await page.evaluate(() => {
+    const win = window as unknown as { __vxMinOpacity: number };
+    win.__vxMinOpacity = 1;
+    const tick = () => {
+      const el = document.querySelector('[data-widget-cell="w_clock0001"]');
+      if (!el) return;
+      win.__vxMinOpacity = Math.min(win.__vxMinOpacity, Number(getComputedStyle(el).opacity));
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
   const t0 = Date.now();
   await page.getByTestId("menu-remove-widget").click();
-  // Mid-way it is smaller and fainter.
-  await page.waitForTimeout(90);
-  const mid = await page.locator('[data-widget-cell="w_clock0001"]').evaluate((el) => ({ o: Number(getComputedStyle(el).opacity), t: getComputedStyle(el).transform })).catch(() => null);
-  if (mid) expect(mid.o).toBeLessThan(1);
   await expect(w).toHaveCount(0);
   expect(Date.now() - t0).toBeLessThan(1500);
+  expect(await page.evaluate(() => (window as unknown as { __vxMinOpacity: number }).__vxMinOpacity)).toBeLessThan(1);
   await expect.poll(async () => (await layoutOf(page)).widgets.length).toBe(0);
 });
 
