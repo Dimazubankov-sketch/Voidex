@@ -495,3 +495,195 @@
     margin-left: 12px;
   }
 }
+
+/* ---------------------------------------------------------------- Stage D: text and pictures in one flow */
+
+.vn2-note {
+  /* Between a picture and the text beside it: about one character (D3). */
+  --vn2-gap: 0.62em;
+}
+.vn2-flow-item {
+  break-inside: avoid-column;
+}
+.vn2-columns .vn2-row,
+.vn2-columns .vn2-carousel-wrap {
+  margin-left: 30px;
+  margin-right: 30px;
+}
+.vn2-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--vn2-gap);
+  padding: 8px 0;
+  font-size: 17px;
+}
+.vn2-cell {
+  flex: 0 0 auto;
+  min-width: 0;
+  transition: width 160ms ease;
+}
+.vn2-row-text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  /* The first line sits level with the top of the picture beside it. */
+  margin-top: -2px;
+}
+.vn2-row-free {
+  flex: 1 1 0;
+  align-self: stretch;
+  min-height: 44px;
+  cursor: text;
+  background: transparent;
+}
+.vn2-frame img {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+.vn2-frame:not([style*="aspect-ratio"]) img,
+.vn2-frame[style*="aspect-ratio"] {
+  max-height: 80vh;
+}
+.vn2-columns .vn2-frame {
+  max-height: calc(var(--vn2-side, 600px) - 90px);
+}
+/* 50 %: the whole picture inside the row's frame, the empty sides softly shown. */
+.vn2-frame-boxed {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vn2-ink) 4%, transparent);
+}
+.vn2-img-active {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.vn2-cell-placeholder {
+  opacity: 0.35;
+}
+.vn2-scale-handle {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: var(--primary);
+  box-shadow: 0 2px 8px rgba(30, 20, 80, 0.25);
+  cursor: ew-resize;
+  pointer-events: none;
+}
+.vn2-scale-badge {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(20, 16, 40, 0.62);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Carousels (D7): one picture at a time on every swipe or arrow; 100 % one in view, 50 % two, 25 % four. */
+.vn2-carousel-wrap {
+  position: relative;
+  padding: 8px 0;
+}
+.vn2-carousel {
+  display: flex;
+  gap: var(--vn2-gap);
+  font-size: 17px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.vn2-carousel-item {
+  flex: 0 0 calc((100% - (var(--vn2-per) - 1) * var(--vn2-gap)) / var(--vn2-per));
+  scroll-snap-align: start;
+}
+.vn2-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 14px rgba(20, 20, 40, 0.14);
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.vn2-carousel-prev {
+  left: 6px;
+}
+.vn2-carousel-next {
+  right: 6px;
+}
+.vn2-carousel-arrow:disabled {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .vn2-carousel-wrap:hover .vn2-carousel-arrow,
+  .vn2-carousel-arrow:focus-visible {
+    opacity: 1;
+  }
+}
+@media (pointer: coarse) {
+  .vn2-carousel-arrow {
+    display: none;
+  }
+}
+
+/* Dragging a picture (D2): lifted a little, a soft shadow; a thin mark shows where it goes. */
+.vn2-drag-ghost {
+  position: fixed;
+  z-index: 400;
+  pointer-events: none;
+  border-radius: 10px;
+  transform: scale(1.035);
+  box-shadow: 0 24px 48px -18px rgba(30, 20, 80, 0.45), 0 6px 16px -8px rgba(30, 20, 80, 0.25);
+  animation: vn2-lift 160ms ease-out;
+}
+@keyframes vn2-lift {
+  from {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(30, 20, 80, 0);
+  }
+}
+.vn2-drop-mark {
+  position: fixed;
+  z-index: 399;
+  pointer-events: none;
+  border-radius: 2px;
+  background: var(--primary);
+}
+.vn2-drop-ring {
+  background: transparent;
+  border: 2px solid var(--primary);
+  border-radius: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vn2-cell {
+    transition: none;
+  }
+  .vn2-drag-ghost {
+    animation: none;
+  }
+  .vn2-carousel {
+    scroll-behavior: auto;
+  }
+}

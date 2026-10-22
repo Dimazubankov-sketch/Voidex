@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
-import { WIDGET_CELLS, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type PlacedCell, type WidgetType, type WorkspaceLayout } from "@voidex/shared";
+import { widgetCells, WIDGET_TYPES, gridPlacement, layoutItemKey, placementOf, widgetKey, type LayoutItem, type Place, type GridGeometry, type PlacedCell, type WorkspaceLayout } from "@voidex/shared";
 import type { DesktopGrid } from "./desktop-geometry";
 import type { IconMetrics, LabelStyle } from "./icons";
 import { useHomeUi } from "./ui-store";
@@ -70,9 +70,11 @@ interface GridProps {
    * outside it and the grid never grows (no scrolling desktop).
    */
   fixed?: DesktopGrid;
+  /** A2 (phone): the page holds exactly these rows; nothing is placed or dropped below them. */
+  bounds?: GridGeometry;
 }
 
-export function HomeGrid({ layout, place, items, metrics: m, label, editing, sorted, minRows = 0, renderItem, renderWidget, testId, fixed }: GridProps) {
+export function HomeGrid({ layout, place, items, metrics: m, label, editing, sorted, minRows = 0, renderItem, renderWidget, testId, fixed, bounds }: GridProps) {
   const id = gridId(place);
   const cols = Math.max(1, fixed ? fixed.cols : place.surface === "mobile" ? layout.mobile.columns : layout.desktop.columns);
   const rowH = rowHeight(m, label);
@@ -80,11 +82,11 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
   const container = place.surface === "mobile" ? String(place.page) : place.space;
   const widgets = layout.widgets.filter((w) => w.surface === place.surface && w.container === container && (WIDGET_TYPES as readonly string[]).includes(w.type));
 
-  const geometry = fixed ? { cols: fixed.cols, rows: fixed.rows } : undefined;
+  const geometry = fixed ? { cols: fixed.cols, rows: fixed.rows } : bounds;
   const placed: Map<string, PlacedCell> = useMemo(() => {
     // PC: stored cells outside the screen area move to the nearest free cell inside it.
     if (!sorted) return placementOf(layout, place, geometry);
-    const blocks = widgets.map((w) => ({ key: widgetKey(w.id), ...WIDGET_CELLS[w.type as WidgetType] }));
+    const blocks = widgets.map((w) => ({ key: widgetKey(w.id), ...widgetCells(w) }));
     const cells = Object.fromEntries(widgets.flatMap((w) => {
       const all = place.surface === "mobile" ? layout.mobile.cells : layout.desktop.cells;
       const c = all[widgetKey(w.id)];
@@ -97,7 +99,11 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
   let rows = 0;
   for (const p of placed.values()) rows = Math.max(rows, p.r + p.h);
   // While something is dragged here the grid grows to the row under the pointer (PC desktops grow downwards).
-  const shownRows = fixed ? Math.max(fixed.rows, rows) : Math.max(minRows, rows + (editing ? 1 : 0), target ? target.r + 1 : 0, 1);
+  const shownRows = fixed
+    ? Math.max(fixed.rows, rows)
+    : bounds
+      ? Math.max(bounds.rows, rows) // more only when the page is completely full
+      : Math.max(minRows, rows + (editing ? 1 : 0), target ? target.r + 1 : 0, 1);
   const area = (p: PlacedCell) => ({ gridColumn: `${p.c + 1} / span ${p.w}`, gridRow: `${p.r + 1} / span ${p.h}` });
   // Step 2.7 (PC): the room a row has beyond its icon is spread evenly over the rows, so the first row
   // sits at the top of the desktop and the last at its bottom (the same space to the system bar and to
@@ -118,7 +124,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
       data-home-free
       data-cols={cols}
       data-rows={fixed ? fixed.rows : undefined}
-      data-max-rows={place.surface === "mobile" ? shownRows : fixed ? fixed.rows : undefined}
+      data-max-rows={bounds ? bounds.rows : place.surface === "mobile" ? shownRows : fixed ? fixed.rows : undefined}
       data-cell-w={fixed ? fixed.cellW : m.cell}
       data-row-h={fixed ? fixed.rowH : rowH}
       data-gap-x={fixed ? 0 : m.gapX}

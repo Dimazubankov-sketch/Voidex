@@ -133,15 +133,66 @@ function settle(el: WheelElement, state: WheelState) {
   decorate(el, state);
 }
 
-/** Rows a flick can travel at most, and the time constant of its glide (ms). */
-const FLING_ROWS_MAX = 14;
-const FLING_TAU = 300;
+/*
+ * B1 — momentum like a real drum. The release speed of the finger (px / ms, from its last ~100 ms) decides:
+ *   slow (under FLING_MIN)          → no spin: the drum rests on the row nearest to where the finger left it
+ *                                     (precise, one value at a time);
+ *   a quick nudge of under half a row → exactly one row on (Step 2.16);
+ *   otherwise                        → it glides on and slows down by itself (exponential decay with time
+ *                                     constant TAU, the way iOS lists coast), landing exactly on a row: a
+ *                                     medium swipe goes a few values, a fast one many (up to FLING_ROWS_MAX).
+ * The glide starts at the finger's own speed, so there is no jump at the release.
+ */
+export const FLING_TAU = 325;
 /** Release speed (px / ms) below which a drag just snaps to its row. */
-const FLING_MIN = 0.55;
-/** Step 2.16: a drag shorter than this (rows of finger travel) never spins on: it steps. */
-const FLING_MIN_ROWS = 1.5;
-/** …and a nudge of at least this much of a row is one row on, never more. */
+export const FLING_MIN = 0.3;
+/** A move shorter than this (rows) and slower than NUDGE_FAST is a nudge: one row on, never more. */
+const NUDGE_ROWS = 0.5;
+const NUDGE_FAST = 1.5;
+/** …and a nudge of at least this much of a row is one row on (less: it stays). */
 const NUDGE = 0.2;
+export const FLING_ROWS_MAX = 80;
+
+/** Duration (ms) of a glide over `distance` px that starts at `velocity` px / ms (cubic ease-out). */
+export function glideDuration(distance: number, velocity: number): number {
+  return Math.max(240, Math.min(1800, (3 * Math.abs(distance)) / Math.max(0.05, Math.abs(velocity))));
+}
+
+/** Finger speed at release from recent samples (px / ms, positive = finger moving up = values grow). */
+export function releaseVelocity(samples: { y: number; t: number }[], now: number): number {
+  if (samples.length < 2) return 0;
+  const last = samples[samples.length - 1]!;
+  // A finger held still before lifting is no flick.
+  if (now - last.t > 80) return 0;
+  let first = samples[0]!;
+  for (const s of samples) if (last.t - s.t <= 100) {
+    first = s;
+    break;
+  }
+  const dt = Math.max(8, last.t - first.t);
+  return -(last.y - first.y) / dt;
+}
+
+/**
+ * Where a release ends (pure): the row to land on, from the scroll position, the release speed, how far the
+ * finger moved (rows) and the row it started on. `null` = no momentum (the caller snaps).
+ */
+export function flingTarget(fromPx: number, velocity: number, dragRows: number, startRow: number, row = ROW_HEIGHT): { row: number; glide: boolean } {
+  const here = fromPx / row;
+  if (Math.abs(dragRows) < NUDGE_ROWS && Math.abs(velocity) < NUDGE_FAST) {
+    if (Math.abs(dragRows) < 1) return { row: Math.abs(dragRows) >= NUDGE ? startRow + Math.sign(dragRows) : startRow, glide: false };
+  }
+  if (Math.abs(velocity) < FLING_MIN) return { row: Math.round(here), glide: false };
+  // Only the speed above half the threshold carries the drum on: just over it is one or two rows.
+  const projected = here + (Math.sign(velocity) * (Math.abs(velocity) - FLING_MIN / 2) * FLING_TAU) / row;
+  let target = Math.round(projected);
+  const dir = Math.sign(velocity);
+  // At least the next row in the direction of the flick.
+  if ((target - here) * dir < 0.5) target = dir > 0 ? Math.ceil(here + 0.5) : Math.floor(here - 0.5);
+  const max = FLING_ROWS_MAX;
+  if (Math.abs(target - here) > max) target = Math.round(here + dir * max);
+  return { row: target, glide: true };
+}
 
 const raf = (fn: (t: number) => void): number =>
   typeof globalThis.requestAnimationFrame === "function" ? globalThis.requestAnimationFrame(fn) : (setTimeout(() => fn(Date.now()), 16) as unknown as number);
@@ -170,43 +221,38 @@ function recentre(el: WheelElement, state: WheelState, extra = 0) {
   return shift;
 }
 
-/**
- * A flick: the drum keeps turning for a moment, longer the faster the flick
- * (a short move is a short turn), then comes to rest exactly on a row. Each
- * row it passes is a real step (the tick sound, the change).
- */
+/** Releases the drum: a snap, a one-row nudge or a momentum glide (see flingTarget). */
 function fling(el: WheelElement, state: WheelState, velocity: number, dragRows = Infinity, startRow?: number) {
   stopSpin(state);
-  // Step 2.16: a small move goes exactly one row on (or stays), whatever its speed: the next
-  // or the previous number is always easy to reach. Only a real flick spins on.
-  if (reduced() || Math.abs(velocity) < FLING_MIN || Math.abs(dragRows) < FLING_MIN_ROWS) {
+  const plan = flingTarget(el.scrollTop, reduced() ? 0 : velocity, dragRows, startRow ?? Math.round(el.scrollTop / ROW_HEIGHT));
+  if (!plan.glide) {
     state.touching = false;
-    const here = el.scrollTop / ROW_HEIGHT;
-    let row = Math.round(here);
-    if (startRow !== undefined && Math.abs(dragRows) < 1) row = Math.abs(dragRows) >= NUDGE ? startRow + Math.sign(dragRows) : startRow;
-    move(el, state, row);
+    move(el, state, plan.row);
     return;
   }
-  // The speed above the flick threshold decides how far it turns (a fair flick: a few rows).
-  const speed = Math.abs(velocity) - FLING_MIN * 0.6;
-  const travel = Math.sign(velocity) * Math.min(FLING_ROWS_MAX * ROW_HEIGHT, speed * FLING_TAU);
-  // Land on a row, inside the middle copy (the same numbers one copy away).
-  recentre(el, state, travel);
-  const from = el.scrollTop;
-  const to = Math.round((from + travel) / ROW_HEIGHT) * ROW_HEIGHT;
-  const rows = Math.abs(to - from) / ROW_HEIGHT;
-  const duration = Math.max(280, Math.min(950, 240 + rows * 52));
+  let from = el.scrollTop;
+  let to = plan.row * ROW_HEIGHT;
+  // A cubic ease-out whose first speed is the finger's (3 · distance / duration = release speed): it starts
+  // exactly as fast as the finger left, slows down evenly and stops on the row in a finite time.
+  const duration = glideDuration(to - from, velocity);
   const start = Date.now();
   state.touching = true;
   state.target = to / ROW_HEIGHT;
   const frame = () => {
     if (!state.active) return;
     const k = Math.min(1, (Date.now() - start) / duration);
-    const eased = 1 - (1 - k) ** 3;
-    el.scrollTo({ top: from + (to - from) * eased, behavior: "instant" });
+    const done = k >= 1;
+    const pos = done ? to : from + (to - from) * (1 - (1 - k) ** 3);
+    el.scrollTo({ top: pos, behavior: "instant" });
+    // Endless: keep the drum in the middle copy while it coasts (the same numbers one copy away).
+    const shift = recentre(el, state);
+    if (shift) {
+      from += shift;
+      to += shift;
+    }
     emit(el, state);
     decorate(el, state);
-    if (k < 1) {
+    if (!done) {
       state.spin = raf(frame);
       return;
     }
@@ -313,7 +359,7 @@ export function mountWheel(el: WheelElement, onChange: WheelChange): () => void 
       recentre(el, state);
       const now = Date.now();
       d.samples.push({ y: event.clientY, t: now });
-      while (d.samples.length > 2 && now - d.samples[0]!.t > 90) d.samples.shift();
+      while (d.samples.length > 2 && now - d.samples[0]!.t > 140) d.samples.shift();
     });
     const release = (event?: { pointerId?: number; type?: string }) => {
       const d = state.drag;
@@ -324,19 +370,19 @@ export function mountWheel(el: WheelElement, onChange: WheelChange): () => void 
         later(state, () => settle(el, state), 180);
         return;
       }
-      const first = d.samples[0]!;
-      const last = d.samples[d.samples.length - 1]!;
-      const dt = Math.max(1, last.t - first.t);
-      // A finger held still before lifting is no flick.
-      const fresh = Date.now() - last.t < 60;
-      const velocity = fresh && event?.type !== "pointercancel" ? -(last.y - first.y) / dt : 0;
+      const velocity = event?.type !== "pointercancel" ? releaseVelocity(d.samples, Date.now()) : 0;
       // How far the finger took the drum (rows) and the row it started on (recentring moves both alike).
       const dragRows = (el.scrollTop - d.top) / ROW_HEIGHT;
       fling(el, state, velocity, dragRows, Math.round(d.top / ROW_HEIGHT));
     };
     on("pointerup", release);
     on("pointercancel", release);
-    on("lostpointercapture", (event: { pointerId: number }) => state.drag && release(event));
+    // B1: on touch screens the pressed option button holds the pointer first (implicit capture); its "lost
+    // capture" when the drum takes the pointer bubbles up here and must not end the drag (it froze the drum).
+    on("lostpointercapture", (event: { pointerId: number; target?: unknown }) => {
+      if (event.target !== undefined && event.target !== el) return;
+      if (state.drag) release(event);
+    });
     // PC: the mouse wheel turns the drum row by row (a notch = one step; a trackpad adds up).
     on(
       "wheel",

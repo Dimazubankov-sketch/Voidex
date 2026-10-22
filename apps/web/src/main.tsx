@@ -6,9 +6,11 @@ import { App } from "./app";
 import "./styles/index.css";
 import { applyStoredTheme } from "@/lib/theme";
 import { trackKeyboard } from "@/lib/keyboard";
+import { installZoomGuard } from "@/lib/zoom-guard";
 
 applyStoredTheme();
 trackKeyboard();
+installZoomGuard();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -17,3 +19,6 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// A1: the bundle runs — the boot guard (public/boot-guard.js) must not show its fallback.
+(window as unknown as { __vxBoot?: { dismiss?: () => void; ok?: boolean } }).__vxBoot?.dismiss?.();

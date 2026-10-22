@@ -221,6 +221,12 @@ export type DesktopSpace = z.infer<typeof DesktopSpaceSchema>;
  * fractions of the free area). Phone: shown at the top of one page, ordered
  * by `y`.
  */
+/** Stage E: one widget inside a stack (or a half of a horizontal carousel). */
+export const WidgetItemSchema = z.object({ id: widgetId, type: z.string().regex(/^[a-z0-9-]{1,32}$/) });
+export type WidgetItem = z.infer<typeof WidgetItemSchema>;
+/** Stage E: at most this many widgets in one stack. */
+export const STACK_MAX = 10;
+
 export const WidgetSchema = z.object({
   id: widgetId,
   /** Any short id: retired / unknown types are dropped by normalizeLayout. */
@@ -230,6 +236,19 @@ export const WidgetSchema = z.object({
   container: z.string().max(32),
   x: fraction,
   y: fraction,
+  /**
+   * Stage E — a STACK: the widgets switched vertically in this one place (2–10; the first is `type`).
+   * Absent: a single widget. Older apps ignore it and show the first widget.
+   */
+  items: z.array(WidgetItemSchema).max(STACK_MAX).optional(),
+  /** The stack's widget in view. */
+  active: z.number().int().min(0).max(STACK_MAX - 1).optional(),
+  /**
+   * Stage E — a horizontal CAROUSEL: a second half beside the first (a widget or a stack), the two
+   * taking two neighbouring 2 × 2 places as one wide block. A stack never holds a carousel.
+   */
+  items2: z.array(WidgetItemSchema).min(1).max(STACK_MAX).optional(),
+  active2: z.number().int().min(0).max(STACK_MAX - 1).optional(),
 });
 export type Widget = z.infer<typeof WidgetSchema>;
 
@@ -449,7 +468,7 @@ export function normalizeLayout(input: WorkspaceLayout | null | undefined, insta
       container = String(at ?? (Number.isInteger(page) ? Math.max(0, Math.min(pages.length - 1, page)) : 0));
     }
     widgetIds.add(w.id);
-    widgets.push({ id: w.id, type: w.type, surface: w.surface === "mobile" ? "mobile" : "desktop", container, x: clamp01(w.x), y: clamp01(w.y) });
+    widgets.push(normalizeWidget({ id: w.id, type: w.type, surface: w.surface === "mobile" ? "mobile" : "desktop", container, x: clamp01(w.x), y: clamp01(w.y), items: w.items, active: w.active, items2: w.items2, active2: w.active2 }, widgetIds));
   }
 
   // Grid cells: only keys that still exist (items on that surface, widgets of that surface).
@@ -900,7 +919,7 @@ export function surfaceKeys(l: WorkspaceLayout, place: Place): { items: string[]
   const container = place.surface === "mobile" ? String(place.page) : place.space;
   const blocks = l.widgets
     .filter((w) => w.surface === place.surface && w.container === container && (WIDGET_TYPES as readonly string[]).includes(w.type))
-    .map((w) => ({ key: widgetKey(w.id), ...WIDGET_CELLS[w.type as WidgetType] }));
+    .map((w) => ({ key: widgetKey(w.id), ...widgetCells(w) }));
   return { items, blocks };
 }
 
@@ -910,7 +929,9 @@ const cellsOf = (l: WorkspaceLayout, surface: Place["surface"]) => (surface === 
 /**
  * Step 2.5.1: the size of a PC desktop grid as this screen shows it — columns
  * and rows that fit the free area (the stored column count is only a
- * fallback). Phone pages ignore it.
+ * fallback). A2: phone pages pass it too (4 columns × the rows that fit the
+ * page), so nothing is ever placed below the visible page. Stored cells are
+ * not rewritten for the screen: a taller phone still shows them where they were.
  */
 export interface GridGeometry {
   cols: number;
@@ -920,7 +941,7 @@ export interface GridGeometry {
 /** Where everything on one page / desktop is right now. */
 export function placementOf(l: WorkspaceLayout, place: Place, geometry?: GridGeometry): Map<string, PlacedCell> {
   const { items, blocks } = surfaceKeys(l, place);
-  const g = place.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   return gridPlacement(g ? g.cols : columnsOf(l, place.surface), items, cellsOf(l, place.surface), blocks, g?.rows);
 }
 
@@ -955,13 +976,14 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
   if (!from) return l;
   const n = clone(l);
   const same = JSON.stringify(from) === JSON.stringify(to);
-  const g = to.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   pin(n, from, g);
   if (!same) pin(n, to, g);
   const cells = cellsOf(n, to.surface);
   const old = cells[key];
   const isWidget = key.startsWith("widget:");
-  const size = isWidget ? WIDGET_CELLS[(n.widgets.find((w) => widgetKey(w.id) === key)?.type ?? "calculator") as WidgetType] : { w: 1, h: 1 };
+  const ww = isWidget ? n.widgets.find((w) => widgetKey(w.id) === key) : undefined;
+  const size = ww ? widgetCells(ww) : { w: 1, h: 1 };
   const cols = g ? g.cols : columnsOf(n, to.surface);
   const c = Math.max(0, Math.min(cols - size.w, cell.c));
   const r = Math.max(0, g ? Math.min(g.rows - size.h, cell.r) : cell.r);
@@ -1001,10 +1023,10 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
  * A free block of `size` cells on a page / desktop where nothing has to move.
  * Without `near`: the first one from the top (reading order). With `near`:
  * the one closest to that cell (PC: where the desktop menu was opened).
- * Phone pages grow downwards, so there is always one; a full PC desktop: null.
+ * Without geometry the grid grows downwards, so there is always one; a full bounded page / desktop: null.
  */
 export function freeBlock(l: WorkspaceLayout, place: Place, size: { w: number; h: number }, near?: Cell, geometry?: GridGeometry): Cell | null {
-  const g = place.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   const cols = Math.max(1, g ? g.cols : columnsOf(l, place.surface));
   const placed = placementOf(l, place, g);
   const taken = new Set<string>();
@@ -1044,7 +1066,7 @@ export function freeBlock(l: WorkspaceLayout, place: Place, size: { w: number; h
 export function placeGroup(l: WorkspaceLayout, keys: string[], anchor: string, to: Place, cell: Cell, geometry?: GridGeometry): WorkspaceLayout {
   const group = [anchor, ...keys.filter((k) => k !== anchor && !k.startsWith("widget:"))];
   const n = clone(l);
-  const g = to.surface === "desktop" ? geometry : undefined;
+  const g = geometry;
   const cols = Math.max(1, g ? g.cols : columnsOf(n, to.surface));
   const froms = new Map<string, Place>();
   for (const k of group) {
@@ -1108,5 +1130,223 @@ export function placeGroup(l: WorkspaceLayout, keys: string[], anchor: string, t
     cells[k] = at;
     taken.add(`${at.c},${at.r}`);
   }
+  return n;
+}
+
+// ---------------------------------------------------------------------------
+// Stage E: widget stacks and horizontal carousels.
+//
+// A STACK switches widgets vertically in one 2 × 2 place (`items`, 2–10). A horizontal CAROUSEL joins two
+// neighbouring 2 × 2 places into one 4 × 2 block (`items2` is its right half); each half is a widget or a
+// stack. Items are plain widgets ({ id, type }), so a stack can never hold a carousel and nothing nests.
+
+const knownType = (t: string) => (WIDGET_TYPES as readonly string[]).includes(t);
+
+/** The widgets of each half (one half for a widget or a stack, two for a carousel). */
+export function widgetColumns(w: Pick<Widget, "id" | "type" | "items" | "items2">): WidgetItem[][] {
+  const first = w.items?.length ? w.items : [{ id: w.id, type: w.type }];
+  return w.items2?.length ? [first, w.items2] : [first];
+}
+export const isWidgetCarousel = (w: Pick<Widget, "items2">) => !!w.items2?.length;
+export const isWidgetStack = (w: Pick<Widget, "items">) => (w.items?.length ?? 0) > 1;
+/** Grid cells a widget covers (a carousel: two widths). */
+export function widgetCells(w: Pick<Widget, "type" | "items2">): { w: number; h: number } {
+  const base = WIDGET_CELLS[w.type as WidgetType] ?? { w: 2, h: 2 };
+  return isWidgetCarousel(w) ? { w: base.w * 2, h: base.h } : base;
+}
+
+/** The consistency rule for one widget: known types, unique ids, at most 10 per stack, one item = no stack. */
+export function normalizeWidget(w: Widget, taken: Set<string> = new Set([w.id])): Widget {
+  const seen = new Set<string>();
+  const clean = (list?: WidgetItem[]) =>
+    (list ?? []).filter((x) => {
+      if (!x || !knownType(x.type) || seen.has(x.id)) return false;
+      seen.add(x.id);
+      return true;
+    }).slice(0, STACK_MAX);
+  let a = clean(w.items);
+  let b = clean(w.items2);
+  if (!a.length && !w.items?.length && knownType(w.type)) a = clean([{ id: w.id, type: w.type }]);
+  if (!a.length && b.length) {
+    a = b;
+    b = [];
+  }
+  if (!a.length) a = [{ id: w.id, type: w.type }];
+  const out: Widget = { id: w.id, type: a[0]!.type, surface: w.surface, container: w.container, x: w.x, y: w.y };
+  if (a.length > 1) {
+    out.items = a;
+    out.active = Math.max(0, Math.min(a.length - 1, w.active ?? 0));
+  }
+  if (b.length) {
+    out.items2 = b;
+    if (b.length > 1) out.active2 = Math.max(0, Math.min(b.length - 1, w.active2 ?? 0));
+  }
+  void taken;
+  return out;
+}
+
+function withColumns(w: Widget, cols: WidgetItem[][], active?: [number | undefined, number | undefined]): Widget {
+  return normalizeWidget({ ...w, items: cols[0], items2: cols[1]?.length ? cols[1] : undefined, active: active?.[0] ?? w.active, active2: active?.[1] ?? w.active2 });
+}
+
+const placeOfWidget = (w: Widget): Place => (w.surface === "mobile" ? { surface: "mobile", page: Number(w.container) } : { surface: "desktop", space: w.container });
+
+export type StackResult = { layout: WorkspaceLayout; error?: undefined } | { layout?: undefined; error: "full" | "carousel" | "room" | "missing" };
+
+/**
+ * E1: a widget (or a stack) dropped on the middle of another widget: they become one stack there.
+ * `half` picks the half of a carousel. Refused: a carousel into a stack, more than 10.
+ */
+export function stackWidgets(l: WorkspaceLayout, draggedId: string, targetId: string, half: 0 | 1 = 0): StackResult {
+  const d = l.widgets.find((w) => w.id === draggedId);
+  const t = l.widgets.find((w) => w.id === targetId);
+  if (!d || !t || d.id === t.id) return { error: "missing" };
+  if (isWidgetCarousel(d)) return { error: "carousel" };
+  const cols = widgetColumns(t).map((c) => [...c]);
+  const h = cols[half] ? half : 0;
+  const added = widgetColumns(d)[0]!;
+  if (cols[h]!.length + added.length > STACK_MAX) return { error: "full" };
+  cols[h]!.push(...added);
+  const n = clone(l);
+  const ti = n.widgets.findIndex((w) => w.id === t.id);
+  // The dropped widget is the one in view.
+  const act: [number | undefined, number | undefined] = h === 0 ? [cols[0]!.length - added.length, undefined] : [undefined, cols[1]!.length - added.length];
+  n.widgets[ti] = withColumns(n.widgets[ti]!, cols, act);
+  return { layout: removeWidget(n, d.id) };
+}
+
+/** E1: «Добавить виджет» on a widget / stack (half of a carousel): a new widget on top of that stack. */
+export function addToStack(l: WorkspaceLayout, id: string, half: 0 | 1, type: WidgetType, newId = newWidgetId()): StackResult {
+  const i = l.widgets.findIndex((w) => w.id === id);
+  if (i < 0) return { error: "missing" };
+  const cols = widgetColumns(l.widgets[i]!).map((c) => [...c]);
+  const h = cols[half] ? half : 0;
+  if (cols[h]!.length >= STACK_MAX) return { error: "full" };
+  cols[h]!.push({ id: newId, type });
+  const n = clone(l);
+  n.widgets[i] = withColumns(n.widgets[i]!, cols, h === 0 ? [cols[0]!.length - 1, undefined] : [undefined, cols[1]!.length - 1]);
+  return { layout: n };
+}
+
+/** The widget of a stack in view (kept for the next time). */
+export function setStackActive(l: WorkspaceLayout, id: string, half: 0 | 1, index: number): WorkspaceLayout {
+  const i = l.widgets.findIndex((w) => w.id === id);
+  if (i < 0) return l;
+  const w = l.widgets[i]!;
+  const cur = half === 0 ? (w.active ?? 0) : (w.active2 ?? 0);
+  if (cur === index) return l;
+  const n = clone(l);
+  n.widgets[i] = normalizeWidget(half === 0 ? { ...w, active: index } : { ...w, active2: index });
+  return n;
+}
+
+/**
+ * E1 «Убрать из стопки»: the widget in view leaves the stack and takes the nearest free 2 × 2 place; the
+ * stack and every other widget stay. No free place: refused (nothing changes).
+ */
+export function unstackActive(l: WorkspaceLayout, id: string, half: 0 | 1, geometry?: GridGeometry, newId = newWidgetId()): StackResult {
+  const i = l.widgets.findIndex((w) => w.id === id);
+  if (i < 0) return { error: "missing" };
+  const w = l.widgets[i]!;
+  const cols = widgetColumns(w).map((c) => [...c]);
+  const h = cols[half] ? half : 0;
+  if (cols[h]!.length < 2) return { error: "missing" };
+  const at = h === 0 ? (w.active ?? 0) : (w.active2 ?? 0);
+  const [item] = cols[h]!.splice(Math.min(at, cols[h]!.length - 1), 1);
+  const place = placeOfWidget(w);
+  const cells = cellsOf(l, w.surface);
+  const near = cells[widgetKey(w.id)];
+  const n = clone(l);
+  pin(n, place, geometry);
+  n.widgets[i] = withColumns(n.widgets[i]!, cols, h === 0 ? [Math.min(at, cols[0]!.length - 1), undefined] : [undefined, Math.min(at, cols[1]!.length - 1)]);
+  const spot = freeBlock(n, place, WIDGET_CELLS[item!.type as WidgetType] ?? { w: 2, h: 2 }, near, geometry);
+  if (!spot) return { error: "room" };
+  const wid = n.widgets.some((x) => x.id === item!.id) ? newId : item!.id;
+  n.widgets.push({ id: wid, type: item!.type, surface: w.surface, container: w.container, x: w.x, y: w.y });
+  cellsOf(n, w.surface)[widgetKey(wid)] = spot;
+  return { layout: n };
+}
+
+/**
+ * E1 «Удалить стопку» / removing a whole widget of a carousel half: the half goes (the app and its data
+ * stay); in a carousel the other half stays where it stood, as a widget or stack of its own.
+ */
+export function deleteWidgetHalf(l: WorkspaceLayout, id: string, half: 0 | 1, geometry?: GridGeometry): WorkspaceLayout {
+  const w = l.widgets.find((x) => x.id === id);
+  if (!w) return l;
+  if (!isWidgetCarousel(w)) return removeWidget(l, id);
+  const cols = widgetColumns(w);
+  const keep = cols[half === 0 ? 1 : 0]!;
+  const n = clone(l);
+  const i = n.widgets.findIndex((x) => x.id === id);
+  const cells = cellsOf(n, w.surface);
+  const shown = placementOf(l, placeOfWidget(w), geometry).get(widgetKey(id));
+  const cell = shown ? { c: shown.c, r: shown.r } : cells[widgetKey(id)];
+  if (cell) cells[widgetKey(id)] = cell;
+  n.widgets[i] = normalizeWidget({ ...w, items: keep, items2: undefined, active: half === 0 ? w.active2 : w.active, active2: undefined });
+  // The right half that stays keeps its place on the right.
+  if (half === 0 && cell) cells[widgetKey(id)] = { c: cell.c + 2, r: cell.r };
+  return n;
+}
+
+/**
+ * E2: can `dragged` and `target` (each a widget or a stack, no carousel) stand side by side as a
+ * carousel, the dragged one on `side` of the target? The 4 × 2 block must fit the grid and hold nothing else.
+ */
+export function carouselSpot(l: WorkspaceLayout, draggedId: string, targetId: string, side: "left" | "right", geometry?: GridGeometry): Cell | null {
+  const d = l.widgets.find((w) => w.id === draggedId);
+  const t = l.widgets.find((w) => w.id === targetId);
+  if (!d || !t || d.id === t.id || isWidgetCarousel(d) || isWidgetCarousel(t)) return null;
+  if (d.surface !== t.surface) return null;
+  const place = placeOfWidget(t);
+  const placed = placementOf(l, place, geometry);
+  const tc = placed.get(widgetKey(t.id));
+  if (!tc) return null;
+  const cols = geometry ? geometry.cols : columnsOf(l, t.surface);
+  const c = side === "right" ? tc.c : tc.c - 2;
+  if (c < 0 || c + 4 > cols) return null;
+  if (geometry && tc.r + 2 > geometry.rows) return null;
+  for (const [k, p] of placed) {
+    if (k === widgetKey(t.id) || k === widgetKey(d.id)) continue;
+    if (p.c < c + 4 && p.c + p.w > c && p.r < tc.r + 2 && p.r + p.h > tc.r) return null;
+  }
+  return { c, r: tc.r };
+}
+
+/** E2: the dragged widget dropped on the «+» beside another: one wide carousel there. */
+export function joinWidgets(l: WorkspaceLayout, draggedId: string, targetId: string, side: "left" | "right", geometry?: GridGeometry): StackResult {
+  const spot = carouselSpot(l, draggedId, targetId, side, geometry);
+  if (!spot) return { error: "room" };
+  const d = l.widgets.find((w) => w.id === draggedId)!;
+  const t = l.widgets.find((w) => w.id === targetId)!;
+  const dc = widgetColumns(d)[0]!;
+  const tcCols = widgetColumns(t)[0]!;
+  const n = clone(removeWidget(l, d.id));
+  const i = n.widgets.findIndex((w) => w.id === t.id);
+  const left = side === "right" ? tcCols : dc;
+  const right = side === "right" ? dc : tcCols;
+  const la = side === "right" ? t.active : d.active;
+  const ra = side === "right" ? d.active : t.active;
+  n.widgets[i] = normalizeWidget({ ...n.widgets[i]!, items: left, items2: right, active: la, active2: ra });
+  cellsOf(n, t.surface)[widgetKey(t.id)] = spot;
+  return { layout: n };
+}
+
+/** E3 «Убрать карусель»: the halves part and stay where they stood (left at the block's start, right beside it). */
+export function splitWidgetCarousel(l: WorkspaceLayout, id: string, geometry?: GridGeometry, newId = newWidgetId()): WorkspaceLayout {
+  const w = l.widgets.find((x) => x.id === id);
+  if (!w || !isWidgetCarousel(w)) return l;
+  const shown = placementOf(l, placeOfWidget(w), geometry).get(widgetKey(id));
+  const n = clone(l);
+  const cells = cellsOf(n, w.surface);
+  const cell = shown ? { c: shown.c, r: shown.r } : (cells[widgetKey(id)] ?? { c: 0, r: 0 });
+  cells[widgetKey(id)] = cell;
+  const [left, right] = widgetColumns(w);
+  const i = n.widgets.findIndex((x) => x.id === id);
+  n.widgets[i] = normalizeWidget({ ...w, items: left, items2: undefined, active: w.active, active2: undefined });
+  const taken = new Set(n.widgets.flatMap((x) => [x.id, ...(x.items ?? []).map((y) => y.id)]));
+  const rid = taken.has(right![0]!.id) ? newId : right![0]!.id;
+  n.widgets.push(normalizeWidget({ id: rid, type: right![0]!.type, surface: w.surface, container: w.container, x: w.x, y: w.y, items: right!.length > 1 ? right : undefined, active: w.active2 }));
+  cells[widgetKey(rid)] = { c: cell.c + 2, r: cell.r };
   return n;
 }

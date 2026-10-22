@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RiArrowGoBackLine, RiArrowGoForwardLine, RiArrowLeftSLine, RiErrorWarningLine, RiLockLine, RiPlayFill, RiShareForwardLine } from "@remixicon/react";
-import type { NotesBody, NotesDocumentDto, NoteBody, PresentationBody } from "@voidex/shared";
+import type { NotesBody, NotesDocumentDto, NoteBody } from "@voidex/shared";
 import { ErrorCode } from "@voidex/shared";
-import { reflowPresentation, setNoteFormat, slideOverflows } from "@voidex/notes";
+import { CANVAS_PRESETS, canvasOf, presetOf, setNoteFormat, type CanvasPreset } from "@voidex/notes";
 import { ApiError } from "@/lib/api";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -15,7 +15,7 @@ import { invalidateNotes, notesApi } from "./data";
 import { activeDoc } from "./editor-state";
 import { MoreMenu, type MenuEntry } from "./kit";
 import { NoteEditor } from "./note-editor";
-import { PresentationEditor, PresentationViewer } from "./presentation";
+import { CanvasSizeSheet, PresentationEditor, PresentationViewer, useCanvasChange } from "./presentation";
 import { useNav, type NotesRoute } from "./route";
 import { useNotesSync } from "./sync";
 
@@ -277,6 +277,10 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
     flush,
   });
 
+  // Stage C: the presentation canvas (presets, custom size) — asks first when pictures would shrink.
+  const canvasChange = useCanvasChange(body?.kind === "presentation" ? body : null, change);
+  const [canvasSheet, setCanvasSheet] = useState(false);
+
   if (failed)
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -306,6 +310,7 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
     );
 
   const isNote = body.kind === "note";
+  const canvas = body.kind === "presentation" ? canvasOf(body) : { w: 1920, h: 1080 };
   const formatEntries: MenuEntry[] =
     readOnly
       ? []
@@ -314,16 +319,21 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
             { id: "format-vertical", label: t("notes.format.vertical"), checked: body.format === "vertical", onSelect: () => change(setNoteFormat(body as NoteBody, "vertical"), true) },
             { id: "format-square", label: t("notes.format.square"), checked: body.format === "square", onSelect: () => change(setNoteFormat(body as NoteBody, "square"), true) },
           ]
-        : [
-            { id: "format-rect", label: t("notes.format.rect"), checked: body.format === "rect", onSelect: () => switchSlides("rect") },
-            { id: "format-square", label: t("notes.format.squareSlides"), checked: body.format === "square", onSelect: () => switchSlides("square") },
-          ];
-  function switchSlides(f: PresentationBody["format"]) {
-    const next = reflowPresentation(body as PresentationBody, f);
-    change(next, true);
-    const n = next.slides.filter((s) => slideOverflows(s, f)).length;
-    if (n) toast({ title: t("notes.pres.overflowAfterSwitch", { n }), tone: "default" });
-  }
+        : (Object.keys(CANVAS_PRESETS) as CanvasPreset[])
+            .map(
+              (k): MenuEntry => ({
+                id: `canvas-${k.replace(":", "x")}`,
+                label: presetOf(canvas) === k ? `${k} · ${canvas.w} × ${canvas.h}` : k,
+                checked: presetOf(canvas) === k,
+                onSelect: () => canvasChange.request(CANVAS_PRESETS[k]),
+              }),
+            )
+            .concat({
+              id: "canvas-custom",
+              label: presetOf(canvas) ? t("notes.canvas.customMenu") : `${t("notes.canvas.customMenu")} · ${canvas.w} × ${canvas.h}`,
+              checked: !presetOf(canvas),
+              onSelect: () => setCanvasSheet(true),
+            });
   const meta = doc;
   const menu: MenuEntry[] = [
     ...(body.kind === "presentation" ? [{ id: "play", label: t("notes.pres.play"), icon: <RiPlayFill className="size-[18px]" />, onSelect: () => setPlaying(0) }] : []),
@@ -427,6 +437,12 @@ export function DocScreen({ docId, back }: { docId: string; back: Back }) {
         <PresentationEditor body={body} onChange={change} readOnly={readOnly} onPlay={(from) => setPlaying(from)} />
       ) : null}
       {playing !== null && body.kind === "presentation" && <PresentationViewer body={body} start={playing} onClose={() => setPlaying(null)} />}
+      {body.kind === "presentation" && (
+        <>
+          {canvasChange.dialog}
+          <CanvasSizeSheet open={canvasSheet} current={canvas} onClose={() => setCanvasSheet(false)} onApply={canvasChange.request} />
+        </>
+      )}
       {actions.sheets}
     </div>
   );

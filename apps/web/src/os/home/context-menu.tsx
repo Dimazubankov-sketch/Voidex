@@ -22,6 +22,8 @@ import {
   RiUnpinLine,
   RiImageLine,
   RiApps2Fill,
+  RiArrowGoBackLine,
+  RiLayoutColumnLine,
 } from "@remixicon/react";
 import {
   addSpace,
@@ -30,6 +32,11 @@ import {
   removeFromFolder,
   removeSpace,
   removeWidget,
+  STACK_MAX,
+  deleteWidgetHalf,
+  splitWidgetCarousel,
+  unstackActive,
+  widgetColumns,
   sameItem,
   unpinFromDock,
   type AppId,
@@ -43,6 +50,8 @@ import { requestClose, useWM } from "../window-manager";
 import { currentView, setView } from "./brush-menu";
 import { addToDesktop, openWallpapers, addToFolder, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
+import { geometryFor } from "./desktop-geometry";
+import { toast } from "@/ui/overlays";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -215,11 +224,47 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
       case "dock-desktops":
         return [{ id: "unpin", label: t("dock.unpin"), icon: <RiUnpinLine />, onSelect: () => updateLayout((l) => ({ ...l, desktop: { ...l.desktop, dockDesktops: false } })) }];
       case "widget": {
+        // Stage E: only what fits this widget: a widget, a stack, a carousel (and its pressed half).
         const id = target.id;
-        return [
-          { id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) },
-          { id: "remove-widget", label: t("widgets.remove"), icon: <RiDeleteBinLine />, danger: true, onSelect: () => updateLayout((l) => removeWidget(l, id)) },
-        ];
+        const w = layout.widgets.find((x) => x.id === id);
+        if (!w) return [];
+        const cols = widgetColumns(w);
+        const half: 0 | 1 = cols.length > 1 && target.half === 1 ? 1 : 0;
+        const col = cols[half]!;
+        const isStack = col.length > 1;
+        const geometry = geometryFor({ surface: w.surface });
+        const list: Entry[] = [];
+        if (col.length < STACK_MAX)
+          list.push({ id: "stack-add", label: t("widgets.add"), icon: <RiAddLine />, onSelect: () => ui().setWidgetsOpen(true, null, { id, half }) });
+        if (isStack)
+          list.push({
+            id: "stack-take-out",
+            label: t("widgets.takeOut"),
+            icon: <RiArrowGoBackLine />,
+            onSelect: () => {
+              let failed = false;
+              updateLayout((l) => {
+                const r = unstackActive(l, id, half, geometry);
+                failed = !!r.error;
+                return r.layout ?? l;
+              });
+              if (failed) toast({ title: t("widgets.noRoom") });
+            },
+          });
+        if (cols.length > 1)
+          list.push({ id: "carousel-split", label: t("widgets.splitCarousel"), icon: <RiLayoutColumnLine />, onSelect: () => updateLayout((l) => splitWidgetCarousel(l, id, geometry)) });
+        list.push({ id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) });
+        if (isStack) list.push({ id: "stack-delete", label: t("widgets.deleteStack"), icon: <RiDeleteBinLine />, danger: true, onSelect: () => ui().setWidgetConfirm({ id, half, kind: "stack" }) });
+        else
+          list.push({
+            id: "remove-widget",
+            label: t("widgets.remove"),
+            icon: <RiDeleteBinLine />,
+            danger: true,
+            // A single widget in a carousel leaves it; the other half stays where it is.
+            onSelect: () => updateLayout((l) => (cols.length > 1 ? deleteWidgetHalf(l, id, half, geometry) : removeWidget(l, id))),
+          });
+        return list;
       }
       case "space": {
         const id = target.id;

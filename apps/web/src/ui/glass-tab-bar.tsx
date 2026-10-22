@@ -166,7 +166,10 @@ export function GlassTabBar<K extends string>({
           swipe.current = null;
           if (s?.moving) settle();
         }}
-        onLostPointerCapture={() => {
+        onLostPointerCapture={(e) => {
+          // A3: on touch screens the pressed tab button holds the pointer first (implicit capture); its
+          // "lost capture" when the bar takes the pointer over bubbles up here and must not end the swipe.
+          if (e.target !== e.currentTarget) return;
           // Someone else took the drag over mid-swipe: never leave the capsule where the finger was.
           const s = swipe.current;
           if (!s?.moving) return;

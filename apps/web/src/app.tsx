@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { refreshSession } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -9,11 +9,13 @@ import { LogoIntro } from "@/brand/logo-intro";
 import { ToastViewport } from "@/ui/overlays";
 import { SystemPopups } from "@/os/notifications/popups";
 import { ClockRuntime } from "@/apps/clock/ring-sheet";
+import { lazyWithRecovery } from "@/lib/app-update";
+import { RootBoundary, UpdateBanner } from "@/ui/app-update-ui";
 
-const AuthRoot = lazy(() => import("@/auth/auth-root").then((m) => ({ default: m.AuthRoot })));
-const Workspace = lazy(() => import("@/os/workspace").then((m) => ({ default: m.Workspace })));
-const LockScreen = lazy(() => import("@/os/lock/lock-screen").then((m) => ({ default: m.LockScreen })));
-const SecurityLayer = lazy(() => import("@/os/lock/security-layer").then((m) => ({ default: m.SecurityLayer })));
+const AuthRoot = lazyWithRecovery(() => import("@/auth/auth-root").then((m) => ({ default: m.AuthRoot })));
+const Workspace = lazyWithRecovery(() => import("@/os/workspace").then((m) => ({ default: m.Workspace })));
+const LockScreen = lazyWithRecovery(() => import("@/os/lock/lock-screen").then((m) => ({ default: m.LockScreen })));
+const SecurityLayer = lazyWithRecovery(() => import("@/os/lock/security-layer").then((m) => ({ default: m.SecurityLayer })));
 
 /**
  * Boot: "VOIDEX doesn't forget me". If this device holds a valid refresh
@@ -40,6 +42,7 @@ export function App() {
   // Every motion animation follows the system "reduce motion" setting.
   return (
     <MotionConfig reducedMotion="user">
+      <RootBoundary>
       {status === "signedIn" ? (
         // Unmounted immediately on sign-out: nothing of the previous account may
         // keep rendering (or crash) while an exit animation plays.
@@ -77,7 +80,9 @@ export function App() {
           )}
         </AnimatePresence>
       )}
+      </RootBoundary>
       <ToastViewport />
+      <UpdateBanner />
       <SystemPopups />
       <ClockRuntime />
       <LogoIntro />

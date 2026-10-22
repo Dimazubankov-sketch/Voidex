@@ -230,19 +230,20 @@ test("Note editor: clean paper, Markdown-style blocks, unlimited sheet, square p
   await page.getByTestId("notes-menu-page-new").click();
   await expect(page.getByTestId("notes-note-editor")).toHaveAttribute("data-pages", "3");
 
-  // A picture: upload, half width, right, remove.
+  // A picture: upload, remove, undo.
   await blocks(page).first().click();
   await page.getByTestId("notes-image-file").setInputFiles({ name: "p.png", mimeType: "image/png", buffer: PNG });
   const img = page.getByTestId("notes-image-block");
   await expect(img).toHaveCount(1);
   await expect(img.getByTestId("notes-image")).toBeVisible();
-  await page.getByTestId("notes-image-w50").click();
-  await page.getByTestId("notes-image-right").click();
-  await expect(img).toHaveAttribute("data-width", "50");
-  await expect(img).toHaveAttribute("data-align", "right");
+  // Stage D: a new picture is 100 % and chosen; its panel has no size / alignment buttons (sizes come from «Масштаб»).
+  await expect(img).toHaveAttribute("data-size", "100");
+  await expect(page.getByTestId("notes-image-tools")).toBeVisible();
+  await expect(page.getByTestId("notes-image-w50")).toHaveCount(0);
   await saved(page);
-  const stored = JSON.stringify((await api(page, "GET", `/api/notes/documents/${s.docs[0]!.id}`)).body.data);
-  expect(stored).toMatch(/"kind":"image","text":"","src":"\/api\/notes\/media\?id=[0-9a-f-]{36}","width":50,"align":"right"|"width":50/);
+  const storedPic = ((await api(page, "GET", `/api/notes/documents/${s.docs[0]!.id}`)).body.data.pages as { blocks: { kind: string; src?: string; width?: number }[] }[]).flatMap((p) => p.blocks).find((b) => b.kind === "image");
+  expect(storedPic?.src).toMatch(/^\/api\/notes\/media\?id=[0-9a-f-]{36}$/);
+  expect(storedPic?.width).toBe(100);
   expect((await api(page, "GET", `/api/notes/documents/${s.docs[0]!.id}`)).body.data.pages).toHaveLength(3);
   await page.getByTestId("notes-image-remove").click();
   await expect(img).toHaveCount(0);
@@ -433,7 +434,7 @@ test("Deep links: #notes/doc/<id> opens my note; someone else's note (or a revok
 
 // ------------------------------------------------------------------ presentations
 
-test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 with an overflow warning, fullscreen show with arrows; a note turns into a presentation and stays", async ({ page }) => {
+test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 asking first when text would no longer fit, fullscreen show with arrows; a note turns into a presentation and stays", async ({ page }) => {
   await signUpViaApi(page, "Пётр", "Слайд");
   const s = await seed(page, "Доклад", [{ name: "Тезисы", data: note("Введение", "Первый тезис", "Второй тезис") }]);
   await openApp(page, "notes");
@@ -464,10 +465,12 @@ test("Presentations: slides, layers, transitions, 16:9 ↔ 1:1 with an overflow 
   await page.getByTestId("notes-layer-input").fill("Очень длинный текст слайда. ".repeat(14));
   // PC: the window "…" (app actions + window actions); phones: the app's own "…" (Step 2.7).
   await page.getByTestId("notes-doc").getByTestId(/^(window-menu|notes-more)$/).click();
-  await page.getByTestId("notes-menu-format-square").click();
+  // Stage C: the canvas presets live in the same menu; text that would no longer fit asks first.
+  await page.getByTestId("notes-menu-canvas-1x1").click();
+  await expect(page.getByTestId("notes-canvas-confirm")).toBeVisible();
+  await page.getByTestId("notes-canvas-confirm").getByTestId("confirm-action").click();
   await expect(ed).toHaveAttribute("data-format", "square");
   await expect(page.getByTestId("notes-slide-overflow")).toBeVisible();
-  await expect(page.getByTestId("toast").filter({ hasText: "Формат изменён" })).toBeVisible();
   await expect(page.getByTestId("notes-save-status")).toHaveAttribute("data-status", "saved", { timeout: 15_000 });
 
   // The show: fullscreen viewer, arrows, Esc.

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ROW_HEIGHT, flushWheels, mountWheels, setWheelValue, unmountWheels, wheelPosition, wheelSpec, wrapValue } from "../src/wheels.ts";
+import { FLING_MIN, FLING_ROWS_MAX, ROW_HEIGHT, flingTarget, glideDuration, releaseVelocity, flushWheels, mountWheels, setWheelValue, unmountWheels, wheelPosition, wheelSpec, wrapValue } from "../src/wheels.ts";
 
 // Ported from Voidex-Clock tests/wheels.test.js (same stand-in elements).
 
@@ -194,7 +194,7 @@ test("a drag follows the pointer; a slow release lands on the next row, a fast f
   w.handlers.pointerup!({ pointerId: 2, type: "pointerup" });
   await sleep(1100);
   const v = changes.at(-1)!;
-  assert.ok(v >= 5 && v <= 1 + 2 + 14, `spun to ${v}`);
+  assert.ok(v >= 5 && v <= 1 + 2 + FLING_ROWS_MAX, `spun to ${v}`);
   assert.equal(w.el.scrollTop % ROW_HEIGHT, 0);
   unmountWheels(w.root);
 });
@@ -264,5 +264,80 @@ test("Step 2.16: a short quick nudge goes exactly one row on (either way), never
   await nudge(3, ROW_HEIGHT * 0.1);
   assert.equal(changes.length, n);
   assert.equal(w.el.dataset.value, "10");
+  unmountWheels(w.root);
+});
+
+test("B1: the release speed decides the travel: slow = the nearest row, medium = a few, fast = many", () => {
+  const top = 100 * ROW_HEIGHT;
+  // Slow drag (precise): no momentum, nearest row.
+  assert.deepEqual(flingTarget(top + 10, 0.1, 3, 97), { row: 100, glide: false });
+  // Medium swipe: a few values on.
+  const medium = flingTarget(top, 0.9, 2, 98);
+  assert.ok(medium.glide && medium.row - 100 >= 3 && medium.row - 100 <= 10, `medium ${medium.row - 100}`);
+  // Fast swipe: many values; faster always goes at least as far; never past the cap.
+  const fast = flingTarget(top, 3, 3, 97);
+  assert.ok(fast.row - 100 >= 15, `fast ${fast.row - 100}`);
+  let prev = 0;
+  for (const v of [0.4, 0.8, 1.2, 2, 3, 5, 9, 20]) {
+    const rows = flingTarget(top, v, 3, 97).row - 100;
+    assert.ok(rows >= prev, `monotonic at ${v}`);
+    assert.ok(rows <= FLING_ROWS_MAX);
+    prev = rows;
+  }
+  // Downwards the same, mirrored.
+  assert.equal(flingTarget(top, -3, -3, 103).row - 100, -(fast.row - 100));
+  // Any flick moves at least one row in its direction.
+  assert.equal(flingTarget(top + 2, FLING_MIN + 0.01, 2, 98).row, 101);
+});
+
+test("B1: the glide starts at the finger's speed and ends in a finite time", () => {
+  for (const [d, v] of [[44 * 5, 0.9], [44 * 20, 3], [44 * 60, 8]] as const) {
+    const dur = glideDuration(d, v);
+    const startSpeed = (3 * d) / dur; // derivative of the cubic ease-out at 0
+    assert.ok(dur <= 1800 && dur >= 240);
+    if (dur > 240 && dur < 1800) assert.ok(Math.abs(startSpeed - v) < 0.01, `speed ${startSpeed} vs ${v}`);
+  }
+});
+
+test("B1: release speed comes from the last ~100 ms; a finger held still is no flick", () => {
+  const now = 1000;
+  assert.equal(releaseVelocity([{ y: 300, t: 900 }, { y: 200, t: 960 }], now + 200), 0);
+  const v = releaseVelocity([{ y: 400, t: 700 }, { y: 300, t: 950 }, { y: 250, t: 990 }], now);
+  assert.ok(v > 1 && v < 1.4, `v ${v}`);
+});
+
+test("B1: a long fast spin crosses 59 → 00 and 23 → 00 and rests on an exact row inside the middle copy", async () => {
+  for (const count of [60, 24]) {
+    const w = wheel(count - 3, count, "x");
+    const changes: number[] = [];
+    mountWheels(w.root, (_k, v) => changes.push(v));
+    w.handlers.pointerdown!({ pointerId: 1, clientY: 600, button: 0 });
+    for (let i = 1; i <= 6; i++) {
+      await sleep(8);
+      w.handlers.pointermove!({ pointerId: 1, clientY: 600 - i * 40 });
+    }
+    w.handlers.pointerup!({ pointerId: 1, type: "pointerup" });
+    await sleep(1900);
+    assert.equal(w.el.scrollTop % ROW_HEIGHT, 0);
+    assert.ok(w.el.scrollTop >= count * ROW_HEIGHT * 0.5 && w.el.scrollTop <= count * ROW_HEIGHT * 2.5);
+    // Values go one way only, wrapping around (a frame of a fast spin may pass two rows), never back.
+    for (let i = 1; i < changes.length; i++) {
+      const d = (changes[i]! - changes[i - 1]! + count) % count;
+      assert.ok(d >= 1 && d <= 4, `step ${i}: ${changes[i - 1]} → ${changes[i]}`);
+    }
+    assert.ok(changes.length > 8);
+    assert.equal(Number(w.el.dataset.value), changes.at(-1));
+    unmountWheels(w.root);
+  }
+});
+
+test("B1: a child's lost capture (touch: the pressed row held the pointer first) does not end the drag", () => {
+  const w = wheel(0, 60, "minutes");
+  mountWheels(w.root, () => {});
+  w.handlers.pointerdown!({ pointerId: 1, clientY: 300, button: 0 });
+  w.handlers.pointermove!({ pointerId: 1, clientY: 290 });
+  w.handlers.lostpointercapture!({ pointerId: 1, target: { tagName: "BUTTON" } });
+  w.handlers.pointermove!({ pointerId: 1, clientY: 212 });
+  assert.equal(w.el.scrollTop, 60 * ROW_HEIGHT + 88); // still following the finger
   unmountWheels(w.root);
 });

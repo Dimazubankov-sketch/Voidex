@@ -622,3 +622,49 @@ describe("Step 2.16: reorder phone pages", () => {
     expect(reorderPages(l, 0, 5)).toBe(l);
   });
 });
+
+describe("A2: phone pages never place anything below the visible page", () => {
+  const PHONE_APPS = ["settings", "mail", "vibex", "notes"] as const;
+  const page0 = { surface: "mobile" as const, page: 0 };
+  const g = { cols: 4, rows: 5 };
+  const nl = (l: ReturnType<typeof defaultLayout>) => normalizeLayout(l, [...PHONE_APPS]);
+  const k = (id: string) => `app:${id}`;
+
+  it("a drop past the last row lands in the last row", () => {
+    let l = nl(defaultLayout([...PHONE_APPS]));
+    l = nl(placeInCell(l, k("vibex"), page0, { c: 1, r: 40 }, g));
+    expect(placementOf(l, page0, g).get(k("vibex"))).toMatchObject({ c: 1, r: 4 });
+  });
+
+  it("a 2×2 widget dropped at the bottom edge stays whole on the page", () => {
+    let l = nl(defaultLayout([...PHONE_APPS]));
+    l = nl(addWidget(l, "clock", { surface: "mobile", page: 0, cell: { c: 0, r: 2 } }));
+    const id = l.widgets[0]!.id;
+    l = nl(placeInCell(l, `widget:${id}`, page0, { c: 3, r: 9 }, g));
+    const p = placementOf(l, page0, g).get(`widget:${id}`)!;
+    expect(p.c + p.w).toBeLessThanOrEqual(4);
+    expect(p.r + p.h).toBeLessThanOrEqual(5);
+  });
+
+  it("stored cells saved below the page (older builds) are shown on the page, without rewriting them", () => {
+    let l = nl(defaultLayout([...PHONE_APPS]));
+    l = { ...l, mobile: { ...l.mobile, cells: { ...l.mobile.cells, [k("notes")]: { c: 2, r: 30 } } } };
+    l = nl(l);
+    const p = placementOf(l, page0, g).get(k("notes"))!;
+    expect(p.r).toBeLessThan(5);
+    expect(l.mobile.cells[k("notes")]).toEqual({ c: 2, r: 30 }); // a taller screen still has the stored value
+    // Nothing overlaps.
+    const seen = new Set<string>();
+    for (const c of placementOf(l, page0, g).values()) {
+      const id = `${c.c},${c.r}`;
+      expect(seen.has(id)).toBe(false);
+      seen.add(id);
+    }
+  });
+
+  it("a full page has no free block for a widget (the UI says so instead of adding it out of sight)", () => {
+    const l = nl(defaultLayout([...PHONE_APPS]));
+    expect(freeBlock(l, page0, { w: 2, h: 2 }, undefined, { cols: 4, rows: 1 })).toBeNull();
+    expect(freeBlock(l, page0, { w: 2, h: 2 }, undefined, g)).toEqual({ c: 0, r: 1 });
+  });
+});

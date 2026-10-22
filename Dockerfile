@@ -22,7 +22,9 @@ COPY apps ./apps
 COPY packages ./packages
 # The server bundle is self-contained (tsup inlines every dependency), so the
 # runtime stage needs no node_modules at all.
-RUN pnpm --filter @voidex/web build && pnpm --filter @voidex/server build
+# The web build stamps this id into the bundle and /version.json (A1: running pages notice a new deployment).
+ARG VOIDEX_VERSION=dev
+RUN VOIDEX_VERSION=${VOIDEX_VERSION} pnpm --filter @voidex/web build && pnpm --filter @voidex/server build
 
 # ---- runtime -----------------------------------------------------------------
 FROM node:22-slim

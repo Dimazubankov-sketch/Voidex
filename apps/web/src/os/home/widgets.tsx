@@ -6,7 +6,17 @@ import {
   MOBILE_PAGES_MAX,
   WIDGETS_MAX,
   WIDGET_CELLS,
+  addToStack,
   addWidget,
+  carouselSpot,
+  deleteWidgetHalf,
+  joinWidgets,
+  setStackActive,
+  stackWidgets,
+  widgetCells,
+  widgetColumns,
+  type StackResult,
+  type WidgetItem,
   freeBlock,
   moveWidget,
   type AppId,
@@ -22,13 +32,14 @@ import {
 } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { getFormFactor, useFormFactor } from "@/lib/form-factor";
-import { useLanguage, useT, type MessageKey } from "@/lib/i18n";
+import { t as translateNow, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { Button, IconButton } from "@/ui/controls";
-import { Sheet } from "@/ui/overlays";
+import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
+import { createPortal } from "react-dom";
 import { useWM } from "../window-manager";
 import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
 import { cityClock, localZone } from "@voidex/clock";
-import { desktopGeometry } from "./desktop-geometry";
+import { desktopGeometry, geometryFor } from "./desktop-geometry";
 import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
 import { currentLayout, updateLayout, useWorkspaceLayout } from "./layout";
@@ -230,6 +241,10 @@ const PRESS_SLOP = 8;
  */
 export function GridWidget({ widget, size, editing }: { widget: Widget; size: { w: number; h: number }; editing: boolean }) {
   const def = defOf(widget.type);
+  const columns = useMemo(() => widgetColumns(widget), [widget]);
+  /** E1 / E2 while dragging: a stack (ring on the target) or a carousel (the «+» beside it). */
+  const [hover, setHover] = useState<Hover | null>(null);
+  const hoverRef = useRef<Hover | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -275,17 +290,42 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       window.removeEventListener("pointerup", stop);
       window.removeEventListener("pointercancel", stop);
     };
+    let menuOpen = false;
+    // F: held, the widget grows a little; it settles back when let go or picked up.
+    const glass = ref.current?.querySelector<HTMLElement>("[data-widget-press]");
+    glass?.setAttribute("data-pressed", "");
+    const unpress = () => glass?.removeAttribute("data-pressed");
+    window.addEventListener("pointerup", unpress, { once: true });
+    window.addEventListener("pointercancel", unpress, { once: true });
     const track = (ev: PointerEvent) => {
       if (ev.pointerId !== id) return;
       at = { x: ev.clientX, y: ev.clientY };
-      if (Math.hypot(at.x - from.x, at.y - from.y) > PRESS_SLOP) stop();
+      if (Math.hypot(at.x - from.x, at.y - from.y) <= PRESS_SLOP) return;
+      stop();
+      unpress();
+      if (!menuOpen) return;
+      // E: the finger moves on after the menu opened: the menu goes and the widget is picked up instead.
+      useHomeUi.getState().closeMenu();
+      useHomeUi.getState().setEditing(true);
+      beginDrag(from.x, from.y);
     };
     const timer = window.setTimeout(() => {
-      stop();
       navigator.vibrate?.(8);
-      useHomeUi.getState().setEditing(true);
-      // The drag begins where the press began, so the widget jumps by nothing and follows from here.
-      beginDrag(from.x, from.y);
+      // E1: holding a widget shows its menu (Добавить виджет / Убрать из стопки / Удалить стопку / Убрать карусель);
+      // moving the finger then picks it up (as before).
+      menuOpen = true;
+      const box = ref.current?.getBoundingClientRect();
+      const half: 0 | 1 = columns.length > 1 && box && from.x > box.left + box.width / 2 ? 1 : 0;
+      useHomeUi.getState().openMenu({ x: from.x, y: from.y, target: { kind: "widget", id: widget.id, half } });
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      const done = () => {
+        window.removeEventListener("pointermove", track);
+        window.removeEventListener("pointerup", done);
+        window.removeEventListener("pointercancel", done);
+      };
+      window.addEventListener("pointerup", done);
+      window.addEventListener("pointercancel", done);
     }, LONG_PRESS_MS);
     window.addEventListener("pointermove", track);
     window.addEventListener("pointerup", stop);
@@ -313,6 +353,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     const clampX = (dx: number) => Math.max(area.left - natural.left, Math.min(area.right - natural.w - natural.left, dx));
     const clampY = (dy: number) => Math.max(area.top - natural.top, Math.min(area.bottom - natural.h - natural.top, dy));
     const finish = () => {
+      hoverRef.current = null;
+      setHover(null);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
@@ -337,8 +379,14 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       updateLayout((cur) => {
         const n = create ? { ...cur, mobile: { ...cur.mobile, pages: [...cur.mobile.pages, []] } } : cur;
         const moved = moveWidget(n, widget.id, { container: String(to) });
-        const cell = freeBlock(moved, { surface: "mobile", page: to }, WIDGET_CELLS[widget.type as WidgetType]) ?? { c: 0, r: 0 };
-        return placeInCell(moved, widgetKey(widget.id), { surface: "mobile", page: to }, cell);
+        const dest = { surface: "mobile" as const, page: to };
+        const cell = freeBlock(moved, dest, widgetCells(widget), undefined, geometryFor(dest));
+        // A2: no room on that page: the widget stays where it was.
+        if (!cell) {
+          toast({ title: translateNow("widgets.noRoom") });
+          return cur;
+        }
+        return placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest));
       });
       x.set(0);
       y.set(0);
@@ -347,6 +395,11 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     const move = (ev: PointerEvent) => {
       x.set(clampX(ev.clientX - start.x));
       y.set(clampY(ev.clientY - start.y));
+      const hv = hoverAt(ev.clientX, ev.clientY, widget, el, columns.length > 1, grid);
+      if (JSON.stringify(hv) !== JSON.stringify(hoverRef.current)) {
+        hoverRef.current = hv;
+        setHover(hv);
+      }
       if (!mobile) return;
       const dir = ev.clientX < area.left + EDGE ? -1 : ev.clientX > area.right - EDGE ? 1 : 0;
       if (dir !== edgeDir) {
@@ -356,15 +409,30 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       }
     };
     const up = () => {
+      const intent = hoverRef.current;
       finish();
       const place = placeOfGrid(grid.dataset.homeGrid!);
+      // E1 / E2: dropped on the middle of a widget (a stack) or on the «+» beside it (a carousel).
+      if (intent && (intent.kind === "stack" || intent.kind === "carousel") && place) {
+        let failed: StackResult["error"];
+        updateLayout((l) => {
+          const r = intent.kind === "stack" ? stackWidgets(l, widget.id, intent.target, intent.half) : joinWidgets(l, widget.id, intent.target, intent.side, geometryFor(place));
+          failed = r.error;
+          return r.layout ?? l;
+        });
+        if (failed) {
+          toast({ title: translateNow(failed === "full" ? "widgets.stackFull" : failed === "carousel" ? "widgets.noCarouselInStack" : "widgets.noRoom") });
+          settleBack();
+        }
+        return;
+      }
       const box = el.getBoundingClientRect();
       // The cell under the widget's top-left cell (its centre), not under the finger.
       const cw = Number(grid.dataset.cellW) || box.width;
       const rh = Number(grid.dataset.rowH) || box.height;
       const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
       // The whole block stays on the page / desktop (never past the last row or the last column).
-      const sz = WIDGET_CELLS[widget.type as WidgetType];
+      const sz = widgetCells(widget);
       // Phone: only the rows that fit on the page (in edit mode the grid offers one more row below it).
       const gr = grid.getBoundingClientRect();
       const gy = Number(grid.dataset.gapY) || 0;
@@ -375,7 +443,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const current = el.parentElement?.dataset.cell;
       if (!place || current === `${target.c},${target.r}`) return settleBack();
       snap.current = { from: box, cell: `${target.c},${target.r}` };
-      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, desktopGeometry()));
+      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, geometryFor(place)));
       // The cell was refused (an icon never pushes a widget away, a full area…): glide back.
       window.setTimeout(() => {
         if (snap.current) {
@@ -409,17 +477,216 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
         e.stopPropagation();
         // A finger's long press picks the widget up (the browser also reports it as a context menu).
         if (touchPress.current) return;
-        useHomeUi.getState().openMenu({ x: e.clientX, y: e.clientY, target: { kind: "widget", id: widget.id } });
+        const box = ref.current?.getBoundingClientRect();
+        const half: 0 | 1 = columns.length > 1 && box && e.clientX > box.left + box.width / 2 ? 1 : 0;
+        useHomeUi.getState().openMenu({ x: e.clientX, y: e.clientY, target: { kind: "widget", id: widget.id, half } });
       }}
     >
       {/* The wiggle is its own layer: the drag moves the outer one, so the two never fight over the transform. */}
-      <div className={cx("vx-glass relative size-full rounded-[24px]", editing && !dragging && "vx-wiggle", dragging && "scale-[1.03] shadow-float transition-transform")}>
-        {editing && !dragging && <RemoveBadge onRemove={() => updateLayout((l) => removeWidget(l, widget.id))} />}
+      <div className={cx("vx-glass vx-press relative size-full rounded-[24px]", editing && !dragging && "vx-wiggle", dragging && "scale-[1.03] shadow-float transition-transform")} data-widget-press>
+        {editing && !dragging && (
+          <RemoveBadge
+            onRemove={() =>
+              // E1 / E3: a stack or a carousel goes only after a confirmation (a single widget at once).
+              columns.length > 1 || columns[0]!.length > 1
+                ? useHomeUi.getState().setWidgetConfirm({ id: widget.id, half: 0, kind: columns.length > 1 ? "carousel" : "stack" })
+                : updateLayout((l) => removeWidget(l, widget.id))
+            }
+          />
+        )}
         <div className={cx("h-full", editing && "pointer-events-none")}>
-          <def.Body />
+          {columns.length > 1 ? (
+            // E2: one wide block, two halves of their own (a widget or a stack each).
+            <div className="flex size-full" data-testid="widget-carousel">
+              {columns.map((col, h) => (
+                <div key={h} className={cx("relative h-full w-1/2 min-w-0", h === 1 && "border-l border-[var(--glass-border)]")} data-widget-half={h}>
+                  <WidgetColumn widgetId={widget.id} items={col} half={h as 0 | 1} active={h === 0 ? (widget.active ?? 0) : (widget.active2 ?? 0)} side={h === 0 ? "left" : "right"} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <WidgetColumn widgetId={widget.id} items={columns[0]!} half={0} active={widget.active ?? 0} side="right" />
+          )}
         </div>
+        {hover && createPortal(<HoverMark hover={hover} />, document.body)}
       </div>
     </motion.div>
+  );
+}
+
+
+// ---------------------------------------------------------------- Stage E: stacks and carousels
+
+type Hover =
+  | { kind: "stack"; target: string; half: 0 | 1; rect: { left: number; top: number; width: number; height: number } }
+  | { kind: "plus" | "carousel"; target: string; side: "left" | "right"; x: number; y: number };
+
+const PLUS_R = 26;
+
+/**
+ * E1 / E2: what a dragged widget is over. The middle of another widget (of a half of a carousel) makes a
+ * stack; near its left / right side a small «+» appears where a carousel would fit, and the widget let
+ * go on the «+» makes the carousel. Anywhere else: an ordinary move to a cell.
+ */
+function hoverAt(x: number, y: number, me: Widget, mine: HTMLElement, meIsCarousel: boolean, grid: HTMLElement): Hover | null {
+  const els = document.elementsFromPoint(x, y);
+  let target: HTMLElement | null = null;
+  for (const e of els) {
+    const w = (e as HTMLElement).closest?.<HTMLElement>("[data-widget]");
+    if (w && w !== mine && !mine.contains(w)) {
+      target = w;
+      break;
+    }
+  }
+  // The «+» sits just outside a widget's side: look for a widget a little to the left / right too.
+  if (!target) {
+    for (const dx of [-PLUS_R - 10, PLUS_R + 10]) {
+      for (const e of document.elementsFromPoint(x + dx, y)) {
+        const w = (e as HTMLElement).closest?.<HTMLElement>("[data-widget]");
+        if (w && w !== mine && !mine.contains(w)) {
+          target = w;
+          break;
+        }
+      }
+      if (target) break;
+    }
+  }
+  if (!target) return null;
+  const id = target.dataset.widget!;
+  const r = target.getBoundingClientRect();
+  const l = currentLayout();
+  const tw = l.widgets.find((w) => w.id === id);
+  if (!tw) return null;
+  const tCarousel = widgetColumns(tw).length > 1;
+  const halfW = tCarousel ? r.width / 2 : r.width;
+  const half: 0 | 1 = tCarousel && x > r.left + r.width / 2 ? 1 : 0;
+  const hl = r.left + half * halfW;
+  const rx = (x - hl) / halfW;
+  const ry = (y - r.top) / r.height;
+  if (!meIsCarousel && rx > 0.22 && rx < 0.78 && ry > 0.15 && ry < 0.85) return { kind: "stack", target: id, half, rect: { left: hl, top: r.top, width: halfW, height: r.height } };
+  if (meIsCarousel || tCarousel) return null;
+  const side: "left" | "right" = x < r.left + r.width / 2 ? "left" : "right";
+  const place = placeOfGrid(grid.dataset.homeGrid!);
+  if (!place || !carouselSpot(l, me.id, id, side, geometryFor(place))) return null;
+  const px = side === "left" ? r.left - 4 : r.right + 4;
+  const py = r.top + r.height / 2;
+  const on = Math.hypot(x - px, y - py) <= PLUS_R + 6;
+  return { kind: on ? "carousel" : "plus", target: id, side, x: px, y: py };
+}
+
+function HoverMark({ hover }: { hover: Hover }) {
+  if (hover.kind === "stack")
+    return <div className="pointer-events-none fixed z-[250] rounded-[26px] ring-[3px] ring-white/80 shadow-[0_0_0_6px_rgba(108,92,255,0.35)]" style={hover.rect} data-testid="widget-stack-target" aria-hidden />;
+  return (
+    <div
+      className={cx("vx-glass pointer-events-none fixed z-[250] grid -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full transition-transform", hover.kind === "carousel" ? "scale-110 text-primary" : "text-text")}
+      style={{ left: hover.x, top: hover.y, width: PLUS_R * 2, height: PLUS_R * 2 }}
+      data-testid="widget-carousel-plus"
+      data-active={hover.kind === "carousel" || undefined}
+      aria-hidden
+    >
+      <RiAddCircleFill className="size-7" />
+    </div>
+  );
+}
+
+/** One half of a widget block: a single widget, or a stack scrolled vertically (E1, E3). */
+function WidgetColumn({ widgetId, items, half, active, side }: { widgetId: string; items: WidgetItem[]; half: 0 | 1; active: number; side: "left" | "right" }) {
+  if (items.length === 1) {
+    const d = defOf(items[0]!.type);
+    return d ? <d.Body /> : null;
+  }
+  return <WidgetStack widgetId={widgetId} items={items} half={half} active={active} side={side} />;
+}
+
+/**
+ * E1: a stack: one widget in view, a vertical swipe (or the mouse wheel) shows the next; the one in view
+ * is kept with the layout. The dots (at most 10) show only while it moves and a moment after; a stack on
+ * the left half of a carousel has them on the left, otherwise on the right.
+ */
+function WidgetStack({ widgetId, items, half, active, side }: { widgetId: string; items: WidgetItem[]; half: 0 | 1; active: number; side: "left" | "right" }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [idx, setIdx] = useState(Math.min(active, items.length - 1));
+  const [dots, setDots] = useState(false);
+  const timers = useRef<{ save?: number; hide?: number }>({});
+  const saved = useRef(active);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollTop = Math.min(active, items.length - 1) * el.clientHeight;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A new widget put on the stack (or the active one changed elsewhere) comes into view.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || active === saved.current) return;
+    saved.current = active;
+    el.scrollTo({ top: active * el.clientHeight, behavior: "smooth" });
+  }, [active]);
+  useEffect(() => () => {
+    window.clearTimeout(timers.current.save);
+    window.clearTimeout(timers.current.hide);
+  }, []);
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const i = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / Math.max(1, el.clientHeight))));
+    setIdx(i);
+    setDots(true);
+    window.clearTimeout(timers.current.hide);
+    timers.current.hide = window.setTimeout(() => setDots(false), 1200);
+    window.clearTimeout(timers.current.save);
+    timers.current.save = window.setTimeout(() => {
+      if (i === saved.current) return;
+      saved.current = i;
+      updateLayout((l) => setStackActive(l, widgetId, half, i));
+    }, 220);
+  };
+  return (
+    <div className="relative size-full" data-testid="widget-stack" data-count={items.length} data-active={idx} data-half={half}>
+      <div ref={ref} className="no-scrollbar size-full snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-[24px]" style={{ touchAction: "pan-y" }} onScroll={onScroll} data-widget-stack>
+        {items.map((it) => {
+          const d = defOf(it.type);
+          return (
+            <div key={it.id} className="h-full w-full snap-start snap-always" data-stack-item={it.id}>
+              {d ? <d.Body /> : null}
+            </div>
+          );
+        })}
+      </div>
+      <div
+        className={cx("pointer-events-none absolute top-1/2 flex -translate-y-1/2 flex-col gap-[5px] transition-opacity duration-300", side === "left" ? "left-1.5" : "right-1.5", dots ? "opacity-100" : "opacity-0")}
+        data-testid="widget-stack-dots"
+        data-visible={dots || undefined}
+        aria-hidden
+      >
+        {items.map((it, i) => (
+          <span key={it.id} className={cx("size-[6px] rounded-full", i === idx ? "bg-[var(--text)]" : "bg-[color-mix(in_srgb,var(--text)_28%,transparent)]")} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** E1 / E3: removing a whole stack or carousel is confirmed first (the apps and their data stay). */
+export function WidgetConfirm() {
+  const t = useT();
+  const c = useHomeUi((s) => s.widgetConfirm);
+  const close = () => useHomeUi.getState().setWidgetConfirm(null);
+  return (
+    <ConfirmDialog
+      open={!!c}
+      onClose={close}
+      onConfirm={() => {
+        if (!c) return;
+        close();
+        updateLayout((l) => (c.kind === "carousel" ? removeWidget(l, c.id) : deleteWidgetHalf(l, c.id, c.half)));
+      }}
+      title={c?.kind === "carousel" ? t("widgets.deleteCarouselTitle") : t("widgets.deleteStackTitle")}
+      message={t("widgets.deleteStackBody")}
+      confirmLabel={t("widgets.remove")}
+      danger
+      testId="widget-confirm"
+    />
   );
 }
 
@@ -430,7 +697,7 @@ export function WidgetStrip({ layout, surface, container, editing }: { layout: W
   return (
     <div className="mx-auto mb-5 flex flex-wrap justify-center gap-3" data-testid="widget-strip">
       {widgets.map((w) => {
-        const cells = WIDGET_CELLS[w.type as WidgetType];
+        const cells = widgetCells(w);
         return <GridWidget key={w.id} widget={w} editing={editing} size={{ w: cells.w * 112, h: cells.h * 116 }} />;
       })}
     </div>
@@ -469,7 +736,7 @@ export function WidgetsPanel() {
   const page = useHomeUi((s) => s.mobilePage);
   const [q, setQ] = useState("");
   const [chosen, setChosen] = useState<WidgetType | null>(null);
-  const full = layout.widgets.length >= WIDGETS_MAX;
+  const full = !useHomeUi.getState().widgetsStack && layout.widgets.length >= WIDGETS_MAX;
   useEffect(() => {
     if (!open) {
       setChosen(null);
@@ -482,7 +749,20 @@ export function WidgetsPanel() {
   }, [q, t, lang]);
   const def = chosen ? defOf(chosen) : undefined;
 
+  const stack = useHomeUi((s) => s.widgetsStack);
   const add = (type: WidgetType) => {
+    // E1: «Добавить виджет» from a widget's menu: on top of that stack (or that half of a carousel).
+    if (stack) {
+      let failed: StackResult["error"];
+      updateLayout((l) => {
+        const r = addToStack(l, stack.id, stack.half, type);
+        failed = r.error;
+        return r.layout ?? l;
+      });
+      if (failed) toast({ title: t(failed === "full" ? "widgets.stackFull" : "widgets.noRoom") });
+      setOpen(false);
+      return;
+    }
     const size = WIDGET_CELLS[type];
     if (ff === "desktop") {
       const place = { surface: "desktop" as const, space };
@@ -495,7 +775,14 @@ export function WidgetsPanel() {
       });
     } else {
       const p = Math.min(page, layout.mobile.pages.length - 1);
-      updateLayout((l) => addWidget(l, type, { surface: "mobile", page: p, cell: freeBlock(l, { surface: "mobile", page: p }, size) ?? undefined }));
+      const dest = { surface: "mobile" as const, page: p };
+      // A2: only where the whole widget is visible; a full page says so instead of adding it out of sight.
+      const cell = freeBlock(currentLayout(), dest, size, undefined, geometryFor(dest));
+      if (!cell) {
+        toast({ title: t("widgets.noRoom") });
+        return;
+      }
+      updateLayout((l) => addWidget(l, type, { surface: "mobile", page: p, cell: freeBlock(l, dest, size, undefined, geometryFor(dest)) ?? cell }));
     }
     setOpen(false);
   };

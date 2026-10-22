@@ -11,12 +11,13 @@ export interface TestEnv {
   clock: { offsetMs: number; advance(ms: number): void };
 }
 
-export async function createTestEnv(): Promise<TestEnv> {
+export async function createTestEnv(extraEnv: Record<string, string> = {}): Promise<TestEnv> {
   const config = loadConfig({
     NODE_ENV: "test",
     DATABASE_URL: TEST_DATABASE_URL,
     MAIL_DOMAIN: "voidops.ru",
     SMS_PROVIDER: "console",
+    ...extraEnv,
   } as NodeJS.ProcessEnv);
   const sms = new ConsoleSmsProvider(() => {});
   const clock = {

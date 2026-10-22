@@ -4,7 +4,7 @@ import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { AlarmEditor, AlarmPage } from "./alarms";
-import { stopPreview } from "./audio";
+import { stopPreview, wantAudio } from "./audio";
 import { ClockIcon, type ClockIconName } from "./icons";
 import { useClock } from "./runtime";
 import { useClockT, type ClockKey } from "./strings";
@@ -97,6 +97,8 @@ export function ClockApp() {
 
   // Leaving Clock (window closed) stops a sound preview.
   useEffect(() => () => stopPreview(), []);
+  // B2: while Clock is open every kind of tap (also the end of a drum drag) gets its sound ready.
+  useEffect(() => wantAudio(), []);
 
   const add = tab === "world" ? () => setCityOpen(true) : tab === "alarm" ? () => setEditing(newAlarmDraft()) : null;
   const addLabel = tab === "world" ? t("add.city") : t("add.alarm");
