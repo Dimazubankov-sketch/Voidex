@@ -1640,4 +1640,6 @@ export const ja: Record<MessageKey, string> = {
   "widgets.sizeSmall": "小、2 × 2",
   "widgets.sizeWide": "ワイド、4 × 2",
   "widgets.noRoomResize": "このページにはそのサイズの空きがありません",
+  "widgets.removeFromStack": "スタックから削除",
+  "widgets.wideAlone": "ワイドウィジェットはスタックやカルーセルに入れられません",
 };

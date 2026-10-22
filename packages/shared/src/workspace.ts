@@ -853,13 +853,15 @@ export const widgetKey = (id: string) => `widget:${id}`;
  * cell inside, and only when the area is full does anything go past the last
  * row. Without `rows` (phone pages) the grid grows downwards as before.
  */
-export function gridPlacement(columns: number, items: string[], cells: Record<string, Cell>, blocks: GridBlock[] = [], rows?: number): Map<string, PlacedCell> {
+export function gridPlacement(columns: number, items: string[], cells: Record<string, Cell>, blocks: GridBlock[] = [], rows?: number, opts: { edges?: boolean } = {}): Map<string, PlacedCell> {
   const cols = Math.max(1, Math.floor(columns));
+  /** B1 (phone): a block narrower than the page stands at its left or right edge, never in between. */
+  const colOk = (c: number, w: number) => !opts.edges || w <= 1 || w >= cols || c === 0 || c === cols - w;
   const maxRows = rows === undefined ? Infinity : Math.max(1, Math.floor(rows));
   const taken = new Set<string>();
   const out = new Map<string, PlacedCell>();
   const free = (c: number, r: number, w: number, h: number) => {
-    if (c < 0 || r < 0 || c + w > cols) return false;
+    if (c < 0 || r < 0 || c + w > cols || !colOk(c, w)) return false;
     for (let y = r; y < r + h; y++) for (let x = c; x < c + w; x++) if (taken.has(`${x},${y}`)) return false;
     return true;
   };
@@ -877,7 +879,8 @@ export function gridPlacement(columns: number, items: string[], cells: Record<st
   const nearest = (c0: number, r0: number, w: number, h: number) => {
     let best: { c: number; r: number } | null = null;
     let dist = Infinity;
-    for (let r = 0; r + h <= maxRows; r++)
+    const lastRow = bounded ? maxRows : r0 + h + 2 + Math.ceil(taken.size / Math.max(1, cols));
+    for (let r = 0; r + h <= lastRow; r++)
       for (let c = 0; c + w <= cols; c++) {
         const d = (c - c0) ** 2 + (r - r0) ** 2;
         if (d < dist && free(c, r, w, h)) {
@@ -892,12 +895,12 @@ export function gridPlacement(columns: number, items: string[], cells: Record<st
   const settle = (key: string, w: number, h: number, queue: { key: string; w: number; h: number }[], late: { key: string; w: number; h: number; c: Cell }[]) => {
     const c = cells[key];
     if (c && fits(c.c, c.r, w, h)) take(key, c.c, c.r, w, h);
-    else if (c && bounded) late.push({ key, w, h, c });
+    else if (c && (bounded || !colOk(c.c, w))) late.push({ key, w, h, c });
     else queue.push({ key, w, h });
   };
   const place = (late: { key: string; w: number; h: number; c: Cell }[], queue: { key: string; w: number; h: number }[]) => {
     for (const x of late) {
-      const at = nearest(Math.min(Math.max(0, x.c.c), cols - x.w), Math.min(Math.max(0, x.c.r), maxRows - x.h), x.w, x.h);
+      const at = nearest(Math.min(Math.max(0, x.c.c), cols - x.w), bounded ? Math.min(Math.max(0, x.c.r), maxRows - x.h) : Math.max(0, x.c.r), x.w, x.h);
       if (at) take(x.key, at.c, at.r, x.w, x.h);
       else queue.push(x);
     }
@@ -952,7 +955,7 @@ export interface GridGeometry {
 export function placementOf(l: WorkspaceLayout, place: Place, geometry?: GridGeometry): Map<string, PlacedCell> {
   const { items, blocks } = surfaceKeys(l, place);
   const g = geometry;
-  return gridPlacement(g ? g.cols : columnsOf(l, place.surface), items, cellsOf(l, place.surface), blocks, g?.rows);
+  return gridPlacement(g ? g.cols : columnsOf(l, place.surface), items, cellsOf(l, place.surface), blocks, g?.rows, { edges: place.surface === "mobile" });
 }
 
 /** Freezes the current placement of a page / desktop into stored cells (so one move changes only what moves). */
@@ -995,7 +998,9 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
   const ww = isWidget ? n.widgets.find((w) => widgetKey(w.id) === key) : undefined;
   const size = ww ? widgetCells(ww) : { w: 1, h: 1 };
   const cols = g ? g.cols : columnsOf(n, to.surface);
-  const c = Math.max(0, Math.min(cols - size.w, cell.c));
+  let c = Math.max(0, Math.min(cols - size.w, cell.c));
+  // B1 (phone): a widget narrower than the page snaps to its left or right edge, whichever is nearer.
+  if (isWidget && to.surface === "mobile" && size.w > 1 && size.w < cols) c = c * 2 + size.w < cols ? 0 : cols - size.w;
   const r = Math.max(0, g ? Math.min(g.rows - size.h, cell.r) : cell.r);
 
   // Who is in the target area?
@@ -1019,9 +1024,19 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
   cells[key] = { c, r };
   // Swap: a single 1×1 occupant takes the dragged item's old cell (same page) or
   // the first free cell; anything a widget lands on flows to free cells.
+  // B4: a widget dropped on one widget of its own size (same page) swaps places with it.
+  const swapWidget = isWidget && same && old && occupants.length === 1 && occupants[0]!.startsWith("widget:") && (() => {
+    const o = placed.get(occupants[0]!);
+    return !!o && o.w === size.w && o.h === size.h;
+  })();
   for (const k of occupants) {
-    if (!isWidget && occupants.length === 1 && same && old) cells[k] = old;
+    if ((!isWidget && occupants.length === 1 && same && old) || swapWidget) cells[k] = old!;
     else delete cells[k];
+  }
+  // B4: nothing may end up below a bounded page / desktop (it would look lost): such a drop is refused.
+  if (g && isWidget) {
+    for (const p of placementOf(n, to, g).values()) if (p.r + p.h > g.rows) return l;
+    if (!same) for (const p of placementOf(n, from, g).values()) if (p.r + p.h > g.rows) return l;
   }
   return n;
 }
@@ -1047,7 +1062,9 @@ export function freeBlock(l: WorkspaceLayout, place: Place, size: { w: number; h
   }
   const w = Math.min(size.w, cols);
   const rows = g ? g.rows : used + size.h;
+  const edges = place.surface === "mobile" && w > 1 && w < cols;
   const free = (c: number, r: number) => {
+    if (edges && c !== 0 && c !== cols - w) return false;
     for (let y = r; y < r + size.h; y++) for (let x = c; x < c + w; x++) if (taken.has(`${x},${y}`)) return false;
     return true;
   };
@@ -1436,5 +1453,25 @@ export function resizeWidget(l: WorkspaceLayout, id: string, size: WidgetSize, g
     cells[k] = best;
     mark({ ...best, w: p.w, h: p.h });
   }
+  return { layout: n };
+}
+
+/**
+ * B3 «Удалить из стопки»: the widget in view goes (it is not put on the desktop; its app and data
+ * stay); the others keep their order and the one after it comes into view (the last one: the one
+ * before). One left: an ordinary widget again.
+ */
+export function deleteStackItem(l: WorkspaceLayout, id: string, half: 0 | 1): StackResult {
+  const i = l.widgets.findIndex((w) => w.id === id);
+  if (i < 0) return { error: "missing" };
+  const w = l.widgets[i]!;
+  const cols = widgetColumns(w).map((c) => [...c]);
+  const h = cols[half] ? half : 0;
+  if (cols[h]!.length < 2) return { error: "missing" };
+  const at = Math.min(h === 0 ? (w.active ?? 0) : (w.active2 ?? 0), cols[h]!.length - 1);
+  cols[h]!.splice(at, 1);
+  const next = Math.min(at, cols[h]!.length - 1);
+  const n = clone(l);
+  n.widgets[i] = withColumns(n.widgets[i]!, cols, h === 0 ? [next, undefined] : [undefined, next]);
   return { layout: n };
 }

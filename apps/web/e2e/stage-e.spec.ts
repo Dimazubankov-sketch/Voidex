@@ -46,9 +46,20 @@ async function dragWidget(page: Page, w: Locator, to: { x: number; y: number }) 
   for (let i = 1; i <= 16; i++) await page.mouse.move(from.x + ((to.x - from.x) * i) / 16, from.y + ((to.y - from.y) * i) / 16);
   await page.waitForTimeout(150);
 }
+/** B2: one swipe on a stack (dir 1: down, the previous widget comes; -1: up, the next one). */
+async function swipeStack(page: Page, stack: Locator, dir: 1 | -1) {
+  const b = (await stack.boundingBox())!;
+  const x = b.x + b.width / 2;
+  const y0 = b.y + b.height / 2 - (dir * b.height) / 4;
+  await page.mouse.move(x, y0);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i++) await page.mouse.move(x, y0 + (dir * b.height * 0.5 * i) / 6);
+  await page.mouse.up();
+}
 async function longPressMenu(page: Page, w: Locator, dx = 0.5) {
   const b = (await w.boundingBox())!;
-  await page.mouse.move(b.x + b.width * dx, b.y + b.height * 0.3);
+  // Near the top: a calculator's keys answer on their own (no menu from a held key, Update 2 · B6).
+  await page.mouse.move(b.x + b.width * dx, b.y + Math.min(b.height * 0.3, 14));
   await page.mouse.down();
   await page.waitForTimeout(650);
   await page.mouse.up();
@@ -69,24 +80,31 @@ test("E1: a widget dropped on another makes a stack; vertical scroll, dots only 
   await expect.poll(async () => (await layoutOf(page)).widgets.length).toBe(1);
   await page.getByTestId("home-done").click().catch(() => page.keyboard.press("Escape"));
   await expect(page.getByTestId("home")).not.toHaveAttribute("data-editing", "true");
-  // Scroll up to the clock: the dots show, then hide; the active widget is saved.
+  // Swipe down to the clock: the dots show, then hide; the active widget is saved.
   await expect(page.getByTestId("widget-stack-dots")).not.toHaveAttribute("data-visible", "true");
-  await page.getByTestId("widget-stack").locator("[data-widget-stack]").evaluate((el) => el.scrollTo({ top: 0 }));
+  await swipeStack(page, page.getByTestId("widget-stack"), 1);
   await expect(page.getByTestId("widget-stack-dots")).toHaveAttribute("data-visible", "true");
   await expect(stack).toHaveAttribute("data-active", "0");
   await expect(page.getByTestId("widget-stack-dots")).not.toHaveAttribute("data-visible", "true", { timeout: 4000 });
   await expect.poll(async () => (await layoutOf(page)).widgets[0]!.active ?? 0).toBe(0);
   await reloadUnlocked(page);
   await expect(page.getByTestId("widget-stack")).toHaveAttribute("data-active", "0");
-  // Long press: the stack's menu.
+  // Long press: the stack's menu (no «Изменить рабочий стол» on widgets).
   await longPressMenu(page, page.getByTestId("widget-stack"));
   await expect(page.getByTestId("menu-stack-add")).toBeVisible();
-  await expect(page.getByTestId("menu-stack-take-out")).toBeVisible();
+  await expect(page.getByTestId("menu-stack-remove-item")).toHaveText("Удалить из стопки");
   await expect(page.getByTestId("menu-stack-delete")).toBeVisible();
-  // «Убрать из стопки»: the clock (in view) gets its own place; the calculator stays.
-  await page.getByTestId("menu-stack-take-out").click();
+  await expect(page.getByTestId("menu-edit")).toHaveCount(0);
+  // «Удалить из стопки»: the clock (in view) is gone, not put on the desktop; the calculator stays alone.
+  await page.getByTestId("menu-stack-remove-item").click();
   await expect(page.getByTestId("widget-stack")).toHaveCount(0);
-  await expect.poll(async () => (await layoutOf(page)).widgets.map((w) => w.type).sort().join()).toBe("calculator,clock");
+  await expect.poll(async () => (await layoutOf(page)).widgets.map((w) => w.type).sort().join()).toBe("calculator");
+  // Put a clock back on its own (from the catalogue) for the next steps.
+  await saveLayout(page, (l) => {
+    const space = l.desktop.spaces[0]!.id;
+    const where = isMobile(page) ? { surface: "mobile" as const, page: 0, cell: { c: 2, r: 0 } } : { surface: "desktop" as const, space, cell: { c: 2, r: 0 } };
+    return addWidget(l, "clock", where, "w_clock0002");
+  });
   // Add on top of the calculator from its menu → a stack again.
   await longPressMenu(page, page.locator('[data-testid="widget-calculator"]'));
   await page.getByTestId("menu-stack-add").click();

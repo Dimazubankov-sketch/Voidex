@@ -1671,6 +1671,8 @@ export const en = {
   "widgets.sizeSmall": "Small, 2 × 2",
   "widgets.sizeWide": "Wide, 4 × 2",
   "widgets.noRoomResize": "Not enough room on this page for that size",
+  "widgets.removeFromStack": "Remove from stack",
+  "widgets.wideAlone": "A wide widget can't join a stack or a carousel",
 } as const;
 
 

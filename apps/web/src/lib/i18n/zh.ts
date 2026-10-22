@@ -1640,4 +1640,6 @@ export const zh: Record<MessageKey, string> = {
   "widgets.sizeSmall": "小，2 × 2",
   "widgets.sizeWide": "宽，4 × 2",
   "widgets.noRoomResize": "此页面没有足够空间放置该尺寸",
+  "widgets.removeFromStack": "从堆栈中移除",
+  "widgets.wideAlone": "宽小组件不能加入堆栈或轮播",
 };

@@ -28,6 +28,7 @@ import { MobileSearch } from "./search";
 import { RemoveSpaceConfirm } from "./spaces";
 import { useHomeUi } from "./ui-store";
 import { GridWidget, WidgetConfirm, WidgetStrip, WidgetsPanel } from "./widgets";
+import { phonePager } from "./pager-ref";
 import { SYSTEM_BAR_H } from "../metrics";
 import { HomeGestureBar, NavButtons } from "../phone-nav";
 
@@ -349,25 +350,39 @@ function MobileHome({ layout, label, editing, dragKey, merge, onOpen, pagerRef }
     if (stored !== page) useHomeUi.getState().setMobilePage(page);
   }, [stored, page]);
 
+  /** B8: the glide that a swipe's release already started (the page change must not restart it). */
+  const gliding = useRef<{ to: number; anim: ReturnType<typeof animate> } | null>(null);
   useEffect(() => {
-    const c = animate(x, -page * width, { duration: 0.36, ease: EASE });
+    const target = -page * width;
+    if (gliding.current && gliding.current.to === target) return;
+    const c = animate(x, target, { duration: 0.32, ease: EASE });
     return () => c.stop();
   }, [page, width, x]);
 
   pagerRef.current = {
     move: (dx) => {
+      gliding.current?.anim.stop();
+      gliding.current = null;
       const edge = (page === 0 && dx > 0) || (page === pages.length - 1 && dx < 0);
       x.set(-page * width + (edge ? dx * 0.3 : dx));
     },
     end: (dx, vx) => {
+      // B8: a flick switches with little travel; a slow, short drag does not; past a third it does.
       let next = page;
-      if (dx < -width * 0.2 || vx < -500) next = page + 1;
-      else if (dx > width * 0.2 || vx > 500) next = page - 1;
+      if (dx < -width * 0.33 || (vx < -300 && dx < -12)) next = page + 1;
+      else if (dx > width * 0.33 || (vx > 300 && dx > 12)) next = page - 1;
       next = Math.max(0, Math.min(pages.length - 1, next));
-      if (next === page) animate(x, -page * width, { duration: 0.3, ease: EASE });
-      else useHomeUi.getState().setMobilePage(next);
+      const target = -next * width;
+      // The glide starts at release, right away, carrying the finger's speed (no wait for a render).
+      const anim = animate(x, target, { type: "spring", velocity: vx, stiffness: 420, damping: 44, mass: 0.9, restDelta: 0.5 });
+      gliding.current = { to: target, anim };
+      void anim.then(() => {
+        if (gliding.current?.anim === anim) gliding.current = null;
+      });
+      if (next !== page) useHomeUi.getState().setMobilePage(next);
     },
   };
+  phonePager.current = pagerRef.current;
 
   const cols = layout.mobile.columns;
   const cell = width ? Math.floor((width - 16) / cols) : 0;

@@ -1640,4 +1640,6 @@ export const ko: Record<MessageKey, string> = {
   "widgets.sizeSmall": "작게, 2 × 2",
   "widgets.sizeWide": "넓게, 4 × 2",
   "widgets.noRoomResize": "이 페이지에 해당 크기를 놓을 공간이 없습니다",
+  "widgets.removeFromStack": "스택에서 삭제",
+  "widgets.wideAlone": "넓은 위젯은 스택이나 캐러셀에 넣을 수 없습니다",
 };

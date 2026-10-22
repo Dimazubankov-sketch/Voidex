@@ -27,6 +27,7 @@ import {
   removeWidget,
   widgetKey,
   type Widget,
+  type Place,
   type WidgetSize,
   type WidgetType,
   type WorkspaceLayout,
@@ -46,6 +47,8 @@ import { cellAt, placeOfGrid } from "./grid";
 import { openApp } from "./actions";
 import { currentLayout, updateLayout, useWorkspaceLayout } from "./layout";
 import { useHomeUi } from "./ui-store";
+import { captureGridFlip, removeAnimated } from "./grid-flip";
+import { phonePager } from "./pager-ref";
 import { VoidexSearchField } from "@/ui/search-field";
 
 /**
@@ -99,10 +102,11 @@ function CalculatorWidget({ preview }: { preview?: boolean }) {
             tabIndex={preview ? -1 : 0}
             onClick={() => setState((s) => press(s, k))}
             className={cx(
-              "flex min-h-0 items-center justify-center rounded-[10px] text-[14px] font-semibold transition-transform active:scale-95",
+              "vx-calc-key flex min-h-0 items-center justify-center rounded-[10px] text-[14px] font-semibold",
               k === "=" ? "bg-primary text-white" : "×÷−+".includes(k) ? "bg-primary/12 text-primary" : k === "C" || k === "±" || k === "%" || k === "⌫" ? "bg-black/[0.06] text-text-secondary" : "bg-white/70 text-text",
             )}
             aria-label={k === "⌫" ? t("widgets.calcBackspace") : k === "C" ? t("widgets.calcClear") : k}
+            data-widget-key
             data-testid={`calc-key-${k}`}
           >
             {k}
@@ -259,6 +263,17 @@ function RemoveBadge({ onRemove }: { onRemove: () => void }) {
   );
 }
 
+/**
+ * B5: a widget carried to another page / desktop keeps being dragged there. Its card on the new page
+ * is a new element; the drag is handed over to it with the pointer and where the finger holds the card.
+ */
+type DragResume = { x: number; y: number; grab: { dx: number; dy: number } };
+const dragResume = new Map<string, (p: DragResume) => void>();
+/** How long the page / desktop switch takes before the card on the new page takes the finger. */
+const SWITCH_SETTLE_MS = 320;
+/** PC: hold a dragged widget over a desktop tab this long to carry it there (as for icons). */
+const SPACE_HOLD_MS = 420;
+
 /** Phone: holding a dragged widget this close to the side of the screen carries it to the next page. */
 const EDGE = 26;
 const EDGE_HOLD_MS = 600;
@@ -306,6 +321,15 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     void animate(y, 0, { type: "spring", stiffness: 520, damping: 42 });
   });
 
+  const resumeRef = useRef<((p: DragResume) => void) | null>(null);
+  useEffect(() => {
+    const fn = (p: DragResume) => resumeRef.current?.(p);
+    dragResume.set(widget.id, fn);
+    return () => {
+      if (dragResume.get(widget.id) === fn) dragResume.delete(widget.id);
+    };
+  }, [widget.id]);
+
   if (!def) return null;
 
   /**
@@ -317,6 +341,26 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     if (e.button !== 0) return;
     e.stopPropagation();
     if (editing) return beginDrag(e.clientX, e.clientY);
+    // B6: a press on a key of the widget (the calculator's) is the key's own: no growing widget, no
+    // menu, no drag. The widget is held or moved by its other parts. A sideways swipe still turns the page.
+    if ((e.target as HTMLElement).closest?.("[data-widget-key]")) {
+      const pid = e.pointerId;
+      const from0 = { x: e.clientX, y: e.clientY };
+      const watch = (ev: PointerEvent) => {
+        if (ev.pointerId !== pid || Math.hypot(ev.clientX - from0.x, ev.clientY - from0.y) <= PRESS_SLOP) return;
+        quit();
+        if (Math.abs(ev.clientX - from0.x) > Math.abs(ev.clientY - from0.y) && phonePager.current && getFormFactor() === "mobile") swipePages(pid, from0);
+      };
+      const quit = () => {
+        window.removeEventListener("pointermove", watch);
+        window.removeEventListener("pointerup", quit);
+        window.removeEventListener("pointercancel", quit);
+      };
+      window.addEventListener("pointermove", watch);
+      window.addEventListener("pointerup", quit);
+      window.addEventListener("pointercancel", quit);
+      return;
+    }
     const id = e.pointerId;
     const from = { x: e.clientX, y: e.clientY };
     let at = { ...from };
@@ -340,6 +384,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       if (Math.hypot(at.x - from.x, at.y - from.y) <= PRESS_SLOP) return;
       stop();
       unpress();
+      // B8: a sideways swipe begun on a widget turns the home page, as on free space.
+      if (!menuOpen && Math.abs(at.x - from.x) > Math.abs(at.y - from.y) && phonePager.current && getFormFactor() === "mobile") return swipePages(id, from);
       if (!menuOpen) return;
       // E: the finger moves on after the menu opened: the menu goes and the widget is picked up instead.
       useHomeUi.getState().closeMenu();
@@ -369,16 +415,59 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     window.addEventListener("pointercancel", stop);
   };
 
-  const beginDrag = (clientX: number, clientY: number) => {
+  /** B8: hands a sideways swipe from this widget to the home pager (speed over the last ~80 ms). */
+  const swipePages = (pointerId: number, from: { x: number; y: number }) => {
+    const pager = phonePager.current;
+    if (!pager) return;
+    const samples: { x: number; t: number }[] = [{ x: from.x, t: performance.now() }];
+    let vx = 0;
+    const mv = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      const now = performance.now();
+      samples.push({ x: ev.clientX, t: now });
+      while (samples.length > 2 && now - samples[0]!.t > 80) samples.shift();
+      const f = samples[0]!;
+      if (now - f.t > 4) vx = ((ev.clientX - f.x) / (now - f.t)) * 1000;
+      pager.move(ev.clientX - from.x);
+    };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      window.removeEventListener("pointermove", mv);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      const lastT = samples[samples.length - 1]!.t;
+      pager.end(ev.clientX - from.x, performance.now() - lastT > 90 ? 0 : vx);
+    };
+    // The click that would end this swipe on the widget (a key, the clock) is swallowed, briefly.
+    const swallow = (ev: MouseEvent) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+    };
+    window.addEventListener("click", swallow, { capture: true, once: true });
+    const end2 = () => window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 350);
+    window.addEventListener("pointerup", end2, { once: true });
+    window.addEventListener("pointercancel", end2, { once: true });
+    window.addEventListener("pointermove", mv);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  const beginDrag = (clientX: number, clientY: number, grab?: { dx: number; dy: number }) => {
     const el = ref.current;
     const grid = el?.closest<HTMLElement>("[data-home-grid]");
     const host = el?.closest<HTMLElement>("[data-grid-host]") ?? grid;
     if (!el || !grid || !host) return;
     x.stop();
     y.stop();
-    const start = { x: clientX - x.get(), y: clientY - y.get() };
     const box0 = el.getBoundingClientRect();
     const natural = { left: box0.left - x.get(), top: box0.top - y.get(), w: box0.width, h: box0.height };
+    // B5: handed over from another page: the card jumps under the finger where it was held.
+    if (grab) {
+      x.set(clientX - grab.dx - natural.left);
+      y.set(clientY - grab.dy - natural.top);
+    }
+    const start = { x: clientX - x.get(), y: clientY - y.get() };
+    let pointer = { x: clientX, y: clientY };
     const area = host.getBoundingClientRect();
     const ui = useHomeUi.getState;
     const mobile = getFormFactor() === "mobile";
@@ -396,6 +485,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
       window.clearTimeout(edgeTimer);
+      window.clearTimeout(spaceTimer);
       setDragging(false);
       ui().setDrag(null);
     };
@@ -403,35 +493,76 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       void animate(x, 0, { type: "spring", stiffness: 520, damping: 42 });
       void animate(y, 0, { type: "spring", stiffness: 520, damping: 42 });
     };
-    /** Phone: carry the widget to the page beside this one (a new one past the last). */
-    const toPage = (dir: -1 | 1) => {
+    /**
+     * B5: carries the widget to another phone page (a new one past the last) or PC desktop and keeps
+     * dragging it there. No room there: it stays on this page, still in the hand (a short note).
+     */
+    const carry = (dest: Place, create: boolean) => {
+      const l0 = currentLayout();
+      const base = create ? { ...l0, mobile: { ...l0.mobile, pages: [...l0.mobile.pages, []] } } : l0;
+      const container = dest.surface === "mobile" ? String(dest.page) : dest.space;
+      const moved = moveWidget(base, widget.id, { container });
+      const cell = freeBlock(moved, dest, widgetCells(widget), undefined, geometryFor(dest));
+      if (!cell) {
+        toast({ title: translateNow("widgets.noRoom") });
+        return false;
+      }
+      const box = el.getBoundingClientRect();
+      const grab = { dx: pointer.x - box.left, dy: pointer.y - box.top };
       finish();
+      updateLayout(() => placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest)));
+      if (dest.surface === "mobile") ui().setMobilePage(dest.page);
+      else useWM.getState().setSpace(dest.space);
+      navigator.vibrate?.(8);
+      // While the page slides in, the finger is followed; then the card on the new page takes it.
+      let latest = { ...pointer };
+      let released = false;
+      const track = (ev: PointerEvent) => {
+        latest = { x: ev.clientX, y: ev.clientY };
+      };
+      const release = () => {
+        released = true;
+      };
+      window.addEventListener("pointermove", track);
+      window.addEventListener("pointerup", release);
+      window.addEventListener("pointercancel", release);
+      window.setTimeout(() => {
+        window.removeEventListener("pointermove", track);
+        window.removeEventListener("pointerup", release);
+        window.removeEventListener("pointercancel", release);
+        // Let go meanwhile: it simply stays where it landed on the new page.
+        if (released) return;
+        ui().setEditing(true);
+        dragResume.get(widget.id)?.({ ...latest, grab });
+      }, SWITCH_SETTLE_MS);
+      return true;
+    };
+    /** Phone: the page beside this one (a new one past the last). */
+    const toPage = (dir: -1 | 1) => {
       const l = currentLayout();
       const from = Number(widget.container);
-      let to = from + dir;
-      if (to < 0) return settleBack();
+      const to = from + dir;
+      if (to < 0) return;
       const create = to >= l.mobile.pages.length;
-      if (create && l.mobile.pages.length >= MOBILE_PAGES_MAX) return settleBack();
-      if (create) to = l.mobile.pages.length;
-      updateLayout((cur) => {
-        const n = create ? { ...cur, mobile: { ...cur.mobile, pages: [...cur.mobile.pages, []] } } : cur;
-        const moved = moveWidget(n, widget.id, { container: String(to) });
-        const dest = { surface: "mobile" as const, page: to };
-        const cell = freeBlock(moved, dest, widgetCells(widget), undefined, geometryFor(dest));
-        // A2: no room on that page: the widget stays where it was.
-        if (!cell) {
-          toast({ title: translateNow("widgets.noRoom") });
-          return cur;
-        }
-        return placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest));
-      });
-      x.set(0);
-      y.set(0);
-      ui().setMobilePage(to);
+      if (create && l.mobile.pages.length >= MOBILE_PAGES_MAX) return;
+      carry({ surface: "mobile", page: create ? l.mobile.pages.length : to }, create);
     };
+    let spaceTimer: number | undefined;
+    let spaceOver: string | null = null;
     const move = (ev: PointerEvent) => {
+      pointer = { x: ev.clientX, y: ev.clientY };
       x.set(clampX(ev.clientX - start.x));
       y.set(clampY(ev.clientY - start.y));
+      // PC: held over another desktop's tab, the widget goes there and stays in the hand.
+      if (!mobile) {
+        const tab = document.elementsFromPoint(ev.clientX, ev.clientY).map((n) => n.closest<HTMLElement>("[data-home-space]")).find(Boolean);
+        const space = tab?.dataset.homeSpace ?? null;
+        if (space !== spaceOver) {
+          spaceOver = space;
+          window.clearTimeout(spaceTimer);
+          if (space && space !== widget.container) spaceTimer = window.setTimeout(() => carry({ surface: "desktop", space }, false), SPACE_HOLD_MS);
+        }
+      }
       const hv = hoverAt(ev.clientX, ev.clientY, widget, el, columns.length > 1, grid);
       if (JSON.stringify(hv) !== JSON.stringify(hoverRef.current)) {
         hoverRef.current = hv;
@@ -452,13 +583,15 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       // E1 / E2: dropped on the middle of a widget (a stack) or on the «+» beside it (a carousel).
       if (intent && (intent.kind === "stack" || intent.kind === "carousel") && place) {
         let failed: StackResult["error"];
+        // B4: the target glides to the joined block (a carousel grows to its full width).
+        captureGridFlip();
         updateLayout((l) => {
           const r = intent.kind === "stack" ? stackWidgets(l, widget.id, intent.target, intent.half) : joinWidgets(l, widget.id, intent.target, intent.side, geometryFor(place));
           failed = r.error;
           return r.layout ?? l;
         });
         if (failed) {
-          toast({ title: translateNow(failed === "full" ? "widgets.stackFull" : failed === "carousel" ? "widgets.noCarouselInStack" : "widgets.noRoom") });
+          toast({ title: translateNow(failed === "full" ? "widgets.stackFull" : failed === "carousel" ? "widgets.noCarouselInStack" : failed === "wide" ? "widgets.wideAlone" : "widgets.noRoom") });
           settleBack();
         }
         return;
@@ -477,6 +610,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const maxRows = Math.min(Number(grid.dataset.maxRows) || Infinity, fitRows);
       const cols = Number(grid.dataset.cols) || sz.w;
       const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
+      // B1 (phone): a widget narrower than the page goes to the edge on the side its centre is over.
+      if (mobile && sz.w > 1 && sz.w < cols) target.c = box.left + box.width / 2 > gr.left + gr.width / 2 ? cols - sz.w : 0;
       const current = el.parentElement?.dataset.cell;
       if (!place || current === `${target.c},${target.r}`) return settleBack();
       snap.current = { from: box, cell: `${target.c},${target.r}` };
@@ -497,6 +632,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
   };
+  resumeRef.current = (p) => beginDrag(p.x, p.y, p.grab);
 
   return (
     <motion.div
@@ -528,7 +664,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
               // E1 / E3: a stack or a carousel goes only after a confirmation (a single widget at once).
               columns.length > 1 || columns[0]!.length > 1
                 ? useHomeUi.getState().setWidgetConfirm({ id: widget.id, half: 0, kind: columns.length > 1 ? "carousel" : "stack" })
-                : updateLayout((l) => removeWidget(l, widget.id))
+                : removeAnimated([widgetKey(widget.id)], () => updateLayout((l) => removeWidget(l, widget.id)))
             }
           />
         )}
@@ -637,41 +773,56 @@ function WidgetColumn({ widgetId, items, half, active, side, size }: { widgetId:
   return <WidgetStack widgetId={widgetId} items={items} half={half} active={active} side={side} />;
 }
 
+/** B2: a step of a stack, and the gesture thresholds (a quarter of its height, or a flick). */
+const STACK_STEP_MS = 260;
+const STACK_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const STACK_FLICK = 0.35; // px per ms
+const STACK_DRAG_SLOP = 6;
+
+/** Swallows the click that ends a swipe (only if it comes at once). */
+function swallowNextClick() {
+  const swallow = (ev: MouseEvent) => {
+    ev.stopPropagation();
+    ev.preventDefault();
+  };
+  window.addEventListener("click", swallow, { capture: true, once: true });
+  window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 350);
+}
+
+/** Circular distance of item `i` from `idx` in a stack of `n`: -⌊n/2⌋ … ⌈n/2⌉. */
+function ringPos(i: number, idx: number, n: number) {
+  let d = (((i - idx) % n) + n) % n;
+  if (d > n / 2) d -= n;
+  return d;
+}
+
 /**
- * E1: a stack: one widget in view, a vertical swipe (or the mouse wheel) shows the next; the one in view
- * is kept with the layout. The dots (at most 10) show only while it moves and a moment after; a stack on
- * the left half of a carousel has them on the left, otherwise on the right.
+ * E1 / B2: a stack. One widget in view; a vertical swipe (or one wheel gesture on a PC) shows the next
+ * or the previous one, and the stack goes round endlessly both ways (… 3 → 1 → 2 …) with no jump: every
+ * widget stays mounted at its place on a ring and only transforms move. One gesture is one step. No
+ * scrollbar. The dots (at most 10) show while it moves and a moment after, on the left for the left
+ * half of a carousel. The widget in view is kept with the layout.
  */
 function WidgetStack({ widgetId, items, half, active, side }: { widgetId: string; items: WidgetItem[]; half: 0 | 1; active: number; side: "left" | "right" }) {
+  const n = items.length;
   const ref = useRef<HTMLDivElement>(null);
-  const [idx, setIdx] = useState(Math.min(active, items.length - 1));
+  const [idx, setIdx] = useState(() => Math.max(0, Math.min(active, n - 1)));
   const [dots, setDots] = useState(false);
-  const timers = useRef<{ save?: number; hide?: number }>({});
+  const [dragDir, setDragDir] = useState<-1 | 1>(1);
+  const ty = useMotionValue(0);
+  const busy = useRef(false);
+  const timers = useRef<{ save?: number; hide?: number; wheel?: number }>({});
   const saved = useRef(active);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (el) el.scrollTop = Math.min(active, items.length - 1) * el.clientHeight;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // A new widget put on the stack (or the active one changed elsewhere) comes into view.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || active === saved.current) return;
-    saved.current = active;
-    el.scrollTo({ top: active * el.clientHeight, behavior: "smooth" });
-  }, [active]);
-  useEffect(() => () => {
-    window.clearTimeout(timers.current.save);
-    window.clearTimeout(timers.current.hide);
-  }, []);
-  const onScroll = () => {
-    const el = ref.current;
-    if (!el) return;
-    const i = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollTop / Math.max(1, el.clientHeight))));
-    setIdx(i);
+  const wheel = useRef({ acc: 0, locked: false });
+  const reduced = useReducedMotionSafe();
+  const cur = Math.min(idx, n - 1);
+
+  const showDots = () => {
     setDots(true);
     window.clearTimeout(timers.current.hide);
     timers.current.hide = window.setTimeout(() => setDots(false), 1200);
+  };
+  const save = (i: number) => {
     window.clearTimeout(timers.current.save);
     timers.current.save = window.setTimeout(() => {
       if (i === saved.current) return;
@@ -679,17 +830,164 @@ function WidgetStack({ widgetId, items, half, active, side }: { widgetId: string
       updateLayout((l) => setStackActive(l, widgetId, half, i));
     }, 220);
   };
+  /** The step lands: the new widget becomes current and the offset goes back to 0 in the same frame (no flash). */
+  const resetPending = useRef(false);
+  const commit = (next: number) => {
+    lastLocal.current = Date.now();
+    resetPending.current = true;
+    setIdx(next);
+    save(next);
+  };
+  useLayoutEffect(() => {
+    if (!resetPending.current) return;
+    resetPending.current = false;
+    ty.set(0);
+    busy.current = false;
+  }, [idx, ty]);
+  /** One step (dir +1: the next widget comes up from below; -1: the previous comes down). */
+  const step = (dir: -1 | 1) => {
+    const h = ref.current?.clientHeight ?? 0;
+    if (busy.current || n < 2 || !h) return;
+    busy.current = true;
+    setDragDir(dir);
+    showDots();
+    const done = () => commit((((cur + dir) % n) + n) % n);
+    if (reduced) return done();
+    void animate(ty, -dir * h, { duration: STACK_STEP_MS / 1000, ease: STACK_EASE }).then(done);
+  };
+
+  // A new widget put on the stack (or the active one changed elsewhere) comes into view. Right after
+  // this device's own swipes, an echo of an earlier save is not a change (the stack never jumps back).
+  const lastLocal = useRef(0);
+  const prevN = useRef(n);
+  useEffect(() => {
+    const grew = n !== prevN.current;
+    prevN.current = n;
+    if (active === saved.current && !grew) return;
+    if (!grew && Date.now() - lastLocal.current < 2500) return;
+    saved.current = active;
+    setIdx(Math.max(0, Math.min(active, n - 1)));
+  }, [active, n]);
+  useEffect(
+    () => () => {
+      window.clearTimeout(timers.current.save);
+      window.clearTimeout(timers.current.hide);
+      window.clearTimeout(timers.current.wheel);
+    },
+    [],
+  );
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (n < 2 || e.button !== 0 || busy.current) return;
+    const el = ref.current!;
+    const h = el.clientHeight;
+    const id = e.pointerId;
+    const y0 = e.clientY;
+    const x0 = e.clientX;
+    let claimed = false;
+    let last = { y: y0, t: e.timeStamp };
+    let v = 0;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      const dy = ev.clientY - y0;
+      if (!claimed) {
+        if (Math.abs(dy) < STACK_DRAG_SLOP || Math.abs(dy) < Math.abs(ev.clientX - x0)) return;
+        claimed = true;
+        showDots();
+      }
+      const dt = Math.max(1, ev.timeStamp - last.t);
+      v = 0.8 * ((ev.clientY - last.y) / dt) + 0.2 * v;
+      last = { y: ev.clientY, t: ev.timeStamp };
+      setDragDir(dy < 0 ? 1 : -1);
+      // Rubber band past one widget's height: the finger never shows two steps at once.
+      ty.set(Math.max(-h, Math.min(h, dy)));
+    };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (!claimed) return;
+      // The swipe is not a tap: the click it would end with (on the clock, a key…) does not happen.
+      swallowNextClick();
+      const dy = ty.get();
+      const flick = Math.abs(v) > STACK_FLICK && Math.sign(v) === Math.sign(dy);
+      if (ev.type !== "pointercancel" && (Math.abs(dy) > h * 0.22 || flick)) {
+        const dir: -1 | 1 = dy < 0 ? 1 : -1;
+        busy.current = true;
+        showDots();
+        const finish = () => commit((((cur + dir) % n) + n) % n);
+        if (reduced) finish();
+        else void animate(ty, -dir * h, { duration: (STACK_STEP_MS * Math.max(0.45, 1 - Math.abs(dy) / h)) / 1000, ease: STACK_EASE }).then(finish);
+      } else {
+        void animate(ty, 0, { duration: 0.2, ease: STACK_EASE });
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (n < 2 || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+    e.stopPropagation();
+    const w = wheel.current;
+    // One wheel gesture (a trackpad's inertia included) = one step: locked until the wheel rests.
+    window.clearTimeout(timers.current.wheel);
+    timers.current.wheel = window.setTimeout(() => {
+      w.acc = 0;
+      w.locked = false;
+    }, 180);
+    if (w.locked) return;
+    w.acc += e.deltaY;
+    if (Math.abs(w.acc) < 30) return;
+    w.locked = true;
+    step(w.acc > 0 ? 1 : -1);
+  };
+
   return (
-    <div className="relative size-full" data-testid="widget-stack" data-count={items.length} data-active={idx} data-half={half}>
-      <div ref={ref} className="no-scrollbar size-full snap-y snap-mandatory overflow-y-auto overscroll-contain rounded-[24px]" style={{ touchAction: "pan-y" }} onScroll={onScroll} data-widget-stack>
-        {items.map((it) => {
-          const d = defOf(it.type);
-          return (
-            <div key={it.id} className="h-full w-full snap-start snap-always" data-stack-item={it.id}>
-              {d ? <d.Body /> : null}
-            </div>
-          );
-        })}
+    <div
+      className="relative size-full"
+      data-testid="widget-stack"
+      data-count={n}
+      data-active={cur}
+      data-half={half}
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowDown") step(1);
+        else if (e.key === "ArrowUp") step(-1);
+      }}
+    >
+      <div
+        ref={ref}
+        className="relative size-full overflow-hidden rounded-[24px]"
+        style={{ touchAction: "none" }}
+        onPointerDown={onPointerDown}
+        onWheel={onWheel}
+        data-widget-stack
+      >
+        <motion.div className="absolute inset-0" style={{ y: ty }}>
+          {items.map((it, i) => {
+            const d = defOf(it.type);
+            let pos = ringPos(i, cur, n);
+            // Two widgets: the other one waits on the side the finger is going to.
+            if (n === 2 && pos !== 0) pos = dragDir;
+            const near = Math.abs(pos) <= 1;
+            return (
+              <div
+                key={it.id}
+                className="absolute inset-0"
+                style={{ transform: `translate3d(0, ${pos * 100}%, 0)`, visibility: near ? "visible" : "hidden" }}
+                aria-hidden={pos !== 0}
+                inert={pos !== 0 ? true : undefined}
+                data-stack-item={it.id}
+                data-stack-pos={pos}
+              >
+                {d ? <d.Body /> : null}
+              </div>
+            );
+          })}
+        </motion.div>
       </div>
       <div
         className={cx("pointer-events-none absolute top-1/2 flex -translate-y-1/2 flex-col gap-[5px] transition-opacity duration-300", side === "left" ? "left-1.5" : "right-1.5", dots ? "opacity-100" : "opacity-0")}
@@ -698,11 +996,24 @@ function WidgetStack({ widgetId, items, half, active, side }: { widgetId: string
         aria-hidden
       >
         {items.map((it, i) => (
-          <span key={it.id} className={cx("size-[6px] rounded-full", i === idx ? "bg-[var(--text)]" : "bg-[color-mix(in_srgb,var(--text)_28%,transparent)]")} />
+          <span key={it.id} className={cx("size-[6px] rounded-full transition-colors", i === cur ? "bg-[var(--text)]" : "bg-[color-mix(in_srgb,var(--text)_28%,transparent)]")} />
         ))}
       </div>
     </div>
   );
+}
+
+/** Reduced motion, safe outside a browser. */
+function useReducedMotionSafe() {
+  const [r, setR] = useState(() => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  useEffect(() => {
+    if (typeof matchMedia !== "function") return;
+    const m = matchMedia("(prefers-reduced-motion: reduce)");
+    const on = () => setR(m.matches);
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  return r;
 }
 
 /** E1 / E3: removing a whole stack or carousel is confirmed first (the apps and their data stay). */
@@ -717,7 +1028,12 @@ export function WidgetConfirm() {
       onConfirm={() => {
         if (!c) return;
         close();
-        updateLayout((l) => (c.kind === "carousel" ? removeWidget(l, c.id) : deleteWidgetHalf(l, c.id, c.half)));
+        // B7: a whole stack / carousel shrinks away; one half of a carousel goes and the other glides into place.
+        const w = currentLayout().widgets.find((x) => x.id === c.id);
+        const whole = c.kind === "carousel" || !w?.items2?.length;
+        const apply = () => updateLayout((l) => (c.kind === "carousel" ? removeWidget(l, c.id) : deleteWidgetHalf(l, c.id, c.half)));
+        if (whole) removeAnimated([widgetKey(c.id)], apply);
+        else removeAnimated([document.querySelector<HTMLElement>(`[data-widget="${c.id}"] [data-widget-half="${c.half}"]`)], apply);
       }}
       title={c?.kind === "carousel" ? t("widgets.deleteCarouselTitle") : t("widgets.deleteStackTitle")}
       message={t("widgets.deleteStackBody")}

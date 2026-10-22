@@ -22,7 +22,7 @@ import {
   RiUnpinLine,
   RiImageLine,
   RiApps2Fill,
-  RiArrowGoBackLine,
+  RiSubtractLine,
   RiLayoutColumnLine,
 } from "@remixicon/react";
 import {
@@ -35,7 +35,7 @@ import {
   STACK_MAX,
   deleteWidgetHalf,
   splitWidgetCarousel,
-  unstackActive,
+  deleteStackItem,
   widgetColumns,
   sameItem,
   unpinFromDock,
@@ -43,6 +43,7 @@ import {
   isWidgetStack,
   resizeWidget,
   widgetSizesOf,
+  widgetKey,
   type WidgetSize,
   type AppId,
   type LayoutItem,
@@ -56,7 +57,7 @@ import { currentView, setView } from "./brush-menu";
 import { addToDesktop, openWallpapers, addToFolder, createFolderWith, openApp, ungroupFolder } from "./actions";
 import { updateLayout } from "./layout";
 import { geometryFor } from "./desktop-geometry";
-import { captureGridFlip } from "./grid-flip";
+import { captureGridFlip, removeAnimated } from "./grid-flip";
 import { toast } from "@/ui/overlays";
 import { useHomeUi, type ContextTarget } from "./ui-store";
 
@@ -240,26 +241,21 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
         const isStack = col.length > 1;
         const geometry = geometryFor({ surface: w.surface });
         const list: Entry[] = [];
-        if (col.length < STACK_MAX)
+        if (col.length < STACK_MAX && w.size !== "w")
           list.push({ id: "stack-add", label: t("widgets.add"), icon: <RiAddLine />, onSelect: () => ui().setWidgetsOpen(true, null, { id, half }) });
         if (isStack)
           list.push({
-            id: "stack-take-out",
-            label: t("widgets.takeOut"),
-            icon: <RiArrowGoBackLine />,
-            onSelect: () => {
-              let failed = false;
-              updateLayout((l) => {
-                const r = unstackActive(l, id, half, geometry);
-                failed = !!r.error;
-                return r.layout ?? l;
-              });
-              if (failed) toast({ title: t("widgets.noRoom") });
-            },
+            // B3: the widget in view leaves the stack and is gone (its app and data stay); the rest stay.
+            id: "stack-remove-item",
+            label: t("widgets.removeFromStack"),
+            icon: <RiSubtractLine />,
+            onSelect: () =>
+              removeAnimated([document.querySelector<HTMLElement>(`[data-widget="${id}"] [data-widget-half="${half}"] [data-stack-pos="0"], [data-widget="${id}"] [data-stack-pos="0"]`)], () =>
+                updateLayout((l) => deleteStackItem(l, id, half).layout ?? l),
+              ),
           });
         if (cols.length > 1)
           list.push({ id: "carousel-split", label: t("widgets.splitCarousel"), icon: <RiLayoutColumnLine />, onSelect: () => updateLayout((l) => splitWidgetCarousel(l, id, geometry)) });
-        list.push({ id: "edit", label: t("home.edit"), icon: <RiApps2Line />, onSelect: () => ui().setEditing(true) });
         if (isStack) list.push({ id: "stack-delete", label: t("widgets.deleteStack"), icon: <RiDeleteBinLine />, danger: true, onSelect: () => ui().setWidgetConfirm({ id, half, kind: "stack" }) });
         else
           list.push({
@@ -268,7 +264,11 @@ function MenuPanel({ layout, x, y, target }: { layout: WorkspaceLayout; x: numbe
             icon: <RiDeleteBinLine />,
             danger: true,
             // A single widget in a carousel leaves it; the other half stays where it is.
-            onSelect: () => updateLayout((l) => (cols.length > 1 ? deleteWidgetHalf(l, id, half, geometry) : removeWidget(l, id))),
+            onSelect: () =>
+              removeAnimated(
+                [cols.length > 1 ? document.querySelector<HTMLElement>(`[data-widget="${id}"] [data-widget-half="${half}"]`) : widgetKey(id)],
+                () => updateLayout((l) => (cols.length > 1 ? deleteWidgetHalf(l, id, half, geometry) : removeWidget(l, id))),
+              ),
           });
         return list;
       }

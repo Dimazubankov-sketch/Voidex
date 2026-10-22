@@ -1640,4 +1640,6 @@ export const fr: Record<MessageKey, string> = {
   "widgets.sizeSmall": "Petit, 2 × 2",
   "widgets.sizeWide": "Large, 4 × 2",
   "widgets.noRoomResize": "Pas assez de place sur cette page pour cette taille",
+  "widgets.removeFromStack": "Retirer de la pile",
+  "widgets.wideAlone": "Un widget large ne peut pas rejoindre une pile ni un carrousel",
 };

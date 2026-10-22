@@ -1640,4 +1640,6 @@ export const tr: Record<MessageKey, string> = {
   "widgets.sizeSmall": "Küçük, 2 × 2",
   "widgets.sizeWide": "Geniş, 4 × 2",
   "widgets.noRoomResize": "Bu sayfada bu boyut için yeterli yer yok",
+  "widgets.removeFromStack": "Yığından kaldır",
+  "widgets.wideAlone": "Geniş bir widget yığına veya karusele eklenemez",
 };

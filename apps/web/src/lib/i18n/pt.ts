@@ -1640,4 +1640,6 @@ export const pt: Record<MessageKey, string> = {
   "widgets.sizeSmall": "Pequeno, 2 × 2",
   "widgets.sizeWide": "Largo, 4 × 2",
   "widgets.noRoomResize": "Não há espaço suficiente nesta página para esse tamanho",
+  "widgets.removeFromStack": "Remover da pilha",
+  "widgets.wideAlone": "Um widget largo não pode entrar numa pilha nem num carrossel",
 };

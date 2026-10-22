@@ -93,7 +93,7 @@ export function HomeGrid({ layout, place, items, metrics: m, label, editing, sor
       const c = all[widgetKey(w.id)];
       return c ? [[widgetKey(w.id), c]] : [];
     }));
-    return gridPlacement(cols, items.map(layoutItemKey), cells, blocks, geometry?.rows);
+    return gridPlacement(cols, items.map(layoutItemKey), cells, blocks, geometry?.rows, { edges: place.surface === "mobile" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, sorted, items, cols, geometry?.rows, JSON.stringify(place)]);
 

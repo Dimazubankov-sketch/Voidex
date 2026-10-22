@@ -563,12 +563,13 @@ describe("Step 2.15: desktop and widgets", () => {
     const place = { surface: "mobile" as const, page: 0 };
     const before = keys(l, place);
     const at = freeBlock(l, place, WIDGET_CELLS.clock)!;
-    // 9 apps on 4 columns: rows 0-1 full, row 2 holds one; the first free 2 x 2 is at column 1 of row 2.
-    expect(at).toEqual({ c: 1, r: 2 });
+    // 9 apps on 4 columns: rows 0-1 full, row 2 holds one. Update 2 · B1: a phone widget stands at the
+    // left or right edge only, so the first free 2 x 2 is the right half of rows 2-3.
+    expect(at).toEqual({ c: 2, r: 2 });
     l = addWidget(l, "clock", { surface: "mobile", page: 0, cell: at }, "w_clock12");
     const after = keys(l, place);
     for (const [k, v] of Object.entries(before)) expect(after[k]).toBe(v);
-    expect(after["widget:w_clock12"]).toBe("1,2");
+    expect(after["widget:w_clock12"]).toBe("2,2");
   });
 
   it("PC: the free block nearest to where the menu was opened; none on a full desktop", () => {

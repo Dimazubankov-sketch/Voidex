@@ -1640,4 +1640,6 @@ export const de: Record<MessageKey, string> = {
   "widgets.sizeSmall": "Klein, 2 × 2",
   "widgets.sizeWide": "Breit, 4 × 2",
   "widgets.noRoomResize": "Auf dieser Seite ist nicht genug Platz für diese Größe",
+  "widgets.removeFromStack": "Aus Stapel entfernen",
+  "widgets.wideAlone": "Ein breites Widget kann keinem Stapel und keinem Karussell beitreten",
 };

@@ -1655,4 +1655,6 @@ export const ru: Record<MessageKey, string> = {
   "widgets.sizeSmall": "Маленький, 2 × 2",
   "widgets.sizeWide": "Широкий, 4 × 2",
   "widgets.noRoomResize": "На этой странице не хватает места для такого размера",
+  "widgets.removeFromStack": "Удалить из стопки",
+  "widgets.wideAlone": "Широкий виджет нельзя объединить в стопку или карусель",
 };
