@@ -22,6 +22,9 @@ import {
   RiArrowDownSLine,
   RiImageLine,
   RiVideoLine,
+  RiCheckLine,
+  RiFileTextLine,
+  RiRepeat2Line,
 } from "@remixicon/react";
 import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -354,98 +357,144 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
 }
 
 /**
- * Update 3 · G1 / G2 (SR1934): three compact sections — «Посты» (own posts), «Репосты» (other people's
- * posts shared by the owner), «Видео» (own videos). A line under the active one glides to the next. The
- * small arrow beside «Видео» opens a two-item switch (Видео / Фото): the profile's photos are reached from
- * there, without a fourth, permanent tab. The third section then reads «Фото».
+ * Update 3 · G1 / G2: the profile's sections as one row of icons (the owner's reference): «Посты» and
+ * «Репосты» are icons (their names for screen readers and as a hint), the last section shows its icon, its
+ * name and a small arrow. A line under the active section glides to the next. The arrow (or a tap on the
+ * active last section) opens a small floating glass menu over the row: «Видео» / «Фото», a tick on the
+ * current one. The photos are reached there, without a fourth, permanent tab.
  */
 function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const t = useT();
   const reduced = useReducedMotion();
   const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
   const third: Tab = tab === "photos" ? "photos" : "video";
-  const tabs: [Tab, MessageKey][] = [
-    ["posts", "vibex.profile.posts"],
-    ["reposts", "vibex.profile.reposts"],
-    [third, third === "photos" ? "vibex.profile.photos" : "vibex.profile.videos"],
-  ];
+  const media = { video: { icon: RiVideoLine, label: "vibex.profile.videos" }, photos: { icon: RiImageLine, label: "vibex.profile.photos" } } as const;
+  const ThirdIcon = media[third].icon;
+
+  // The menu closes on a tap outside it and on Esc.
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [open]);
+
+  const line = (
+    <motion.span
+      layoutId="vx-profile-tab-line"
+      className="absolute inset-x-[22%] -bottom-px h-[3px] rounded-full bg-primary"
+      transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42 }}
+      aria-hidden
+    />
+  );
+  const cell = (on: boolean) => cx("relative flex h-12 min-w-0 items-center justify-center transition-colors duration-200", on ? "text-text" : "text-text-tertiary hover:text-text-secondary");
+
   return (
-    <div className="sticky top-0 z-10 -mx-1 bg-surface/95 px-1 backdrop-blur" data-testid="profile-tabs-wrap">
+    <div ref={wrap} className="sticky top-0 z-10 -mx-1 bg-surface/95 px-1 backdrop-blur" data-testid="profile-tabs-wrap">
       <div className="relative grid grid-cols-3 border-b border-border" role="tablist" data-testid="profile-tabs">
-        {tabs.map(([k, label], i) => {
+        {(
+          [
+            ["posts", RiFileTextLine, "vibex.profile.posts"],
+            ["reposts", RiRepeat2Line, "vibex.profile.reposts"],
+          ] as const
+        ).map(([k, Icon, label]) => {
           const on = tab === k;
           return (
             <button
-              key={i}
+              key={k}
               type="button"
               role="tab"
               aria-selected={on}
+              title={t(label)}
               onClick={() => {
-                if (i === 2 && on) setOpen((v) => !v);
-                else {
-                  setOpen(false);
-                  onTab(k);
-                }
+                setOpen(false);
+                onTab(k);
               }}
-              className={cx("relative flex h-11 min-w-0 items-center justify-center gap-0.5 px-2 text-[14.5px] font-semibold transition-colors duration-200", on ? "text-text" : "text-text-tertiary hover:text-text-secondary")}
+              className={cell(on)}
               data-testid={`profile-tab-${k}`}
             >
-              <span className="truncate">{t(label)}</span>
-              {i === 2 && <span className="w-5 shrink-0" aria-hidden />}
-              {on && (
-                <motion.span
-                  layoutId="vx-profile-tab-line"
-                  className="absolute inset-x-[26%] -bottom-px h-[2.5px] rounded-full bg-primary"
-                  transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42 }}
-                  aria-hidden
-                />
-              )}
+              <Icon className="size-[22px]" aria-hidden />
+              <span className="sr-only">{t(label)}</span>
+              {on && line}
             </button>
           );
         })}
-        {/* The arrow: its own button (never inside the tab button), at the end of the third section. */}
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label={t("vibex.profile.mediaSwitch")}
-          className="absolute right-[calc(100%/6-34px)] top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover hover:text-text"
-          data-testid="profile-media-toggle"
-        >
-          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }} className="flex">
-            <RiArrowDownSLine className="size-5" />
-          </motion.span>
-        </button>
+        <div className={cell(tab === third)}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === third}
+            onClick={() => (tab === third ? setOpen((v) => !v) : (setOpen(false), onTab(third)))}
+            className="flex h-full min-w-0 items-center gap-1.5 pl-2 text-[14.5px] font-semibold"
+            data-testid={`profile-tab-${third}`}
+          >
+            <ThirdIcon className="size-[21px] shrink-0" aria-hidden />
+            <span className="truncate">{t(media[third].label)}</span>
+          </button>
+          {/* The arrow: its own button (never inside the tab button). */}
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-haspopup="menu"
+            aria-label={t("vibex.profile.mediaSwitch")}
+            className="flex h-full items-center pl-0.5 pr-2"
+            data-testid="profile-media-toggle"
+          >
+            <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }} className="flex">
+              <RiArrowDownSLine className="size-[18px]" />
+            </motion.span>
+          </button>
+          {tab === third && line}
+        </div>
       </div>
-      <AnimatePresence initial={false}>
+      <AnimatePresence>
         {open && (
           <motion.div
-            className="overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+            role="menu"
+            aria-label={t("vibex.profile.mediaSwitch")}
+            className="absolute right-2 top-1 z-20 w-[200px] origin-top-right overflow-hidden rounded-[20px] border border-white/70 bg-surface/95 p-1.5 shadow-float backdrop-blur-xl backdrop-saturate-150"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.86, y: -6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: -4 }}
+            transition={{ duration: reduced ? 0.12 : 0.2, ease: [0.22, 1, 0.36, 1] }}
             data-testid="profile-media-switch"
           >
-            <div className="flex justify-end gap-1.5 px-2 py-2" role="radiogroup">
-              {(["video", "photos"] as const).map((k) => (
+            {(["video", "photos"] as const).map((k) => {
+              const Icon = media[k].icon;
+              const on = third === k;
+              return (
                 <button
                   key={k}
                   type="button"
-                  role="radio"
-                  aria-checked={third === k}
+                  role="menuitemradio"
+                  aria-checked={on}
                   onClick={() => {
                     onTab(k);
                     setOpen(false);
                   }}
-                  className={cx("flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium transition-colors", third === k ? "bg-primary text-white" : "bg-surface-secondary text-text-secondary hover:bg-surface-hover")}
+                  className="flex h-11 w-full items-center gap-3 rounded-[14px] px-3 text-left text-[15px] font-medium text-text transition-colors hover:bg-surface-hover active:bg-surface-hover"
                   data-testid={`profile-media-${k}`}
                 >
-                  {k === "video" ? <RiVideoLine className="size-4" /> : <RiImageLine className="size-4" />}
-                  {t(k === "video" ? "vibex.profile.videos" : "vibex.profile.photos")}
+                  <Icon className="size-5 shrink-0 text-text-secondary" aria-hidden />
+                  <span className="flex-1">{t(media[k].label)}</span>
+                  {on && <RiCheckLine className="size-5 shrink-0 text-primary" aria-hidden />}
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </motion.div>
         )}
       </AnimatePresence>
