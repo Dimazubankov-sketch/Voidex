@@ -638,8 +638,13 @@ function Bubble({
       <div ref={bubble} className="flex flex-col items-end gap-1">
         {forwarded}
         {msg.replyTo && <ReplyQuote reply={msg.replyTo} mine={false} nameOf={nameOf} />}
-        <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} playback={{ chatId: msg.conversationId, messageId: msg.id, senderName: nameOf(msg.senderId) }} />
-        <span className="rounded-full bg-black/35 px-2 text-[11px] tabular-nums text-white">{time}</span>
+        <div className="relative">
+          <CircleBubble file={msg.files[0]} durationMs={msg.durationMs} playback={{ chatId: msg.conversationId, messageId: msg.id, senderName: nameOf(msg.senderId) }} />
+          <span className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-0.5 rounded-full bg-black/40 px-2 py-[1px] text-[11px] tabular-nums text-white backdrop-blur-sm" data-testid="circle-time">
+            {time}
+            {mine && <Ticks msg={msg} peerReadAt={peerReadAt} />}
+          </span>
+        </div>
       </div>
     ) : mediaOnly ? (
       <div ref={bubble} className="relative w-[min(86%,420px)]" data-testid="message-media">
@@ -654,10 +659,10 @@ function Bubble({
         className={cx(
           "flex flex-col gap-1.5 overflow-hidden",
           // Step 2.12: with photos the bubble is as wide as they are and they reach its edges (no coloured frame).
-          images.length > 0 ? "w-[min(86%,420px)] pb-1" : "max-w-[min(78%,520px)] px-1 py-1",
+          images.length > 0 ? "w-[min(84%,400px)] pb-0.5" : "max-w-[min(80%,520px)]",
           mine ? "bg-primary text-white" : "bg-surface text-text shadow-tile",
-          "rounded-[22px]",
-          tail && (mine ? "rounded-br-[8px]" : "rounded-bl-[8px]"),
+          "rounded-[18px]",
+          tail && (mine ? "rounded-br-[6px]" : "rounded-bl-[6px]"),
         )}
       >
         {author && (
@@ -695,9 +700,9 @@ function Bubble({
             {msg.sharedPost ? <NestedPost post={msg.sharedPost} /> : <UnavailablePost className="bg-surface" />}
           </div>
         )}
-        <div className="flex items-end gap-2 px-2.5 pb-1">
+        <div className="flex items-end gap-2 px-3 pb-[5px] pt-[6px]">
           {msg.text && (
-            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words pt-0.5 text-[15px] leading-[1.4]" data-selectable={!selecting || undefined}>
+            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[15px] leading-[1.36]" data-selectable={!selecting || undefined}>
               {msg.text}
             </p>
           )}
@@ -841,17 +846,21 @@ function Messages({ chat, actions = NO_ACTIONS, preview = false }: { chat: Vibex
   // Rendered bottom-up (column-reverse keeps the newest at the bottom without scroll math).
   return (
     // Step 2.10: the preview scrolls too (its own wrapper keeps every message control inert, see PreviewScroller).
-    <div className="scroll-area flex flex-1 flex-col-reverse gap-1 overflow-x-hidden px-3 py-3 sm:px-5" data-testid={preview ? "preview-messages" : "messages"}>
+    <div
+      className="scroll-area flex flex-1 flex-col-reverse gap-[3px] overflow-x-hidden px-2.5 pb-2 sm:px-5"
+      style={{ paddingTop: preview ? 12 : "calc(var(--chat-top, 0px) + 10px)" }}
+      data-testid={preview ? "preview-messages" : "messages"}
+    >
       {items.map((m, i) => {
         const older = items[i + 1];
         const newer = items[i - 1];
         const tail = !newer || newer.mine !== m.mine || dayKey(newer.createdAt) !== dayKey(m.createdAt);
         const dayBreak = !older || dayKey(older.createdAt) !== dayKey(m.createdAt);
         return (
-          <div key={m.id} className={cx("flex flex-col", older && older.mine !== m.mine && "mt-2")}>
+          <div key={m.id} className={cx("flex flex-col", older && older.mine !== m.mine && "mt-[7px]")}>
             {dayBreak && (
-              <div className="my-2 flex justify-center">
-                <span className="vx-glass rounded-full px-3 py-1 text-[12px] font-medium text-text-secondary">{formatDate(m.createdAt, lang, { day: "numeric", month: "long" })}</span>
+              <div className="my-2.5 flex justify-center">
+                <span className="vx-glass rounded-full px-2.5 py-[3px] text-[12px] font-medium text-text-secondary">{formatDate(m.createdAt, lang, { day: "numeric", month: "long" })}</span>
               </div>
             )}
             <Bubble
@@ -1027,7 +1036,7 @@ function MessageComposer({
   const empty = !text.trim() && !files.length && !pending.length;
 
   return (
-    <div className="shrink-0 px-3 pb-2.5 pt-2 sm:px-4">
+    <div className="shrink-0 px-2.5 pb-2 pt-1.5 sm:px-4">
       <AnimatePresence initial={false}>
         {attachments.length > 0 && (
           <motion.div className="mb-2 flex flex-col gap-2" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} data-testid="composer-files">
@@ -1104,7 +1113,7 @@ function MessageComposer({
       )}
       {/* Update 2 · C7: a round attach button, the field (a pill that grows with the text), a round
           microphone / video circle button that becomes «send» once there is text. */}
-      <div ref={setRow} className="relative flex items-end gap-2" data-testid="composer-row">
+      <div ref={setRow} className="relative flex items-end gap-1.5" data-testid="composer-row">
         <input
           ref={input}
           type="file"
@@ -1138,12 +1147,12 @@ function MessageComposer({
           disabled={!!editing || files.length + pending.length >= VIBEX_FILES_MAX}
           aria-label={t("vibex.chat.attach")}
           title={t("vibex.chat.attach")}
-          className="vx-glass-strong flex size-11 shrink-0 items-center justify-center rounded-full text-text-secondary transition-transform active:scale-95 disabled:opacity-40"
+          className="vx-glass-strong flex size-10 shrink-0 items-center justify-center rounded-full text-text-secondary transition-transform active:scale-95 disabled:opacity-40"
           data-testid="chat-attach"
         >
-          <RiAttachment2 className="size-[21px]" />
+          <RiAttachment2 className="size-5" />
         </button>
-        <div className="vx-glass-strong flex min-h-11 min-w-0 flex-1 items-end rounded-[22px] px-3.5" data-testid="composer-field">
+        <div className="vx-glass-strong flex min-h-10 min-w-0 flex-1 items-end rounded-[20px] px-3.5" data-testid="composer-field">
         <textarea
           ref={area}
           rows={1}
@@ -1158,7 +1167,7 @@ function MessageComposer({
             }
           }}
           placeholder={t("vibex.chat.placeholder")}
-          className="max-h-40 min-h-11 min-w-0 flex-1 resize-none bg-transparent py-[11px] text-[16px] leading-[1.35] outline-none placeholder:text-text-tertiary"
+          className="max-h-40 min-h-10 min-w-0 flex-1 resize-none bg-transparent py-[9px] text-[16px] leading-[1.35] outline-none placeholder:text-text-tertiary"
           enterKeyHint={ff === "desktop" ? "send" : "enter"}
           data-testid="chat-input"
         />
@@ -1168,7 +1177,7 @@ function MessageComposer({
             type="button"
             onClick={() => void submit()}
             disabled={!text.trim() || edit.isPending}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-35"
             whileTap={{ scale: 0.9 }}
             aria-label={t("common.save")}
             data-testid="chat-edit-save"
@@ -1182,7 +1191,7 @@ function MessageComposer({
             type="button"
             onClick={submit}
             disabled={!canSend}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-[0_6px_16px_-6px_rgba(108,92,255,0.65)] transition-opacity disabled:opacity-35"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-[0_6px_16px_-6px_rgba(108,92,255,0.65)] transition-opacity disabled:opacity-35"
             initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
@@ -1299,10 +1308,38 @@ function ConversationView({
   const [chatInfo, setChatInfo] = useState(false);
   const closeChat = useVibex((s) => s.openChat);
   const selected = selection ? items.filter((m) => selection.has(m.id)) : [];
-  return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="conversation" data-chat-id={chatId}>
-      <ChatHeader chat={c} onBack={onBack} onInfo={() => (c.group ? setInfo(true) : setChatInfo(true))} onProfile={() => c.peer && push({ kind: "person", id: c.peer.id })} />
+  // Update 3 · C1 (SR2488): on phones the header and the pins float over the history, which scrolls under
+  // them (a soft fade keeps them readable); the history starts below them (--chat-top).
+  const floating = useFormFactor() === "mobile";
+  const root = useRef<HTMLDivElement>(null);
+  const top = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = top.current;
+    const r = root.current;
+    if (!el || !r) return;
+    const set = () => r.style.setProperty("--chat-top", floating ? `${Math.round(el.getBoundingClientRect().height)}px` : "0px");
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [floating]);
+  const head = (
+    <>
+      <ChatHeader chat={c} onBack={onBack} floating={floating} onInfo={() => (c.group ? setInfo(true) : setChatInfo(true))} onProfile={() => c.peer && push({ kind: "person", id: c.peer.id })} />
       <ChatTopPanel chat={c} onJump={(id) => void jump(id)} nameOf={nameOf} />
+    </>
+  );
+  return (
+    <div ref={root} className="relative flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="conversation" data-chat-id={chatId} data-floating-head={floating || undefined}>
+      {floating ? (
+        <div ref={top} className="vx-chat-top pointer-events-none absolute inset-x-0 top-0 z-[6] pb-2" data-testid="chat-top">
+          {head}
+        </div>
+      ) : (
+        <div ref={top} className="shrink-0 border-b border-border" data-testid="chat-top">
+          {head}
+        </div>
+      )}
       <div ref={setHost} className="relative flex min-h-0 flex-1 flex-col bg-surface-secondary/50">
         <Messages chat={c} actions={listActions} />
         {selection ? (

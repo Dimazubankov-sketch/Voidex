@@ -1823,10 +1823,12 @@ export class VibexService {
     const c = decodeCursor(cursor);
     const hasFile = (cond: SQL) => sql`EXISTS (SELECT 1 FROM vibex_files f WHERE f.message_id = ${vibexMessages.id} AND ${cond})`;
     const filter: SQL =
+      // Update 3 · E1: a video circle carries a video file too; «Медиа» is photos and video files sent as
+      // ordinary messages only (circles and voice are in «Голосовые и видео»).
       kind === "media"
-        ? hasFile(sql`(f.mime_type LIKE 'image/%' OR f.mime_type LIKE 'video/%') AND f.mime_type <> 'image/gif'`)
+        ? and(eq(vibexMessages.kind, "text"), hasFile(sql`(f.mime_type LIKE 'image/%' OR f.mime_type LIKE 'video/%') AND f.mime_type <> 'image/gif'`))!
         : kind === "gifs"
-          ? hasFile(sql`f.mime_type = 'image/gif'`)
+          ? and(eq(vibexMessages.kind, "text"), hasFile(sql`f.mime_type = 'image/gif'`))!
           : kind === "music"
             ? and(eq(vibexMessages.kind, "text"), hasFile(sql`f.mime_type LIKE 'audio/%'`))!
             : kind === "voice"
