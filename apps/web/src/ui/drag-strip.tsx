@@ -1,12 +1,14 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { animate, motion, useMotionValue, useReducedMotion } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { cx } from "@/lib/cx";
 
 /**
- * Update 3 · E2: a row of tabs (chips) that is moved by the finger instead of native overflow scrolling:
- * iOS never draws its scroll indicator under it, and the row owns its horizontal drags
- * (`data-gesture-owner`): the page's swipe back and the side drawer stay out of it. A flick glides on with
- * the finger's speed; a tap after a drag does not switch the tab. The active tab is brought into view.
+ * Update 3 · E2: a row of tabs (chips) moved by the finger instead of native overflow scrolling. The row
+ * is `overflow: hidden` (iOS never draws its scroll indicator, nothing scrolls by itself) and the finger
+ * drives its scroll position; a flick glides on with the finger's speed. Keyboard focus and
+ * `scrollIntoView` still reveal a tab (a hidden overflow still scrolls by script). The row owns its
+ * horizontal drags (`data-gesture-owner`): the page's swipe back and the side drawer stay out of it. A
+ * tap after a drag does not switch the tab. The active tab is brought into view.
  *
  * When everything fits (a PC window, a wide phone) nothing moves and, with `fill`, the tabs share the
  * whole width in one line.
@@ -32,42 +34,58 @@ export function DragStrip({
 }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
   const reduced = useReducedMotion();
-  const [room, setRoom] = useState({ min: 0, fits: true });
+  const [fits, setFits] = useState(true);
+  const drag = useRef<{ id: number; x: number; y: number; left: number; engaged: boolean; samples: { x: number; t: number }[] } | null>(null);
   const moved = useRef(false);
+  const glide = useRef(0);
 
-  // How far the row may move (0 … -overflow); re-measured when either box changes size.
+  const stopGlide = () => cancelAnimationFrame(glide.current);
+  /** Scrolls to `to` (clamped), gliding with an ease-out unless reduced motion. */
+  const scrollTo = (to: number, ms = 320) => {
+    const o = outer.current;
+    if (!o) return;
+    stopGlide();
+    const max = o.scrollWidth - o.clientWidth;
+    const target = Math.max(0, Math.min(max, to));
+    if (reduced || Math.abs(target - o.scrollLeft) < 1) {
+      o.scrollLeft = target;
+      return;
+    }
+    const from = o.scrollLeft;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms);
+      o.scrollLeft = from + (target - from) * (1 - Math.pow(1 - k, 3));
+      if (k < 1) glide.current = requestAnimationFrame(tick);
+    };
+    glide.current = requestAnimationFrame(tick);
+  };
+
   useLayoutEffect(() => {
     const o = outer.current;
     const i = inner.current;
     if (!o || !i) return;
-    const measure = () => {
-      const over = i.scrollWidth - o.clientWidth;
-      const next = { min: Math.min(0, -over), fits: over <= 1 };
-      setRoom((r) => (r.min === next.min && r.fits === next.fits ? r : next));
-      if (x.get() < next.min) x.set(next.min);
-      if (next.fits) x.set(0);
-    };
+    const measure = () => setFits(i.scrollWidth <= o.clientWidth + 1);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(o);
     ro.observe(i);
     return () => ro.disconnect();
-  }, [x]);
+  }, []);
 
-  // The active tab comes into view (centred when possible), gliding.
+  // The active tab comes into view (centred when possible).
   useLayoutEffect(() => {
     const o = outer.current;
     const i = inner.current;
-    if (!o || !i || !activeKey || room.fits) return;
+    if (!o || !i || !activeKey || fits) return;
     const el = i.querySelector<HTMLElement>(`[data-strip-key="${CSS.escape(activeKey)}"]`);
     if (!el) return;
-    const want = Math.max(room.min, Math.min(0, o.clientWidth / 2 - (el.offsetLeft + el.offsetWidth / 2)));
-    if (Math.abs(want - x.get()) < 1) return;
-    if (reduced) x.set(want);
-    else void animate(x, want, { type: "spring", stiffness: 420, damping: 40 });
-  }, [activeKey, room, x, reduced]);
+    scrollTo(el.offsetLeft + el.offsetWidth / 2 - o.clientWidth / 2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, fits]);
+
+  useLayoutEffect(() => () => stopGlide(), []);
 
   return (
     <div
@@ -76,10 +94,46 @@ export function DragStrip({
       // Vertical scrolling of the page stays native; the row takes the sideways moves.
       style={{ touchAction: "pan-y" }}
       data-gesture-owner=""
-      data-strip-fits={room.fits || undefined}
+      data-strip-fits={fits || undefined}
       data-testid={testId}
       role="tablist"
       aria-label={label}
+      onPointerDown={(e) => {
+        if (fits || e.button !== 0) return;
+        stopGlide();
+        moved.current = false;
+        drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, left: e.currentTarget.scrollLeft, engaged: false, samples: [{ x: e.clientX, t: performance.now() }] };
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d || d.id !== e.pointerId) return;
+        const dx = e.clientX - d.x;
+        if (!d.engaged) {
+          if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(e.clientY - d.y)) return;
+          d.engaged = true;
+          moved.current = true;
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* synthetic pointer */
+          }
+        }
+        e.currentTarget.scrollLeft = d.left - dx;
+        const now = performance.now();
+        d.samples.push({ x: e.clientX, t: now });
+        while (d.samples.length > 2 && now - d.samples[0]!.t > 80) d.samples.shift();
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        drag.current = null;
+        if (!d?.engaged || d.id !== e.pointerId) return;
+        // A flick glides on with the finger's speed (px/ms), slowing down.
+        const f = d.samples[0]!;
+        const l = d.samples[d.samples.length - 1]!;
+        const v = performance.now() - l.t > 90 ? 0 : (l.x - f.x) / Math.max(1, l.t - f.t);
+        if (Math.abs(v) > 0.15) scrollTo(e.currentTarget.scrollLeft - v * 260, 420);
+      }}
+      onPointerCancel={() => (drag.current = null)}
       onClickCapture={(e) => {
         // The tap that ends a drag is not a tab choice.
         if (moved.current) {
@@ -89,20 +143,9 @@ export function DragStrip({
         }
       }}
     >
-      <motion.div
-        ref={inner}
-        className={cx("flex w-max min-w-full", fill && room.fits && "[&>*]:flex-1", innerClassName)}
-        style={{ x }}
-        drag={room.fits ? false : "x"}
-        dragConstraints={{ left: room.min, right: 0 }}
-        dragElastic={0.12}
-        dragTransition={{ power: 0.28, timeConstant: 220, bounceStiffness: 420, bounceDamping: 38 }}
-        dragDirectionLock
-        onDragStart={() => (moved.current = true)}
-        onDragEnd={() => window.setTimeout(() => (moved.current = false), 60)}
-      >
+      <div ref={inner} className={cx("flex w-max min-w-full", fill && fits && "[&>*]:flex-1", innerClassName)}>
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }

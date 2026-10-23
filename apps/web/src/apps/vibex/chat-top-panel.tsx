@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, animate, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { RiCloseLine, RiPauseFill, RiPlayFill, RiUnpinLine } from "@remixicon/react";
 import type { VibexChatDto, VibexPinDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
@@ -112,22 +112,7 @@ function PinsBar({ chat, pins, onJump, nameOf }: { chat: VibexChatDto; pins: Pic
         <Segments count={pins.length} index={i} />
         <span className="relative h-[34px] min-w-0 flex-1 overflow-hidden">
           <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              key={p.id}
-              className="absolute inset-0 flex flex-col justify-center"
-              initial={reduced ? { opacity: 0 } : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -12 }}
-              transition={{ duration: 0.22, ease: EASE }}
-            >
-              <span className="block truncate text-[12.5px] font-semibold leading-[1.25] text-primary" data-testid="pinned-title">
-                {pins.length > 1 ? t("vibex.pins.titleN", { n: i + 1 }) : t("vibex.pins.title")}
-              </span>
-              <span className="block truncate text-[13px] leading-[1.3] text-text-secondary" data-testid="pinned-text">
-                {chat.group ? `${nameOf(p.senderId)}: ` : ""}
-                {pinText(t, p)}
-              </span>
-            </motion.span>
+            <PinLines key={p.id} reduced={!!reduced} title={pins.length > 1 ? t("vibex.pins.titleN", { n: i + 1 }) : t("vibex.pins.title")} text={`${chat.group ? `${nameOf(p.senderId)}: ` : ""}${pinText(t, p)}`} />
           </AnimatePresence>
         </span>
       </button>
@@ -144,6 +129,28 @@ function PinsBar({ chat, pins, onJump, nameOf }: { chat: VibexChatDto; pins: Pic
         </button>
       )}
     </>
+  );
+}
+
+/** The two lines of a pin; the one leaving (during the swap) drops its test ids, so only one is "the" pin. */
+function PinLines({ title, text, reduced }: { title: string; text: string; reduced: boolean }) {
+  const present = useIsPresent();
+  return (
+    <motion.span
+      className="absolute inset-0 flex flex-col justify-center"
+      initial={reduced ? { opacity: 0 } : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={reduced ? { opacity: 0 } : { opacity: 0, y: -12 }}
+      transition={{ duration: 0.22, ease: EASE }}
+      aria-hidden={!present || undefined}
+    >
+      <span className="block truncate text-[12.5px] font-semibold leading-[1.25] text-primary" data-testid={present ? "pinned-title" : undefined}>
+        {title}
+      </span>
+      <span className="block truncate text-[13px] leading-[1.3] text-text-secondary" data-testid={present ? "pinned-text" : undefined}>
+        {text}
+      </span>
+    </motion.span>
   );
 }
 

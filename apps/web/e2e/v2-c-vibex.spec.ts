@@ -55,7 +55,7 @@ test("C1 / C2 / C3: header with presence; several pins — a tap goes to each in
   // Unpin the one shown: one pin left, both sides.
   await page.getByTestId("pinned-unpin").click();
   await expect(bar).toHaveAttribute("data-count", "1");
-  await expect.poll(async () => (await api(bp, "GET", `/api/vibex/chats/${chat.id}`)).body.pins.map((p: { id: string }) => p.id)).toEqual([m1.id]);
+  await expect.poll(async () => (await api(bp, "GET", `/api/vibex/chats/${chat.id}`)).body.pins.map((p: { id: string }) => p.id)).toEqual([m2.id]); // the first (shown) was unpinned
   // B hides presence: A sees «был(а) недавно», grey, never the real time.
   await api(bp, "PATCH", "/api/vibex/settings", { privacy: { presence: "nobody" } });
   await reloadUnlocked(page);
