@@ -23,7 +23,8 @@ import {
   RiImageLine,
   RiVideoLine,
   RiCheckLine,
-  RiFileTextLine,
+  RiArticleLine,
+  RiImage2Line,
   RiRepeat2Line,
 } from "@remixicon/react";
 import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
@@ -369,7 +370,7 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const third: Tab = tab === "photos" ? "photos" : "video";
-  const media = { video: { icon: RiVideoLine, label: "vibex.profile.videos" }, photos: { icon: RiImageLine, label: "vibex.profile.photos" } } as const;
+  const media = { video: { icon: RiVideoLine, label: "vibex.profile.videos" }, photos: { icon: RiImage2Line, label: "vibex.profile.photos" } } as const;
   const ThirdIcon = media[third].icon;
 
   // The menu closes on a tap outside it and on Esc.
@@ -395,19 +396,19 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const line = (
     <motion.span
       layoutId="vx-profile-tab-line"
-      className="absolute inset-x-[22%] -bottom-px h-[3px] rounded-full bg-primary"
+      className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-primary"
       transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42 }}
       aria-hidden
     />
   );
-  const cell = (on: boolean) => cx("relative flex h-12 min-w-0 items-center justify-center transition-colors duration-200", on ? "text-text" : "text-text-tertiary hover:text-text-secondary");
+  const cell = (on: boolean) => cx("flex h-12 min-w-0 items-center justify-center transition-colors duration-200", on ? "text-text" : "text-text-tertiary hover:text-text-secondary");
 
   return (
-    <div ref={wrap} className="sticky top-0 z-10 -mx-1 bg-surface/95 px-1 backdrop-blur" data-testid="profile-tabs-wrap">
-      <div className="relative grid grid-cols-3 border-b border-border" role="tablist" data-testid="profile-tabs">
+    <div ref={wrap} className="sticky top-0 z-10 -mx-1 bg-surface px-1" data-testid="profile-tabs-wrap">
+      <div className="relative grid grid-cols-[1fr_1fr_1.55fr] border-b border-border" role="tablist" data-testid="profile-tabs">
         {(
           [
-            ["posts", RiFileTextLine, "vibex.profile.posts"],
+            ["posts", RiArticleLine, "vibex.profile.posts"],
             ["reposts", RiRepeat2Line, "vibex.profile.reposts"],
           ] as const
         ).map(([k, Icon, label]) => {
@@ -426,22 +427,25 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
               className={cell(on)}
               data-testid={`profile-tab-${k}`}
             >
-              <Icon className="size-[22px]" aria-hidden />
+              <span className="relative flex h-full min-w-[34px] items-center justify-center">
+                <Icon className="size-[23px]" aria-hidden />
+                {on && line}
+              </span>
               <span className="sr-only">{t(label)}</span>
-              {on && line}
             </button>
           );
         })}
         <div className={cell(tab === third)}>
-          <button
+          <div className="relative flex h-full min-w-0 items-center">
+            <button
             type="button"
             role="tab"
             aria-selected={tab === third}
             onClick={() => (tab === third ? setOpen((v) => !v) : (setOpen(false), onTab(third)))}
-            className="flex h-full min-w-0 items-center gap-1.5 pl-2 text-[14.5px] font-semibold"
+            className="flex h-full min-w-0 items-center gap-2 pl-1 text-[15.5px] font-semibold"
             data-testid={`profile-tab-${third}`}
           >
-            <ThirdIcon className="size-[21px] shrink-0" aria-hidden />
+            <ThirdIcon className="size-[22px] shrink-0" aria-hidden />
             <span className="truncate">{t(media[third].label)}</span>
           </button>
           {/* The arrow: its own button (never inside the tab button). */}
@@ -451,14 +455,15 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
             aria-expanded={open}
             aria-haspopup="menu"
             aria-label={t("vibex.profile.mediaSwitch")}
-            className="flex h-full items-center pl-0.5 pr-2"
+            className="flex h-full items-center pl-2 pr-1"
             data-testid="profile-media-toggle"
           >
             <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }} className="flex">
               <RiArrowDownSLine className="size-[18px]" />
             </motion.span>
           </button>
-          {tab === third && line}
+            {tab === third && line}
+          </div>
         </div>
       </div>
       <AnimatePresence>
@@ -466,11 +471,11 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
           <motion.div
             role="menu"
             aria-label={t("vibex.profile.mediaSwitch")}
-            className="absolute right-2 top-1 z-20 w-[200px] origin-top-right overflow-hidden rounded-[20px] border border-white/70 bg-surface/95 p-1.5 shadow-float backdrop-blur-xl backdrop-saturate-150"
-            initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.86, y: -6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.92, y: -4 }}
-            transition={{ duration: reduced ? 0.12 : 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute bottom-0 right-1.5 z-20 w-[min(250px,62%)] origin-bottom-right overflow-hidden rounded-[28px] border border-white/80 bg-surface/[0.88] py-2 shadow-[0_18px_50px_-12px_rgba(40,30,90,0.35),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-2xl backdrop-saturate-[1.8]"
+            initial={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.6, filter: "blur(6px)" }}
+            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.75, filter: "blur(4px)" }}
+            transition={reduced ? { duration: 0.12 } : { type: "spring", stiffness: 520, damping: 36, mass: 0.8 }}
             data-testid="profile-media-switch"
           >
             {(["video", "photos"] as const).map((k) => {
@@ -486,12 +491,12 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
                     onTab(k);
                     setOpen(false);
                   }}
-                  className="flex h-11 w-full items-center gap-3 rounded-[14px] px-3 text-left text-[15px] font-medium text-text transition-colors hover:bg-surface-hover active:bg-surface-hover"
+                  className="flex h-[46px] w-full items-center gap-3 px-4 text-left text-[17px] text-text transition-colors active:bg-black/5"
                   data-testid={`profile-media-${k}`}
                 >
-                  <Icon className="size-5 shrink-0 text-text-secondary" aria-hidden />
-                  <span className="flex-1">{t(media[k].label)}</span>
-                  {on && <RiCheckLine className="size-5 shrink-0 text-primary" aria-hidden />}
+                  <span className="flex w-5 shrink-0 justify-center">{on && <RiCheckLine className="size-5 text-primary" aria-hidden />}</span>
+                  <Icon className="size-6 shrink-0" aria-hidden />
+                  <span className="flex-1 truncate">{t(media[k].label)}</span>
                 </button>
               );
             })}
