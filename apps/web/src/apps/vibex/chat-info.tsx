@@ -22,6 +22,7 @@ import {
 import { VIBEX_CHAT_MEDIA_KINDS, canDeleteChatForAll, type VibexChatDto, type VibexChatMediaKind, type VibexMessageDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
 import { cx } from "@/lib/cx";
+import { DragStrip } from "@/ui/drag-strip";
 import { errorMessage } from "@/lib/errors";
 import { formatShortDate, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { IconButton, Spinner } from "@/ui/controls";
@@ -290,20 +291,25 @@ function MediaTabs({ chat, tab, onTab, onPick }: { chat: VibexChatDto; tab: Vibe
   const more = useLoadMore(!!q.hasNextPage && !q.isFetchingNextPage, () => void q.fetchNextPage());
   return (
     <div className="pb-6">
-      <div className="no-scrollbar sticky top-0 z-[1] flex gap-1.5 overflow-x-auto bg-surface px-3 py-2" role="tablist" data-testid="chat-info-tabs">
-        {VIBEX_CHAT_MEDIA_KINDS.map((k) => (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => onTab(k)}
-            className={cx("h-9 shrink-0 rounded-full px-4 text-[14px] font-medium transition-colors", tab === k ? "bg-primary text-white" : "bg-surface-secondary text-text-secondary hover:bg-surface-hover")}
-            data-testid={`chat-tab-${k}`}
-          >
-            {t(TAB_LABEL[k])}
-          </button>
-        ))}
+      {/* Update 3 · E2: moved by the finger (no native scroll, so no scroll indicator), owns its sideways
+          drags (the page's swipe back stays out); the chosen tab comes into view; on a PC one line. */}
+      <div className="sticky top-0 z-[1] bg-surface py-2">
+        <DragStrip activeKey={tab} fill className="px-3" innerClassName="gap-1.5" testId="chat-info-tabs" label={t("vibex.info.title")}>
+          {VIBEX_CHAT_MEDIA_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => onTab(k)}
+              className={cx("h-9 shrink-0 whitespace-nowrap rounded-full px-4 text-[14px] font-medium transition-colors duration-200", tab === k ? "bg-primary text-white" : "bg-surface-secondary text-text-secondary hover:bg-surface-hover")}
+              data-strip-key={k}
+              data-testid={`chat-tab-${k}`}
+            >
+              {t(TAB_LABEL[k])}
+            </button>
+          ))}
+        </DragStrip>
       </div>
       {q.isPending ? (
         <div className="flex justify-center py-8">
@@ -315,7 +321,9 @@ function MediaTabs({ chat, tab, onTab, onPick }: { chat: VibexChatDto; tab: Vibe
         </p>
       ) : tab === "media" || tab === "gifs" ? (
         <div className="grid grid-cols-3 gap-0.5 px-0.5" data-testid="chat-tab-grid">
-          {items.flatMap((m) => m.files.filter((f) => (tab === "gifs" ? f.mimeType === "image/gif" : (f.kind === "image" || f.kind === "video") && f.mimeType !== "image/gif")).map((f) => <Thumb key={f.id} fileId={f.id} video={f.kind === "video"} onClick={() => onPick(m.id)} />))}
+          {items
+            .filter((m) => m.kind === "text")
+            .flatMap((m) => m.files.filter((f) => (tab === "gifs" ? f.mimeType === "image/gif" : (f.kind === "image" || f.kind === "video") && f.mimeType !== "image/gif")).map((f) => <Thumb key={f.id} fileId={f.id} video={f.kind === "video"} onClick={() => onPick(m.id)} />))}
         </div>
       ) : (
         <div className="flex flex-col px-1.5" data-testid="chat-tab-list">

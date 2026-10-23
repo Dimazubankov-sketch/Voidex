@@ -582,7 +582,7 @@ test("posts: Media (VOIDEX Media / device) and a Files paperclip (Files only, no
   expect(await carousel.locator("[data-slide]").count()).toBe(3);
 });
 
-test("profile: tabs Публикации · Посты · Репосты; one media grid with photo / video marks; text folded under «Показать текст»; + creates a post", async ({ page }) => {
+test("profile: tabs Посты · Репосты · Видео (photos behind the arrow); one media grid with photo / video marks; text folded under «Показать текст»; + creates a post", async ({ page }) => {
   const me = await signUpViaApi(page, "Профиль", "Публикаций");
   const pic = (await api(page, "POST", "/api/vibex/files?purpose=post", undefined, { name: "p.png", base64: PNG })).body.id;
   await api(page, "POST", "/api/vibex/posts", { text: "Подпись к фото", mediaIds: [pic] });
@@ -591,8 +591,12 @@ test("profile: tabs Публикации · Посты · Репосты; one me
   if (isMobile(page)) await openVibexMenu(page);
   await page.getByTestId("vibex-me").last().click();
   const tabs = await page.getByTestId("profile-tabs").getByRole("tab").allInnerTexts();
-  expect(tabs.map((x) => x.trim())).toEqual(["Публикации", "Посты", "Репосты"]);
-  await expect(page.getByTestId("profile-tab-media")).toHaveAttribute("aria-selected", "true");
+  // Update 3 · G1: Посты · Репосты · Видео; the photos are behind the arrow beside «Видео».
+  expect(tabs.map((x) => x.trim())).toEqual(["Посты", "Репосты", "Видео"]);
+  await expect(page.getByTestId("profile-tab-posts")).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("profile-tab-video").click();
+  await page.getByTestId("profile-media-toggle").click();
+  await page.getByTestId("profile-media-photos").click();
   await expect(page.getByTestId("media-kind-photo")).toHaveCount(0);
   await expect(page.getByTestId("publication-tile")).toHaveCount(1);
   await expect(page.getByTestId("publication-mark")).toHaveAttribute("data-mark", "photo");

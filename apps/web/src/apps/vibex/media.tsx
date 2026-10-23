@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiFolderOpenLine, RiMusic2Line, RiPlayFill } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiDownload2Line, RiFileLine, RiFileTextLine, RiFileZipLine, RiFilmLine, RiFolderOpenLine, RiMusic2Line, RiPlayFill, RiVolumeMuteFill, RiVolumeUpFill } from "@remixicon/react";
 import { wrapIndex, type VibexFileDto } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { errorMessage } from "@/lib/errors";
@@ -20,7 +20,7 @@ function FileIcon({ mime, className }: { mime: string; className?: string }) {
   return <RiFileLine className={className} />;
 }
 
-export function VibexImage({ file, className, onClick }: { file: VibexFileDto; className?: string; onClick?: () => void }) {
+export function VibexImage({ file, className, onClick, fit = "cover" }: { file: VibexFileDto; className?: string; onClick?: () => void; fit?: "cover" | "contain" }) {
   const { data: src, isError } = useFileUrl(file.id);
   return (
     <button
@@ -31,7 +31,13 @@ export function VibexImage({ file, className, onClick }: { file: VibexFileDto; c
       data-testid="vibex-image"
     >
       {src ? (
-        <img src={src} alt="" className="size-full object-cover" draggable={false} />
+        <img
+          src={src}
+          alt=""
+          className={cx("size-full", fit === "contain" ? "object-contain" : "object-cover")}
+          draggable={false}
+          onLoad={(e) => noteRatio(file.id, e.currentTarget.naturalWidth / Math.max(1, e.currentTarget.naturalHeight))}
+        />
       ) : (
         <span className="absolute inset-0 flex items-center justify-center text-text-tertiary">{isError ? <RiFileLine className="size-6" /> : <Spinner />}</span>
       )}
@@ -110,30 +116,198 @@ export function VibexVideoTile({ file, className, onClick, autoplay }: { file: V
   );
 }
 
+// ------------------------------------------------------------- shapes (Update 3 · F1)
+
 /**
- * A post's pictures / videos. One: shown large. Several (Step 2.9): a looping
- * carousel — 1 → 2 → 3 → 1 … and back 1 ← 3 ← 2 — swiped with a finger or
- * dragged with the mouse (arrows on hover, ← → keys). Only three slides exist
- * in the page at any time (previous, current, next); the index wraps around.
- * A tap opens the viewer on that item.
+ * Update 3 · F1 (SR5136): a picture or a video keeps its own shape in the feed: square (1:1), wide
+ * (16:9) or tall like a phone screen (9:16). Tall ones are as high as the card allows (520 px) and as
+ * wide as that height needs, so a feed of them stays calm. The frame crops a little at most; the file
+ * itself is never changed, and the viewer shows it whole.
+ *
+ * The shape is learned from the file once it loads (the server keeps no sizes) and remembered for the
+ * session, so a post never jumps twice.
+ */
+export type MediaShape = "square" | "wide" | "tall";
+const ratios = new Map<string, number>();
+const ratioListeners = new Set<() => void>();
+export function noteRatio(id: string, r: number) {
+  if (!Number.isFinite(r) || r <= 0 || Math.abs((ratios.get(id) ?? 0) - r) < 0.01) return;
+  ratios.set(id, r);
+  ratioListeners.forEach((f) => f());
+}
+export function shapeOf(r: number | undefined): MediaShape {
+  if (r === undefined) return "square";
+  return r >= 1.25 ? "wide" : r <= 0.8 ? "tall" : "square";
+}
+export function useShape(id: string | undefined): MediaShape {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const f = () => bump((n) => n + 1);
+    ratioListeners.add(f);
+    return () => {
+      ratioListeners.delete(f);
+    };
+  }, []);
+  return shapeOf(id ? ratios.get(id) : undefined);
+}
+/** The frame of one media item of that shape (tall: 9:16 up to 520 px high, then narrower). */
+const TALL_MAX_H = 520;
+function frameStyle(shape: MediaShape, carousel = false): CSSProperties {
+  if (shape === "wide") return { aspectRatio: "16 / 9", width: "100%" };
+  // In a carousel every slide shares one frame: a tall one is 4:5 there (the slides stay full width).
+  if (shape === "tall") return carousel ? { aspectRatio: "4 / 5", width: "100%", maxHeight: TALL_MAX_H } : { aspectRatio: "9 / 16", width: `min(100%, ${Math.round((TALL_MAX_H * 9) / 16)}px)` };
+  return { aspectRatio: "1 / 1", width: "100%" };
+}
+
+// ------------------------------------------------------------- videos (Update 3 · F3)
+
+/** F3: only one feed video has sound at a time. */
+let soundOwner: HTMLVideoElement | null = null;
+function takeSound(v: HTMLVideoElement) {
+  if (soundOwner && soundOwner !== v) {
+    soundOwner.muted = true;
+    soundOwner.dispatchEvent(new Event("vx-muted"));
+  }
+  soundOwner = v;
+}
+
+function formatClock(s: number) {
+  if (!Number.isFinite(s) || s <= 0) return "";
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+}
+
+/**
+ * F3: a video in a post. Its own shape (no stretched frames). With autoplay on it plays muted while most
+ * of it is on screen and pauses when it scrolls away; otherwise a clear play button. The sound button
+ * turns this one's sound on (any other feed video goes quiet); a tap opens it large with sound.
+ * The controls fade in; the remaining time shows in the corner.
+ */
+export function PostVideo({ file, onOpen, autoplay, style, className }: { file: VibexFileDto; onOpen?: () => void; autoplay: boolean; style?: CSSProperties; className?: string }) {
+  const t = useT();
+  const { data: src, isError } = useFileUrl(file.id);
+  const box = useRef<HTMLDivElement>(null);
+  const video = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [left, setLeft] = useState("");
+  useEffect(() => {
+    const el = box.current;
+    const v = video.current;
+    if (!el || !v || !src) return;
+    if (!autoplay) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e) return;
+        if (e.intersectionRatio >= 0.6) void v.play().catch(() => undefined);
+        else v.pause();
+      },
+      { threshold: [0, 0.6, 1] },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [src, autoplay]);
+  useEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    const quiet = () => setMuted(true);
+    v.addEventListener("vx-muted", quiet);
+    return () => {
+      v.removeEventListener("vx-muted", quiet);
+      if (soundOwner === v) soundOwner = null;
+    };
+  }, [src]);
+  return (
+    <div ref={box} className={cx("group relative overflow-hidden bg-black", className)} style={style} data-testid="vibex-video" data-playing={playing || undefined} data-shape={shapeOf(ratios.get(file.id))}>
+      {src ? (
+        <video
+          ref={video}
+          src={src}
+          className="size-full object-cover"
+          muted={muted}
+          playsInline
+          loop
+          preload="metadata"
+          onLoadedMetadata={(e) => {
+            noteRatio(file.id, e.currentTarget.videoWidth / Math.max(1, e.currentTarget.videoHeight));
+            setLeft(formatClock(e.currentTarget.duration));
+          }}
+          onTimeUpdate={(e) => setLeft(formatClock(e.currentTarget.duration - e.currentTarget.currentTime))}
+          onPlay={() => setPlaying(true)}
+          onPause={() => setPlaying(false)}
+          data-testid="vibex-video-el"
+        />
+      ) : (
+        <span className="absolute inset-0 flex items-center justify-center text-white/70">{isError ? <RiFilmLine className="size-6" /> : <Spinner className="text-white" />}</span>
+      )}
+      {/* A tap anywhere opens it large (with sound and full controls). */}
+      <button type="button" onClick={onOpen} className="absolute inset-0" aria-label={file.filename} data-testid="vibex-video-open" />
+      <AnimatePresence>
+        {!playing && (
+          <motion.span
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.08 }}
+            transition={{ duration: 0.18 }}
+          >
+            <span className="flex size-14 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur" data-testid="vibex-video-play">
+              <RiPlayFill className="ml-0.5 size-8" />
+            </span>
+          </motion.span>
+        )}
+      </AnimatePresence>
+      {left && <span className="pointer-events-none absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[12px] font-medium tabular-nums text-white">{left}</span>}
+      {src && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const v = video.current;
+            if (!v) return;
+            const next = !muted;
+            if (!next) takeSound(v);
+            v.muted = next;
+            setMuted(next);
+            if (v.paused) void v.play().catch(() => undefined);
+          }}
+          aria-label={muted ? t("vibex.media.soundOn") : t("vibex.media.soundOff")}
+          aria-pressed={!muted}
+          className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-black/50 text-white transition-opacity"
+          data-testid="vibex-video-sound"
+        >
+          {muted ? <RiVolumeMuteFill className="size-[18px]" /> : <RiVolumeUpFill className="size-[18px]" />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A post's pictures / videos. One: in its own shape (F1). Several (F2): a carousel — 1 → 2 → 3 → 1 …
+ * and back — swiped with a finger or dragged with the mouse (arrows on hover, ← → keys). All slides
+ * share the first one's frame, so nothing jumps while going through them. Only three slides exist in
+ * the page at any time. A tap opens the viewer (the whole file) on that item.
  */
 export function MediaGrid({ media, className }: { media: VibexFileDto[]; className?: string }) {
   const [open, setOpen] = useState<number | null>(null);
   const autoplay = useVibexMe().data?.settings.media.autoplay ?? true;
   const items = media.filter((m) => m.kind === "image" || m.kind === "video");
+  const shape = useShape(items[0]?.id);
   if (!items.length) return null;
+  const one = items[0]!;
   return (
     <>
       {items.length === 1 ? (
-        <div className={cx("overflow-hidden rounded-2xl", className)} data-testid="vibex-media">
-          {items[0]!.kind === "video" ? (
-            <VibexVideoTile file={items[0]!} onClick={() => setOpen(0)} className="aspect-[4/3] max-h-[420px] w-full" autoplay={autoplay} />
+        <div className={cx("overflow-hidden rounded-2xl", className)} style={frameStyle(shape)} data-testid="vibex-media" data-shape={shape}>
+          {one.kind === "video" ? (
+            <PostVideo file={one} onOpen={() => setOpen(0)} className="size-full" autoplay={autoplay} />
           ) : (
-            <VibexImage file={items[0]!} onClick={() => setOpen(0)} className="aspect-[4/3] max-h-[420px] w-full" />
+            <VibexImage file={one} onClick={() => setOpen(0)} className="size-full" />
           )}
         </div>
       ) : (
-        <MediaCarousel items={items} onOpen={setOpen} autoplay={autoplay} className={className} />
+        <MediaCarousel items={items} onOpen={setOpen} autoplay={autoplay} className={className} shape={shape} />
       )}
       <Lightbox files={items} index={open} onIndex={setOpen} />
     </>
@@ -142,7 +316,7 @@ export function MediaGrid({ media, className }: { media: VibexFileDto[]; classNa
 
 const SLIDE_EASE = [0.22, 1, 0.36, 1] as const;
 
-function MediaCarousel({ items, onOpen, autoplay, className }: { items: VibexFileDto[]; onOpen: (i: number) => void; autoplay: boolean; className?: string }) {
+function MediaCarousel({ items, onOpen, autoplay, className, shape }: { items: VibexFileDto[]; onOpen: (i: number) => void; autoplay: boolean; className?: string; shape: MediaShape }) {
   const t = useT();
   const n = items.length;
   const [index, setIndex] = useState(0);
@@ -150,12 +324,22 @@ function MediaCarousel({ items, onOpen, autoplay, className }: { items: VibexFil
   const x = useMotionValue(0);
   const busy = useRef(false);
   const dragged = useRef(false);
+  // The counter shows while going through the photos, then fades (the dots stay).
+  const [counter, setCounter] = useState(false);
+  const counterTimer = useRef<number | undefined>(undefined);
+  const flashCounter = () => {
+    setCounter(true);
+    window.clearTimeout(counterTimer.current);
+    counterTimer.current = window.setTimeout(() => setCounter(false), 1400);
+  };
+  useEffect(() => () => window.clearTimeout(counterTimer.current), []);
   const width = () => box.current?.clientWidth ?? 1;
   /** Slides one step (−1 back, +1 forward) and wraps the index; the three slides are re-used. */
   const step = (dir: -1 | 1) => {
     if (busy.current) return;
     busy.current = true;
-    void animate(x, -dir * width(), { duration: 0.28, ease: SLIDE_EASE }).then(() => {
+    flashCounter();
+    void animate(x, -dir * width(), { duration: 0.3, ease: SLIDE_EASE }).then(() => {
       setIndex((i) => wrapIndex(i + dir, n));
       x.set(0);
       busy.current = false;
@@ -163,21 +347,18 @@ function MediaCarousel({ items, onOpen, autoplay, className }: { items: VibexFil
   };
   const slide = (offset: -1 | 0 | 1) => {
     const f = items[wrapIndex(index + offset, n)]!;
-    const cls = "aspect-[4/3] max-h-[420px] w-full shrink-0";
+    const open = () => !dragged.current && onOpen(wrapIndex(index + offset, n));
     return (
       <div key={`${offset}:${f.id}`} className="absolute inset-0" style={{ left: `${offset * 100}%` }} aria-hidden={offset !== 0} data-slide={offset}>
-        {f.kind === "video" ? (
-          <VibexVideoTile file={f} className={cls} autoplay={offset === 0 && autoplay} onClick={() => !dragged.current && onOpen(wrapIndex(index + offset, n))} />
-        ) : (
-          <VibexImage file={f} className={cls} onClick={() => !dragged.current && onOpen(wrapIndex(index + offset, n))} />
-        )}
+        {f.kind === "video" ? <PostVideo file={f} className="size-full" autoplay={offset === 0 && autoplay} onOpen={open} /> : <VibexImage file={f} className="size-full" onClick={open} />}
       </div>
     );
   };
   return (
     <div
       ref={box}
-      className={cx("group relative aspect-[4/3] max-h-[420px] w-full touch-pan-y select-none overflow-hidden rounded-2xl bg-surface-secondary", className)}
+      className={cx("group relative touch-pan-y select-none overflow-hidden rounded-2xl bg-surface-secondary", className)}
+      style={frameStyle(shape, true)}
       role="region"
       aria-roledescription="carousel"
       aria-label={t("vibex.media.carousel", { n })}
@@ -192,12 +373,14 @@ function MediaCarousel({ items, onOpen, autoplay, className }: { items: VibexFil
       data-carousel
       data-gesture-owner
       data-index={index}
+      data-shape={shape}
     >
       <motion.div
         className="absolute inset-0"
         style={{ x }}
         onPanStart={() => {
           dragged.current = true;
+          flashCounter();
         }}
         onPan={(_, info) => {
           if (!busy.current) x.set(info.offset.x);
@@ -215,12 +398,15 @@ function MediaCarousel({ items, onOpen, autoplay, className }: { items: VibexFil
         {slide(0)}
         {slide(1)}
       </motion.div>
-      <span className="pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/45 px-2 py-0.5 text-[12px] font-medium tabular-nums text-white" data-testid="carousel-counter">
+      <span
+        className={cx("pointer-events-none absolute right-2.5 top-2.5 rounded-full bg-black/45 px-2 py-0.5 text-[12px] font-medium tabular-nums text-white transition-opacity duration-300", counter ? "opacity-100" : "opacity-0")}
+        data-testid="carousel-counter"
+      >
         {index + 1} / {n}
       </span>
-      <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1.5" aria-hidden>
+      <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center gap-1.5" aria-hidden data-testid="carousel-dots">
         {items.map((m, i) => (
-          <span key={m.id} className={cx("size-1.5 rounded-full transition", i === index ? "bg-white" : "bg-white/50")} />
+          <span key={m.id} className={cx("h-1.5 rounded-full transition-all duration-300", i === index ? "w-3.5 bg-white" : "w-1.5 bg-white/55")} />
         ))}
       </div>
       {(["prev", "next"] as const).map((k) => (

@@ -165,8 +165,7 @@ function ClockFace({ zone, className }: { zone: string; className?: string }) {
 /**
  * A2: Clock widget, the world clock's top panel on the home screen. It shows the city selected in
  * Clock (else this device's zone), from the same store and the same time functions as the app, so the
- * two never disagree. 2 × 2: the analog face with the city and the time under it; 4 × 2: the city, the
- * time, the date and the face. A tap opens Clock on the world clock.
+ * two never disagree. 2 × 2: the analog face only; 4 × 2: the city, the time, the date and the face. A tap opens Clock on the world clock.
  */
 function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }) {
   const t = useT();
@@ -183,7 +182,7 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       type="button"
       tabIndex={preview ? -1 : 0}
       onClick={(e) => openApp("clock", e.currentTarget, { tab: "world" })}
-      className={cx("flex size-full rounded-[24px] text-left", wide ? "items-center gap-[5%] px-[6%] py-[5%]" : "flex-col items-center justify-center gap-[4%] p-[7%]", preview && "pointer-events-none")}
+      className={cx("flex size-full rounded-[24px] text-left", wide ? "items-center gap-[5%] px-[6%] py-[5%]" : "items-center justify-center p-[7%]", preview && "pointer-events-none")}
       aria-label={label}
       title={label}
       data-testid="clock-widget"
@@ -203,15 +202,9 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
           <ClockFace zone={zone} className="aspect-square h-full max-h-full shrink-0" />
         </>
       ) : (
-        <>
-          <ClockFace zone={zone} className="min-h-0 w-full flex-1" />
-          <span className="flex w-full min-w-0 items-baseline justify-center gap-1.5 text-[12px] leading-none">
-            <span className="min-w-0 truncate font-medium text-text" data-testid="clock-widget-city">
-              {city}
-            </span>
-            <span className="shrink-0 font-semibold text-primary tabular-nums">{time}</span>
-          </span>
-        </>
+        // Update 3 · B1: 2 × 2 is the analog face only (as before Update 2); the city and the time are
+        // in the 4 × 2 size and in the label read aloud.
+        <ClockFace zone={zone} className="size-full max-h-full" />
       )}
     </button>
   );
@@ -267,10 +260,43 @@ function RemoveBadge({ onRemove }: { onRemove: () => void }) {
  * B5: a widget carried to another page / desktop keeps being dragged there. Its card on the new page
  * is a new element; the drag is handed over to it with the pointer and where the finger holds the card.
  */
-type DragResume = { x: number; y: number; grab: { dx: number; dy: number } };
+type DragResume = { x: number; y: number; grab: { dx: number; dy: number }; pointerId?: number };
 const dragResume = new Map<string, (p: DragResume) => void>();
-/** How long the page / desktop switch takes before the card on the new page takes the finger. */
-const SWITCH_SETTLE_MS = 320;
+/** Longest wait for the page / desktop switch to settle before the card on the new page takes the finger. */
+const SWITCH_SETTLE_MAX_MS = 900;
+
+/**
+ * Update 3 · B2: the finger stays with the drag across a page switch. The card under the finger is
+ * replaced by a new one on the other page; Safari keeps sending that touch to the removed card (its
+ * events no longer reach the window), so the drag was lost on an iPhone. The pointer is captured by the
+ * workspace, which never goes away: every move and the release keep arriving.
+ */
+function holdPointer(pointerId: number | undefined) {
+  if (pointerId === undefined) return;
+  const keeper = document.querySelector<HTMLElement>('[data-testid="workspace"]');
+  try {
+    keeper?.setPointerCapture(pointerId);
+  } catch {
+    /* not an active pointer (synthetic) */
+  }
+}
+
+/** Phone: resolves once the pages have stopped sliding (the page shown sits in the pager), at most `max` ms. */
+function pagesSettled(page: number, max = SWITCH_SETTLE_MAX_MS): Promise<void> {
+  const t0 = performance.now();
+  return new Promise((done) => {
+    let still = 0;
+    const tick = () => {
+      const pager = document.querySelector<HTMLElement>("[data-home-pager]")?.getBoundingClientRect();
+      const el = document.querySelector<HTMLElement>(`[data-testid="home-page-${page}"]`)?.getBoundingClientRect();
+      if (!pager || !el || performance.now() - t0 > max) return done();
+      still = Math.abs(el.left - pager.left) < 1 ? still + 1 : 0;
+      if (still >= 2) return done();
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
 /** PC: hold a dragged widget over a desktop tab this long to carry it there (as for icons). */
 const SPACE_HOLD_MS = 420;
 
@@ -340,7 +366,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
   const pressStart = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    if (editing) return beginDrag(e.clientX, e.clientY);
+    if (editing) return beginDrag(e.clientX, e.clientY, undefined, e.pointerId);
     // B6: a press on a key of the widget (the calculator's) is the key's own: no growing widget, no
     // menu, no drag. The widget is held or moved by its other parts. A sideways swipe still turns the page.
     if ((e.target as HTMLElement).closest?.("[data-widget-key]")) {
@@ -390,7 +416,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       // E: the finger moves on after the menu opened: the menu goes and the widget is picked up instead.
       useHomeUi.getState().closeMenu();
       useHomeUi.getState().setEditing(true);
-      beginDrag(from.x, from.y);
+      beginDrag(from.x, from.y, undefined, id);
     };
     const timer = window.setTimeout(() => {
       navigator.vibrate?.(8);
@@ -452,11 +478,12 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     window.addEventListener("pointercancel", end);
   };
 
-  const beginDrag = (clientX: number, clientY: number, grab?: { dx: number; dy: number }) => {
+  const beginDrag = (clientX: number, clientY: number, grab?: { dx: number; dy: number }, pointerId?: number) => {
     const el = ref.current;
     const grid = el?.closest<HTMLElement>("[data-home-grid]");
     const host = el?.closest<HTMLElement>("[data-grid-host]") ?? grid;
     if (!el || !grid || !host) return;
+    holdPointer(pointerId);
     x.stop();
     y.stop();
     const box0 = el.getBoundingClientRect();
@@ -468,9 +495,13 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     }
     const start = { x: clientX - x.get(), y: clientY - y.get() };
     let pointer = { x: clientX, y: clientY };
-    const area = host.getBoundingClientRect();
     const ui = useHomeUi.getState;
     const mobile = getFormFactor() === "mobile";
+    // Phone: sideways the bounds are the pager (what is on screen), as for icons: the page strip may still
+    // be sliding when the drag starts, and its own box would then be off to the side.
+    const hostBox = host.getBoundingClientRect();
+    const pagerBox = mobile ? document.querySelector<HTMLElement>("[data-home-pager]")?.getBoundingClientRect() : undefined;
+    const area = pagerBox ? { left: pagerBox.left, right: pagerBox.right, top: hostBox.top, bottom: hostBox.bottom } : hostBox;
     let edgeTimer: number | undefined;
     let edgeDir = 0;
     setDragging(true);
@@ -510,11 +541,13 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const box = el.getBoundingClientRect();
       const grab = { dx: pointer.x - box.left, dy: pointer.y - box.top };
       finish();
+      // B2: the finger is kept by the workspace before this card goes away (see holdPointer).
+      holdPointer(pointerId);
       updateLayout(() => placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest)));
       if (dest.surface === "mobile") ui().setMobilePage(dest.page);
       else useWM.getState().setSpace(dest.space);
       navigator.vibrate?.(8);
-      // While the page slides in, the finger is followed; then the card on the new page takes it.
+      // While the page slides in, the finger is followed; once it has settled, the card on the new page takes it.
       let latest = { ...pointer };
       let released = false;
       const track = (ev: PointerEvent) => {
@@ -526,15 +559,16 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       window.addEventListener("pointermove", track);
       window.addEventListener("pointerup", release);
       window.addEventListener("pointercancel", release);
-      window.setTimeout(() => {
+      const settled = dest.surface === "mobile" ? pagesSettled(dest.page) : new Promise<void>((r) => window.setTimeout(r, 320));
+      void settled.then(() => {
         window.removeEventListener("pointermove", track);
         window.removeEventListener("pointerup", release);
         window.removeEventListener("pointercancel", release);
         // Let go meanwhile: it simply stays where it landed on the new page.
         if (released) return;
         ui().setEditing(true);
-        dragResume.get(widget.id)?.({ ...latest, grab });
-      }, SWITCH_SETTLE_MS);
+        dragResume.get(widget.id)?.({ ...latest, grab, pointerId });
+      });
       return true;
     };
     /** Phone: the page beside this one (a new one past the last). */
@@ -632,7 +666,7 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
   };
-  resumeRef.current = (p) => beginDrag(p.x, p.y, p.grab);
+  resumeRef.current = (p) => beginDrag(p.x, p.y, p.grab, p.pointerId);
 
   return (
     <motion.div

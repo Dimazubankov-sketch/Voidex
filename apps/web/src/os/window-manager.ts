@@ -329,6 +329,15 @@ function endSwipeRun() {
   if (useWM.getState().swipeOrder) useWM.setState({ swipeOrder: null });
 }
 
+/**
+ * The pause is counted only while no finger is on the gesture bar: a slow drag never ends the run in its
+ * middle (the app peeking beside this one is the one that slides in). `true` on touch, `false` on release.
+ */
+export function holdSwipeRun(touching: boolean) {
+  window.clearTimeout(swipeRunTimer);
+  if (!touching && useWM.getState().swipeOrder) swipeRunTimer = window.setTimeout(() => useWM.setState({ swipeOrder: null }), SWIPE_RUN_MS);
+}
+
 /** Brings a window up and in front (and to the end of the order of last use). */
 function focusWindow(id: string) {
   const s = useWM.getState();

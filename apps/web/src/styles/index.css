@@ -929,3 +929,32 @@ img[data-system-asset] { pointer-events: none; }
     rotate: 360deg;
   }
 }
+
+/* Update 3 · A: the app pictures in the phone switcher are pictures only. Nothing inside takes a touch
+   (pointer-events-auto in the copy cannot win over !important) and no copied scroll container stays a
+   native scroll layer (iOS would scroll it under the finger). */
+.vx-snapshot,
+.vx-snapshot * {
+  pointer-events: none !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+.vx-snapshot [data-snap-scroller] {
+  overflow: hidden !important;
+  scroll-snap-type: none !important;
+}
+
+/* Update 3 · C1 (SR2488): the chat header floats over the history on phones. Behind the capsules a soft
+   fade (blur that thins out downwards) keeps them readable while the messages scroll under them. */
+.vx-chat-top::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -14px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 82%, transparent) 0%, color-mix(in srgb, var(--surface) 55%, transparent) 62%, transparent 100%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}

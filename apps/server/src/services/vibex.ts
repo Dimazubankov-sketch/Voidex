@@ -13,6 +13,7 @@ import {
   VIBEX_POST_VIDEO_TYPES,
   VibexSettingsSchema,
   type VibexFeedMode,
+  type VibexPersonPostKind,
   type VibexMediaItemDto,
   type VibexMessageKind,
   type VibexSettings,
@@ -817,8 +818,30 @@ export class VibexService {
     );
   }
 
-  personPosts(viewerId: string, userId: string, cursor?: string, limit = 30) {
-    return this.page(viewerId, eq(vibexPosts.authorId, userId), cursor, limit);
+  /**
+   * A person's posts and reposts, newest first. Update 3 · G1: `kind` narrows it on the server (so pages
+   * stay full): `post` own posts, `repost` shares of other people's posts, `video` own posts with a video, `photo` own posts with a photo.
+   */
+  personPosts(viewerId: string, userId: string, cursor?: string, limit = 30, kind: VibexPersonPostKind = "all") {
+    const withVideo = sql`EXISTS (SELECT 1 FROM vibex_files f WHERE f.post_id = ${vibexPosts.id} AND f.mime_type IN (${sql.join(
+      VIBEX_POST_VIDEO_TYPES.map((t) => sql`${t}`),
+      sql`, `,
+    )}))`;
+    const withPhoto = sql`EXISTS (SELECT 1 FROM vibex_files f WHERE f.post_id = ${vibexPosts.id} AND f.mime_type IN (${sql.join(
+      VIBEX_POST_IMAGE_TYPES.map((t) => sql`${t}`),
+      sql`, `,
+    )}))`;
+    const which =
+      kind === "post"
+        ? eq(vibexPosts.kind, "post")
+        : kind === "repost"
+          ? eq(vibexPosts.kind, "repost")
+          : kind === "video"
+            ? and(eq(vibexPosts.kind, "post"), withVideo)
+            : kind === "photo"
+              ? and(eq(vibexPosts.kind, "post"), withPhoto)
+              : undefined;
+    return this.page(viewerId, and(eq(vibexPosts.authorId, userId), which), cursor, limit);
   }
 
   /**
@@ -1823,10 +1846,12 @@ export class VibexService {
     const c = decodeCursor(cursor);
     const hasFile = (cond: SQL) => sql`EXISTS (SELECT 1 FROM vibex_files f WHERE f.message_id = ${vibexMessages.id} AND ${cond})`;
     const filter: SQL =
+      // Update 3 · E1: a video circle carries a video file too; «Медиа» is photos and video files sent as
+      // ordinary messages only (circles and voice are in «Голосовые и видео»).
       kind === "media"
-        ? hasFile(sql`(f.mime_type LIKE 'image/%' OR f.mime_type LIKE 'video/%') AND f.mime_type <> 'image/gif'`)
+        ? and(eq(vibexMessages.kind, "text"), hasFile(sql`(f.mime_type LIKE 'image/%' OR f.mime_type LIKE 'video/%') AND f.mime_type <> 'image/gif'`))!
         : kind === "gifs"
-          ? hasFile(sql`f.mime_type = 'image/gif'`)
+          ? and(eq(vibexMessages.kind, "text"), hasFile(sql`f.mime_type = 'image/gif'`))!
           : kind === "music"
             ? and(eq(vibexMessages.kind, "text"), hasFile(sql`f.mime_type LIKE 'audio/%'`))!
             : kind === "voice"

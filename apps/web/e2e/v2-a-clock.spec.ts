@@ -74,7 +74,9 @@ test("A2: the Clock widget shows the selected city; its menu switches 2 × 2 ⇄
   await clock(page).getByTestId("clock-city-select").and(page.locator('[data-zone="Asia/Omsk"]')).click();
   await reloadUnlocked(page);
   await expect(w.getByTestId("clock-widget")).toHaveAttribute("data-zone", "Asia/Omsk");
-  await expect(w.getByTestId("clock-widget-city")).toHaveText("Омск");
+  // Update 3 · B1: 2 × 2 is the face only; the city is in its label (read aloud) and in the 4 × 2 size.
+  await expect(w.getByTestId("clock-widget-city")).toHaveCount(0);
+  await expect(w.getByTestId("clock-widget")).toHaveAttribute("aria-label", /Омск/);
   const small = (await w.boundingBox())!;
   const before = (await layoutOf(page)).mobile.pages[0]!.length + (await layoutOf(page)).desktop.spaces[0]!.items.length;
   // Long press → the menu with the size picker (only sizes it has).

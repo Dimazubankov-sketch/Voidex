@@ -30,7 +30,7 @@ async function setup(page: Page, browser: Browser) {
   return { a, b, bp, chat, m1, m2 };
 }
 
-test("C1 / C2 / C3: header with presence; several pins — a tap goes to each in turn, the same direction, round again", async ({ page, browser }) => {
+test("C1 / C2 / C3: header with presence; several pins — a tap goes to each in turn, newest to first, and stays at the first", async ({ page, browser }) => {
   const { b, bp, chat, m1, m2 } = await setup(page, browser);
   await api(page, "POST", `/api/vibex/chats/${chat.id}/pins`, { messageId: m2.id });
   await api(bp, "POST", `/api/vibex/chats/${chat.id}/pins`, { messageId: m1.id });
@@ -50,11 +50,12 @@ test("C1 / C2 / C3: header with presence; several pins — a tap goes to each in
   await expect(page.getByTestId("pinned-title")).toHaveText("Закреплённое сообщение #1");
   await bar.click();
   await expect(page.locator(`[data-message-id="${m1.id}"][data-jumped]`)).toHaveCount(1);
-  await expect(page.getByTestId("pinned-title")).toHaveText("Закреплённое сообщение #2");
+  // Update 3 · C2: at the first pin it stays there (no jump back to the newest).
+  await expect(page.getByTestId("pinned-title")).toHaveText("Закреплённое сообщение #1");
   // Unpin the one shown: one pin left, both sides.
   await page.getByTestId("pinned-unpin").click();
   await expect(bar).toHaveAttribute("data-count", "1");
-  await expect.poll(async () => (await api(bp, "GET", `/api/vibex/chats/${chat.id}`)).body.pins.map((p: { id: string }) => p.id)).toEqual([m1.id]);
+  await expect.poll(async () => (await api(bp, "GET", `/api/vibex/chats/${chat.id}`)).body.pins.map((p: { id: string }) => p.id)).toEqual([m2.id]); // the first (shown) was unpinned
   // B hides presence: A sees «был(а) недавно», grey, never the real time.
   await api(bp, "PATCH", "/api/vibex/settings", { privacy: { presence: "nobody" } });
   await reloadUnlocked(page);

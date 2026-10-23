@@ -6,6 +6,7 @@ import qrcode from "qrcode-generator";
 import { vibexProfileLink, type VibexPersonDto } from "@voidex/shared";
 import { VibexGlyph } from "@/brand/brand";
 import { useT } from "@/lib/i18n";
+import { cx } from "@/lib/cx";
 import { toast } from "@/ui/overlays";
 
 /**
@@ -29,13 +30,25 @@ function useMatrix(text: string): boolean[][] {
   }, [text]);
 }
 
+/** Side of the logo's square in modules: odd, about 22 % of the code. */
+export function logoModules(n: number) {
+  const k = Math.round(n * 0.22);
+  return k % 2 === 1 ? k : k + 1;
+}
+
 /** The code as an SVG: rounded modules, the three finder patterns drawn as rounded squares. */
 export function QrCode({ text, size = 232, className }: { text: string; size?: number; className?: string }) {
   const m = useMatrix(text);
   const n = m.length;
   const finder = (r: number, c: number) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+  // Update 3 · D2: the logo's square is cut out of the grid exactly at its centre, on whole modules
+  // (an odd count, so its middle is the grid's middle). About 5 % of the area: error correction Q
+  // restores up to 25 %, the code still reads.
+  const hole = logoModules(n);
+  const lo = (n - hole) / 2;
+  const underLogo = (r: number, c: number) => r >= lo && r < lo + hole && c >= lo && c < lo + hole;
   const dots: string[] = [];
-  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r]![c] && !finder(r, c)) dots.push(`M${c + 0.12},${r + 0.5}a0.38,0.38 0 1,0 0.76,0a0.38,0.38 0 1,0 -0.76,0`);
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r]![c] && !finder(r, c) && !underLogo(r, c)) dots.push(`M${c + 0.12},${r + 0.5}a0.38,0.38 0 1,0 0.76,0a0.38,0.38 0 1,0 -0.76,0`);
   const eye = (x: number, y: number) => (
     <g key={`${x},${y}`}>
       <rect x={x + 0.5} y={y + 0.5} width={6} height={6} rx={1.9} fill="none" stroke="currentColor" strokeWidth={1} />
@@ -43,12 +56,34 @@ export function QrCode({ text, size = 232, className }: { text: string; size?: n
     </g>
   );
   return (
-    <svg viewBox={`-1 -1 ${n + 2} ${n + 2}`} width={size} height={size} className={className} role="img" aria-label={text} data-testid="qr-code" data-text={text} data-modules={n}>
+    <svg viewBox={`-1 -1 ${n + 2} ${n + 2}`} width={size} height={size} className={cx("block", className)} role="img" aria-label={text} data-testid="qr-code" data-text={text} data-modules={n}>
       <path d={dots.join("")} fill="currentColor" />
       {eye(0, 0)}
       {eye(n - 7, 0)}
       {eye(0, n - 7)}
     </svg>
+  );
+}
+
+/**
+ * D2: the code with the Vibex logo in its middle. The white square is exactly the cut-out of the grid
+ * (whole modules, centred on the middle module), the glyph sits in it with the same margin on every side.
+ */
+function QrWithLogo({ text, size }: { text: string; size: number }) {
+  const n = useMatrix(text).length;
+  const unit = size / (n + 2);
+  const box = logoModules(n) * unit;
+  return (
+    <div className="relative" style={{ width: size, height: size }} data-testid="qr-with-logo">
+      <QrCode text={text} size={size} />
+      <span
+        className="absolute flex items-center justify-center rounded-[22%] bg-white"
+        style={{ width: box, height: box, left: (size - box) / 2, top: (size - box) / 2, padding: box * 0.14 }}
+        data-testid="qr-logo"
+      >
+        <VibexGlyph className="size-full" />
+      </span>
+    </div>
   );
 }
 
@@ -70,6 +105,9 @@ export async function shareProfile(t: ReturnType<typeof useT>, person: Pick<Vibe
     toast({ title: url });
   }
 }
+
+/** D1: «Поделиться» and «Сохранить» are the same size; icon and text centred on one line, 8 px apart. */
+const QR_BUTTON = "vx-glass flex h-12 min-w-0 flex-1 basis-0 max-w-[176px] items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 text-[15px] font-medium text-text transition-transform active:scale-[0.97]";
 
 /** The card as a PNG: the code, the username, white background (for saving or sending). */
 async function cardPng(text: string, handle: string): Promise<Blob | null> {
@@ -154,12 +192,7 @@ export function ProfileQrSheet({ person, onClose }: { person: Pick<VibexPersonDt
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             >
-              <div className="relative">
-                <QrCode text={profileLink(person.handle)} size={Math.min(250, window.innerWidth - 120)} />
-                <span className="absolute left-1/2 top-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[14px] bg-white p-1.5 shadow-sm">
-                  <VibexGlyph className="size-full" />
-                </span>
-              </div>
+              <QrWithLogo text={profileLink(person.handle)} size={Math.min(250, window.innerWidth - 120)} />
               <span className="max-w-[260px] truncate text-[19px] font-semibold uppercase tracking-wide text-primary" data-testid="qr-handle">
                 @{person.handle}
               </span>
@@ -167,13 +200,13 @@ export function ProfileQrSheet({ person, onClose }: { person: Pick<VibexPersonDt
             <p className="max-w-[300px] text-center text-[13.5px] text-text-secondary">{t("vibex.qr.hint")}</p>
           </div>
           <div className="flex justify-center gap-3">
-            <button type="button" onClick={() => void shareProfile(t, person)} className="vx-glass flex h-12 flex-1 max-w-[180px] items-center justify-center gap-2 rounded-full text-[15px] font-medium text-text" data-testid="qr-share">
-              <RiShareForwardLine className="size-5" />
-              {t("vibex.qr.share")}
+            <button type="button" onClick={() => void shareProfile(t, person)} className={QR_BUTTON} data-testid="qr-share">
+              <RiShareForwardLine className="size-5 shrink-0" />
+              <span className="truncate">{t("vibex.qr.share")}</span>
             </button>
-            <button type="button" disabled={busy} onClick={() => void save()} className="vx-glass flex h-12 flex-1 max-w-[180px] items-center justify-center gap-2 rounded-full text-[15px] font-medium text-text disabled:opacity-50" data-testid="qr-save">
-              <RiDownload2Line className="size-5" />
-              {t("vibex.qr.save")}
+            <button type="button" disabled={busy} onClick={() => void save()} className={cx(QR_BUTTON, "disabled:opacity-50")} data-testid="qr-save">
+              <RiDownload2Line className="size-5 shrink-0" />
+              <span className="truncate">{t("vibex.qr.save")}</span>
             </button>
           </div>
         </motion.div>

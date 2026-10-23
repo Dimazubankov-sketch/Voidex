@@ -232,7 +232,7 @@ export function RecordButton({
       <motion.button
         type="button"
         className={cx(
-          "relative z-20 flex size-11 shrink-0 touch-none select-none items-center justify-center rounded-full text-white shadow-[0_6px_16px_-6px_rgba(108,92,255,0.65)]",
+          "relative z-20 flex size-10 shrink-0 touch-none select-none items-center justify-center rounded-full text-white shadow-[0_6px_16px_-6px_rgba(108,92,255,0.65)]",
           state === "cancel-zone" ? "bg-danger" : "bg-primary",
         )}
         style={{ x: drag.x * 0.5, y: drag.y * 0.5 }}

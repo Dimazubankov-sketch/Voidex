@@ -63,7 +63,11 @@ async function openChat(page: Page) {
 
 /** The phone gesture bar of the app in front: a mouse swipe (pointer events), like a finger. */
 async function gestureBar(page: Page, dx: number, dy: number) {
-  await page.waitForTimeout(600); // the window finishes opening (it grows out of its icon)
+  // The window finishes opening (it grows out of its icon) or sliding in: it stands still at its place.
+  // (Polled, not a fixed wait: a run of swipes ends after a 2.5 s pause, so a slow machine must not idle.)
+  await expect
+    .poll(() => page.locator('section[data-state="open"]').evaluate((el) => (el as HTMLElement).style.transform || "none"), { intervals: [50] })
+    .toBe("none");
   const bar = page.locator('section[data-state="open"] [data-testid="home-indicator"]');
   const box = (await bar.boundingBox())!;
   const x = box.x + box.width / 2;

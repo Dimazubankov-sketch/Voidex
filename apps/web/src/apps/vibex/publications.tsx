@@ -412,10 +412,17 @@ export function PublicationsGrid({ query, onOpen }: { query: PostsQuery; onOpen:
 export function PublicationViewer({ query, startId, title, onClose }: { query: PostsQuery; startId: string; title: string; onClose: () => void }) {
   const t = useT();
   const scroller = useRef<HTMLDivElement>(null);
+  // Update 3: the feed may still be loading when the viewer opens (from «Видео» / «Фото» its pages are not
+  // cached yet): it goes to the tapped publication as soon as that is in the page, once.
+  const placed = useRef(false);
   useLayoutEffect(() => {
+    if (placed.current) return;
     const el = scroller.current?.querySelector<HTMLElement>(`[data-testid="publication-item"][data-post-id="${CSS.escape(startId)}"]`);
-    if (el && scroller.current) scroller.current.scrollTop = el.offsetTop - 4;
-  }, [startId]);
+    if (el && scroller.current) {
+      scroller.current.scrollTop = el.offsetTop - 4;
+      placed.current = true;
+    }
+  });
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", key);
