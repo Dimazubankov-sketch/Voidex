@@ -109,6 +109,11 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
       }
       return;
     }
+    // A pull is not a tap: a press that began on the search field and turned into a pull does not search.
+    if (dy > 10) {
+      const a = document.activeElement as HTMLElement | null;
+      if (a?.closest?.('[data-testid="chats-pane"]') && a.matches("input")) a.blur();
+    }
     setPulling(Math.min(140, dy));
   };
   const onUp = () => {

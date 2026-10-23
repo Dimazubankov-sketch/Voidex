@@ -154,10 +154,18 @@ test("D: the QR screen — «Поделиться» and «Сохранить» a
   expect(Math.abs(centre.off)).toBeLessThan(1);
   expect(Math.round(centre.gap)).toBe(8);
   // The logo: centred on the code, the same size as the modules cut out for it.
+  // Measured in one frame, once the card has settled (it rises in).
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const c = document.querySelector('[data-testid="qr-code"]')!.getBoundingClientRect();
+        const l = document.querySelector('[data-testid="qr-logo"]')!.getBoundingClientRect();
+        return Math.max(Math.abs(l.x + l.width / 2 - (c.x + c.width / 2)), Math.abs(l.y + l.height / 2 - (c.y + c.height / 2)));
+      }),
+    )
+    .toBeLessThan(0.6);
   const code = (await page.getByTestId("qr-code").boundingBox())!;
   const logo = (await page.getByTestId("qr-logo").boundingBox())!;
-  expect(Math.abs(logo.x + logo.width / 2 - (code.x + code.width / 2))).toBeLessThan(0.6);
-  expect(Math.abs(logo.y + logo.height / 2 - (code.y + code.height / 2))).toBeLessThan(0.6);
   // Readable: the logo covers a small share of the code (error correction Q restores up to 25 %).
   const modules = Number(await page.getByTestId("qr-code").getAttribute("data-modules"));
   const unit = code.width / (modules + 2);
