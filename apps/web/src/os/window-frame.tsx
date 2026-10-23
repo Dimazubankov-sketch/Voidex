@@ -170,6 +170,9 @@ export function WindowFrame({ win, launcherRect }: { win: AppWindow; launcherRec
           } else releasedByGesture.delete(win.id);
         }}
         aria-hidden={!visible}
+        // Update 3 · A: a window that is not in front (behind the switcher, at home) takes no touch, no
+        // focus and no scroll, whatever its children say (pointer-events-auto inside does not escape inert).
+        inert={!visible}
       >
         <DraggedApp>
           <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-top)]" data-window-content={win.id}>

@@ -72,6 +72,10 @@ export function captureWindow(id: string) {
       dst[i]!.dataset.snapScrollTop = String(s.scrollTop);
       dst[i]!.dataset.snapScrollLeft = String(s.scrollLeft);
     }
+    // Update 3 · A: a scroll container in the copy would be a native scroll layer on iOS (it scrolls under
+    // the finger whatever pointer-events say): marked here, frozen by CSS (overflow: hidden keeps the position).
+    const cs = getComputedStyle(s);
+    if (/(auto|scroll)/.test(cs.overflowX + cs.overflowY)) dst[i]!.dataset.snapScroller = "";
   }
   shots.set(id, { node, w: r.width, h: r.height, at: Date.now() });
   bump();

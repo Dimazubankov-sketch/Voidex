@@ -53,7 +53,9 @@ export function SnapshotView({ win, className }: { win: AppWindow; className?: s
   const { Icon } = CLIENT_APPS[win.appId];
   return (
     <div className={className} data-snapshot={snap && !locked ? "live" : locked ? "locked" : "none"}>
-      <div ref={host} className="vx-app pointer-events-none flex size-full flex-col overflow-hidden" aria-hidden />
+      <div ref={host} className="vx-app vx-snapshot pointer-events-none flex size-full flex-col overflow-hidden" aria-hidden />
+      {/* Update 3 · A: a shield over the picture: a touch on a card never lands inside the copy of the app. */}
+      <div className="absolute inset-0 z-[1]" data-snapshot-shield aria-hidden />
       {(!snap || locked) && (
         <div className="vx-app absolute inset-0 flex flex-col items-center justify-center gap-3">
           <AppTile size={84} glow>

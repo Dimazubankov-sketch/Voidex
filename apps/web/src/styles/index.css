@@ -929,3 +929,17 @@ img[data-system-asset] { pointer-events: none; }
     rotate: 360deg;
   }
 }
+
+/* Update 3 · A: the app pictures in the phone switcher are pictures only. Nothing inside takes a touch
+   (pointer-events-auto in the copy cannot win over !important) and no copied scroll container stays a
+   native scroll layer (iOS would scroll it under the finger). */
+.vx-snapshot,
+.vx-snapshot * {
+  pointer-events: none !important;
+  touch-action: none !important;
+  user-select: none !important;
+}
+.vx-snapshot [data-snap-scroller] {
+  overflow: hidden !important;
+  scroll-snap-type: none !important;
+}

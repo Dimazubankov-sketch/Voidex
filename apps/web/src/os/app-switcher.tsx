@@ -164,6 +164,7 @@ function Deck({ items }: { items: AppWindow[] }) {
       }}
       tabIndex={-1}
       data-testid="app-switcher"
+      data-index={current}
     >
       <SwitcherBackdrop />
       <motion.div className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center" style={{ x, gap: GAP }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.18 }}>
