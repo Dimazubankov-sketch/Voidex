@@ -301,8 +301,7 @@ test("G: the profile — «Посты · Репосты · Видео», the arr
   await page.getByTestId("profile-tab-video").click();
   await expect(page.getByTestId("profile-videos")).toBeVisible();
   // The arrow opens the switch (smoothly) and leads to the photos.
-  // A row of icons (posts, reposts) and «Видео ▾»; the arrow opens a floating menu with a tick on the current item.
-  await expect(page.getByTestId("profile-tab-posts").locator("svg")).toHaveCount(1);
+  // The tab card keeps its look; the arrow beside «Видео» opens a floating menu with a tick on the current item.
   await expect(page.getByTestId("profile-tab-video")).toHaveText("Видео");
   await page.getByTestId("profile-media-toggle").click();
   const menu = page.getByTestId("profile-media-switch");
@@ -312,7 +311,7 @@ test("G: the profile — «Посты · Репосты · Видео», the arr
   await expect(page.getByTestId("profile-media-photos")).toHaveAttribute("aria-checked", "false");
   // The menu floats over the page: the tab row keeps its height.
   const rowH = (await page.getByTestId("profile-tabs").boundingBox())!.height;
-  expect(rowH).toBeLessThan(56);
+  expect(rowH).toBeLessThan(70);
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await page.getByTestId("profile-tab-video").click(); // a tap on the active «Видео» opens it too

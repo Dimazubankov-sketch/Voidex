@@ -23,9 +23,7 @@ import {
   RiImageLine,
   RiVideoLine,
   RiCheckLine,
-  RiArticleLine,
   RiImage2Line,
-  RiRepeat2Line,
 } from "@remixicon/react";
 import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -358,11 +356,10 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
 }
 
 /**
- * Update 3 · G1 / G2: the profile's sections as one row of icons (the owner's reference): «Посты» and
- * «Репосты» are icons (their names for screen readers and as a hint), the last section shows its icon, its
- * name and a small arrow. A line under the active section glides to the next. The arrow (or a tap on the
- * active last section) opens a small floating glass menu over the row: «Видео» / «Фото», a tick on the
- * current one. The photos are reached there, without a fourth, permanent tab.
+ * Update 3 · G1 / G2: the profile's tabs keep their card (three segments; the active one violet with a
+ * violet line under it) and read «Посты · Репосты · Видео ▾». The arrow (or a tap on the active last tab)
+ * opens a small floating glass menu over the card (the owner's reference): «Видео» / «Фото», a tick on
+ * the current one. The photos are reached there, without a fourth, permanent tab.
  */
 function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const t = useT();
@@ -371,7 +368,7 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const wrap = useRef<HTMLDivElement>(null);
   const third: Tab = tab === "photos" ? "photos" : "video";
   const media = { video: { icon: RiVideoLine, label: "vibex.profile.videos" }, photos: { icon: RiImage2Line, label: "vibex.profile.photos" } } as const;
-  const ThirdIcon = media[third].icon;
+  const order: Tab[] = ["posts", "reposts", third];
 
   // The menu closes on a tap outside it and on Esc.
   useEffect(() => {
@@ -393,59 +390,51 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
     };
   }, [open]);
 
-  const line = (
-    <motion.span
-      layoutId="vx-profile-tab-line"
-      className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-primary"
-      transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42 }}
-      aria-hidden
-    />
-  );
-  const cell = (on: boolean) => cx("flex h-12 min-w-0 items-center justify-center transition-colors duration-200", on ? "text-text" : "text-text-tertiary hover:text-text-secondary");
+  const cell = (i: number) => {
+    const on = tab === order[i];
+    const divider = i > 0 && !on && tab !== order[i - 1];
+    return cx(
+      "relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-[16px] px-1 text-[15px] font-semibold transition-colors",
+      on ? "bg-primary/[0.08] text-primary" : "text-text-secondary hover:text-text",
+      divider && "before:absolute before:inset-y-3 before:left-0 before:w-px before:bg-border",
+    );
+  };
+  const line = <span className="absolute inset-x-[18%] -bottom-1.5 h-[3px] rounded-full bg-primary" aria-hidden />;
 
   return (
-    <div ref={wrap} className="sticky top-0 z-10 -mx-1 bg-surface px-1" data-testid="profile-tabs-wrap">
-      <div className="relative grid grid-cols-[1fr_1fr_1.55fr] border-b border-border" role="tablist" data-testid="profile-tabs">
+    <div ref={wrap} className="sticky top-0 z-10" data-testid="profile-tabs-wrap">
+      <div className="flex items-stretch rounded-[22px] border border-border/60 bg-surface/95 p-1.5 shadow-tile backdrop-blur" role="tablist" data-testid="profile-tabs">
         {(
           [
-            ["posts", RiArticleLine, "vibex.profile.posts"],
-            ["reposts", RiRepeat2Line, "vibex.profile.reposts"],
+            ["posts", "vibex.profile.posts"],
+            ["reposts", "vibex.profile.reposts"],
           ] as const
-        ).map(([k, Icon, label]) => {
-          const on = tab === k;
-          return (
-            <button
-              key={k}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              title={t(label)}
-              onClick={() => {
-                setOpen(false);
-                onTab(k);
-              }}
-              className={cell(on)}
-              data-testid={`profile-tab-${k}`}
-            >
-              <span className="relative flex h-full min-w-[34px] items-center justify-center">
-                <Icon className="size-[23px]" aria-hidden />
-                {on && line}
-              </span>
-              <span className="sr-only">{t(label)}</span>
-            </button>
-          );
-        })}
-        <div className={cell(tab === third)}>
-          <div className="relative flex h-full min-w-0 items-center">
-            <button
+        ).map(([k, label], i) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => {
+              setOpen(false);
+              onTab(k);
+            }}
+            className={cell(i)}
+            data-testid={`profile-tab-${k}`}
+          >
+            <span className="truncate">{t(label)}</span>
+            {tab === k && line}
+          </button>
+        ))}
+        <div className={cell(2)}>
+          <button
             type="button"
             role="tab"
             aria-selected={tab === third}
             onClick={() => (tab === third ? setOpen((v) => !v) : (setOpen(false), onTab(third)))}
-            className="flex h-full min-w-0 items-center gap-2 pl-1 text-[15.5px] font-semibold"
+            className="flex h-full min-w-0 flex-1 items-center justify-end"
             data-testid={`profile-tab-${third}`}
           >
-            <ThirdIcon className="size-[22px] shrink-0" aria-hidden />
             <span className="truncate">{t(media[third].label)}</span>
           </button>
           {/* The arrow: its own button (never inside the tab button). */}
@@ -455,15 +444,14 @@ function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
             aria-expanded={open}
             aria-haspopup="menu"
             aria-label={t("vibex.profile.mediaSwitch")}
-            className="flex h-full items-center pl-2 pr-1"
+            className="flex h-full flex-1 items-center justify-start pl-0.5"
             data-testid="profile-media-toggle"
           >
             <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }} className="flex">
               <RiArrowDownSLine className="size-[18px]" />
             </motion.span>
           </button>
-            {tab === third && line}
-          </div>
+          {tab === third && line}
         </div>
       </div>
       <AnimatePresence>
