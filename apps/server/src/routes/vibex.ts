@@ -3,6 +3,7 @@ import {
   ErrorCode,
   VibexCreatePostSchema,
   VibexCursorQuerySchema,
+  VibexPersonPostsQuerySchema,
   VibexFeedQuerySchema,
   VibexHistoryQuerySchema,
   VibexOpenChatSchema,
@@ -119,8 +120,8 @@ export const vibexRoutes: FastifyPluginAsync = async (app) => {
 
   app.get("/people/:id/posts", async (req) => {
     const { id } = parse(idParam, req.params);
-    const q = parse(VibexCursorQuerySchema, req.query);
-    return vibex.personPosts(req.auth!.userId, id, q.before, q.limit);
+    const q = parse(VibexPersonPostsQuerySchema, req.query);
+    return vibex.personPosts(req.auth!.userId, id, q.before, q.limit, q.kind);
   });
 
   /** Step 2.9 "Публикации": the person's posts with a photo / video (the same posts, media first). */

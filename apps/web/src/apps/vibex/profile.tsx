@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   RiAddCircleLine,
   RiCameraLine,
@@ -19,6 +19,9 @@ import {
   RiUserSearchLine,
   RiQrCodeLine,
   RiShareForwardLine,
+  RiArrowDownSLine,
+  RiImageLine,
+  RiVideoLine,
 } from "@remixicon/react";
 import { VIBEX_BIO_MAX, VIBEX_CITY_MAX, VIBEX_WEBSITE_MAX, type VibexPersonDto, type VibexProfileDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -34,7 +37,6 @@ import {
   useFollow,
   useFollowList,
   usePersonPosts,
-  usePersonPublications,
   useProfile,
   useStories,
   useUpdateProfile,
@@ -351,39 +353,102 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
   );
 }
 
-/** Profile tabs (reference): a card of three segments; the active one violet with a violet line under it. */
+/**
+ * Update 3 · G1 / G2 (SR1934): three compact sections — «Посты» (own posts), «Репосты» (other people's
+ * posts shared by the owner), «Видео» (own videos). A line under the active one glides to the next. The
+ * small arrow beside «Видео» opens a two-item switch (Видео / Фото): the profile's photos are reached from
+ * there, without a fourth, permanent tab. The third section then reads «Фото».
+ */
 function ProfileTabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const t = useT();
-  // Step 2.9: Публикации · Посты · Репосты.
+  const reduced = useReducedMotion();
+  const [open, setOpen] = useState(false);
+  const third: Tab = tab === "photos" ? "photos" : "video";
   const tabs: [Tab, MessageKey][] = [
-    ["media", "vibex.profile.media"],
     ["posts", "vibex.profile.posts"],
     ["reposts", "vibex.profile.reposts"],
+    [third, third === "photos" ? "vibex.profile.photos" : "vibex.profile.videos"],
   ];
   return (
-    <div className="sticky top-0 z-10 flex items-stretch rounded-[22px] border border-border/60 bg-surface/95 p-1.5 shadow-tile backdrop-blur" role="tablist" data-testid="profile-tabs">
-      {tabs.map(([k, label], i) => {
-        const on = tab === k;
-        const divider = i > 0 && tab !== k && tab !== tabs[i - 1]![0];
-        return (
-          <button
-            key={k}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            onClick={() => onTab(k)}
-            className={cx(
-              "relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-[16px] px-1 text-[15px] font-semibold transition-colors",
-              on ? "bg-primary/[0.08] text-primary" : "text-text-secondary hover:text-text",
-              divider && "before:absolute before:inset-y-3 before:left-0 before:w-px before:bg-border",
-            )}
-            data-testid={`profile-tab-${k}`}
+    <div className="sticky top-0 z-10 -mx-1 bg-surface/95 px-1 backdrop-blur" data-testid="profile-tabs-wrap">
+      <div className="relative grid grid-cols-3 border-b border-border" role="tablist" data-testid="profile-tabs">
+        {tabs.map(([k, label], i) => {
+          const on = tab === k;
+          return (
+            <button
+              key={i}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => {
+                if (i === 2 && on) setOpen((v) => !v);
+                else {
+                  setOpen(false);
+                  onTab(k);
+                }
+              }}
+              className={cx("relative flex h-11 min-w-0 items-center justify-center gap-0.5 px-2 text-[14.5px] font-semibold transition-colors duration-200", on ? "text-text" : "text-text-tertiary hover:text-text-secondary")}
+              data-testid={`profile-tab-${k}`}
+            >
+              <span className="truncate">{t(label)}</span>
+              {i === 2 && <span className="w-5 shrink-0" aria-hidden />}
+              {on && (
+                <motion.span
+                  layoutId="vx-profile-tab-line"
+                  className="absolute inset-x-[26%] -bottom-px h-[2.5px] rounded-full bg-primary"
+                  transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 42 }}
+                  aria-hidden
+                />
+              )}
+            </button>
+          );
+        })}
+        {/* The arrow: its own button (never inside the tab button), at the end of the third section. */}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={t("vibex.profile.mediaSwitch")}
+          className="absolute right-[calc(100%/6-34px)] top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-hover hover:text-text"
+          data-testid="profile-media-toggle"
+        >
+          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: reduced ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }} className="flex">
+            <RiArrowDownSLine className="size-5" />
+          </motion.span>
+        </button>
+      </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            className="overflow-hidden"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+            data-testid="profile-media-switch"
           >
-            <span className="truncate">{t(label)}</span>
-            {on && <span className="absolute inset-x-[18%] -bottom-1.5 h-[3px] rounded-full bg-primary" aria-hidden />}
-          </button>
-        );
-      })}
+            <div className="flex justify-end gap-1.5 px-2 py-2" role="radiogroup">
+              {(["video", "photos"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={third === k}
+                  onClick={() => {
+                    onTab(k);
+                    setOpen(false);
+                  }}
+                  className={cx("flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium transition-colors", third === k ? "bg-primary text-white" : "bg-surface-secondary text-text-secondary hover:bg-surface-hover")}
+                  data-testid={`profile-media-${k}`}
+                >
+                  {k === "video" ? <RiVideoLine className="size-4" /> : <RiImageLine className="size-4" />}
+                  {t(k === "video" ? "vibex.profile.videos" : "vibex.profile.photos")}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -643,26 +708,43 @@ export function ProfileEditor({ profile, open, onClose }: { profile: VibexProfil
 
 // ------------------------------------------------------------------- media
 
-/**
- * Step 2.9 «Публикации»: one grid of the person's media posts — each tile is
- * a post's first photo / video with a small photo / video mark in its corner
- * (no separate Photo / Video buttons). A tap opens the publication media
- * first; its text stays folded under «Показать текст». The same posts are in
- * «Посты» as full cards: two views of one post, nothing copied.
- */
-function PublicationsTab({ userId, title }: { userId: string; title: string }) {
+/** G1 «Видео»: the person's posts with a video, as a grid (a tap opens them as a feed). */
+function VideosTab({ userId, title }: { userId: string; title: string }) {
   const t = useT();
-  const q = usePersonPublications(userId);
+  const q = usePersonPosts(userId, "video");
   const open = useVibex((s) => s.openPublication);
   const items = q.data?.pages.flatMap((p) => p.items) ?? [];
   return (
-    <div className="flex flex-col gap-3" data-testid="profile-media">
+    <div className="flex flex-col gap-3" data-testid="profile-videos">
       {q.isPending ? (
         <Skeleton className="h-48 rounded-2xl" />
       ) : !items.length ? (
-        <EmptyState icon={<RiImageEditLine className="size-7" />} title={t("vibex.profile.noPublications")} />
+        <EmptyState icon={<RiVideoLine className="size-7" />} title={t("vibex.profile.noVideos")} />
       ) : (
-        // Step 2.13: equal 3:4 cells, hairline gaps, white type marks; a tap opens the publications as a feed.
+        <PublicationsGrid query={q} onOpen={(postId) => open({ userId, postId, title })} />
+      )}
+      {q.hasNextPage && (
+        <Button variant="ghost" onClick={() => void q.fetchNextPage()} loading={q.isFetchingNextPage}>
+          {t("vibex.feed.more")}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** G2 «Фото»: the person's posts with a photo, as the same grid (a tap opens them as a feed). */
+function PhotosTab({ userId, title }: { userId: string; title: string }) {
+  const t = useT();
+  const q = usePersonPosts(userId, "photo");
+  const open = useVibex((s) => s.openPublication);
+  const items = q.data?.pages.flatMap((p) => p.items) ?? [];
+  return (
+    <div className="flex flex-col gap-3" data-testid="profile-photos">
+      {q.isPending ? (
+        <Skeleton className="h-48 rounded-2xl" />
+      ) : !items.length ? (
+        <EmptyState icon={<RiImageLine className="size-7" />} title={t("vibex.profile.noPhotos")} />
+      ) : (
         <PublicationsGrid query={q} onOpen={(postId) => open({ userId, postId, title })} />
       )}
       {q.hasNextPage && (
@@ -676,34 +758,35 @@ function PublicationsTab({ userId, title }: { userId: string; title: string }) {
 
 // ------------------------------------------------------------------- pages
 
-type Tab = "posts" | "reposts" | "media";
+type Tab = "posts" | "reposts" | "video" | "photos";
 
 export function PersonPage({ id }: { id: string }) {
   const t = useT();
   const profile = useProfile(id);
-  const posts = usePersonPosts(id);
-  const [tab, setTab] = useState<Tab>("media");
+  // G1: each section is its own list from the server (posts and reposts never mixed).
+  const [tab, setTab] = useState<Tab>("posts");
+  const posts = usePersonPosts(id, "post", tab === "posts");
+  const reposts = usePersonPosts(id, "repost", tab === "reposts");
   const [editing, setEditing] = useState(false);
   if (profile.isError) return <EmptyState icon={<RiUserSearchLine className="size-7" />} title={t("vibex.person.unavailable")} />;
-  const all = posts.data?.pages.flatMap((p) => p.items) ?? [];
-  const shown = all.filter((p) => (tab === "posts" ? p.kind === "post" : p.kind === "repost"));
-  const filtered = posts.data ? { ...posts, data: { ...posts.data, pages: [{ items: shown, next: null }] } } : posts;
+  const title = profile.data?.person.name ?? "";
   return (
     <div className="flex flex-col gap-3" data-testid="person-page">
       {profile.data ? <ProfileHeader profile={profile.data} onEdit={() => setEditing(true)} /> : <Skeleton className="h-[300px] rounded-[28px]" />}
       <ProfileTabs tab={tab} onTab={setTab} />
       {profile.data && !profile.data.visible && !profile.data.me ? (
         <EmptyState icon={<RiUserForbidLine className="size-7" />} title={t("vibex.profile.private")} />
-      ) : tab === "media" ? (
-        <PublicationsTab userId={id} title={profile.data?.person.name ?? ""} />
-      ) : (
+      ) : tab === "video" ? (
+        <VideosTab userId={id} title={title} />
+      ) : tab === "photos" ? (
+        <PhotosTab userId={id} title={title} />
+      ) : tab === "posts" ? (
         <>
-          {profile.data?.me && tab === "posts" && <ProfileComposer />}
-          <PostList
-            query={{ ...filtered, hasNextPage: posts.hasNextPage, isFetchingNextPage: posts.isFetchingNextPage, fetchNextPage: posts.fetchNextPage }}
-            empty={<FeedEmpty mine={profile.data?.me} reposts={tab === "reposts"} />}
-          />
+          {profile.data?.me && <ProfileComposer />}
+          <PostList query={posts} empty={<FeedEmpty mine={profile.data?.me} />} />
         </>
+      ) : (
+        <PostList query={reposts} empty={<FeedEmpty mine={profile.data?.me} reposts />} />
       )}
       {profile.data?.me && <ProfileEditor profile={profile.data} open={editing} onClose={() => setEditing(false)} />}
     </div>

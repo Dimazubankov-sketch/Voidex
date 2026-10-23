@@ -206,6 +206,10 @@ test("profile publications: equal cells, hairline gaps, white type marks, inside
   await api(page, "POST", "/api/vibex/posts", { text: "Ещё фото", mediaIds: [await photo(page)] });
   await launchVibex(page);
   await page.getByTestId(isMobile(page) ? "vibex-tab-me" : "vibex-nav-me").last().click();
+  // Update 3 · G2: the photo publications are behind the arrow beside «Видео».
+  await page.getByTestId("profile-tab-video").click();
+  await page.getByTestId("profile-media-toggle").click();
+  await page.getByTestId("profile-media-photos").click();
   const grid = page.getByTestId("profile-media-grid");
   await expect(grid).toBeVisible();
   const tiles = page.getByTestId("publication-tile");

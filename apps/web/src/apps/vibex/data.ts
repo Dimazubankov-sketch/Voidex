@@ -29,6 +29,7 @@ import {
   type VibexActivityPageDto,
   type VibexSearchDto,
   type VibexFeedMode,
+  type VibexPersonPostKind,
 } from "@voidex/shared";
 import { ApiError, accessToken, api, qs } from "@/lib/api";
 import { applyMe } from "@/lib/account";
@@ -459,8 +460,9 @@ export function useFeed(mode: VibexFeedMode = "recommended") {
   return useInfiniteQuery(postPages([...vk.feed, mode] as const, (before) => `/api/vibex/feed${qs({ before, mode })}`));
 }
 
-export function usePersonPosts(id: string | null) {
-  return useInfiniteQuery(postPages(vk.personPosts(id ?? ""), (before) => `/api/vibex/people/${id}/posts${qs({ before })}`, !!id));
+export function usePersonPosts(id: string | null, kind: VibexPersonPostKind = "all", enabled = true) {
+  const key = kind === "all" ? vk.personPosts(id ?? "") : ([...vk.personPosts(id ?? ""), kind] as const);
+  return useInfiniteQuery(postPages(key, (before) => `/api/vibex/people/${id}/posts${qs({ before, kind: kind === "all" ? undefined : kind })}`, !!id && enabled));
 }
 
 export function usePost(id: string | null) {

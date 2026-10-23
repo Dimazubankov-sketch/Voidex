@@ -409,7 +409,10 @@ test("vibex: comment threads — root, reply, reply to a reply (one level, @name
     await openVibexMenu(page);
     await page.getByTestId("vibex-drawer").getByTestId("vibex-me").click();
   } else await page.getByTestId("vibex-me").click();
-  await page.getByTestId("profile-tab-media").click();
+  // Update 3 · G2: the photo publications are behind the arrow beside «Видео».
+  await page.getByTestId("profile-tab-video").click();
+  await page.getByTestId("profile-media-toggle").click();
+  await page.getByTestId("profile-media-photos").click();
   await expect(page.getByTestId("profile-media-grid").getByTestId("publication-tile")).toHaveCount(1);
   // Step 2.13: «Публикации» opens the publications as a feed, media first.
   await page.getByTestId("profile-media-grid").getByTestId("publication-tile").click();

@@ -325,6 +325,14 @@ export const VibexCursorQuerySchema = z.object({
   before: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(VIBEX_PAGE),
 });
+/**
+ * Update 3 · G1: a profile's sections, filtered on the server: «Посты» (own posts), «Репосты» (other
+ * people's posts the owner shared), «Видео» (own posts with a video), «Фото» (own posts with a photo);
+ * `all` is both posts and reposts.
+ */
+export const VIBEX_PERSON_POST_KINDS = ["all", "post", "repost", "video", "photo"] as const;
+export type VibexPersonPostKind = (typeof VIBEX_PERSON_POST_KINDS)[number];
+export const VibexPersonPostsQuerySchema = VibexCursorQuerySchema.extend({ kind: z.enum(VIBEX_PERSON_POST_KINDS).default("all") });
 /** Step 2.15: Главная's two tabs. */
 export const VibexFeedQuerySchema = VibexCursorQuerySchema.extend({ mode: z.enum(VIBEX_FEED_MODES).default("recommended") });
 

@@ -284,11 +284,7 @@ test("Vibex profile per the reference; post cards unchanged", async ({ page }) =
   const row = await profileActionRow(page);
   expect(row.settled).toBe(true);
   expect(row.gap).toBeGreaterThanOrEqual(6);
-  // Tabs (Step 2.9): Публикации first and active (violet), then Посты / Репосты.
-  await expect(page.getByTestId("profile-tab-media")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByTestId("profile-tab-media")).toHaveCSS("color", "rgb(108, 92, 255)");
-  await expect(page.getByTestId("profile-media")).toBeVisible();
-  await page.getByTestId("profile-tab-posts").click();
+  // Tabs (Update 3 · G1): Посты first and active, then Репосты / Видео.
   await expect(page.getByTestId("profile-tab-posts")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("profile-composer")).toBeVisible();
   // The post below is the same post card as in the feed.

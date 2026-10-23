@@ -152,7 +152,7 @@ test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a ch
 
   // A deletes the post: B's repost and bookmark now say "post unavailable".
   await nav(page, "me");
-  await page.getByTestId("profile-tab-posts").click(); // Step 2.9: the profile opens on Публикации
+  await page.getByTestId("profile-tab-posts").click(); // Update 3: the profile opens on Посты
   const mine = page.locator(`[data-testid=post-card][data-post-id="${postId}"]`);
   await mine.getByTestId("post-menu").click();
   await page.getByTestId("menu-delete-post").click();
@@ -311,10 +311,10 @@ test("vibex: the VOIDEX session is the identity (no Vibex sign-in); comments bot
   expect(fromB.map((c: { text: string }) => c.text)).toEqual(["Отличный пост!", "Спасибо!"]);
   await page.getByTestId("comments-back").click();
 
-  // Profile: email; Публикации is the first, open tab (Step 2.9).
+  // Profile: email; «Посты» is the first, open tab (Update 3 · G1).
   await nav(page, "me");
   await expect(page.getByTestId("profile-email")).toHaveText(a.address);
-  await expect(page.getByTestId("profile-tab-media")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("profile-tab-posts")).toHaveAttribute("aria-selected", "true");
 
   void browser;
 });
