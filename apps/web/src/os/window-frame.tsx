@@ -14,7 +14,7 @@ import { useGesturePeek } from "./gesture-peek";
 import { useWorkspaceLayout } from "./home/layout";
 import { NavButtons } from "./phone-nav";
 import { captureWindow } from "./snapshots";
-import { foregroundId, switchOrder, useWM, type AppWindow, type Rect } from "./window-manager";
+import { foregroundId, holdSwipeRun, switchOrder, useWM, type AppWindow, type Rect } from "./window-manager";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const GUTTER = 10;
@@ -365,6 +365,7 @@ function HomeIndicator() {
   };
   const reset = () => {
     start.current = null;
+    holdSwipeRun(false);
     useGesturePeek.setState({ active: false });
     settle();
   };
@@ -376,6 +377,7 @@ function HomeIndicator() {
         const fg = foregroundId(useWM.getState());
         // The switcher card shows exactly this screen.
         if (fg) captureWindow(fg);
+        holdSwipeRun(true);
         start.current = { x: e.clientX, y: e.clientY, at: performance.now(), id: e.pointerId, axis: null, samples: [{ x: e.clientX, y: e.clientY, t: performance.now() }] };
         try {
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -408,6 +410,7 @@ function HomeIndicator() {
       onPointerUp={(e) => {
         const s0 = start.current;
         start.current = null;
+        holdSwipeRun(false);
         if (!s0 || s0.id !== e.pointerId) return reset();
         const now = performance.now();
         const first = s0.samples[0]!;
