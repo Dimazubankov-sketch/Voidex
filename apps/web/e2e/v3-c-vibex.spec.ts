@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type CDPSession, type Page } from "@playwright/test";
-import { apiAs as api, newPage, openApp, signUpViaApi } from "./helpers";
+import { apiAs as api, newPage, openApp, phoneHome, signUpViaApi } from "./helpers";
 
 /** Update 3 · C–H: the Vibex chat, pins, QR, chat media tabs, feed media, profile sections, search and stories. */
 const isMobile = (page: Page) => (page.viewportSize()?.width ?? 1000) < 700;
@@ -229,7 +229,11 @@ test("F: feed media keep their shape (square / wide / tall); a carousel keeps on
   await api(page, "POST", "/api/vibex/posts", { text: "квадрат", mediaIds: [sq] });
   await api(page, "POST", "/api/vibex/posts", { text: "широкое", mediaIds: [wide] });
   await api(page, "POST", "/api/vibex/posts", { text: "высокое", mediaIds: [tall] });
-  await api(page, "POST", "/api/vibex/posts", { text: "карусель", mediaIds: [wide, sq, tall] });
+  // A file belongs to one post: the carousel gets its own copies.
+  const c1 = await upload(page, "c1.png", "post", await png(160, 90));
+  const c2 = await upload(page, "c2.png", "post", await png(60, 60));
+  const c3 = await upload(page, "c3.png", "post", await png(90, 160));
+  expect((await api(page, "POST", "/api/vibex/posts", { text: "карусель", mediaIds: [c1, c2, c3] })).status).toBe(201);
   await openVibex(page);
   const card = (text: string) => page.locator('[data-testid="post-card"]', { hasText: text }).first();
   const media = (text: string) => card(text).getByTestId("vibex-media");
@@ -316,17 +320,18 @@ test("G3 / H: one glass tab bar (Vibex and Clock); search rises with «Отме�
   await expect(page.getByTestId("stories-header")).toBeVisible();
   await expect(page.getByTestId("chat-search")).toBeVisible();
   // Tap the search: the header folds, «Отмена» comes, the field has the focus.
-  await page.getByTestId("chat-search").locator("input").click();
+  await page.getByTestId("chat-search").click();
   await expect(page.getByTestId("chats-pane")).toHaveAttribute("data-searching", "true");
   await expect(page.getByTestId("chat-search-cancel")).toBeVisible();
   await expect(page.getByTestId("stories-header")).toHaveCount(0);
-  await expect(page.getByTestId("chat-search").locator("input")).toBeFocused();
+  await expect(page.getByTestId("chat-search")).toBeFocused();
   await page.keyboard.type("кто");
   await page.getByTestId("chat-search-cancel").click();
   await expect(page.getByTestId("chats-pane")).not.toHaveAttribute("data-searching", "true");
-  await expect(page.getByTestId("chat-search").locator("input")).toHaveValue("");
+  await expect(page.getByTestId("chat-search")).toHaveValue("");
   await expect(page.getByTestId("chat-search-cancel")).toHaveCount(0);
   // Clock uses the same bar.
+  await phoneHome(page);
   await openApp(page, "clock");
   await expect(page.locator('[data-testid="clock-bottom-nav"]')).toHaveClass(/vx-tabbar/);
 });

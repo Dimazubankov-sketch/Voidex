@@ -123,6 +123,7 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
     setPulling(0);
   };
   const onScroll = () => {
+    if (performance.now() < quietUntil.current) return;
     const top = scroller.current?.scrollTop ?? 0;
     if (top > 24 && level === 2) setLevel(1);
     if (top > 64 && level >= 1 && !query && !focused) setLevel(0);
@@ -143,9 +144,30 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
   };
 
   const stack = <StackedStories groups={groups} onClick={() => setLevel(2)} />;
+  // Update 3 · H1 (SR4949): searching on a phone: the header folds away, the field rises to the top and
+  // «Отмена» slides in beside it; the list below keeps its place. Cancel (or Esc) brings everything back.
+  const searching = !pc && focused;
+  // What was open when the search was tapped comes back on «Отмена» (the layout settling meanwhile is not a scroll).
+  const levelAtFocus = useRef(0);
+  const quietUntil = useRef(0);
+  const cancelSearch = () => {
+    quietUntil.current = performance.now() + 600;
+    setQuery("");
+    setFocused(false);
+    setLevel(Math.max(1, levelAtFocus.current));
+    (document.activeElement as HTMLElement | null)?.blur?.();
+  };
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col" data-testid="chats-pane" data-level={shown}>
-      {header?.(stack)}
+    <div className="relative flex min-h-0 flex-1 flex-col" data-testid="chats-pane" data-level={shown} data-searching={searching || undefined}>
+      <motion.div
+        className="shrink-0 overflow-hidden"
+        initial={false}
+        animate={searching ? { height: 0, opacity: 0 } : { height: "auto", opacity: 1 }}
+        transition={reduced ? { duration: 0 } : { duration: 0.28, ease: EASE }}
+        data-testid="chats-header-fold"
+      >
+        {header?.(stack)}
+      </motion.div>
       <div
         ref={scroller}
         className="vx-chat-list vx-tab-scroll scroll-area relative min-h-0 flex-1 overscroll-y-contain"
@@ -171,7 +193,7 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
         {/* The pull itself: a soft gap that follows the finger before the parts open. */}
         <div style={{ height: pulling * 0.5, transition: pulling ? "none" : "height 200ms ease" }} aria-hidden />
         <AnimatePresence initial={false}>
-          {shown >= 2 && (
+          {shown >= 2 && !searching && (
             <motion.div
               key="stories"
               initial={{ height: 0, opacity: 0 }}
@@ -193,11 +215,43 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
               transition={reduced ? { duration: 0 } : { duration: 0.26, ease: EASE }}
               className="overflow-hidden"
             >
-              <div className="flex items-center gap-2 px-3 pb-2 pt-1.5">
-                <div className="min-w-0 flex-1" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
+              <div className={cx("flex items-center gap-2 px-3 pb-2 transition-[padding] duration-300", searching ? "pt-2.5" : "pt-1.5")}>
+                <motion.div
+                  layout={!reduced}
+                  transition={{ duration: 0.26, ease: EASE }}
+                  className="min-w-0 flex-1"
+                  onFocus={() => {
+                    if (!focused) levelAtFocus.current = level;
+                    setFocused(true);
+                  }}
+                  onBlur={() => setFocused(false)}
+                  onKeyDown={(e) => e.key === "Escape" && cancelSearch()}
+                >
                   <VoidexSearchField value={query} onChange={setQuery} placeholder={t("vibex.chats.search")} testId="chat-search" />
-                </div>
-                <OrderFilter order={order} />
+                </motion.div>
+                <AnimatePresence initial={false} mode="popLayout">
+                  {searching ? (
+                    <motion.button
+                      key="cancel"
+                      type="button"
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 16 }}
+                      transition={{ duration: 0.22, ease: EASE }}
+                      // Keeps the field focused until the tap lands (a blur first would hide the button).
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={cancelSearch}
+                      className="shrink-0 px-1 text-[15px] font-medium text-primary"
+                      data-testid="chat-search-cancel"
+                    >
+                      {t("common.cancel")}
+                    </motion.button>
+                  ) : (
+                    <motion.div key="filter" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} transition={{ duration: 0.18 }}>
+                      <OrderFilter order={order} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </motion.div>
           )}
