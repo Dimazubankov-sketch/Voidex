@@ -710,6 +710,7 @@ export const en = {
   "vibex.profile.changeCover": "Change cover",
   "vibex.profile.follow": "Follow",
   "vibex.profile.following": "Following · Unfollow",
+  "vibex.profile.subscribed": "Following",
   "vibex.profile.followers": "followers",
   "vibex.profile.followingCount": "following",
   "vibex.profile.followsYou": "Follows you",

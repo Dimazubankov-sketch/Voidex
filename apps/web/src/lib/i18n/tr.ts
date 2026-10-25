@@ -679,6 +679,7 @@ export const tr: Record<MessageKey, string> = {
   "vibex.profile.changeCover": "Kapağı değiştir",
   "vibex.profile.follow": "Takip et",
   "vibex.profile.following": "Takip ediliyor · Bırak",
+  "vibex.profile.subscribed": "Takip ediliyor",
   "vibex.profile.followers": "takipçi",
   "vibex.profile.followingCount": "takip",
   "vibex.profile.followsYou": "Seni takip ediyor",

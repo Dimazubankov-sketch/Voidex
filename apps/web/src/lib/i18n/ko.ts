@@ -679,6 +679,7 @@ export const ko: Record<MessageKey, string> = {
   "vibex.profile.changeCover": "커버 변경",
   "vibex.profile.follow": "팔로우",
   "vibex.profile.following": "팔로잉 · 언팔로우",
+  "vibex.profile.subscribed": "팔로잉",
   "vibex.profile.followers": "팔로워",
   "vibex.profile.followingCount": "팔로잉",
   "vibex.profile.followsYou": "회원님을 팔로우함",

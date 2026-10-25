@@ -694,6 +694,7 @@ export const ru: Record<MessageKey, string> = {
   "vibex.profile.changeCover": "Изменить обложку",
   "vibex.profile.follow": "Подписаться",
   "vibex.profile.following": "Вы подписаны · Отписаться",
+  "vibex.profile.subscribed": "Вы подписаны",
   "vibex.profile.followers": "подписчиков",
   "vibex.profile.followingCount": "подписок",
   "vibex.profile.followsYou": "Подписан(а) на вас",

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   RiAddCircleLine,
+  RiAddLine,
   RiCameraLine,
   RiChat1Line,
   RiCloseLine,
@@ -14,10 +15,8 @@ import {
   RiMoreFill,
   RiSettings4Line,
   RiUserAddLine,
-  RiUserFollowLine,
   RiUserForbidLine,
   RiUserSearchLine,
-  RiQrCodeLine,
   RiShareForwardLine,
   RiArrowDownSLine,
   RiImageLine,
@@ -54,6 +53,7 @@ import { useVibex } from "./store";
 import { StoryHalo, StoryViewer } from "./stories";
 import { AvatarViewer } from "./avatar-viewer";
 import { PresenceDot, PresenceLine } from "./presence";
+import { QrIcon } from "./qr-icon";
 import { ProfileQrSheet, shareProfile } from "./qr";
 
 /** Soft VOIDEX cover when the person has none (no stock photos): milk and two violets. */
@@ -72,23 +72,6 @@ function siteHref(v: string) {
   return /^https?:\/\//i.test(v) ? v : `https://${v}`;
 }
 
-function Pill({ icon, children, onClick, tone = "outline", testId, disabled }: { icon?: ReactNode; children: ReactNode; onClick: () => void; tone?: "outline" | "primary"; testId: string; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cx(
-        "flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[14px] font-medium transition disabled:opacity-60",
-        tone === "primary" ? "bg-primary text-white hover:bg-primary/90" : "border border-border bg-surface text-text hover:bg-surface-hover",
-      )}
-      data-testid={testId}
-    >
-      {icon}
-      {children}
-    </button>
-  );
-}
 
 /** Counter words with the language's plural rules ("1 запись", "5 записей"). */
 function useCount() {
@@ -191,6 +174,19 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
               </span>
             </StoryHalo>
             {!profile.me && <PresenceDot presence={person.presence} size={20} className="bottom-[9px] right-[9px]" />}
+            {/* Update 4 · E2: a new photo from the small «+» on the avatar (the cover keeps its camera). */}
+            {profile.me && (
+              <button
+                type="button"
+                onClick={() => avatarInput.current?.click()}
+                aria-label={t("vibex.profile.changeAvatar")}
+                title={t("vibex.profile.changeAvatar")}
+                className="absolute bottom-[6px] right-[6px] z-10 flex size-[30px] items-center justify-center rounded-full border-[2.5px] border-surface bg-[linear-gradient(135deg,#9a86ff,#6d4ff5)] text-white shadow-[0_4px_12px_-4px_rgba(108,92,255,0.7)] transition-transform active:scale-90"
+                data-testid="profile-avatar-plus"
+              >
+                <RiAddLine className="size-[18px]" />
+              </button>
+            )}
             {uploading === "circle" && (
               <span className="absolute inset-[5px] grid place-items-center rounded-full bg-black/30">
                 <Spinner size={18} />
@@ -210,24 +206,7 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                 <RiEditLine className="size-[18px] shrink-0" />
                 <span className="min-w-0 truncate">{t("vibex.profile.edit")}</span>
               </button>
-            ) : (
-              <>
-                {profile.followed ? (
-                  <Pill icon={<RiUserFollowLine className="size-4" />} onClick={() => follow.mutate(false)} testId="profile-unfollow">
-                    {t("vibex.profile.following")}
-                  </Pill>
-                ) : (
-                  <Pill tone="primary" icon={<RiUserAddLine className="size-4" />} onClick={() => follow.mutate(true)} disabled={blocked} testId="profile-follow">
-                    {t("vibex.profile.follow")}
-                  </Pill>
-                )}
-                {profile.canMessage && (
-                  <Pill icon={busy ? <Spinner size={14} /> : <RiChat1Line className="size-4" />} onClick={() => void write()} testId="person-write">
-                    {t("vibex.person.write")}
-                  </Pill>
-                )}
-              </>
-            )}
+            ) : null}
             <div className="relative w-11 shrink-0" data-testid="profile-more-zone">
               <button type="button" onClick={() => setMenu((m) => !m)} aria-label={t("vibex.profile.more")} className={round} data-testid="profile-more">
                 <RiMoreFill className="size-5" />
@@ -242,19 +221,11 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
                       {t("vibex.qr.share")}
                     </button>
                     <button type="button" role="menuitem" onClick={() => (setMenu(false), setQr(true))} className={menuItem} data-testid="profile-menu-qr">
-                      <RiQrCodeLine className="size-[18px] text-text-secondary" />
+                      <QrIcon className="size-[18px] text-text-secondary" />
                       {t("vibex.qr.title")}
                     </button>
                     {profile.me ? (
                       <>
-                        <button type="button" role="menuitem" onClick={() => (setMenu(false), coverInput.current?.click())} className={menuItem} data-testid="profile-menu-cover">
-                          <RiImageEditLine className="size-[18px] text-text-secondary" />
-                          {t("vibex.profile.changeCover")}
-                        </button>
-                        <button type="button" role="menuitem" onClick={() => (setMenu(false), avatarInput.current?.click())} className={menuItem} data-testid="profile-menu-avatar">
-                          <RiCameraLine className="size-[18px] text-text-secondary" />
-                          {t("vibex.profile.changeAvatar")}
-                        </button>
                         <button type="button" role="menuitem" onClick={() => (setMenu(false), go("settings"))} className={menuItem} data-testid="profile-menu-settings">
                           <RiSettings4Line className="size-[18px] text-text-secondary" />
                           {t("vibex.nav.settings")}
@@ -322,6 +293,46 @@ function ProfileHeader({ profile, onEdit }: { profile: VibexProfileDto; onEdit: 
             <span className="max-w-full truncate text-[13.5px] text-text-secondary">{count("following", profile.following)}</span>
           </button>
         </div>
+        {/* Update 4 · E3 (the X reference, in Vibex colours): «Написать» on the left, «Подписаться» on the right. */}
+        {!profile.me && (
+          <div className={cx("mt-4 grid gap-2.5", profile.canMessage ? "grid-cols-2" : "grid-cols-1")} data-testid="profile-actions">
+            {profile.canMessage && (
+              <button
+                type="button"
+                onClick={() => void write()}
+                disabled={busy}
+                className="flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-full border border-border-strong bg-surface px-3 text-[14.5px] font-semibold text-text transition active:scale-[0.97] hover:bg-surface-hover"
+                data-testid="person-write"
+              >
+                {busy ? <Spinner size={14} /> : <RiChat1Line className="size-[17px] shrink-0" />}
+                <span className="truncate">{t("vibex.person.write")}</span>
+              </button>
+            )}
+            {profile.followed ? (
+              <button
+                type="button"
+                onClick={() => follow.mutate(false)}
+                disabled={follow.isPending}
+                className="flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-full border border-primary/30 bg-primary/[0.08] px-3 text-[14.5px] font-semibold text-primary transition active:scale-[0.97]"
+                data-testid="profile-unfollow"
+              >
+                <RiCheckLine className="size-[17px] shrink-0" />
+                <span className="truncate">{t("vibex.profile.subscribed")}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => follow.mutate(true)}
+                disabled={blocked || follow.isPending}
+                className="flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-full bg-[linear-gradient(135deg,#9a86ff,#7a62f5)] px-3 text-[14.5px] font-semibold text-white shadow-[0_8px_20px_-8px_rgba(108,92,255,0.7)] transition active:scale-[0.97] disabled:opacity-50"
+                data-testid="profile-follow"
+              >
+                <RiUserAddLine className="size-[17px] shrink-0" />
+                <span className="truncate">{t("vibex.profile.follow")}</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <FollowSheet userId={person.id} which={list} onClose={() => setList(null)} />
       {profile.me && (

@@ -679,6 +679,7 @@ export const ja: Record<MessageKey, string> = {
   "vibex.profile.changeCover": "カバーを変更",
   "vibex.profile.follow": "フォロー",
   "vibex.profile.following": "フォロー中 · 解除",
+  "vibex.profile.subscribed": "フォロー中",
   "vibex.profile.followers": "フォロワー",
   "vibex.profile.followingCount": "フォロー中",
   "vibex.profile.followsYou": "フォローされています",

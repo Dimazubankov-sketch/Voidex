@@ -679,6 +679,7 @@ export const de: Record<MessageKey, string> = {
   "vibex.profile.changeCover": "Titelbild ändern",
   "vibex.profile.follow": "Folgen",
   "vibex.profile.following": "Folgst du · Entfolgen",
+  "vibex.profile.subscribed": "Du folgst",
   "vibex.profile.followers": "Follower",
   "vibex.profile.followingCount": "folgt",
   "vibex.profile.followsYou": "Folgt dir",

@@ -679,6 +679,7 @@ export const zh: Record<MessageKey, string> = {
   "vibex.profile.changeCover": "更换封面",
   "vibex.profile.follow": "关注",
   "vibex.profile.following": "已关注 · 取消关注",
+  "vibex.profile.subscribed": "已关注",
   "vibex.profile.followers": "粉丝",
   "vibex.profile.followingCount": "关注",
   "vibex.profile.followsYou": "关注了你",
