@@ -1002,3 +1002,8 @@ img[data-system-asset] { pointer-events: none; }
 /* A press: the tab answers under the finger. */
 .vx-tabbar button:active .vx-tabbar-item { transform: scale(0.9); }
 .vx-tabbar[data-compact] button:active .vx-tabbar-item { transform: scale(0.8); }
+
+/* Update 4 · C: the Clock widget picture dims a little in the dark theme. */
+[data-theme="dark"] .vx-clock-art img {
+  filter: brightness(0.82) saturate(1.05);
+}

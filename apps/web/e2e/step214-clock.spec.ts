@@ -416,7 +416,7 @@ test("Clock widget: 2 x 2 like the Calculator widget, the time of now, ticking, 
   const tile = (await page.locator('[data-testid="app-mail"] [data-tile]').first().boundingBox())!;
   expect(a.width).toBeGreaterThan(tile.width * 1.7);
   // No logo inside.
-  await expect(w.locator('[data-logo], img, image')).toHaveCount(0);
+  await expect(w.locator("[data-logo]")).toHaveCount(0);
   // The time of now on this device, and the second hand moves.
   const label = await w.getByTestId("clock-widget").getAttribute("data-time");
   const local = await page.evaluate(() => new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(Date.now()));
@@ -424,8 +424,8 @@ test("Clock widget: 2 x 2 like the Calculator widget, the time of now, ticking, 
   const sec = w.getByTestId("clock-widget-second");
   const first = await sec.getAttribute("data-angle");
   await expect.poll(() => sec.getAttribute("data-angle"), { timeout: 4000 }).not.toBe(first);
-  // Update 4 · C1: the dial is the logo (its own colours); the widget's surface follows the theme.
-  const face = () => w.locator(".vx-logo-surface").first().evaluate((el) => getComputedStyle(el).backgroundImage);
+  // Update 4 · C: the widget is the reference picture with live hands; it dims a little in the dark theme.
+  const face = () => w.locator(".vx-clock-art img").first().evaluate((el) => getComputedStyle(el).filter);
   const light = await face();
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   const dark = await face();

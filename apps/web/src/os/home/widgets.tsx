@@ -150,13 +150,19 @@ function useSecond(active: boolean) {
 
 /** The Clock widget's analog face (SVG): its hands glide, driven per frame without React renders. */
 /**
- * Update 4 · C1: the dial is the new Clock logo, drawn large: a thick violet → indigo ring with a soft
- * light on it, a white glass rim, a pale lavender face with 12 violet hour marks, and three hands
- * (hour, minute, second) that show the real time (useHands: CSS spins from the current phase).
- * Gradients and shadows use user-space units: a hand is a zero-width line, and a bounding-box gradient
- * or filter on it would draw nothing.
+ * Update 4 · C1 (the owner's reference, 1 : 1): the widget is the reference picture itself — its ring,
+ * glass rim, soft waves and the 12 marks — with its painted hands, knob and text taken out; the live
+ * parts are drawn over it in the same places: the 12 marks again (crisp), three hands (hour, minute,
+ * second) at the real time and the centre knob. `dial` is where the face is in the picture: its centre
+ * (fractions of the picture's width / height) and radius (a fraction of its height).
  */
-function ClockFace({ zone, className }: { zone: string; className?: string }) {
+const CLOCK_ART = {
+  s: { src: "/widgets/clock-s.webp", ratio: 521 / 514, dial: { x: 0.5167, y: 0.5163, r: 0.3366 } },
+  w: { src: "/widgets/clock-w.webp", ratio: 1028 / 514, dial: { x: 0.727, y: 0.5212, r: 0.3424 } },
+} as const;
+
+/** The live parts of the face, over the picture (viewBox: the face's radius is 100). */
+function ClockFace({ zone, className, style }: { zone: string; className?: string; style?: React.CSSProperties }) {
   const hour = useRef<SVGGElement>(null);
   const minute = useRef<SVGGElement>(null);
   const second = useRef<SVGGElement>(null);
@@ -166,57 +172,69 @@ function ClockFace({ zone, className }: { zone: string; className?: string }) {
   const id = (n: string) => `vxc-${uid}-${n}`;
   const url = (n: string) => `url(#${id(n)})`;
   return (
-    <svg viewBox="0 0 200 200" className={cx("drop-shadow-[0_6px_14px_rgba(60,40,170,0.18)]", className)} aria-hidden data-testid="clock-face">
+    <svg viewBox="0 0 200 200" className={cx("pointer-events-none absolute overflow-visible", className)} style={style} aria-hidden data-testid="clock-face">
       <defs>
-        <linearGradient id={id("ring")} x1="0.1" y1="0.15" x2="0.95" y2="0.85">
-          <stop offset="0" stopColor="#b79cff" />
-          <stop offset="0.45" stopColor="#7b4dff" />
-          <stop offset="1" stopColor="#3f63ff" />
+        {/* The marks of the picture: deep violet at the centre side, lighter outwards. */}
+        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="30.7" x2="100" y2="14.2">
+          <stop offset="0" stopColor="#7754fd" />
+          <stop offset="1" stopColor="#b08cfc" />
         </linearGradient>
-        <radialGradient id={id("light")} cx="0.3" cy="0.25" r="0.75">
-          <stop offset="0" stopColor="#fff" stopOpacity="0.85" />
-          <stop offset="0.45" stopColor="#fff" stopOpacity="0.25" />
-          <stop offset="1" stopColor="#fff" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={id("dial")} cx="0.42" cy="0.38" r="0.7">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.75" stopColor="#f3f0ff" />
-          <stop offset="1" stopColor="#e3dcff" />
-        </radialGradient>
-        <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="100" y1="44" x2="100" y2="106">
-          <stop offset="0" stopColor="#9d7bff" />
-          <stop offset="1" stopColor="#5b2df0" />
+        {/* The hands: a deep blue-violet at the centre, lavender at the tip (as in the picture). */}
+        <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="22">
+          <stop offset="0" stopColor="#3b20ef" />
+          <stop offset="0.55" stopColor="#6f4dfb" />
+          <stop offset="1" stopColor="#ad97ff" />
         </linearGradient>
-        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="34" x2="100" y2="48">
-          <stop offset="0" stopColor="#9f86ff" />
-          <stop offset="1" stopColor="#6b3cf5" />
-        </linearGradient>
-        <radialGradient id={id("knob")} cx="0.4" cy="0.35" r="0.7">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="1" stopColor="#cfc2ff" />
+        <radialGradient id={id("knobRing")} cx="0.42" cy="0.38" r="0.62">
+          <stop offset="0" stopColor="#d4c6fe" />
+          <stop offset="0.72" stopColor="#9374fc" />
+          <stop offset="1" stopColor="#b9a0fd" />
         </radialGradient>
-        <filter id={id("sh")} filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
-          <feDropShadow dx="0" dy="1.5" stdDeviation="1.6" floodColor="#4b2bd6" floodOpacity="0.28" />
+        <radialGradient id={id("knob")} cx="0.38" cy="0.32" r="0.7">
+          <stop offset="0" stopColor="#f1ecff" />
+          <stop offset="1" stopColor="#c3b0fd" />
+        </radialGradient>
+        <filter id={id("sh")} filterUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
+          <feDropShadow dx="0" dy="1.6" stdDeviation="1.8" floodColor="#3a1fd6" floodOpacity="0.3" />
         </filter>
       </defs>
-      <circle cx={100} cy={100} r={97} fill={url("ring")} />
-      <circle cx={100} cy={100} r={97} fill={url("light")} />
-      <circle cx={100} cy={100} r={84} fill="#fff" fillOpacity={0.38} stroke="#fff" strokeOpacity={0.85} strokeWidth={1.6} />
-      <circle cx={100} cy={100} r={74} fill={url("dial")} stroke="#fff" strokeWidth={2.2} filter={url("sh")} />
       {Array.from({ length: 12 }, (_, i) => (
-        <line key={i} x1={100} y1={i % 3 === 0 ? 35 : 36} x2={100} y2={i % 3 === 0 ? 47 : 45} stroke={url("tick")} strokeWidth={i % 3 === 0 ? 6 : 5} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
+        <line key={i} x1={100} y1={30.7} x2={100} y2={14.2} stroke={url("tick")} strokeWidth={7.1} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
       ))}
       <g ref={hour} data-testid="clock-widget-hour">
-        <line x1={100} y1={104} x2={100} y2={66} stroke={url("hand")} strokeWidth={10} strokeLinecap="round" filter={url("sh")} />
+        <line x1={100} y1={106} x2={100} y2={46} stroke={url("hand")} strokeWidth={11.5} strokeLinecap="round" filter={url("sh")} />
       </g>
       <g ref={minute} data-testid="clock-widget-minute">
-        <line x1={100} y1={104} x2={100} y2={48} stroke={url("hand")} strokeWidth={8} strokeLinecap="round" filter={url("sh")} />
+        <line x1={100} y1={106} x2={100} y2={27} stroke={url("hand")} strokeWidth={8.5} strokeLinecap="round" filter={url("sh")} />
       </g>
       <g ref={second} data-testid="clock-widget-second">
-        <line x1={100} y1={116} x2={100} y2={40} stroke="#4a3cf0" strokeWidth={2} strokeLinecap="round" />
+        <line x1={100} y1={124} x2={100} y2={10} stroke="#4526f0" strokeWidth={2.4} strokeLinecap="round" filter={url("sh")} />
       </g>
-      <circle cx={100} cy={100} r={8.5} fill={url("knob")} stroke="#7b55ff" strokeWidth={3} />
+      <circle cx={100} cy={100} r={17} fill={url("knobRing")} filter={url("sh")} />
+      <circle cx={100} cy={100} r={10.5} fill={url("knob")} />
     </svg>
+  );
+}
+
+/**
+ * The picture filling the widget like `object-fit: cover`, with the live face (and, 4 × 2, the text) on a
+ * stage of the picture's own proportions, so everything stays where it is in the picture at any size.
+ */
+function ClockArt({ size, zone, children }: { size: "s" | "w"; zone: string; children?: React.ReactNode }) {
+  const art = CLOCK_ART[size];
+  const d = art.dial;
+  return (
+    <span className="vx-clock-art pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] [container-type:size]" data-clock-art={size}>
+      {/* 4 × 2: anchored right, so the dial is always whole (a taller phone card trims the empty left part). */}
+      <span className={cx("absolute top-1/2 -translate-y-1/2", size === "w" ? "right-0" : "left-1/2 -translate-x-1/2")} style={{ width: `max(100cqw, calc(100cqh * ${art.ratio}))`, aspectRatio: String(art.ratio) }}>
+        <img src={art.src} alt="" draggable={false} className="absolute inset-0 size-full select-none" />
+        <ClockFace
+          zone={zone}
+          style={{ left: `${(d.x - d.r / art.ratio) * 100}%`, top: `${(d.y - d.r) * 100}%`, width: `${((2 * d.r) / art.ratio) * 100}%`, height: `${2 * d.r * 100}%` }}
+        />
+      </span>
+      {children}
+    </span>
   );
 }
 
@@ -250,7 +268,7 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       type="button"
       tabIndex={preview ? -1 : 0}
       onClick={(e) => openApp("clock", e.currentTarget, { tab: "world" })}
-      className={cx("relative flex size-full rounded-[24px] text-left", wide ? "items-center gap-[4%] py-[5%] pl-[7%] pr-[5%]" : "items-center justify-center p-[7%]", preview && "pointer-events-none")}
+      className={cx("relative flex size-full overflow-hidden rounded-[24px] text-left", preview && "pointer-events-none")}
       aria-label={label}
       title={label}
       data-testid="clock-widget"
@@ -258,26 +276,30 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       data-zone={zone}
       data-time={time}
     >
-      <LogoSurface />
-      {wide ? (
-        <>
-          {/* Update 4 · C1 (the reference): the city, the time and the date on the left, the large dial on the right. */}
-          <span className="relative flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-[15px] font-semibold text-text" data-testid="clock-widget-city">
+      <ClockArt size={wide ? "w" : "s"} zone={zone}>
+        {wide && (
+          // Update 4 · C1: the city, the time and the date where the picture has them.
+          // In the card's own space: from its left side up to the dial, sized like the picture's text (the
+          // time shrinks a little when a taller card leaves less room beside the dial).
+          <span
+            className="absolute left-[7.5%] top-1/2 flex -translate-y-1/2 flex-col"
+            style={{
+              width: `calc(92.5cqw - max(100cqw, ${CLOCK_ART.w.ratio * 100}cqh) * ${(1 - (CLOCK_ART.w.dial.x - CLOCK_ART.w.dial.r / CLOCK_ART.w.ratio)).toFixed(4)} - 3cqw)`,
+              fontSize: `min(1cqh, calc((92.5cqw - max(100cqw, ${CLOCK_ART.w.ratio * 100}cqh) * ${(1 - (CLOCK_ART.w.dial.x - CLOCK_ART.w.dial.r / CLOCK_ART.w.ratio)).toFixed(4)} - 3cqw) / 78))`,
+            }}
+          >
+            <span className="truncate font-semibold leading-tight text-[#1d1b2b]" style={{ fontSize: "7.6em" }} data-testid="clock-widget-city">
               {city}
             </span>
-            <span className="bg-[linear-gradient(135deg,#8a63ff,#4f3cf0)] bg-clip-text text-[44px] font-bold leading-[1.05] tracking-[-0.04em] text-transparent tabular-nums" data-testid="clock-widget-time">
+            <span className="bg-[linear-gradient(135deg,#8e6bff,#5a3ef2)] bg-clip-text font-bold leading-[1.02] tracking-[-0.02em] text-transparent tabular-nums" style={{ fontSize: "26em" }} data-testid="clock-widget-time">
               {time}
             </span>
-            <span className="truncate text-[12px] text-text-secondary">{date}</span>
+            <span className="truncate text-[#7a7690]" style={{ fontSize: "5.9em" }}>
+              {date.charAt(0).toUpperCase() + date.slice(1)}
+            </span>
           </span>
-          <ClockFace zone={zone} className="relative aspect-square h-full max-h-full shrink-0" />
-        </>
-      ) : (
-        // Update 3 · B1: 2 × 2 is the analog face only (as before Update 2); the city and the time are
-        // in the 4 × 2 size and in the label read aloud.
-        <ClockFace zone={zone} className="relative size-full max-h-full" />
-      )}
+        )}
+      </ClockArt>
     </button>
   );
 }

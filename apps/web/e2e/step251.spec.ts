@@ -181,7 +181,8 @@ test("Wallpapers: one screen with Lock / Home tabs, carousel, Apply, Add your ow
 
   // Add your own: the picture becomes the lock wallpaper and shows in the carousel.
   await page.getByTestId("wallpapers-file").setInputFiles({ name: "mine.png", mimeType: "image/png", buffer: PNG_1x1 });
-  await expect(page.getByTestId("wallpapers-option-image")).toBeVisible();
+  // Update 4 · D2: my own pictures are a library on the account (each its own card).
+  await expect(page.locator('[data-testid^="wallpapers-option-lib:"]').first()).toBeVisible();
   await expect.poll(async () => (await storedLayout(page))?.appearance?.lockWallpaper?.kind).toBe("image");
 
   // Sync toggle.
