@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useQuery } from "@tanstack/react-query";
 import type { Wallpaper } from "@voidex/shared";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/query";
@@ -79,6 +80,29 @@ export async function readLocalImage(userId: string, slot: WallpaperSlot): Promi
 async function writeLocalImage(userId: string, slot: WallpaperSlot, blob: Blob) {
   await idb("readwrite", (s) => s.put(blob, imageKey(userId, slot)));
 }
+async function deleteLocalImage(userId: string, slot: WallpaperSlot) {
+  await idb("readwrite", (s) => s.delete(imageKey(userId, slot)));
+}
+
+// --------------------------------------------------------------- Update 4 · D2: own wallpapers
+
+/** One of my own wallpapers (the library on the account; built-in ones are presets, never here). */
+export interface UserWallpaper {
+  id: string;
+  createdAt: string;
+}
+
+/** "lib-<tail>-…": the slot shows this library picture (see the server's userWallpaperVersion). */
+export const isFromLibrary = (w: Wallpaper | null | undefined, id: string) => w?.kind === "image" && w.version.startsWith(`lib-${id.slice(-16)}-`);
+
+export function useUserWallpapers(enabled: boolean) {
+  return useQuery({ queryKey: ["wallpapers", "library"], queryFn: () => api.get<{ wallpapers: UserWallpaper[] }>("/api/account/wallpapers").then((r) => r.wallpapers), enabled, staleTime: 60_000 });
+}
+
+/** A library picture as an image URL (only the owner can read it). */
+export function useUserWallpaperImage(id: string | null) {
+  return useQuery({ queryKey: ["wallpaper", "lib", id], queryFn: async () => URL.createObjectURL(await api.get<Blob>(`/api/account/wallpapers/${encodeURIComponent(id!)}`)), enabled: !!id, staleTime: Infinity, gcTime: Infinity });
+}
 
 // --------------------------------------------------------------- the hook
 
@@ -112,6 +136,41 @@ export function useWallpapers() {
     return { kind: "image", version: r.version };
   };
 
+  /** Update 4 · D2: my own picture goes to the library (sync on) and is put on the slot. */
+  const addOwn = async (file: File, slot: WallpaperSlot): Promise<Wallpaper> => {
+    if (useLocal) return upload(file, slot);
+    const blob = await prepareWallpaper(file);
+    const { id } = await api.post<{ id: string }>("/api/account/wallpapers", blob, { headers: { "Content-Type": "application/octet-stream" } });
+    void queryClient.invalidateQueries({ queryKey: ["wallpapers", "library"] });
+    return applyOwn(id, slot);
+  };
+  const applyOwn = async (id: string, slot: WallpaperSlot): Promise<Wallpaper> => {
+    const r = await api.post<{ version: string }>(`/api/account/wallpapers/${encodeURIComponent(id)}/apply${slot === "lock" ? "?slot=lock" : ""}`, {});
+    return { kind: "image", version: r.version };
+  };
+  /**
+   * Deletes one of my own wallpapers. Where it is in use (home screen, lock screen) the safe built-in one
+   * takes its place first. `id` null: the picture of this slot that is not in the library (uploaded
+   * before Update 4, or kept on this device with sync off). Built-in wallpapers are never deleted.
+   */
+  const removeOwn = async (id: string | null, slot: WallpaperSlot) => {
+    const onDesk = id ? isFromLibrary(wallpaper, id) : slot === "desktop" && wallpaper.kind === "image";
+    const onLock = id ? isFromLibrary(lockWallpaper, id) : slot === "lock" && lockWallpaper?.kind === "image";
+    if (onDesk) setWallpaper({ kind: "default" });
+    if (onLock) setLockWallpaper(null);
+    if (useLocal) {
+      if (onDesk) await deleteLocalImage(userId, "desktop");
+      if (onLock) await deleteLocalImage(userId, "lock");
+    } else {
+      if (id) await api.delete(`/api/account/wallpapers/${encodeURIComponent(id)}`);
+      // The copy on a slot that no longer shows it.
+      if (onDesk) await api.delete("/api/account/wallpaper").catch(() => undefined);
+      if (onLock) await api.delete("/api/account/wallpaper?slot=lock").catch(() => undefined);
+    }
+    void queryClient.invalidateQueries({ queryKey: ["wallpapers", "library"] });
+    void queryClient.invalidateQueries({ queryKey: ["wallpaper"] });
+  };
+
   const setSync = async (on: boolean) => {
     if (on) {
       write(null);
@@ -135,5 +194,5 @@ export function useWallpapers() {
     void queryClient.invalidateQueries({ queryKey: ["wallpaper"] });
   };
 
-  return { wallpaper, lockWallpaper, sync, setWallpaper, setLockWallpaper, upload, setSync };
+  return { wallpaper, lockWallpaper, sync, local: useLocal, setWallpaper, setLockWallpaper, upload, addOwn, applyOwn, removeOwn, setSync };
 }

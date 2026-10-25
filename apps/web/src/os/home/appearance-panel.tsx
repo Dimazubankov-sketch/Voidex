@@ -254,6 +254,11 @@ export const WALLPAPER_LABEL: Record<WallpaperPreset, MessageKey> = {
   "wave-gray": "wallpaper.waveGray",
   "wave-gray-purple": "wallpaper.waveGrayPurple",
   "wave-milk-gray-purple": "wallpaper.waveMilkGrayPurple",
+  "v-glow": "wallpaper.vGlow",
+  "v-silk": "wallpaper.vSilk",
+  "v-dawn": "wallpaper.vDawn",
+  "v-orbit": "wallpaper.vOrbit",
+  "v-prism": "wallpaper.vPrism",
 };
 
 /** A desktop tile at its real size with the chosen logo size: the tile itself never changes. */

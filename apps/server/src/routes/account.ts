@@ -85,6 +85,31 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/account/wallpaper", async (req) => accounts.deleteWallpaper(req.auth!.userId, wallpaperSlot(req.query)));
 
+  // Update 4 · D2: my own wallpapers (a library apart from the built-in ones).
+  app.get("/account/wallpapers", async (req) => accounts.listUserWallpapers(req.auth!.userId));
+  app.post(
+    "/account/wallpapers",
+    { bodyLimit: WALLPAPER_MAX, config: { rateLimit: { max: 20 * app.ctx.config.rateLimitScale, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const body = req.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
+      const mime = sniffImage(body);
+      if (!mime) throw fail(ErrorCode.ValidationFailed, "Upload a JPEG, PNG or WebP image.");
+      reply.status(201);
+      return accounts.addUserWallpaper(req.auth!.userId, mime, body);
+    },
+  );
+  const wallpaperId = z.object({ id: z.string().min(4).max(64) });
+  app.get("/account/wallpapers/:id", async (req, reply) => {
+    const w = await accounts.getUserWallpaper(req.auth!.userId, parse(wallpaperId, req.params).id);
+    if (!w) throw notFound("Wallpaper");
+    reply.header("Cache-Control", "private, max-age=86400");
+    reply.header("X-Content-Type-Options", "nosniff");
+    return reply.type(w.mimeType).send(w.data);
+  });
+  app.delete("/account/wallpapers/:id", async (req) => accounts.deleteUserWallpaper(req.auth!.userId, parse(wallpaperId, req.params).id));
+  app.post("/account/wallpapers/:id/apply", async (req) => accounts.applyUserWallpaper(req.auth!.userId, parse(wallpaperId, req.params).id, wallpaperSlot(req.query)));
+
   /** Avatars are visible to any signed-in VOIDEX user (e.g. mail senders). */
   app.get("/users/:id/avatar", async (req, reply) => {
     const { id } = parse(idParam, req.params);

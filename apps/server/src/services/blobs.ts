@@ -20,7 +20,8 @@ export interface BlobStorage {
   keysOf(ownerUserId: string, purpose: BlobPurpose, tx?: Tx): Promise<string[]>;
 }
 
-export type BlobPurpose = "mail" | "wallpaper" | "lock-wallpaper" | "vibex" | "notes";
+/** Update 4 · D2: "user-wallpaper" — the person's own wallpapers (their library), apart from the built-in ones. */
+export type BlobPurpose = "mail" | "wallpaper" | "lock-wallpaper" | "vibex" | "notes" | "user-wallpaper";
 
 export class PgBlobStorage implements BlobStorage {
   constructor(private readonly db: Db) {}

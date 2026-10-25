@@ -52,6 +52,12 @@ export const WALLPAPER_PRESETS = [
   "wave-gray",
   "wave-gray-purple",
   "wave-milk-gray-purple",
+  // Update 4 · D1: added to the catalogue (the ones above stay as they are).
+  "v-glow",
+  "v-silk",
+  "v-dawn",
+  "v-orbit",
+  "v-prism",
 ] as const;
 export type WallpaperPreset = (typeof WALLPAPER_PRESETS)[number];
 /** Step 2 gradients — still accepted in stored data, shown as presets. */
