@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
+import { QrIcon } from "./qr-icon";
 import {
   RiArrowLeftSLine,
   RiBellLine,
@@ -11,13 +12,16 @@ import {
   RiMic2Line,
   RiMoreFill,
   RiMusic2Line,
-  RiPhoneLine,
+  RiPhoneFill,
+  RiNotification3Fill,
+  RiNotificationOffFill,
+  RiVidiconFill,
+  RiVidiconLine,
+  RiSearch2Line,
   RiProhibited2Line,
-  RiQrCodeLine,
   RiSearchLine,
   RiShareForwardLine,
   RiUserLine,
-  RiVidiconLine,
 } from "@remixicon/react";
 import { VIBEX_CHAT_MEDIA_KINDS, canDeleteChatForAll, type VibexChatDto, type VibexChatMediaKind, type VibexMessageDto } from "@voidex/shared";
 import { Avatar } from "@/brand/brand";
@@ -116,11 +120,12 @@ export function ChatInfo({ chat, onClose, onJump, onCall, onProfile, onDeleted }
       ref={ref}
       type="button"
       onClick={onClick}
-      className="flex h-[58px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl bg-surface-secondary text-primary transition-colors active:bg-surface-hover [@media(hover:hover)]:hover:bg-surface-hover"
+      // Update 4 · E1 (the reference): solid icons of one size and weight in even tiles; a light press.
+      className="flex h-[62px] min-w-0 flex-1 flex-col items-center justify-center gap-[5px] rounded-[18px] bg-surface-secondary text-primary transition-[transform,background-color] duration-150 ease-out active:scale-[0.94] active:bg-surface-hover motion-reduce:active:scale-100 [@media(hover:hover)]:hover:bg-surface-hover"
       data-testid={`info-${id}`}
     >
-      <span className="[&_svg]:size-[21px]">{icon}</span>
-      <span className="max-w-full truncate px-1 text-[11.5px] font-medium text-text-secondary">{label}</span>
+      <span className="flex h-6 items-center [&_svg]:size-6">{icon}</span>
+      <span className="max-w-full truncate px-1 text-[11.5px] font-medium leading-none text-text-secondary">{label}</span>
     </button>
   );
 
@@ -154,10 +159,10 @@ export function ChatInfo({ chat, onClose, onJump, onCall, onProfile, onDeleted }
             <PresenceLine presence={presence} className="mt-0.5 justify-center text-[13px]" />
           </div>
           <div className="flex gap-2 px-3 pb-3" role="group">
-            {action("call", <RiPhoneLine />, t("vibex.info.call"), () => onCall("audio"))}
-            {action("video", <RiVidiconLine />, t("vibex.info.video"), () => onCall("video"))}
-            {action("sound", chat.muted ? <RiNotificationOffLine /> : <RiBellLine />, t("vibex.info.sound"), () => setMenu("sound"), soundRef)}
-            {action("search", <RiSearchLine />, t("vibex.info.search"), () => setSearching(true))}
+            {action("call", <RiPhoneFill />, t("vibex.info.call"), () => onCall("audio"))}
+            {action("video", <RiVidiconFill />, t("vibex.info.video"), () => onCall("video"))}
+            {action("sound", chat.muted ? <RiNotificationOffFill /> : <RiNotification3Fill />, t("vibex.info.sound"), () => setMenu("sound"), soundRef)}
+            {action("search", <RiSearch2Line className="[stroke:currentColor] [stroke-width:0.6]" />, t("vibex.info.search"), () => setSearching(true))}
             {action("more", <RiMoreFill />, t("vibex.info.more"), () => setMenu("more"), moreRef)}
           </div>
           <div className="mx-3 mb-3 overflow-hidden rounded-2xl bg-surface-secondary">
@@ -169,7 +174,7 @@ export function ChatInfo({ chat, onClose, onJump, onCall, onProfile, onDeleted }
                 </span>
               </span>
               <IconButton label={t("vibex.qr.title")} onClick={() => setQr(true)} data-testid="chat-info-qr">
-                <RiQrCodeLine className="size-[22px] text-primary" />
+                <QrIcon className="size-[23px] text-primary" />
               </IconButton>
             </div>
             {bio && (

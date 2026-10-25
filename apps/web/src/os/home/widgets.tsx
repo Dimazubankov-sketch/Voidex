@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
-import { RiAddCircleFill, RiArrowLeftSLine, RiCloseLine, RiSubtractLine } from "@remixicon/react";
+import { RiAddCircleFill, RiAddLine, RiArrowLeftSLine, RiCloseLine, RiLockLine, RiSubtractLine } from "@remixicon/react";
 import {
   APP_REGISTRY,
   MOBILE_PAGES_MAX,
@@ -23,11 +23,13 @@ import {
   display,
   emptyCalc,
   placeInCell,
+  placeWidgetMakingRoom,
   press,
   removeWidget,
   widgetKey,
   type Widget,
   type Place,
+  type Cell,
   type WidgetSize,
   type WidgetType,
   type WorkspaceLayout,
@@ -35,11 +37,18 @@ import {
 import { cx } from "@/lib/cx";
 import { getFormFactor, useFormFactor } from "@/lib/form-factor";
 import { t as translateNow, useLanguage, useT, type MessageKey } from "@/lib/i18n";
-import { Button, IconButton } from "@/ui/controls";
+import { Button, IconButton, Spinner } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
 import { createPortal } from "react-dom";
 import { useWM } from "../window-manager";
-import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
+import { CalculatorGlyph, ClockGlyph, NotesGlyph } from "@/brand/brand";
+import { useQuery } from "@tanstack/react-query";
+import { notesPreview, type NotesDocMetaDto } from "@voidex/shared";
+import { api } from "@/lib/api";
+import { queryClient } from "@/lib/query";
+import { useSession } from "@/lib/session";
+
+import { notesApi } from "@/apps/notes/data";
 import { cityClock, cityName } from "@voidex/clock";
 import { useHands, useShownZone } from "@/apps/clock/analog";
 import { desktopGeometry, geometryFor } from "./desktop-geometry";
@@ -103,7 +112,8 @@ function CalculatorWidget({ preview }: { preview?: boolean }) {
             onClick={() => setState((s) => press(s, k))}
             className={cx(
               "vx-calc-key flex min-h-0 items-center justify-center rounded-[10px] text-[14px] font-semibold",
-              k === "=" ? "bg-primary text-white" : "×÷−+".includes(k) ? "bg-primary/12 text-primary" : k === "C" || k === "±" || k === "%" || k === "⌫" ? "bg-black/[0.06] text-text-secondary" : "bg-white/70 text-text",
+              // Update 4 · C2: the colours of the new Calculator logo (lavender keys, violet signs, a deep violet «=»).
+              k === "=" ? "vx-calc-eq" : "×÷−+".includes(k) ? "vx-calc-op" : k === "C" || k === "±" || k === "%" || k === "⌫" ? "vx-calc-fn" : "vx-calc-digit",
             )}
             aria-label={k === "⌫" ? t("widgets.calcBackspace") : k === "C" ? t("widgets.calcClear") : k}
             data-widget-key
@@ -139,26 +149,102 @@ function useSecond(active: boolean) {
 }
 
 /** The Clock widget's analog face (SVG): its hands glide, driven per frame without React renders. */
-function ClockFace({ zone, className }: { zone: string; className?: string }) {
+/**
+ * Update 4 · C1 (the owner's reference, 1 : 1): the widget is the reference picture itself — its ring,
+ * glass rim, soft waves and the 12 marks — with its painted hands, knob and text taken out; the live
+ * parts are drawn over it in the same places: the 12 marks again (crisp), three hands (hour, minute,
+ * second) at the real time and the centre knob. `dial` is where the face is in the picture: its centre
+ * (fractions of the picture's width / height) and radius (a fraction of its height).
+ */
+const CLOCK_ART = {
+  s: { src: "/widgets/clock-s.webp", ratio: 521 / 514, dial: { x: 0.5167, y: 0.5163, r: 0.3366 } },
+  w: { src: "/widgets/clock-w.webp", ratio: 1028 / 514, dial: { x: 0.727, y: 0.5212, r: 0.3424 } },
+} as const;
+
+/** The live parts of the face, over the picture (viewBox: the face's radius is 100). */
+function ClockFace({ zone, className, style }: { zone: string; className?: string; style?: React.CSSProperties }) {
   const hour = useRef<SVGGElement>(null);
   const minute = useRef<SVGGElement>(null);
   const second = useRef<SVGGElement>(null);
   useHands(zone, { hour, minute, second }, true);
-  const hand = (len: number, width: number, cls: string, tail = 0) => <line x1={100} y1={100 + tail} x2={100} y2={100 - len} strokeWidth={width} strokeLinecap="round" className={cls} />;
+  // Ids unique per face (several clocks may be on screen).
+  const uid = useId().replace(/:/g, "");
+  const id = (n: string) => `vxc-${uid}-${n}`;
+  const url = (n: string) => `url(#${id(n)})`;
   return (
-    <svg viewBox="0 0 200 200" className={cx("drop-shadow-[0_6px_14px_rgba(20,16,50,0.16)]", className)} aria-hidden>
-      <circle cx={100} cy={100} r={98} className="fill-[var(--surface)]" />
+    <svg viewBox="0 0 200 200" className={cx("pointer-events-none absolute overflow-visible", className)} style={style} aria-hidden data-testid="clock-face">
+      <defs>
+        {/* The marks of the picture: deep violet at the centre side, lighter outwards. */}
+        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="30.7" x2="100" y2="14.2">
+          <stop offset="0" stopColor="#7754fd" />
+          <stop offset="1" stopColor="#b08cfc" />
+        </linearGradient>
+        {/* The hands: a deep blue-violet at the centre, lavender at the tip (as in the picture). */}
+        <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="22">
+          <stop offset="0" stopColor="#3b20ef" />
+          <stop offset="0.55" stopColor="#6f4dfb" />
+          <stop offset="1" stopColor="#ad97ff" />
+        </linearGradient>
+        <radialGradient id={id("knobRing")} cx="0.42" cy="0.38" r="0.62">
+          <stop offset="0" stopColor="#d4c6fe" />
+          <stop offset="0.72" stopColor="#9374fc" />
+          <stop offset="1" stopColor="#b9a0fd" />
+        </radialGradient>
+        <radialGradient id={id("knob")} cx="0.38" cy="0.32" r="0.7">
+          <stop offset="0" stopColor="#f1ecff" />
+          <stop offset="1" stopColor="#c3b0fd" />
+        </radialGradient>
+        <filter id={id("sh")} filterUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
+          <feDropShadow dx="0" dy="1.6" stdDeviation="1.8" floodColor="#3a1fd6" floodOpacity="0.3" />
+        </filter>
+      </defs>
       {Array.from({ length: 12 }, (_, i) => (
-        <line key={i} x1={100} y1={13} x2={100} y2={i % 3 === 0 ? 33 : 28} strokeWidth={i % 3 === 0 ? 6 : 4.5} strokeLinecap="round" className="stroke-[color-mix(in_srgb,var(--text)_70%,transparent)]" transform={`rotate(${i * 30} 100 100)`} />
+        <line key={i} x1={100} y1={30.7} x2={100} y2={14.2} stroke={url("tick")} strokeWidth={7.1} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
       ))}
-      <g ref={hour}>{hand(46, 7, "stroke-[var(--text)]")}</g>
-      <g ref={minute}>{hand(70, 5.5, "stroke-[var(--text)]")}</g>
-      <g ref={second} data-testid="clock-widget-second">
-        {hand(78, 2, "stroke-[var(--primary)]", 16)}
+      <g ref={hour} data-testid="clock-widget-hour">
+        <line x1={100} y1={106} x2={100} y2={46} stroke={url("hand")} strokeWidth={11.5} strokeLinecap="round" filter={url("sh")} />
       </g>
-      <circle cx={100} cy={100} r={6} className="fill-[var(--text)]" />
-      <circle cx={100} cy={100} r={3} className="fill-[var(--primary)]" />
+      <g ref={minute} data-testid="clock-widget-minute">
+        <line x1={100} y1={106} x2={100} y2={27} stroke={url("hand")} strokeWidth={8.5} strokeLinecap="round" filter={url("sh")} />
+      </g>
+      <g ref={second} data-testid="clock-widget-second">
+        <line x1={100} y1={124} x2={100} y2={10} stroke="#4526f0" strokeWidth={2.4} strokeLinecap="round" filter={url("sh")} />
+      </g>
+      <circle cx={100} cy={100} r={17} fill={url("knobRing")} filter={url("sh")} />
+      <circle cx={100} cy={100} r={10.5} fill={url("knob")} />
     </svg>
+  );
+}
+
+/**
+ * The picture filling the widget like `object-fit: cover`, with the live face (and, 4 × 2, the text) on a
+ * stage of the picture's own proportions, so everything stays where it is in the picture at any size.
+ */
+function ClockArt({ size, zone, children }: { size: "s" | "w"; zone: string; children?: React.ReactNode }) {
+  const art = CLOCK_ART[size];
+  const d = art.dial;
+  return (
+    <span className="vx-clock-art pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] [container-type:size]" data-clock-art={size}>
+      {/* 4 × 2: anchored right, so the dial is always whole (a taller phone card trims the empty left part). */}
+      <span className={cx("absolute top-1/2 -translate-y-1/2", size === "w" ? "right-0" : "left-1/2 -translate-x-1/2")} style={{ width: `max(100cqw, calc(100cqh * ${art.ratio}))`, aspectRatio: String(art.ratio) }}>
+        <img src={art.src} alt="" draggable={false} className="absolute inset-0 size-full select-none" />
+        <ClockFace
+          zone={zone}
+          style={{ left: `${(d.x - d.r / art.ratio) * 100}%`, top: `${(d.y - d.r) * 100}%`, width: `${((2 * d.r) / art.ratio) * 100}%`, height: `${2 * d.r * 100}%` }}
+        />
+      </span>
+      {children}
+    </span>
+  );
+}
+
+/** The soft lavender surface of the new Clock / Notes widgets (the logos' tile, as a background). */
+function LogoSurface() {
+  return (
+    <span aria-hidden className="vx-logo-surface pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+      <span className="absolute -right-[18%] -top-[30%] size-[70%] rounded-full bg-[#c9b8ff]/30 blur-2xl" />
+      <span className="absolute -bottom-[35%] -left-[10%] size-[80%] rounded-full bg-[#b9c4ff]/25 blur-2xl" />
+    </span>
   );
 }
 
@@ -182,7 +268,7 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       type="button"
       tabIndex={preview ? -1 : 0}
       onClick={(e) => openApp("clock", e.currentTarget, { tab: "world" })}
-      className={cx("flex size-full rounded-[24px] text-left", wide ? "items-center gap-[5%] px-[6%] py-[5%]" : "items-center justify-center p-[7%]", preview && "pointer-events-none")}
+      className={cx("relative flex size-full overflow-hidden rounded-[24px] text-left", preview && "pointer-events-none")}
       aria-label={label}
       title={label}
       data-testid="clock-widget"
@@ -190,23 +276,176 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       data-zone={zone}
       data-time={time}
     >
-      {wide ? (
-        <>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-[15px] font-semibold text-text" data-testid="clock-widget-city">
+      <ClockArt size={wide ? "w" : "s"} zone={zone}>
+        {wide && (
+          // Update 4 · C1: the city, the time and the date where the picture has them.
+          // In the card's own space: from its left side up to the dial, sized like the picture's text (the
+          // time shrinks a little when a taller card leaves less room beside the dial).
+          <span
+            className="absolute left-[7.5%] top-1/2 flex -translate-y-1/2 flex-col"
+            style={{
+              width: `calc(92.5cqw - max(100cqw, ${CLOCK_ART.w.ratio * 100}cqh) * ${(1 - (CLOCK_ART.w.dial.x - CLOCK_ART.w.dial.r / CLOCK_ART.w.ratio)).toFixed(4)} - 3cqw)`,
+              fontSize: `min(1cqh, calc((92.5cqw - max(100cqw, ${CLOCK_ART.w.ratio * 100}cqh) * ${(1 - (CLOCK_ART.w.dial.x - CLOCK_ART.w.dial.r / CLOCK_ART.w.ratio)).toFixed(4)} - 3cqw) / 78))`,
+            }}
+          >
+            <span className="truncate font-semibold leading-tight text-[#1d1b2b]" style={{ fontSize: "7.6em" }} data-testid="clock-widget-city">
               {city}
             </span>
-            <span className="text-[44px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary tabular-nums">{time}</span>
-            <span className="truncate text-[12px] text-text-secondary">{date}</span>
+            <span className="bg-[linear-gradient(135deg,#8e6bff,#5a3ef2)] bg-clip-text font-bold leading-[1.02] tracking-[-0.02em] text-transparent tabular-nums" style={{ fontSize: "26em" }} data-testid="clock-widget-time">
+              {time}
+            </span>
+            <span className="truncate text-[#7a7690]" style={{ fontSize: "5.9em" }}>
+              {date.charAt(0).toUpperCase() + date.slice(1)}
+            </span>
           </span>
-          <ClockFace zone={zone} className="aspect-square h-full max-h-full shrink-0" />
-        </>
-      ) : (
-        // Update 3 · B1: 2 × 2 is the analog face only (as before Update 2); the city and the time are
-        // in the 4 × 2 size and in the label read aloud.
-        <ClockFace zone={zone} className="size-full max-h-full" />
-      )}
+        )}
+      </ClockArt>
     </button>
+  );
+}
+
+/** Update 4 · C3: the most recently changed documents, from Notes itself (no storage of its own). */
+function useRecentNotes(enabled: boolean) {
+  return useQuery({
+    // Under ["notes"]: the server's notes events refresh it with the app.
+    queryKey: ["notes", "recent"],
+    queryFn: () => api.get<{ documents: NotesDocMetaDto[] }>("/api/notes/recent?limit=6"),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+/** Opens a note in Notes (its project, then the note). */
+const openNote = (el: Element, d: Pick<NotesDocMetaDto, "id" | "projectId">) => openApp("notes", el, { doc: d.id, project: d.projectId });
+
+/**
+ * Update 4 · C3: the Notes widget, from the Notes data (GET /api/notes/recent; refreshed by the notes
+ * events like the app). 2 × 2: the latest note's name and a short excerpt. 4 × 2: name, a few lines and
+ * when it changed. 4 × 4: a longer text that scrolls inside, the next notes, and «+» for a new note.
+ * Notes locked with the code (Settings → Apps → Notes): only that it is locked, never the content.
+ */
+function NotesWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }) {
+  const t = useT();
+  const lang = useLanguage();
+  const locked = useSession((s) => !!s.user?.preferences.apps?.notes?.lock);
+  const q = useRecentNotes(!preview && !locked);
+  const big = size === "l";
+  const wide = size === "w" || big;
+  const docs = preview ? [{ id: "p", projectId: "p", kind: "note", name: t("widgets.notesSample"), preview: t("widgets.notesSampleText"), updatedAt: new Date().toISOString() } as NotesDocMetaDto] : (q.data?.documents ?? []);
+  const notes = docs.filter((d) => d.kind === "note");
+  const doc = notes[0] ?? docs[0];
+  // 4 × 4: the whole text of the latest note (the same document the app opens).
+  const full = useQuery({ queryKey: ["notes", "document", doc?.id ?? ""], queryFn: () => notesApi.document(doc!.id), enabled: big && !preview && !locked && !!doc, staleTime: 15_000 });
+  const text = big && full.data ? notesPreview(full.data.data, 1600) : (doc?.preview ?? "");
+  const when = doc ? new Intl.DateTimeFormat(lang === "ru" ? "ru-RU" : lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(doc.updatedAt)) : "";
+  const [creating, setCreating] = useState(false);
+  const create = async (el: HTMLElement) => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const projects = (await notesApi.projects()).projects.filter((p) => p.role !== "viewer");
+      const projectId = doc && docs[0]?.role !== "viewer" ? doc.projectId : (projects[0]?.id ?? (await notesApi.createProject(t("widgets.notesProject"))).id);
+      const d = await notesApi.createDocument(projectId, { kind: "note", name: t("widgets.notesNew") });
+      void queryClient.invalidateQueries({ queryKey: ["notes"] });
+      openNote(el, d);
+    } catch {
+      toast({ title: t("widgets.notesFailed"), tone: "danger" });
+    } finally {
+      setCreating(false);
+    }
+  };
+  const head = (
+    <span className="relative flex items-center gap-1.5">
+      <NotesGlyph className="size-[18px] shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#6a3cf2]">{t("widgets.notes")}</span>
+      {big && !locked && (
+        <button
+          type="button"
+          tabIndex={preview ? -1 : 0}
+          onClick={(e) => {
+            e.stopPropagation();
+            void create(e.currentTarget);
+          }}
+          aria-label={t("widgets.notesNew")}
+          title={t("widgets.notesNew")}
+          className="pressable -my-1 flex size-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,#9172ff,#5a33ef)] text-white shadow-[0_4px_10px_-4px_rgba(90,51,239,0.6)]"
+          data-widget-key
+          data-testid="notes-widget-new"
+        >
+          {creating ? <Spinner size={12} /> : <RiAddLine className="size-4" />}
+        </button>
+      )}
+    </span>
+  );
+  let body: React.ReactNode;
+  if (locked)
+    body = (
+      <span className="relative flex flex-1 flex-col items-center justify-center gap-1.5 text-center" data-testid="notes-widget-locked">
+        <RiLockLine className="size-6 text-[#7b55ff]" />
+        <span className="text-[12px] font-medium leading-tight text-text-secondary">{t("widgets.notesLocked")}</span>
+      </span>
+    );
+  else if (!preview && q.isPending) body = <span className="relative mt-2 flex flex-col gap-1.5"><span className="h-3 w-3/4 rounded-full bg-[#7b55ff]/12" /><span className="h-3 w-1/2 rounded-full bg-[#7b55ff]/10" /></span>;
+  else if (!doc)
+    body = (
+      <span className="relative flex flex-1 flex-col items-center justify-center gap-1 text-center" data-testid="notes-widget-empty">
+        <span className="text-[13px] font-semibold text-text">{t("widgets.notesEmpty")}</span>
+        <span className="text-[11.5px] leading-tight text-text-secondary">{t("widgets.notesEmptyHint")}</span>
+      </span>
+    );
+  else
+    body = (
+      <>
+        <span className={cx("relative mt-1.5 line-clamp-2 font-semibold leading-tight text-text", wide ? "text-[16px]" : "text-[14px]")} data-testid="notes-widget-title">
+          {doc.name}
+        </span>
+        <span
+          className={cx("relative mt-1 whitespace-pre-wrap break-words text-text-secondary", wide ? "text-[13px] leading-[1.35]" : "text-[12px] leading-[1.3]", big ? "min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:none]" : wide ? "line-clamp-3" : "line-clamp-4")}
+          // 4 × 4: the long text scrolls up and down inside; sideways moves still go to the home pages.
+          style={big ? { touchAction: "pan-y" } : undefined}
+          data-testid="notes-widget-text"
+        >
+          {text || t("widgets.notesNoText")}
+        </span>
+        {wide && <span className="relative mt-auto pt-1.5 text-[11px] text-text-tertiary" data-testid="notes-widget-date">{t("widgets.notesChanged", { when })}</span>}
+        {big && notes.length > 1 && (
+          <span className="relative mt-2 flex flex-col gap-1 border-t border-[#7b55ff]/12 pt-2" data-testid="notes-widget-more">
+            {notes.slice(1, 3).map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                tabIndex={preview ? -1 : 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openNote(e.currentTarget, d);
+                }}
+                className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-[#7b55ff]/8"
+                data-widget-key
+              >
+                <span className="size-1.5 shrink-0 rounded-full bg-[#7b55ff]" />
+                <span className="truncate text-[12.5px] font-medium text-text">{d.name}</span>
+              </button>
+            ))}
+          </span>
+        )}
+      </>
+    );
+  return (
+    <div
+      role="button"
+      tabIndex={preview ? -1 : 0}
+      onClick={(e) => (doc && !locked && !preview ? openNote(e.currentTarget, doc) : openApp("notes", e.currentTarget))}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLElement).click()}
+      className={cx("relative flex size-full cursor-pointer flex-col overflow-hidden rounded-[24px] text-left", wide ? "p-[16px]" : "p-[13px]", preview && "pointer-events-none")}
+      aria-label={locked ? t("widgets.notesLocked") : doc ? `${t("widgets.notes")}: ${doc.name}` : t("widgets.notes")}
+      data-testid="notes-widget"
+      data-size={size ?? "s"}
+      data-locked={locked || undefined}
+    >
+      <LogoSurface />
+      {head}
+      {body}
+    </div>
   );
 }
 
@@ -230,6 +469,16 @@ export const WIDGETS: WidgetDef[] = [
     keywords: "clock time analog watch часы время циферблат",
     Icon: ({ className }) => <ClockGlyph className={className} />,
     Body: ClockWidget,
+  },
+  {
+    type: "notes",
+    app: "notes",
+    title: "widgets.notes",
+    name: "widgets.notesName",
+    description: "widgets.notesHint",
+    keywords: "notes note text заметки заметка текст",
+    Icon: ({ className }) => <NotesGlyph className={className} />,
+    Body: NotesWidget,
   },
 ];
 
@@ -504,6 +753,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     const area = pagerBox ? { left: pagerBox.left, right: pagerBox.right, top: hostBox.top, bottom: hostBox.bottom } : hostBox;
     let edgeTimer: number | undefined;
     let edgeDir = 0;
+    // Update 4 · B: the layout as it was before this drag (the «Отменить» of a move that made room).
+    const beforeDrag = currentLayout();
     setDragging(true);
     ui().setDrag({ item: { kind: "app", id: "settings" }, size: 0, widget: widget.id });
 
@@ -524,6 +775,43 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       void animate(x, 0, { type: "spring", stiffness: 520, damping: 42 });
       void animate(y, 0, { type: "spring", stiffness: 520, damping: 42 });
     };
+    /** The cell under the widget's top-left cell (its centre), kept inside the page / desktop. */
+    const targetCell = () => {
+      const box = el.getBoundingClientRect();
+      const cw = Number(grid.dataset.cellW) || box.width;
+      const rh = Number(grid.dataset.rowH) || box.height;
+      const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
+      const sz = widgetCells(widget);
+      // Phone: only the rows that fit on the page (in edit mode the grid offers one more row below it).
+      const gr = grid.getBoundingClientRect();
+      const gy = Number(grid.dataset.gapY) || 0;
+      const fitRows = Math.max(sz.h, Math.floor((area.bottom - gr.top + gy) / (rh + gy)));
+      const maxRows = Math.min(Number(grid.dataset.maxRows) || Infinity, fitRows);
+      const cols = Number(grid.dataset.cols) || sz.w;
+      const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
+      // B1 (phone): a widget narrower than the page goes to the edge on the side its centre is over.
+      if (mobile && sz.w > 1 && sz.w < cols) target.c = box.left + box.width / 2 > gr.left + gr.width / 2 ? cols - sz.w : 0;
+      return { box, target };
+    };
+    /**
+     * Update 4 · B2: puts the widget there, the icons and widgets under it making way (what no longer fits
+     * goes to a neighbouring page / desktop). Refused (null): nothing changes. Reports the move with
+     * «Отменить» when anything else had to move.
+     */
+    const makeRoom = (base: WorkspaceLayout, dest: Place, cell: Cell) => {
+      const g = geometryFor(dest);
+      const r = g ? placeWidgetMakingRoom(base, widgetKey(widget.id), dest, cell, g) : null;
+      if (!r) return null;
+      if (r.moved.length || r.spilled.length || r.created) {
+        const restore = beforeDrag;
+        toast({
+          title: translateNow(r.spilled.length ? "widgets.roomSpilled" : "widgets.roomMade"),
+          action: { label: translateNow("common.undo"), onClick: () => { captureGridFlip(); updateLayout(() => restore); } },
+          duration: 6000,
+        });
+      }
+      return r.layout;
+    };
     /**
      * B5: carries the widget to another phone page (a new one past the last) or PC desktop and keeps
      * dragging it there. No room there: it stays on this page, still in the hand (a short note).
@@ -534,7 +822,9 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const container = dest.surface === "mobile" ? String(dest.page) : dest.space;
       const moved = moveWidget(base, widget.id, { container });
       const cell = freeBlock(moved, dest, widgetCells(widget), undefined, geometryFor(dest));
-      if (!cell) {
+      // Update 4 · B2: no free block there: the icons there make way (from the same place on that page).
+      const next = cell ? placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest)) : makeRoom(base, dest, targetCell().target);
+      if (!next) {
         toast({ title: translateNow("widgets.noRoom") });
         return false;
       }
@@ -543,7 +833,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       finish();
       // B2: the finger is kept by the workspace before this card goes away (see holdPointer).
       holdPointer(pointerId);
-      updateLayout(() => placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest)));
+      captureGridFlip();
+      updateLayout(() => next);
       if (dest.surface === "mobile") ui().setMobilePage(dest.page);
       else useWM.getState().setSpace(dest.space);
       navigator.vibrate?.(8);
@@ -630,26 +921,20 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
         }
         return;
       }
-      const box = el.getBoundingClientRect();
-      // The cell under the widget's top-left cell (its centre), not under the finger.
-      const cw = Number(grid.dataset.cellW) || box.width;
-      const rh = Number(grid.dataset.rowH) || box.height;
-      const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
-      // The whole block stays on the page / desktop (never past the last row or the last column).
-      const sz = widgetCells(widget);
-      // Phone: only the rows that fit on the page (in edit mode the grid offers one more row below it).
-      const gr = grid.getBoundingClientRect();
-      const gy = Number(grid.dataset.gapY) || 0;
-      const fitRows = Math.max(sz.h, Math.floor((area.bottom - gr.top + gy) / (rh + gy)));
-      const maxRows = Math.min(Number(grid.dataset.maxRows) || Infinity, fitRows);
-      const cols = Number(grid.dataset.cols) || sz.w;
-      const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
-      // B1 (phone): a widget narrower than the page goes to the edge on the side its centre is over.
-      if (mobile && sz.w > 1 && sz.w < cols) target.c = box.left + box.width / 2 > gr.left + gr.width / 2 ? cols - sz.w : 0;
+      // The cell under the widget's top-left cell (its centre), not under the finger; the whole block
+      // stays on the page / desktop (never past the last row or the last column).
+      const { box, target } = targetCell();
       const current = el.parentElement?.dataset.cell;
       if (!place || current === `${target.c},${target.r}`) return settleBack();
+      // Update 4 · B2: the icons and widgets under it make way; refused only when nothing can be placed.
+      const next = makeRoom(currentLayout(), place, target);
+      if (!next) {
+        toast({ title: translateNow("widgets.noRoom") });
+        return settleBack();
+      }
       snap.current = { from: box, cell: `${target.c},${target.r}` };
-      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, geometryFor(place)));
+      captureGridFlip();
+      updateLayout(() => next);
       // The cell was refused (an icon never pushes a widget away, a full area…): glide back.
       window.setTimeout(() => {
         if (snap.current) {
@@ -1222,7 +1507,7 @@ export function WidgetsPanel() {
               <IconButton label={t("common.back")} onClick={() => setChosen(null)} size="sm" data-testid="widget-config-back">
                 <RiArrowLeftSLine className="size-5" />
               </IconButton>
-              <span className="flex size-7 items-center justify-center rounded-[9px] bg-surface shadow-tile">
+              <span className="vx-app-tile flex size-7 items-center justify-center rounded-[9px] bg-surface shadow-tile">
                 <def.Icon className="size-[18px]" />
               </span>
               <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{APP_REGISTRY[def.app].name[lang]}</span>

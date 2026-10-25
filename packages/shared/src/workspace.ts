@@ -52,6 +52,12 @@ export const WALLPAPER_PRESETS = [
   "wave-gray",
   "wave-gray-purple",
   "wave-milk-gray-purple",
+  // Update 4 · D1: added to the catalogue (the ones above stay as they are).
+  "v-glow",
+  "v-silk",
+  "v-dawn",
+  "v-orbit",
+  "v-prism",
 ] as const;
 export type WallpaperPreset = (typeof WALLPAPER_PRESETS)[number];
 /** Step 2 gradients — still accepted in stored data, shown as presets. */
@@ -84,17 +90,18 @@ export type GlassLevel = (typeof GLASS_LEVELS)[number];
  * Step 2.3: the "desktops" (Workspaces) widget was removed; stored ones are
  * dropped by normalizeLayout. Each widget covers a block of grid cells.
  */
-export const WIDGET_TYPES = ["calculator", "clock"] as const;
+export const WIDGET_TYPES = ["calculator", "clock", "notes"] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 /** Step 2.14: Clock, large analog clock, the place of four icons (2 × 2). */
-export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 }, clock: { w: 2, h: 2 } };
+export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 }, clock: { w: 2, h: 2 }, notes: { w: 2, h: 2 } };
 /**
  * A2: widget sizes. "s" is the type's base block (2 × 2, four icon cells); "w" is twice as wide
  * (4 × 2, eight cells). Each type lists only the sizes it really draws: the menu never offers more.
  */
-export const WIDGET_SIZES = ["s", "w"] as const;
+export const WIDGET_SIZES = ["s", "w", "l"] as const;
 export type WidgetSize = (typeof WIDGET_SIZES)[number];
-export const WIDGET_SIZE_OPTIONS: Record<WidgetType, readonly WidgetSize[]> = { calculator: ["s"], clock: ["s", "w"] };
+/** Update 4 · C3: Notes has 2 × 2, 4 × 2 and 4 × 4 («l»). */
+export const WIDGET_SIZE_OPTIONS: Record<WidgetType, readonly WidgetSize[]> = { calculator: ["s"], clock: ["s", "w"], notes: ["s", "w", "l"] };
 export const widgetSizesOf = (type: string): readonly WidgetSize[] => WIDGET_SIZE_OPTIONS[type as WidgetType] ?? ["s"];
 /** Background of the PC system bar (top): real glass, or none. */
 export const SYSTEM_BAR_STYLES = ["glass", "off"] as const;
@@ -1042,6 +1049,145 @@ export function placeInCell(l: WorkspaceLayout, key: string, to: Place, cell: Ce
 }
 
 // ---------------------------------------------------------------------------
+// Update 4 · B: a widget moved onto a busy page / desktop makes room for itself.
+
+export interface RoomResult {
+  layout: WorkspaceLayout;
+  /** Items and widgets that moved to another cell on the target (they made way). */
+  moved: string[];
+  /** Items and widgets carried to a neighbouring page / desktop because the target had no room left. */
+  spilled: string[];
+  /** A page / desktop created for them (only within the limits). */
+  created?: Place;
+}
+
+const samePlace = (a: Place, b: Place) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Carries one item / widget from one page / desktop to another (its cell there: the first free one). */
+function carryKey(n: WorkspaceLayout, key: string, from: Place, to: Place) {
+  const cells = cellsOf(n, to.surface);
+  delete cells[key];
+  if (key.startsWith("widget:")) {
+    const w = n.widgets.find((x) => widgetKey(x.id) === key);
+    if (w) w.container = to.surface === "mobile" ? String(to.page) : to.space;
+    return;
+  }
+  const src = containerOf(n, from);
+  const item = src?.find((i) => itemKey(i) === key);
+  if (!src || !item) return;
+  src.splice(src.indexOf(item), 1);
+  containerOf(n, to)?.push(item);
+}
+
+const overflowOf = (n: WorkspaceLayout, p: Place, g: GridGeometry) => [...placementOf(n, p, g).entries()].filter(([, q]) => q.r + q.h > g.rows).map(([k]) => k);
+
+/**
+ * Pages / desktops to try for an item that no longer fits on `p`: the ones after it, a new one past the
+ * last (within MOBILE_PAGES_MAX / DESKTOP_SPACES_MAX), then the ones before it.
+ */
+function neighbours(n: WorkspaceLayout, p: Place): (Place | "new")[] {
+  if (p.surface === "mobile") {
+    const count = n.mobile.pages.length;
+    const after = Array.from({ length: Math.max(0, count - p.page - 1) }, (_, i) => ({ surface: "mobile" as const, page: p.page + 1 + i }));
+    const before = Array.from({ length: p.page }, (_, i) => ({ surface: "mobile" as const, page: p.page - 1 - i }));
+    return [...after, ...(count < MOBILE_PAGES_MAX ? ["new" as const] : []), ...before];
+  }
+  const ids = n.desktop.spaces.map((s) => s.id);
+  const at = ids.indexOf(p.space);
+  const after = ids.slice(at + 1).map((id) => ({ surface: "desktop" as const, space: id }));
+  const before = ids.slice(0, Math.max(0, at)).reverse().map((id) => ({ surface: "desktop" as const, space: id }));
+  return [...after, ...(ids.length < DESKTOP_SPACES_MAX ? ["new" as const] : []), ...before];
+}
+
+/**
+ * Update 4 · B2: puts a widget (single, stack or carousel; 2 × 2, 4 × 2 or 4 × 4) into a cell of a page /
+ * desktop and makes room for it there:
+ *  - the icons under it move to the free cells nearest to where they were (they "make way");
+ *  - widgets under it go to the first free block (one of the same size on the same page simply swaps);
+ *  - whatever no longer fits on the page goes to a neighbouring page / desktop (a new one is created
+ *    within the limits), and that one makes room the same way.
+ * Nothing is ever removed and nothing ends up outside the grid. When everything cannot be placed it
+ * returns null and the caller keeps the layout as it was (the move is cancelled).
+ */
+export function placeWidgetMakingRoom(l: WorkspaceLayout, key: string, to: Place, cell: Cell, geometry: GridGeometry, random: () => number = Math.random): RoomResult | null {
+  if (!key.startsWith("widget:")) return null;
+  const from = containerKeyOf(l, to.surface, key);
+  const w0 = l.widgets.find((w) => widgetKey(w.id) === key);
+  if (!from || !w0) return null;
+  const g = geometry;
+  const size = widgetCells(w0);
+  if (size.w > g.cols || size.h > g.rows) return null;
+  const n = clone(l);
+  const same = samePlace(from, to);
+  pin(n, from, g);
+  if (!same) pin(n, to, g);
+  const cells = cellsOf(n, to.surface);
+  const old = cells[key] ? { ...cells[key]! } : undefined;
+  let c = Math.max(0, Math.min(g.cols - size.w, cell.c));
+  if (to.surface === "mobile" && size.w > 1 && size.w < g.cols) c = c * 2 + size.w < g.cols ? 0 : g.cols - size.w;
+  const r = Math.max(0, Math.min(g.rows - size.h, cell.r));
+  const before = placementOf(n, to, g);
+  const occupants = [...before.entries()].filter(([k, p]) => k !== key && p.c < c + size.w && p.c + p.w > c && p.r < r + size.h && p.r + p.h > r);
+  if (!same) carryKey(n, key, from, to);
+  cells[key] = { c, r };
+  const swap = same && old && occupants.length === 1 && occupants[0]![0].startsWith("widget:") && occupants[0]![1].w === size.w && occupants[0]![1].h === size.h;
+  for (const [k] of occupants) {
+    if (swap) cells[k] = old!;
+    // A widget under it: the first free block. An icon keeps its old cell: taken by the widget now, it
+    // goes to the free cell nearest to it (see gridPlacement).
+    else if (k.startsWith("widget:")) delete cells[k];
+  }
+  // Whatever no longer fits goes to a neighbouring page / desktop, which makes room the same way.
+  const spilled: string[] = [];
+  let created: Place | undefined;
+  const queue: Place[] = [to];
+  for (let guard = 0; queue.length && guard < 24; guard++) {
+    const p = queue.shift()!;
+    const over = overflowOf(n, p, g);
+    if (!over.length) continue;
+    if (over.includes(key)) return null;
+    // What fits stays where it is now.
+    const cs = cellsOf(n, p.surface);
+    for (const [k, q] of placementOf(n, p, g)) if (!over.includes(k)) cs[k] = { c: q.c, r: q.r };
+    for (const k of over) {
+      let done = false;
+      for (const cand of neighbours(n, p)) {
+        const trial = clone(n);
+        let dest: Place;
+        if (cand === "new") {
+          if (p.surface === "mobile") {
+            trial.mobile.pages.push([]);
+            dest = { surface: "mobile", page: trial.mobile.pages.length - 1 };
+          } else {
+            const added = addSpace(trial, random);
+            if (!added) continue;
+            Object.assign(trial, added.layout);
+            dest = { surface: "desktop", space: added.id };
+          }
+        } else {
+          if (samePlace(cand, to) && p !== to) continue;
+          dest = cand;
+          pin(trial, dest, g);
+        }
+        carryKey(trial, k, p, dest);
+        if (overflowOf(trial, dest, g).length) continue;
+        Object.assign(n, trial);
+        if (cand === "new") created = dest;
+        spilled.push(k);
+        done = true;
+        break;
+      }
+      if (!done) return null;
+    }
+    if (overflowOf(n, p, g).length) queue.push(p);
+  }
+  for (const p of [to, from]) if (overflowOf(n, p, g).length) return null;
+  const after = placementOf(n, to, g);
+  const moved = [...before.entries()].filter(([k, p]) => k !== key && !spilled.includes(k) && after.get(k) && (after.get(k)!.c !== p.c || after.get(k)!.r !== p.r)).map(([k]) => k);
+  return { layout: n, moved, spilled, created };
+}
+
+// ---------------------------------------------------------------------------
 // Step 2.15: where a new widget goes, and moving several icons at once.
 
 /**
@@ -1179,10 +1325,11 @@ export const isWidgetStack = (w: Pick<Widget, "items">) => (w.items?.length ?? 0
 /** Grid cells a widget covers (a carousel or a wide widget: two widths). */
 export function widgetCells(w: Pick<Widget, "type" | "items2"> & { size?: WidgetSize }): { w: number; h: number } {
   const base = WIDGET_CELLS[w.type as WidgetType] ?? { w: 2, h: 2 };
+  if (w.size === "l" && !isWidgetCarousel(w)) return { w: base.w * 2, h: base.h * 2 };
   return isWidgetCarousel(w) || w.size === "w" ? { w: base.w * 2, h: base.h } : base;
 }
 /** A2: a wide widget stands alone: it is never part of a stack or a carousel. */
-export const isWideWidget = (w: Pick<Widget, "size">) => w.size === "w";
+export const isWideWidget = (w: Pick<Widget, "size">) => w.size === "w" || w.size === "l";
 
 /** The consistency rule for one widget: known types, unique ids, at most 10 per stack, one item = no stack. */
 export function normalizeWidget(w: Widget, taken: Set<string> = new Set([w.id])): Widget {

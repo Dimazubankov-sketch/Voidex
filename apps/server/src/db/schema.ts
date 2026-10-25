@@ -422,7 +422,7 @@ export const blobs = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     /** What the blob is for: "mail" attachment content or the "wallpaper". */
-    purpose: text("purpose", { enum: ["mail", "wallpaper", "lock-wallpaper", "vibex", "notes"] }).notNull(),
+    purpose: text("purpose", { enum: ["mail", "wallpaper", "lock-wallpaper", "vibex", "notes", "user-wallpaper"] }).notNull(),
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     data: bytea("data").notNull(),

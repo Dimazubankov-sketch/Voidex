@@ -192,7 +192,7 @@ export async function homeSwitcher(page: Page) {
 }
 
 /** Step 2.15: «Добавить виджет»: the catalogue first, then the widget's page with its own «Добавить виджет». */
-export async function addWidgetFromPicker(page: Page, type: "calculator" | "clock") {
+export async function addWidgetFromPicker(page: Page, type: "calculator" | "clock" | "notes") {
   await expect(page.getByTestId("widgets-panel")).toBeVisible();
   await page.getByTestId(`widget-card-${type}`).click();
   await expect(page.getByTestId(`widget-config-${type}`)).toBeVisible();

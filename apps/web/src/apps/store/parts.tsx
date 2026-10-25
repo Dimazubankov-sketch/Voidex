@@ -4,11 +4,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { RiArrowLeftSLine, RiArrowRightSLine, RiCloseLine, RiSearchLine, RiStarFill, RiStarLine } from "@remixicon/react";
 import { APP_REGISTRY } from "@voidex/shared";
 import { AppTile } from "@/brand/brand";
+import { AppGlyph } from "@/os/home/icons";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { errorMessage } from "@/lib/errors";
 import { useLanguage, useT } from "@/lib/i18n";
-import { CLIENT_APPS } from "@/os/app-registry";
 import { useWM } from "@/os/window-manager";
 import { Spinner } from "@/ui/controls";
 import { toast } from "@/ui/overlays";
@@ -17,12 +17,9 @@ import { installApp, useAppStates, useInstalls, useStoreStats } from "./data";
 
 /** An app's icon in its white tile (the same look as on the desktop). */
 export function StoreIcon({ id, size = 56 }: { id: StoreAppId; size?: number }) {
-  const { Icon } = CLIENT_APPS[id];
   return (
     <AppTile size={size} className="shrink-0">
-      <span className="flex items-center justify-center" style={{ width: "58%", height: "58%" }}>
-        <Icon className="size-full" />
-      </span>
+      <AppGlyph id={id} />
     </AppTile>
   );
 }

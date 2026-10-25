@@ -103,9 +103,12 @@ test("B1: the 2 × 2 clock shows the analog face only; 4 × 2 keeps the city, th
   expect((await w.innerText()).trim()).toBe("");
   // The hands still run and the face fills the tile.
   await expect(w.getByTestId("clock-widget-second")).toBeVisible();
+  // Update 4 · C: the card picture (with its ring) fills the tile; the live dial sits inside the ring.
+  const art = (await w.locator(".vx-clock-art img").boundingBox())!;
   const face = (await w.locator("svg").boundingBox())!;
   const tile = (await w.boundingBox())!;
-  expect(face.width).toBeGreaterThan(tile.width * 0.8);
+  expect(art.width).toBeGreaterThanOrEqual(tile.width - 1);
+  expect(face.width).toBeGreaterThan(tile.width * 0.6);
   // The selected city is still spoken (aria-label) and drives the hands.
   await expect(w).toHaveAttribute("aria-label", /.+/);
   // 4 × 2: city, time, date.

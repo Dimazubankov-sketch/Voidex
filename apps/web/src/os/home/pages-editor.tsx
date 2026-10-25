@@ -191,7 +191,7 @@ function MiniPage({ layout, page, lifted }: { layout: WorkspaceLayout; page: num
             const app = CLIENT_APPS[item.id];
             if (!app) return null;
             return (
-              <span key={key} className="flex aspect-square items-center justify-center self-center rounded-[26%] bg-surface shadow-sm" style={style}>
+              <span key={key} className="vx-app-tile flex aspect-square items-center justify-center self-center rounded-[26%] bg-surface shadow-sm" style={style}>
                 <app.Icon className="size-[72%]" />
               </span>
             );

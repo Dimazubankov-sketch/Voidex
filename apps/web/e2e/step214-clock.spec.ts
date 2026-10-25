@@ -49,9 +49,9 @@ test("registry: Clock is installed with its own logo on the desktop, opens nativ
   await signUpViaApi(page, "Часовщик", "Первый");
   const icon = page.getByTestId("app-clock");
   await expect(icon).toBeVisible();
-  await expect(icon.locator('[data-logo="/brand/app-clock.png"]')).toHaveCount(1);
-  // Optically normalised like the other marks.
-  expect(Number(await icon.locator("[data-optical]").getAttribute("data-optical"))).toBeGreaterThan(1);
+  await expect(icon.locator('[data-logo="/brand/logo-clock.webp"]')).toHaveCount(1);
+  // Update 4: the logo is the whole tile.
+  await expect(icon.locator("[data-tile-logo]")).toHaveCount(1);
   const apps = (await apiAs(page, "GET", "/api/apps")).body as { id: string; manifest: { name: { ru: string }; category: string } }[];
   const entry = apps.filter((a) => a.id === "clock");
   expect(entry).toHaveLength(1);
@@ -66,6 +66,8 @@ test("registry: Clock is installed with its own logo on the desktop, opens nativ
   await clock(page).getByTestId("clock-add").click();
   await expect(page.getByTestId("clock-city-picker")).toBeVisible();
   await expect(win.locator('[data-logo], img[src*="app-clock"], image[href*="app-clock"]')).toHaveCount(0);
+  // The sheet takes focus on the next frame; Escape is heard from inside it.
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="clock-city-picker"]'))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("clock-city-picker")).toHaveCount(0);
   for (const tab of ["alarm", "stopwatch", "timers", "world"]) {
@@ -313,7 +315,7 @@ test("Settings → Applications → Часы: lock, notifications (Clock sends t
   await expect(page.getByTestId("settings-app-notifications").last()).toBeVisible();
   await expect(page.getByTestId("settings-app-no-notifications")).toHaveCount(0);
   await expect(page.getByTestId("settings-app-offload").last()).toBeVisible();
-  await expect(page.getByTestId("settings-app-page").last().locator('[data-logo="/brand/app-clock.png"]')).toHaveCount(1);
+  await expect(page.getByTestId("settings-app-page").last().locator('[data-logo="/brand/logo-clock.webp"]')).toHaveCount(1);
 });
 
 test("Appex Store lists Clock with its logo, words, version and screenshots for both platforms", async ({ page }) => {
@@ -324,7 +326,7 @@ test("Appex Store lists Clock with its logo, words, version and screenshots for 
   await page.getByTestId("store-see-all").first().click();
   const row = page.locator('[data-testid="store-row"][data-app="clock"]');
   await expect(row).toBeVisible();
-  await expect(row.locator('[data-logo="/brand/app-clock.png"]')).toHaveCount(1);
+  await expect(row.locator('[data-logo="/brand/logo-clock.webp"]')).toHaveCount(1);
   await row.getByTestId("store-row-open").click();
   const app = page.getByTestId("store-app-page");
   await expect(app).toHaveAttribute("data-app", "clock");
@@ -416,7 +418,7 @@ test("Clock widget: 2 x 2 like the Calculator widget, the time of now, ticking, 
   const tile = (await page.locator('[data-testid="app-mail"] [data-tile]').first().boundingBox())!;
   expect(a.width).toBeGreaterThan(tile.width * 1.7);
   // No logo inside.
-  await expect(w.locator('[data-logo], img, image')).toHaveCount(0);
+  await expect(w.locator("[data-logo]")).toHaveCount(0);
   // The time of now on this device, and the second hand moves.
   const label = await w.getByTestId("clock-widget").getAttribute("data-time");
   const local = await page.evaluate(() => new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(Date.now()));
@@ -424,8 +426,8 @@ test("Clock widget: 2 x 2 like the Calculator widget, the time of now, ticking, 
   const sec = w.getByTestId("clock-widget-second");
   const first = await sec.getAttribute("data-angle");
   await expect.poll(() => sec.getAttribute("data-angle"), { timeout: 4000 }).not.toBe(first);
-  // Its colours come from the theme: a light face, then a dark one.
-  const face = () => w.locator("svg circle").first().evaluate((el) => getComputedStyle(el).fill);
+  // Update 4 · C: the widget is the reference picture with live hands; it dims a little in the dark theme.
+  const face = () => w.locator(".vx-clock-art img").first().evaluate((el) => getComputedStyle(el).filter);
   const light = await face();
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   const dark = await face();

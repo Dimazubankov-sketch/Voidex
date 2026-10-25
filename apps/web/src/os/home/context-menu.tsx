@@ -440,13 +440,13 @@ function WidgetSizes({ id, layout, onDone }: { id: string; layout: WorkspaceLayo
             type="button"
             role="menuitemradio"
             aria-checked={on}
-            aria-label={t(size === "w" ? "widgets.sizeWide" : "widgets.sizeSmall")}
+            aria-label={t(size === "l" ? "widgets.sizeLarge" : size === "w" ? "widgets.sizeWide" : "widgets.sizeSmall")}
             onClick={() => pick(size)}
             className={cx("flex h-12 flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors", on ? "bg-primary/12 text-primary" : "text-text-secondary hover:bg-surface-hover")}
             data-testid={`widget-size-${size}`}
           >
-            <span aria-hidden className={cx("block rounded-[4px] border-[1.5px] border-current", size === "w" ? "h-[12px] w-[24px]" : "h-[12px] w-[12px]")} />
-            {size === "w" ? "4 × 2" : "2 × 2"}
+            <span aria-hidden className={cx("block rounded-[4px] border-[1.5px] border-current", size === "l" ? "h-[20px] w-[20px]" : size === "w" ? "h-[12px] w-[24px]" : "h-[12px] w-[12px]")} />
+            {size === "l" ? "4 × 4" : size === "w" ? "4 × 2" : "2 × 2"}
           </button>
         );
       })}

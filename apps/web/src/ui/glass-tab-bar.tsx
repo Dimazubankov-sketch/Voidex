@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "motion/react";
 import { cx } from "@/lib/cx";
 
@@ -18,6 +18,61 @@ const LEAD = { type: "spring", stiffness: 520, damping: 42, mass: 0.9 } as const
 const TRAIL = { type: "spring", stiffness: 300, damping: 34, mass: 1 } as const;
 /** Sideways travel (px) before a press on the bar becomes a swipe. */
 const SWIPE_SLOP = 8;
+
+/**
+ * Update 4 · F (SR7854): how far the content must move in one direction before the bar changes — a
+ * scroll down past COMPACT_AFTER makes it compact, a scroll up past EXPAND_AFTER brings it back (not only
+ * at the very top). Small jitters of the finger stay below both and change nothing.
+ */
+const COMPACT_AFTER = 28;
+const EXPAND_AFTER = 16;
+/** Near the top of the content the bar is always full. */
+const TOP_ZONE = 24;
+
+/**
+ * Update 4 · F: the bar turns compact while the content under it is scrolled down and full again as
+ * soon as it is scrolled up. It listens to every vertical scroller of its own app (scroll events are
+ * caught on the app root); sideways scrollers (tab strips, carousels) never count.
+ */
+export function useCompactOnScroll(host: React.RefObject<HTMLElement | null>, resetKey: unknown) {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => setCompact(false), [resetKey]);
+  useEffect(() => {
+    const root = host.current?.parentElement;
+    if (!root) return;
+    const last = new WeakMap<EventTarget, { top: number; left: number }>();
+    let acc = 0;
+    let dir = 0;
+    const onScroll = (e: Event) => {
+      const el = e.target as HTMLElement;
+      if (!(el instanceof HTMLElement) || host.current?.contains(el)) return;
+      const top = el.scrollTop;
+      const prev = last.get(el);
+      last.set(el, { top, left: el.scrollLeft });
+      if (!prev) return;
+      const dy = top - prev.top;
+      // Only vertical scrolling counts (a sideways strip changes scrollLeft, not scrollTop).
+      if (!dy || Math.abs(el.scrollLeft - prev.left) > Math.abs(dy)) return;
+      if (top <= TOP_ZONE) {
+        acc = 0;
+        dir = 0;
+        setCompact(false);
+        return;
+      }
+      const d = Math.sign(dy);
+      if (d !== dir) {
+        dir = d;
+        acc = 0;
+      }
+      acc += Math.abs(dy);
+      if (d > 0 && acc > COMPACT_AFTER) setCompact(true);
+      else if (d < 0 && acc > EXPAND_AFTER) setCompact(false);
+    };
+    root.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => root.removeEventListener("scroll", onScroll, { capture: true });
+  }, [host]);
+  return compact;
+}
 
 /**
  * The system glass tab bar (Step 2.13 Vibex, Step 2.15 for every app with a
@@ -47,6 +102,9 @@ export function GlassTabBar<K extends string>({
 }) {
   const reduced = useReducedMotion();
   const bar = useRef<HTMLDivElement>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  // Update 4 · F: compact while the content is scrolled down; full again on the way up and on a new tab.
+  const compact = useCompactOnScroll(wrap, active);
   const buttons = useRef(new Map<K, HTMLButtonElement>());
   const left = useMotionValue(0);
   const right = useMotionValue(0);
@@ -116,15 +174,16 @@ export function GlassTabBar<K extends string>({
 
   return (
     // Step 2.16: the bar's strip belongs to the bar: no page gesture (the side menu's swipe) starts in it.
-    <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-2" data-gesture-owner="" data-testid={wrapTestId}>
+    <div ref={wrap} className="vx-tabbar-wrap pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pb-2" data-gesture-owner="" data-testid={wrapTestId} data-compact={compact || undefined}>
       <nav
         ref={bar}
         role="tablist"
         aria-label={ariaLabel}
         data-gesture-owner=""
-        className="vx-tabbar pointer-events-auto relative flex h-[60px] w-full max-w-[460px] touch-none select-none items-center rounded-full px-1"
+        className={cx("vx-tabbar pointer-events-auto relative flex w-full touch-none select-none items-center rounded-full px-1", reduced && "vx-tabbar-still")}
         data-testid={testId}
         data-active={active}
+        data-compact={compact || undefined}
         onPointerDown={(e) => {
           if (e.button !== 0) return;
           swiped.current = false;
@@ -185,7 +244,7 @@ export function GlassTabBar<K extends string>({
           }
         }}
       >
-        <motion.span className="vx-tabbar-capsule pointer-events-none absolute top-[6px] h-[48px] rounded-full" style={{ left, width }} aria-hidden data-testid={testId ? `${testId}-capsule` : undefined} />
+        <motion.span className="vx-tabbar-capsule pointer-events-none absolute rounded-full" style={{ left, width }} aria-hidden data-testid={testId ? `${testId}-capsule` : undefined} />
         {items.map((item) => {
           const on = item.key === active;
           return (
@@ -205,7 +264,7 @@ export function GlassTabBar<K extends string>({
               data-tab={item.key}
               data-testid={item.testId}
             >
-              <span className={cx("relative flex items-center justify-center rounded-full", labels ? "h-11 w-full flex-col gap-0.5" : "size-11")}>
+              <span className={cx("vx-tabbar-item relative flex items-center justify-center rounded-full", labels ? "h-11 w-full flex-col gap-0.5" : "size-11")}>
                 <span className={cx("flex transition-colors duration-200", on ? "text-primary" : "text-text-secondary")}>{item.icon(on)}</span>
                 {labels && <span className={cx("max-w-full truncate px-1 text-[10px] font-semibold leading-none", on ? "text-primary" : "text-text-secondary")}>{item.label}</span>}
                 {(item.badge ?? 0) > 0 && (

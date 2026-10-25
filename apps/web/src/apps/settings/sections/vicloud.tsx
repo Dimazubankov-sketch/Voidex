@@ -36,7 +36,7 @@ import type { SectionProps } from "../settings-app";
  * are kept with the account and take effect when ViCloud starts.
  */
 
-export const VICLOUD_ICON = "/brand/vicloud.webp";
+export const VICLOUD_ICON = "/brand/logo-vicloud.webp";
 
 /** ViCloud+ plans (no prices: payment is not available). */
 const PLANS = [
@@ -47,7 +47,7 @@ const PLANS = [
 
 /** The ViCloud logo the user sent, as a small app-like tile. */
 export function ViCloudIcon({ className }: { className?: string }) {
-  return <img src={VICLOUD_ICON} alt="" draggable={false} className={cx("shrink-0 select-none rounded-[22%] shadow-[0_2px_8px_rgba(80,60,200,0.18)]", className)} data-system-asset />;
+  return <img src={VICLOUD_ICON} alt="" draggable={false} className={cx("shrink-0 select-none [filter:drop-shadow(0_2px_8px_rgba(80,60,200,0.18))]", className)} data-system-asset />;
 }
 
 function Hero({ title, subtitle, art }: { title: ReactNode; subtitle: ReactNode; art?: ReactNode }) {

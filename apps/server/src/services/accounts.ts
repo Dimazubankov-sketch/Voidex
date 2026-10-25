@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   parseAddress,
   APP_IDS,
@@ -26,6 +26,7 @@ import type { z } from "zod";
 import type { RegisterSchema, ProfileUpdateSchema } from "@voidex/shared";
 import type { Tx } from "../db/client.js";
 import {
+  blobs,
   consents,
   installedApps,
   mailAccounts,
@@ -474,6 +475,47 @@ export class AccountService {
     return { ok: true };
   }
 
+  // Update 4 · D2: the person's own wallpapers — a library of their uploads, apart from the built-in
+  // ones (those are presets in code and can never be deleted). Applying one copies it into the slot
+  // (desktop / lock), so the lock screen and the home screen read it exactly as before; deleting one
+  // removes only that picture (never a Media photo or another file).
+
+  async listUserWallpapers(userId: string): Promise<{ wallpapers: { id: string; createdAt: string }[] }> {
+    const rows = await this.ctx.db
+      .select({ key: blobs.key, createdAt: blobs.createdAt })
+      .from(blobs)
+      .where(and(eq(blobs.ownerUserId, userId), eq(blobs.purpose, "user-wallpaper")))
+      .orderBy(desc(blobs.createdAt));
+    return { wallpapers: rows.map((r) => ({ id: r.key, createdAt: r.createdAt.toISOString() })) };
+  }
+
+  async addUserWallpaper(userId: string, mimeType: string, data: Buffer) {
+    const have = await this.ctx.blobs.keysOf(userId, "user-wallpaper");
+    if (have.length >= USER_WALLPAPERS_MAX) throw fail(ErrorCode.ValidationFailed, "Too many wallpapers.");
+    const id = await this.ctx.blobs.put({ ownerUserId: userId, purpose: "user-wallpaper", mimeType, data });
+    return { id };
+  }
+
+  /** The owner's own wallpaper only (anything else is "not found"). */
+  async getUserWallpaper(userId: string, id: string) {
+    const b = await this.ctx.blobs.get(id);
+    return b && b.ownerUserId === userId && b.purpose === "user-wallpaper" ? b : null;
+  }
+
+  async deleteUserWallpaper(userId: string, id: string) {
+    if (!(await this.getUserWallpaper(userId, id))) throw fail(ErrorCode.NotFound, "Wallpaper not found.");
+    await this.ctx.blobs.delete([id]);
+    return { ok: true };
+  }
+
+  /** Puts one of my wallpapers on a slot; the returned version names the library picture it came from. */
+  async applyUserWallpaper(userId: string, id: string, slot: WallpaperSlot) {
+    const b = await this.getUserWallpaper(userId, id);
+    if (!b) throw fail(ErrorCode.NotFound, "Wallpaper not found.");
+    const { version } = await this.setWallpaper(userId, b.mimeType, b.data, slot);
+    return { version: userWallpaperVersion(id, version) };
+  }
+
   // ---------------------------------------------------------------- preferences
 
   async updatePreferences(userId: string, patch: z.infer<typeof PreferencesPatchSchema>) {
@@ -526,4 +568,8 @@ export function mergePreferences(data: Partial<Preferences> | undefined | null):
 }
 
 export type WallpaperSlot = "desktop" | "lock";
+/** Update 4 · D2: at most this many own wallpapers in the library. */
+export const USER_WALLPAPERS_MAX = 24;
+/** "lib-<the library picture's key tail>-<the slot copy's version>": which own wallpaper a slot shows. */
+export const userWallpaperVersion = (id: string, slotVersion: string) => `lib-${id.slice(-16)}-${slotVersion}`;
 const slotPurpose = (slot: WallpaperSlot) => (slot === "lock" ? ("lock-wallpaper" as const) : ("wallpaper" as const));

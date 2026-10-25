@@ -63,6 +63,8 @@ export const notesRoutes: FastifyPluginAsync = async (app) => {
 
   // projects
   app.get("/projects", async (req) => notes.listProjects(me(req)));
+  /** Update 4 · C3: the most recently changed documents (the Notes widget). */
+  app.get("/recent", async (req) => notes.recent(me(req), z.object({ limit: z.coerce.number().int().min(1).max(20).default(6) }).parse(req.query ?? {}).limit));
   app.post("/projects", limit(60), async (req, reply) => {
     reply.status(201);
     return notes.createProject(me(req), parse(projectBody, req.body).name);

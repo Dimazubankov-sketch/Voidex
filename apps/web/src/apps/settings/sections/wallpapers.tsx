@@ -1,16 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { RiArrowLeftSLine, RiArrowRightSLine, RiCheckLine, RiImageAddLine } from "@remixicon/react";
+import { RiArrowLeftSLine, RiArrowRightSLine, RiCheckLine, RiDeleteBinLine, RiImageAddLine } from "@remixicon/react";
 import { WALLPAPER_PRESETS, type Wallpaper } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useFormFactor } from "@/lib/form-factor";
 import { useLanguage, useT } from "@/lib/i18n";
 import { Button, Spinner, Switch } from "@/ui/controls";
-import { toast } from "@/ui/overlays";
+import { ConfirmDialog, toast } from "@/ui/overlays";
 import { VoidexMark } from "@/brand/brand";
 import { FaceGlyph } from "@/os/lock/face-glyph";
 import { DEFAULT_SWATCH, PRESETS, useWallpaperImage, wallpaperStyle, type WallpaperSlot } from "@/os/home/appearance";
 import { WALLPAPER_LABEL } from "@/os/home/appearance-panel";
-import { useWallpapers } from "@/os/home/wallpapers";
+import { isFromLibrary, useUserWallpaperImage, useUserWallpapers, useWallpapers } from "@/os/home/wallpapers";
 import { SectionTitle } from "../kit";
 
 export type WallpaperTab = "lock" | "home";
@@ -26,6 +26,8 @@ interface Option {
   key: string;
   wallpaper: Wallpaper | null;
   label: string;
+  /** Update 4 · D2: one of my own wallpapers (id: its library picture; null: a picture outside the library). */
+  own?: { id: string | null };
 }
 
 const same = (a: Wallpaper | null, b: Wallpaper | null) => JSON.stringify(a) === JSON.stringify(b);
@@ -58,6 +60,9 @@ export function WallpapersSection() {
   const slot: WallpaperSlot = tab === "lock" ? "lock" : "desktop";
   const applied = tab === "lock" ? wp.lockWallpaper : wp.wallpaper;
   const phone = ff === "mobile";
+  const library = useUserWallpapers(!wp.local).data ?? [];
+  const [deleting, setDeleting] = useState<Option | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => () => void (nextTab = "lock"), []);
 
@@ -66,9 +71,12 @@ export function WallpapersSection() {
     if (tab === "lock") all.push({ key: "same", wallpaper: null, label: t("lockSettings.asDesktop") });
     all.push({ key: "default", wallpaper: { kind: "default" }, label: t("wallpaper.default") });
     for (const id of WALLPAPER_PRESETS) all.push({ key: id, wallpaper: { kind: "preset", id }, label: t(WALLPAPER_LABEL[id]) });
-    if (applied?.kind === "image") all.push({ key: "image", wallpaper: applied, label: t("appearance.image") });
+    // Update 4 · D2: my own wallpapers stay in the catalogue (each deletable), after the built-in ones.
+    for (const u of library)
+      all.push({ key: `lib:${u.id}`, wallpaper: isFromLibrary(applied, u.id) ? applied : { kind: "image", version: `lib-${u.id.slice(-16)}-new` }, label: t("wallpapers.own"), own: { id: u.id } });
+    if (applied?.kind === "image" && !library.some((u) => isFromLibrary(applied, u.id))) all.push({ key: "image", wallpaper: applied, label: t("appearance.image"), own: { id: null } });
     return all;
-  }, [tab, applied, t]);
+  }, [tab, applied, t, library]);
 
   // The strip's own width decides the card size and the side padding (no percentages of other boxes).
   useLayoutEffect(() => {
@@ -129,16 +137,44 @@ export function WallpapersSection() {
 
   const current = options[index];
   const isApplied = current ? same(current.wallpaper, applied) : true;
-  const apply = () => {
+  const apply = async () => {
     if (!current) return;
-    if (tab === "lock") wp.setLockWallpaper(current.wallpaper);
-    else if (current.wallpaper) wp.setWallpaper(current.wallpaper);
+    let w = current.wallpaper;
+    // One of my own (library) pictures: copied onto this slot first.
+    if (current.own?.id) {
+      setBusy(true);
+      try {
+        w = await wp.applyOwn(current.own.id, slot);
+      } catch {
+        toast({ title: t("appearance.imageFailed"), tone: "danger" });
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+    if (tab === "lock") wp.setLockWallpaper(w);
+    else if (w) wp.setWallpaper(w);
     toast({ title: t("wallpapers.applied"), tone: "success" });
   };
+  const remove = async () => {
+    const o = deleting;
+    if (!o?.own) return;
+    setRemoving(true);
+    try {
+      await wp.removeOwn(o.own.id, slot);
+      toast({ title: t("wallpapers.deleted"), tone: "success" });
+      setDeleting(null);
+    } catch {
+      toast({ title: t("wallpapers.deleteFailed"), tone: "danger" });
+    } finally {
+      setRemoving(false);
+    }
+  };
+  const inUse = (o: Option | null) => !!o?.own && (o.own.id ? isFromLibrary(wp.wallpaper, o.own.id) || isFromLibrary(wp.lockWallpaper, o.own.id) : true);
   const upload = async (file: File) => {
     setBusy(true);
     try {
-      const w = await wp.upload(file, slot);
+      const w = await wp.addOwn(file, slot);
       if (tab === "lock") wp.setLockWallpaper(w);
       else wp.setWallpaper(w);
     } catch {
@@ -214,7 +250,7 @@ export function WallpapersSection() {
       </div>
 
       <div className="mx-auto mt-5 grid w-full max-w-[460px] grid-cols-2 gap-3" data-testid="wallpapers-actions">
-        <Button onClick={apply} disabled={isApplied || !current} className="min-w-0" data-testid="wallpapers-apply">
+        <Button onClick={() => void apply()} disabled={isApplied || !current || busy} className="min-w-0" data-testid="wallpapers-apply">
           {isApplied ? <RiCheckLine className="size-4 shrink-0" /> : null}
           <span className="truncate">{isApplied ? t("wallpapers.inUse") : t("wallpapers.apply")}</span>
         </Button>
@@ -235,6 +271,32 @@ export function WallpapersSection() {
           }}
         />
       </div>
+
+      {/* Update 4 · D2: my own wallpapers can be deleted (built-in ones never). */}
+      {current?.own && (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setDeleting(current)}
+            className="pressable flex h-9 items-center gap-1.5 rounded-full px-4 text-[14px] font-medium text-danger hover:bg-danger-soft"
+            data-testid="wallpapers-delete"
+          >
+            <RiDeleteBinLine className="size-4" />
+            {t("wallpapers.delete")}
+          </button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => void remove()}
+        title={t("wallpapers.deleteTitle")}
+        message={inUse(deleting) ? t("wallpapers.deleteInUse") : t("wallpapers.deleteMessage")}
+        confirmLabel={inUse(deleting) ? t("wallpapers.deleteReplace") : t("wallpapers.delete")}
+        danger
+        loading={removing}
+        testId="wallpapers-delete-confirm"
+      />
 
       <div className="mt-6 flex items-center gap-3 rounded-[22px] border border-border/70 bg-surface p-4 shadow-tile" data-testid="wallpapers-sync">
         <span className="min-w-0 flex-1">
@@ -284,8 +346,11 @@ function PreviewCard({ option, tab, desktop, slot, phone, applied }: { option: O
   const lang = useLanguage();
   const look = option.wallpaper ?? desktop;
   const lookSlot: WallpaperSlot = option.wallpaper ? slot : "desktop";
-  const image = useWallpaperImage(look, lookSlot);
-  const w = look.kind === "default" ? { style: { background: DEFAULT_SWATCH }, dark: false } : wallpaperStyle(look, image.data);
+  // Update 4 · D2: one of my own pictures not on this slot yet: shown from the library.
+  const libId = option.own?.id && !applied ? option.own.id : null;
+  const lib = useUserWallpaperImage(libId);
+  const image = useWallpaperImage(libId ? null : look, lookSlot);
+  const w = look.kind === "default" ? { style: { background: DEFAULT_SWATCH }, dark: false } : wallpaperStyle(look, libId ? lib.data : image.data, false, phone);
   const dark = look.kind === "preset" ? !!PRESETS[look.id as keyof typeof PRESETS]?.dark : w.dark;
   const now = new Date();
   const time = new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(now);

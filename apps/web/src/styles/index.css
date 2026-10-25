@@ -958,3 +958,52 @@ img[data-system-asset] { pointer-events: none; }
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
 }
+
+/* Update 4: an app logo is a whole tile (see TileLogo). Inside AppTile it replaces the white plate: the
+   logo fills the tile; only a soft violet shadow stays under it, like the artwork's own glow. */
+.vx-app-tile:has(> [data-tile-logo]),
+.vx-app-tile:has(> [data-glyph-box] > [data-tile-logo]) {
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 2px 7px rgba(72, 52, 190, 0.16));
+}
+.vx-app-tile > [data-tile-logo] {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Update 4 · C: the new Clock / Notes widgets sit on the logos' soft lavender surface. */
+.vx-logo-surface { background: linear-gradient(135deg, #ffffff 0%, #f5f2ff 55%, #ebe5ff 100%); }
+[data-theme="dark"] .vx-logo-surface { background: linear-gradient(135deg, #24203a 0%, #1d1a2c 60%, #29224a 100%); }
+
+/* Update 4 · C2: the Calculator widget in the colours of its new logo (not glassier than before). */
+.vx-calc-digit { background: rgba(255, 255, 255, 0.82); color: var(--text); box-shadow: inset 0 0 0 1px rgba(120, 96, 230, 0.08); }
+.vx-calc-fn { background: #f0ecfd; color: #6a6488; }
+.vx-calc-op { background: #e9e2ff; color: #6a3cf2; }
+.vx-calc-eq { background: linear-gradient(135deg, #9172ff, #5a33ef); color: #fff; box-shadow: 0 4px 10px -4px rgba(90, 51, 239, 0.55); }
+[data-theme="dark"] .vx-calc-digit { background: rgba(255, 255, 255, 0.08); box-shadow: none; }
+[data-theme="dark"] .vx-calc-fn { background: rgba(255, 255, 255, 0.05); color: #b9b3d6; }
+[data-theme="dark"] .vx-calc-op { background: rgba(124, 92, 255, 0.22); color: #c4b2ff; }
+
+/* Update 4 · F (SR7854): the floating tab bar turns compact while the content is scrolled down — a little
+   narrower and lower, the icons a touch smaller, the active capsule still under the active tab — and comes
+   back to its full size on the way up. Fast and smooth; still with reduced motion. */
+.vx-tabbar {
+  height: 60px;
+  max-width: 460px;
+  transition: max-width 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vx-tabbar-capsule { top: 6px; height: 48px; transition: top 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.vx-tabbar-item { transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.vx-tabbar[data-compact] { height: 50px; max-width: min(340px, 76%); transform: translateY(4px); }
+.vx-tabbar[data-compact] .vx-tabbar-capsule { top: 5px; height: 40px; }
+.vx-tabbar[data-compact] .vx-tabbar-item { transform: scale(0.88); }
+.vx-tabbar-still, .vx-tabbar-still .vx-tabbar-capsule, .vx-tabbar-still .vx-tabbar-item { transition: none; }
+/* A press: the tab answers under the finger. */
+.vx-tabbar button:active .vx-tabbar-item { transform: scale(0.9); }
+.vx-tabbar[data-compact] button:active .vx-tabbar-item { transform: scale(0.8); }
+
+/* Update 4 · C: the Clock widget picture dims a little in the dark theme. */
+[data-theme="dark"] .vx-clock-art img {
+  filter: brightness(0.82) saturate(1.05);
+}
