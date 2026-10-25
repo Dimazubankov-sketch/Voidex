@@ -424,8 +424,8 @@ test("Clock widget: 2 x 2 like the Calculator widget, the time of now, ticking, 
   const sec = w.getByTestId("clock-widget-second");
   const first = await sec.getAttribute("data-angle");
   await expect.poll(() => sec.getAttribute("data-angle"), { timeout: 4000 }).not.toBe(first);
-  // Its colours come from the theme: a light face, then a dark one.
-  const face = () => w.locator("svg circle").first().evaluate((el) => getComputedStyle(el).fill);
+  // Update 4 · C1: the dial is the logo (its own colours); the widget's surface follows the theme.
+  const face = () => w.locator(".vx-logo-surface").first().evaluate((el) => getComputedStyle(el).backgroundImage);
   const light = await face();
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   const dark = await face();
