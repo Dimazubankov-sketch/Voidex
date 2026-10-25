@@ -66,6 +66,8 @@ test("registry: Clock is installed with its own logo on the desktop, opens nativ
   await clock(page).getByTestId("clock-add").click();
   await expect(page.getByTestId("clock-city-picker")).toBeVisible();
   await expect(win.locator('[data-logo], img[src*="app-clock"], image[href*="app-clock"]')).toHaveCount(0);
+  // The sheet takes focus on the next frame; Escape is heard from inside it.
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[data-testid="clock-city-picker"]'))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("clock-city-picker")).toHaveCount(0);
   for (const tab of ["alarm", "stopwatch", "timers", "world"]) {
