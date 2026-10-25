@@ -23,11 +23,13 @@ import {
   display,
   emptyCalc,
   placeInCell,
+  placeWidgetMakingRoom,
   press,
   removeWidget,
   widgetKey,
   type Widget,
   type Place,
+  type Cell,
   type WidgetSize,
   type WidgetType,
   type WorkspaceLayout,
@@ -504,6 +506,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
     const area = pagerBox ? { left: pagerBox.left, right: pagerBox.right, top: hostBox.top, bottom: hostBox.bottom } : hostBox;
     let edgeTimer: number | undefined;
     let edgeDir = 0;
+    // Update 4 · B: the layout as it was before this drag (the «Отменить» of a move that made room).
+    const beforeDrag = currentLayout();
     setDragging(true);
     ui().setDrag({ item: { kind: "app", id: "settings" }, size: 0, widget: widget.id });
 
@@ -524,6 +528,43 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       void animate(x, 0, { type: "spring", stiffness: 520, damping: 42 });
       void animate(y, 0, { type: "spring", stiffness: 520, damping: 42 });
     };
+    /** The cell under the widget's top-left cell (its centre), kept inside the page / desktop. */
+    const targetCell = () => {
+      const box = el.getBoundingClientRect();
+      const cw = Number(grid.dataset.cellW) || box.width;
+      const rh = Number(grid.dataset.rowH) || box.height;
+      const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
+      const sz = widgetCells(widget);
+      // Phone: only the rows that fit on the page (in edit mode the grid offers one more row below it).
+      const gr = grid.getBoundingClientRect();
+      const gy = Number(grid.dataset.gapY) || 0;
+      const fitRows = Math.max(sz.h, Math.floor((area.bottom - gr.top + gy) / (rh + gy)));
+      const maxRows = Math.min(Number(grid.dataset.maxRows) || Infinity, fitRows);
+      const cols = Number(grid.dataset.cols) || sz.w;
+      const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
+      // B1 (phone): a widget narrower than the page goes to the edge on the side its centre is over.
+      if (mobile && sz.w > 1 && sz.w < cols) target.c = box.left + box.width / 2 > gr.left + gr.width / 2 ? cols - sz.w : 0;
+      return { box, target };
+    };
+    /**
+     * Update 4 · B2: puts the widget there, the icons and widgets under it making way (what no longer fits
+     * goes to a neighbouring page / desktop). Refused (null): nothing changes. Reports the move with
+     * «Отменить» when anything else had to move.
+     */
+    const makeRoom = (base: WorkspaceLayout, dest: Place, cell: Cell) => {
+      const g = geometryFor(dest);
+      const r = g ? placeWidgetMakingRoom(base, widgetKey(widget.id), dest, cell, g) : null;
+      if (!r) return null;
+      if (r.moved.length || r.spilled.length || r.created) {
+        const restore = beforeDrag;
+        toast({
+          title: translateNow(r.spilled.length ? "widgets.roomSpilled" : "widgets.roomMade"),
+          action: { label: translateNow("common.undo"), onClick: () => { captureGridFlip(); updateLayout(() => restore); } },
+          duration: 6000,
+        });
+      }
+      return r.layout;
+    };
     /**
      * B5: carries the widget to another phone page (a new one past the last) or PC desktop and keeps
      * dragging it there. No room there: it stays on this page, still in the hand (a short note).
@@ -534,7 +575,9 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       const container = dest.surface === "mobile" ? String(dest.page) : dest.space;
       const moved = moveWidget(base, widget.id, { container });
       const cell = freeBlock(moved, dest, widgetCells(widget), undefined, geometryFor(dest));
-      if (!cell) {
+      // Update 4 · B2: no free block there: the icons there make way (from the same place on that page).
+      const next = cell ? placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest)) : makeRoom(base, dest, targetCell().target);
+      if (!next) {
         toast({ title: translateNow("widgets.noRoom") });
         return false;
       }
@@ -543,7 +586,8 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
       finish();
       // B2: the finger is kept by the workspace before this card goes away (see holdPointer).
       holdPointer(pointerId);
-      updateLayout(() => placeInCell(moved, widgetKey(widget.id), dest, cell, geometryFor(dest)));
+      captureGridFlip();
+      updateLayout(() => next);
       if (dest.surface === "mobile") ui().setMobilePage(dest.page);
       else useWM.getState().setSpace(dest.space);
       navigator.vibrate?.(8);
@@ -630,26 +674,20 @@ export function GridWidget({ widget, size, editing }: { widget: Widget; size: { 
         }
         return;
       }
-      const box = el.getBoundingClientRect();
-      // The cell under the widget's top-left cell (its centre), not under the finger.
-      const cw = Number(grid.dataset.cellW) || box.width;
-      const rh = Number(grid.dataset.rowH) || box.height;
-      const hit = cellAt(grid, box.left + Math.min(cw, box.width) / 2, box.top + Math.min(rh, box.height) / 2);
-      // The whole block stays on the page / desktop (never past the last row or the last column).
-      const sz = widgetCells(widget);
-      // Phone: only the rows that fit on the page (in edit mode the grid offers one more row below it).
-      const gr = grid.getBoundingClientRect();
-      const gy = Number(grid.dataset.gapY) || 0;
-      const fitRows = Math.max(sz.h, Math.floor((area.bottom - gr.top + gy) / (rh + gy)));
-      const maxRows = Math.min(Number(grid.dataset.maxRows) || Infinity, fitRows);
-      const cols = Number(grid.dataset.cols) || sz.w;
-      const target = { c: Math.max(0, Math.min(hit.c, cols - sz.w)), r: Math.max(0, Math.min(hit.r, maxRows - sz.h)) };
-      // B1 (phone): a widget narrower than the page goes to the edge on the side its centre is over.
-      if (mobile && sz.w > 1 && sz.w < cols) target.c = box.left + box.width / 2 > gr.left + gr.width / 2 ? cols - sz.w : 0;
+      // The cell under the widget's top-left cell (its centre), not under the finger; the whole block
+      // stays on the page / desktop (never past the last row or the last column).
+      const { box, target } = targetCell();
       const current = el.parentElement?.dataset.cell;
       if (!place || current === `${target.c},${target.r}`) return settleBack();
+      // Update 4 · B2: the icons and widgets under it make way; refused only when nothing can be placed.
+      const next = makeRoom(currentLayout(), place, target);
+      if (!next) {
+        toast({ title: translateNow("widgets.noRoom") });
+        return settleBack();
+      }
       snap.current = { from: box, cell: `${target.c},${target.r}` };
-      updateLayout((l) => placeInCell(l, widgetKey(widget.id), place, target, geometryFor(place)));
+      captureGridFlip();
+      updateLayout(() => next);
       // The cell was refused (an icon never pushes a widget away, a full area…): glide back.
       window.setTimeout(() => {
         if (snap.current) {
