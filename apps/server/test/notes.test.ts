@@ -419,3 +419,22 @@ describe("Step 2.16: books are gone; books written earlier live on as notes", ()
     expect(looksLike("application/vnd.voidex.book+json", Buffer.from(JSON.stringify({ format: "voidex.prsn", version: 1, space: {} })))).toBe(false);
   });
 });
+
+describe("Update 4 · C3: recent documents for the Notes widget", () => {
+  it("lists only what I can open, most recently changed first, with a text preview", async () => {
+    const [a, b] = [await user("Виджет"), await user("Чужой")];
+    const p = await project(a, "Мой");
+    const first = await doc(a, p, "note", "Первая");
+    const second = await doc(a, p, "note", "Вторая");
+    expect((await a.d.put(`/api/notes/documents/${first.id}`, { data: note("Купить молоко"), revision: first.revision })).status).toBe(200);
+    const other = await doc(b, await project(b, "Чужой"), "note", "Секрет");
+    expect((await b.d.put(`/api/notes/documents/${other.id}`, { data: note("тайна"), revision: other.revision })).status).toBe(200);
+    const r = await a.d.get("/api/notes/recent?limit=5");
+    expect(r.status).toBe(200);
+    const list = r.body.documents as { id: string; preview: string; updatedAt: string }[];
+    expect(list.map((d) => d.id)).toEqual([first.id, second.id]);
+    expect(list[0]!.preview).toContain("Купить молоко");
+    expect(list.some((d) => d.id === other.id)).toBe(false);
+    expect((await new Device(env.app).get("/api/notes/recent")).status).toBe(401);
+  });
+});

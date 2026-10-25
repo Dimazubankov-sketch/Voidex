@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { and, arrayOverlaps, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, arrayOverlaps, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   DEFAULT_NOTES_PREFS,
   ErrorCode,
@@ -306,6 +306,28 @@ export class NotesService {
       projects: rows.map((p) => this.projectDto(p, p.ownerId === userId ? "owner" : projectGrants.get(p.id)!, owners.get(p.ownerId)!, counts.get(p.id) ?? 0, sharedProjects.has(p.id))),
       sharedDocuments: visibleDocs.map((d) => this.docMeta(d, docGrants.get(d.id)!, true)),
     };
+  }
+
+  /**
+   * Update 4 · C3: the documents I can open, most recently changed first (the Notes widget on the home
+   * screen). The same access as listProjects: my projects, projects shared with me, documents shared
+   * with me one by one. Only metadata and the short text preview; the widget opens the document itself.
+   */
+  async recent(userId: string, limit = 6): Promise<{ documents: NotesDocMetaDto[] }> {
+    await this.ensureMigrated(userId);
+    const grants = await this.ctx.db.select().from(notesMembers).where(eq(notesMembers.userId, userId));
+    const projectGrants = new Map(grants.filter((g) => g.resourceType === "project").map((g) => [g.resourceId, g.role]));
+    const docGrants = new Map(grants.filter((g) => g.resourceType === "document").map((g) => [g.resourceId, g.role]));
+    const projects = await this.ctx.db
+      .select({ id: notesProjects.id, ownerId: notesProjects.ownerId })
+      .from(notesProjects)
+      .where(projectGrants.size ? or(eq(notesProjects.ownerId, userId), inArray(notesProjects.id, [...projectGrants.keys()])) : eq(notesProjects.ownerId, userId));
+    const roleOf = new Map(projects.map((p) => [p.id, p.ownerId === userId ? ("owner" as const) : projectGrants.get(p.id)!]));
+    const ids = projects.map((p) => p.id);
+    const where = ids.length && docGrants.size ? or(inArray(notesDocuments.projectId, ids), inArray(notesDocuments.id, [...docGrants.keys()])) : ids.length ? inArray(notesDocuments.projectId, ids) : docGrants.size ? inArray(notesDocuments.id, [...docGrants.keys()]) : null;
+    if (!where) return { documents: [] };
+    const rows = await this.ctx.db.select().from(notesDocuments).where(where).orderBy(desc(notesDocuments.updatedAt)).limit(Math.max(1, Math.min(20, limit)));
+    return { documents: rows.map((d) => this.docMeta(d, roleOf.get(d.projectId) ?? docGrants.get(d.id)!, !roleOf.has(d.projectId))) };
   }
 
   async createProject(userId: string, name: string): Promise<NotesProjectDto> {

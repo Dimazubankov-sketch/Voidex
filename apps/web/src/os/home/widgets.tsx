@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type PointerEvent as ReactPointerEvent } from "react";
 import { AnimatePresence, animate, motion, useMotionValue } from "motion/react";
-import { RiAddCircleFill, RiArrowLeftSLine, RiCloseLine, RiSubtractLine } from "@remixicon/react";
+import { RiAddCircleFill, RiAddLine, RiArrowLeftSLine, RiCloseLine, RiLockLine, RiSubtractLine } from "@remixicon/react";
 import {
   APP_REGISTRY,
   MOBILE_PAGES_MAX,
@@ -37,11 +37,18 @@ import {
 import { cx } from "@/lib/cx";
 import { getFormFactor, useFormFactor } from "@/lib/form-factor";
 import { t as translateNow, useLanguage, useT, type MessageKey } from "@/lib/i18n";
-import { Button, IconButton } from "@/ui/controls";
+import { Button, IconButton, Spinner } from "@/ui/controls";
 import { ConfirmDialog, Sheet, toast } from "@/ui/overlays";
 import { createPortal } from "react-dom";
 import { useWM } from "../window-manager";
-import { CalculatorGlyph, ClockGlyph } from "@/brand/brand";
+import { CalculatorGlyph, ClockGlyph, NotesGlyph } from "@/brand/brand";
+import { useQuery } from "@tanstack/react-query";
+import { notesPreview, type NotesDocMetaDto } from "@voidex/shared";
+import { api } from "@/lib/api";
+import { queryClient } from "@/lib/query";
+import { useSession } from "@/lib/session";
+
+import { notesApi } from "@/apps/notes/data";
 import { cityClock, cityName } from "@voidex/clock";
 import { useHands, useShownZone } from "@/apps/clock/analog";
 import { desktopGeometry, geometryFor } from "./desktop-geometry";
@@ -105,7 +112,8 @@ function CalculatorWidget({ preview }: { preview?: boolean }) {
             onClick={() => setState((s) => press(s, k))}
             className={cx(
               "vx-calc-key flex min-h-0 items-center justify-center rounded-[10px] text-[14px] font-semibold",
-              k === "=" ? "bg-primary text-white" : "×÷−+".includes(k) ? "bg-primary/12 text-primary" : k === "C" || k === "±" || k === "%" || k === "⌫" ? "bg-black/[0.06] text-text-secondary" : "bg-white/70 text-text",
+              // Update 4 · C2: the colours of the new Calculator logo (lavender keys, violet signs, a deep violet «=»).
+              k === "=" ? "vx-calc-eq" : "×÷−+".includes(k) ? "vx-calc-op" : k === "C" || k === "±" || k === "%" || k === "⌫" ? "vx-calc-fn" : "vx-calc-digit",
             )}
             aria-label={k === "⌫" ? t("widgets.calcBackspace") : k === "C" ? t("widgets.calcClear") : k}
             data-widget-key
@@ -141,26 +149,84 @@ function useSecond(active: boolean) {
 }
 
 /** The Clock widget's analog face (SVG): its hands glide, driven per frame without React renders. */
+/**
+ * Update 4 · C1: the dial is the new Clock logo, drawn large: a thick violet → indigo ring with a soft
+ * light on it, a white glass rim, a pale lavender face with 12 violet hour marks, and three hands
+ * (hour, minute, second) that show the real time (useHands: CSS spins from the current phase).
+ * Gradients and shadows use user-space units: a hand is a zero-width line, and a bounding-box gradient
+ * or filter on it would draw nothing.
+ */
 function ClockFace({ zone, className }: { zone: string; className?: string }) {
   const hour = useRef<SVGGElement>(null);
   const minute = useRef<SVGGElement>(null);
   const second = useRef<SVGGElement>(null);
   useHands(zone, { hour, minute, second }, true);
-  const hand = (len: number, width: number, cls: string, tail = 0) => <line x1={100} y1={100 + tail} x2={100} y2={100 - len} strokeWidth={width} strokeLinecap="round" className={cls} />;
+  // Ids unique per face (several clocks may be on screen).
+  const uid = useId().replace(/:/g, "");
+  const id = (n: string) => `vxc-${uid}-${n}`;
+  const url = (n: string) => `url(#${id(n)})`;
   return (
-    <svg viewBox="0 0 200 200" className={cx("drop-shadow-[0_6px_14px_rgba(20,16,50,0.16)]", className)} aria-hidden>
-      <circle cx={100} cy={100} r={98} className="fill-[var(--surface)]" />
+    <svg viewBox="0 0 200 200" className={cx("drop-shadow-[0_6px_14px_rgba(60,40,170,0.18)]", className)} aria-hidden data-testid="clock-face">
+      <defs>
+        <linearGradient id={id("ring")} x1="0.1" y1="0.15" x2="0.95" y2="0.85">
+          <stop offset="0" stopColor="#b79cff" />
+          <stop offset="0.45" stopColor="#7b4dff" />
+          <stop offset="1" stopColor="#3f63ff" />
+        </linearGradient>
+        <radialGradient id={id("light")} cx="0.3" cy="0.25" r="0.75">
+          <stop offset="0" stopColor="#fff" stopOpacity="0.85" />
+          <stop offset="0.45" stopColor="#fff" stopOpacity="0.25" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={id("dial")} cx="0.42" cy="0.38" r="0.7">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.75" stopColor="#f3f0ff" />
+          <stop offset="1" stopColor="#e3dcff" />
+        </radialGradient>
+        <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="100" y1="44" x2="100" y2="106">
+          <stop offset="0" stopColor="#9d7bff" />
+          <stop offset="1" stopColor="#5b2df0" />
+        </linearGradient>
+        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="34" x2="100" y2="48">
+          <stop offset="0" stopColor="#9f86ff" />
+          <stop offset="1" stopColor="#6b3cf5" />
+        </linearGradient>
+        <radialGradient id={id("knob")} cx="0.4" cy="0.35" r="0.7">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#cfc2ff" />
+        </radialGradient>
+        <filter id={id("sh")} filterUnits="userSpaceOnUse" x="0" y="0" width="200" height="200">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.6" floodColor="#4b2bd6" floodOpacity="0.28" />
+        </filter>
+      </defs>
+      <circle cx={100} cy={100} r={97} fill={url("ring")} />
+      <circle cx={100} cy={100} r={97} fill={url("light")} />
+      <circle cx={100} cy={100} r={84} fill="#fff" fillOpacity={0.38} stroke="#fff" strokeOpacity={0.85} strokeWidth={1.6} />
+      <circle cx={100} cy={100} r={74} fill={url("dial")} stroke="#fff" strokeWidth={2.2} filter={url("sh")} />
       {Array.from({ length: 12 }, (_, i) => (
-        <line key={i} x1={100} y1={13} x2={100} y2={i % 3 === 0 ? 33 : 28} strokeWidth={i % 3 === 0 ? 6 : 4.5} strokeLinecap="round" className="stroke-[color-mix(in_srgb,var(--text)_70%,transparent)]" transform={`rotate(${i * 30} 100 100)`} />
+        <line key={i} x1={100} y1={i % 3 === 0 ? 35 : 36} x2={100} y2={i % 3 === 0 ? 47 : 45} stroke={url("tick")} strokeWidth={i % 3 === 0 ? 6 : 5} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
       ))}
-      <g ref={hour}>{hand(46, 7, "stroke-[var(--text)]")}</g>
-      <g ref={minute}>{hand(70, 5.5, "stroke-[var(--text)]")}</g>
-      <g ref={second} data-testid="clock-widget-second">
-        {hand(78, 2, "stroke-[var(--primary)]", 16)}
+      <g ref={hour} data-testid="clock-widget-hour">
+        <line x1={100} y1={104} x2={100} y2={66} stroke={url("hand")} strokeWidth={10} strokeLinecap="round" filter={url("sh")} />
       </g>
-      <circle cx={100} cy={100} r={6} className="fill-[var(--text)]" />
-      <circle cx={100} cy={100} r={3} className="fill-[var(--primary)]" />
+      <g ref={minute} data-testid="clock-widget-minute">
+        <line x1={100} y1={104} x2={100} y2={48} stroke={url("hand")} strokeWidth={8} strokeLinecap="round" filter={url("sh")} />
+      </g>
+      <g ref={second} data-testid="clock-widget-second">
+        <line x1={100} y1={116} x2={100} y2={40} stroke="#4a3cf0" strokeWidth={2} strokeLinecap="round" />
+      </g>
+      <circle cx={100} cy={100} r={8.5} fill={url("knob")} stroke="#7b55ff" strokeWidth={3} />
     </svg>
+  );
+}
+
+/** The soft lavender surface of the new Clock / Notes widgets (the logos' tile, as a background). */
+function LogoSurface() {
+  return (
+    <span aria-hidden className="vx-logo-surface pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+      <span className="absolute -right-[18%] -top-[30%] size-[70%] rounded-full bg-[#c9b8ff]/30 blur-2xl" />
+      <span className="absolute -bottom-[35%] -left-[10%] size-[80%] rounded-full bg-[#b9c4ff]/25 blur-2xl" />
+    </span>
   );
 }
 
@@ -184,7 +250,7 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       type="button"
       tabIndex={preview ? -1 : 0}
       onClick={(e) => openApp("clock", e.currentTarget, { tab: "world" })}
-      className={cx("flex size-full rounded-[24px] text-left", wide ? "items-center gap-[5%] px-[6%] py-[5%]" : "items-center justify-center p-[7%]", preview && "pointer-events-none")}
+      className={cx("relative flex size-full rounded-[24px] text-left", wide ? "items-center gap-[4%] py-[5%] pl-[7%] pr-[5%]" : "items-center justify-center p-[7%]", preview && "pointer-events-none")}
       aria-label={label}
       title={label}
       data-testid="clock-widget"
@@ -192,23 +258,172 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
       data-zone={zone}
       data-time={time}
     >
+      <LogoSurface />
       {wide ? (
         <>
-          <span className="flex min-w-0 flex-1 flex-col">
+          {/* Update 4 · C1 (the reference): the city, the time and the date on the left, the large dial on the right. */}
+          <span className="relative flex min-w-0 flex-1 flex-col">
             <span className="truncate text-[15px] font-semibold text-text" data-testid="clock-widget-city">
               {city}
             </span>
-            <span className="text-[44px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary tabular-nums">{time}</span>
+            <span className="bg-[linear-gradient(135deg,#8a63ff,#4f3cf0)] bg-clip-text text-[44px] font-bold leading-[1.05] tracking-[-0.04em] text-transparent tabular-nums" data-testid="clock-widget-time">
+              {time}
+            </span>
             <span className="truncate text-[12px] text-text-secondary">{date}</span>
           </span>
-          <ClockFace zone={zone} className="aspect-square h-full max-h-full shrink-0" />
+          <ClockFace zone={zone} className="relative aspect-square h-full max-h-full shrink-0" />
         </>
       ) : (
         // Update 3 · B1: 2 × 2 is the analog face only (as before Update 2); the city and the time are
         // in the 4 × 2 size and in the label read aloud.
-        <ClockFace zone={zone} className="size-full max-h-full" />
+        <ClockFace zone={zone} className="relative size-full max-h-full" />
       )}
     </button>
+  );
+}
+
+/** Update 4 · C3: the most recently changed documents, from Notes itself (no storage of its own). */
+function useRecentNotes(enabled: boolean) {
+  return useQuery({
+    // Under ["notes"]: the server's notes events refresh it with the app.
+    queryKey: ["notes", "recent"],
+    queryFn: () => api.get<{ documents: NotesDocMetaDto[] }>("/api/notes/recent?limit=6"),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+/** Opens a note in Notes (its project, then the note). */
+const openNote = (el: Element, d: Pick<NotesDocMetaDto, "id" | "projectId">) => openApp("notes", el, { doc: d.id, project: d.projectId });
+
+/**
+ * Update 4 · C3: the Notes widget, from the Notes data (GET /api/notes/recent; refreshed by the notes
+ * events like the app). 2 × 2: the latest note's name and a short excerpt. 4 × 2: name, a few lines and
+ * when it changed. 4 × 4: a longer text that scrolls inside, the next notes, and «+» for a new note.
+ * Notes locked with the code (Settings → Apps → Notes): only that it is locked, never the content.
+ */
+function NotesWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }) {
+  const t = useT();
+  const lang = useLanguage();
+  const locked = useSession((s) => !!s.user?.preferences.apps?.notes?.lock);
+  const q = useRecentNotes(!preview && !locked);
+  const big = size === "l";
+  const wide = size === "w" || big;
+  const docs = preview ? [{ id: "p", projectId: "p", kind: "note", name: t("widgets.notesSample"), preview: t("widgets.notesSampleText"), updatedAt: new Date().toISOString() } as NotesDocMetaDto] : (q.data?.documents ?? []);
+  const notes = docs.filter((d) => d.kind === "note");
+  const doc = notes[0] ?? docs[0];
+  // 4 × 4: the whole text of the latest note (the same document the app opens).
+  const full = useQuery({ queryKey: ["notes", "document", doc?.id ?? ""], queryFn: () => notesApi.document(doc!.id), enabled: big && !preview && !locked && !!doc, staleTime: 15_000 });
+  const text = big && full.data ? notesPreview(full.data.data, 1600) : (doc?.preview ?? "");
+  const when = doc ? new Intl.DateTimeFormat(lang === "ru" ? "ru-RU" : lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(doc.updatedAt)) : "";
+  const [creating, setCreating] = useState(false);
+  const create = async (el: HTMLElement) => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const projects = (await notesApi.projects()).projects.filter((p) => p.role !== "viewer");
+      const projectId = doc && docs[0]?.role !== "viewer" ? doc.projectId : (projects[0]?.id ?? (await notesApi.createProject(t("widgets.notesProject"))).id);
+      const d = await notesApi.createDocument(projectId, { kind: "note", name: t("widgets.notesNew") });
+      void queryClient.invalidateQueries({ queryKey: ["notes"] });
+      openNote(el, d);
+    } catch {
+      toast({ title: t("widgets.notesFailed"), tone: "danger" });
+    } finally {
+      setCreating(false);
+    }
+  };
+  const head = (
+    <span className="relative flex items-center gap-1.5">
+      <NotesGlyph className="size-[18px] shrink-0" />
+      <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#6a3cf2]">{t("widgets.notes")}</span>
+      {big && !locked && (
+        <button
+          type="button"
+          tabIndex={preview ? -1 : 0}
+          onClick={(e) => {
+            e.stopPropagation();
+            void create(e.currentTarget);
+          }}
+          aria-label={t("widgets.notesNew")}
+          title={t("widgets.notesNew")}
+          className="pressable -my-1 flex size-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,#9172ff,#5a33ef)] text-white shadow-[0_4px_10px_-4px_rgba(90,51,239,0.6)]"
+          data-widget-key
+          data-testid="notes-widget-new"
+        >
+          {creating ? <Spinner size={12} /> : <RiAddLine className="size-4" />}
+        </button>
+      )}
+    </span>
+  );
+  let body: React.ReactNode;
+  if (locked)
+    body = (
+      <span className="relative flex flex-1 flex-col items-center justify-center gap-1.5 text-center" data-testid="notes-widget-locked">
+        <RiLockLine className="size-6 text-[#7b55ff]" />
+        <span className="text-[12px] font-medium leading-tight text-text-secondary">{t("widgets.notesLocked")}</span>
+      </span>
+    );
+  else if (!preview && q.isPending) body = <span className="relative mt-2 flex flex-col gap-1.5"><span className="h-3 w-3/4 rounded-full bg-[#7b55ff]/12" /><span className="h-3 w-1/2 rounded-full bg-[#7b55ff]/10" /></span>;
+  else if (!doc)
+    body = (
+      <span className="relative flex flex-1 flex-col items-center justify-center gap-1 text-center" data-testid="notes-widget-empty">
+        <span className="text-[13px] font-semibold text-text">{t("widgets.notesEmpty")}</span>
+        <span className="text-[11.5px] leading-tight text-text-secondary">{t("widgets.notesEmptyHint")}</span>
+      </span>
+    );
+  else
+    body = (
+      <>
+        <span className={cx("relative mt-1.5 line-clamp-2 font-semibold leading-tight text-text", wide ? "text-[16px]" : "text-[14px]")} data-testid="notes-widget-title">
+          {doc.name}
+        </span>
+        <span
+          className={cx("relative mt-1 whitespace-pre-wrap break-words text-text-secondary", wide ? "text-[13px] leading-[1.35]" : "text-[12px] leading-[1.3]", big ? "min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-width:none]" : wide ? "line-clamp-3" : "line-clamp-4")}
+          // 4 × 4: the long text scrolls up and down inside; sideways moves still go to the home pages.
+          style={big ? { touchAction: "pan-y" } : undefined}
+          data-testid="notes-widget-text"
+        >
+          {text || t("widgets.notesNoText")}
+        </span>
+        {wide && <span className="relative mt-auto pt-1.5 text-[11px] text-text-tertiary" data-testid="notes-widget-date">{t("widgets.notesChanged", { when })}</span>}
+        {big && notes.length > 1 && (
+          <span className="relative mt-2 flex flex-col gap-1 border-t border-[#7b55ff]/12 pt-2" data-testid="notes-widget-more">
+            {notes.slice(1, 3).map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                tabIndex={preview ? -1 : 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openNote(e.currentTarget, d);
+                }}
+                className="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 text-left hover:bg-[#7b55ff]/8"
+                data-widget-key
+              >
+                <span className="size-1.5 shrink-0 rounded-full bg-[#7b55ff]" />
+                <span className="truncate text-[12.5px] font-medium text-text">{d.name}</span>
+              </button>
+            ))}
+          </span>
+        )}
+      </>
+    );
+  return (
+    <div
+      role="button"
+      tabIndex={preview ? -1 : 0}
+      onClick={(e) => (doc && !locked && !preview ? openNote(e.currentTarget, doc) : openApp("notes", e.currentTarget))}
+      onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLElement).click()}
+      className={cx("relative flex size-full cursor-pointer flex-col overflow-hidden rounded-[24px] text-left", wide ? "p-[16px]" : "p-[13px]", preview && "pointer-events-none")}
+      aria-label={locked ? t("widgets.notesLocked") : doc ? `${t("widgets.notes")}: ${doc.name}` : t("widgets.notes")}
+      data-testid="notes-widget"
+      data-size={size ?? "s"}
+      data-locked={locked || undefined}
+    >
+      <LogoSurface />
+      {head}
+      {body}
+    </div>
   );
 }
 
@@ -232,6 +447,16 @@ export const WIDGETS: WidgetDef[] = [
     keywords: "clock time analog watch часы время циферблат",
     Icon: ({ className }) => <ClockGlyph className={className} />,
     Body: ClockWidget,
+  },
+  {
+    type: "notes",
+    app: "notes",
+    title: "widgets.notes",
+    name: "widgets.notesName",
+    description: "widgets.notesHint",
+    keywords: "notes note text заметки заметка текст",
+    Icon: ({ className }) => <NotesGlyph className={className} />,
+    Body: NotesWidget,
   },
 ];
 

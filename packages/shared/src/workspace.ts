@@ -84,17 +84,18 @@ export type GlassLevel = (typeof GLASS_LEVELS)[number];
  * Step 2.3: the "desktops" (Workspaces) widget was removed; stored ones are
  * dropped by normalizeLayout. Each widget covers a block of grid cells.
  */
-export const WIDGET_TYPES = ["calculator", "clock"] as const;
+export const WIDGET_TYPES = ["calculator", "clock", "notes"] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 /** Step 2.14: Clock, large analog clock, the place of four icons (2 × 2). */
-export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 }, clock: { w: 2, h: 2 } };
+export const WIDGET_CELLS: Record<WidgetType, { w: number; h: number }> = { calculator: { w: 2, h: 2 }, clock: { w: 2, h: 2 }, notes: { w: 2, h: 2 } };
 /**
  * A2: widget sizes. "s" is the type's base block (2 × 2, four icon cells); "w" is twice as wide
  * (4 × 2, eight cells). Each type lists only the sizes it really draws: the menu never offers more.
  */
 export const WIDGET_SIZES = ["s", "w", "l"] as const;
 export type WidgetSize = (typeof WIDGET_SIZES)[number];
-export const WIDGET_SIZE_OPTIONS: Record<WidgetType, readonly WidgetSize[]> = { calculator: ["s"], clock: ["s", "w"] };
+/** Update 4 · C3: Notes has 2 × 2, 4 × 2 and 4 × 4 («l»). */
+export const WIDGET_SIZE_OPTIONS: Record<WidgetType, readonly WidgetSize[]> = { calculator: ["s"], clock: ["s", "w"], notes: ["s", "w", "l"] };
 export const widgetSizesOf = (type: string): readonly WidgetSize[] => WIDGET_SIZE_OPTIONS[type as WidgetType] ?? ["s"];
 /** Background of the PC system bar (top): real glass, or none. */
 export const SYSTEM_BAR_STYLES = ["glass", "off"] as const;
