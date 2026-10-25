@@ -984,3 +984,21 @@ img[data-system-asset] { pointer-events: none; }
 [data-theme="dark"] .vx-calc-digit { background: rgba(255, 255, 255, 0.08); box-shadow: none; }
 [data-theme="dark"] .vx-calc-fn { background: rgba(255, 255, 255, 0.05); color: #b9b3d6; }
 [data-theme="dark"] .vx-calc-op { background: rgba(124, 92, 255, 0.22); color: #c4b2ff; }
+
+/* Update 4 · F (SR7854): the floating tab bar turns compact while the content is scrolled down — a little
+   narrower and lower, the icons a touch smaller, the active capsule still under the active tab — and comes
+   back to its full size on the way up. Fast and smooth; still with reduced motion. */
+.vx-tabbar {
+  height: 60px;
+  max-width: 460px;
+  transition: max-width 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1), transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vx-tabbar-capsule { top: 6px; height: 48px; transition: top 260ms cubic-bezier(0.22, 1, 0.36, 1), height 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.vx-tabbar-item { transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1); }
+.vx-tabbar[data-compact] { height: 50px; max-width: min(340px, 76%); transform: translateY(4px); }
+.vx-tabbar[data-compact] .vx-tabbar-capsule { top: 5px; height: 40px; }
+.vx-tabbar[data-compact] .vx-tabbar-item { transform: scale(0.88); }
+.vx-tabbar-still, .vx-tabbar-still .vx-tabbar-capsule, .vx-tabbar-still .vx-tabbar-item { transition: none; }
+/* A press: the tab answers under the finger. */
+.vx-tabbar button:active .vx-tabbar-item { transform: scale(0.9); }
+.vx-tabbar[data-compact] button:active .vx-tabbar-item { transform: scale(0.8); }
