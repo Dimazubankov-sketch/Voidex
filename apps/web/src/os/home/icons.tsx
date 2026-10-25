@@ -3,11 +3,11 @@ import { memo, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { motion, motionValue } from "motion/react";
 import { RiCheckLine, RiSubtractLine } from "@remixicon/react";
-import { APP_REGISTRY, GLYPH_SCALE_BOX, GLYPH_SCALES, removeFromFolder, type AppId, type Folder, type GlyphScale, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
+import { APP_REGISTRY, GLYPH_SCALES, removeFromFolder, type AppId, type Folder, type GlyphScale, type LayoutItem, type WorkspaceLayout } from "@voidex/shared";
 import { cx } from "@/lib/cx";
 import { useLanguage, useT } from "@/lib/i18n";
 import { useMailSummary } from "@/lib/mail-summary";
-import { AppTile, GLYPH_BOX } from "@/brand/brand";
+import { AppTile } from "@/brand/brand";
 import { CLIENT_APPS } from "../app-registry";
 import { appLabel, itemKey, ungroupFolder } from "./actions";
 import type { LabelTone } from "./appearance";
@@ -114,7 +114,7 @@ export function FolderTile({ folder, size, highlight }: { folder: Folder; size: 
       {folder.apps.slice(0, 9).map((id) => {
         const { Icon } = CLIENT_APPS[id];
         return (
-          <span key={id} className="flex items-center justify-center bg-surface shadow-[0_1px_2px_rgba(20,20,40,0.12)]" style={{ width: mini, height: mini, borderRadius: mini * 0.3 }}>
+          <span key={id} className="vx-app-tile flex items-center justify-center bg-surface shadow-[0_1px_2px_rgba(20,20,40,0.12)]" style={{ width: mini, height: mini, borderRadius: mini * 0.3 }}>
             <Icon className="size-[72%]" />
           </span>
         );
@@ -255,14 +255,20 @@ export const HomeItem = memo(function HomeItem({ item, layout, metrics, label, i
  * area stay, and the dock, search and launcher keep the standard size.
  */
 export function glyphBox(scale: GlyphScale | undefined): string {
-  return `${Math.round(GLYPH_SCALE_BOX[scale && (GLYPH_SCALES as readonly string[]).includes(scale) ? scale : "m"] * 100)}%`;
+  return `${Math.round(TILE_LOGO_SCALE[scale && (GLYPH_SCALES as readonly string[]).includes(scale) ? scale : "m"] * 100)}%`;
 }
 
+/**
+ * Update 4: the logos are whole tiles, so «Logo size» scales the logo tile inside its place (the grid,
+ * the hit area and the label stay): a little smaller, the standard full tile, a little larger.
+ */
+const TILE_LOGO_SCALE: Record<GlyphScale, number> = { s: 0.88, m: 1, l: 1.06 };
+
 /** An app's logo inside its tile: the standard size (see GLYPH_BOX), or a desktop icon's own (`box`). */
-export function AppGlyph({ id, box = GLYPH_BOX }: { id: AppId; box?: string }) {
+export function AppGlyph({ id, box = "100%" }: { id: AppId; box?: string }) {
   const { Icon } = CLIENT_APPS[id];
   return (
-    <span className="flex items-center justify-center" style={{ width: box, height: box }} data-glyph-box={box}>
+    <span className="flex shrink-0 items-center justify-center" style={{ width: box, height: box }} data-glyph-box={box}>
       <Icon className="size-full" />
     </span>
   );

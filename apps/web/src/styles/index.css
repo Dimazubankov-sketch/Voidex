@@ -958,3 +958,16 @@ img[data-system-asset] { pointer-events: none; }
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
 }
+
+/* Update 4: an app logo is a whole tile (see TileLogo). Inside AppTile it replaces the white plate: the
+   logo fills the tile; only a soft violet shadow stays under it, like the artwork's own glow. */
+.vx-app-tile:has(> [data-tile-logo]),
+.vx-app-tile:has(> [data-glyph-box] > [data-tile-logo]) {
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 2px 7px rgba(72, 52, 190, 0.16));
+}
+.vx-app-tile > [data-tile-logo] {
+  width: 100% !important;
+  height: 100% !important;
+}

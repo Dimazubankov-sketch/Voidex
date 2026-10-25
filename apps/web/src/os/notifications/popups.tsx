@@ -211,12 +211,12 @@ function Popup({ n, phone, onDone }: { n: NotificationDto; phone: boolean; onDon
         {n.actor ? (
           <>
             <Avatar name={n.actor.name} userId={n.actor.id} version={n.actor.avatarVersion} size={42} />
-            <span className="absolute -bottom-1 -right-1 flex size-[20px] items-center justify-center rounded-[7px] bg-white shadow-tile">
+            <span className="vx-app-tile absolute -bottom-1 -right-1 flex size-[20px] items-center justify-center rounded-[7px] bg-white shadow-tile">
               <Icon className="size-[14px]" />
             </span>
           </>
         ) : (
-          <span className="flex size-[42px] items-center justify-center rounded-[13px] bg-white shadow-tile">
+          <span className="vx-app-tile flex size-[42px] items-center justify-center rounded-[13px] bg-white shadow-tile">
             <Icon className="size-6" />
           </span>
         )}

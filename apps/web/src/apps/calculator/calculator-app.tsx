@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { RiFileList3Line } from "@remixicon/react";
 import { mountCalculator, type CalculatorController } from "@voidex/calculator/voidex";
 import { APP_REGISTRY } from "@voidex/shared";
-import { CalculatorGlyph } from "@/brand/brand";
 import { useI18n, useT } from "@/lib/i18n";
 import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
@@ -56,8 +55,8 @@ export function CalculatorApp() {
           )
         }
       >
+        {/* Update 4 · A3: no app logo inside the Calculator itself (only its name); the logo stays on the desktop and in catalogues. */}
         <span className="flex min-w-0 items-center gap-2 pl-1.5">
-          <CalculatorGlyph className="size-6 shrink-0" />
           <span className="truncate text-[15px] font-semibold">{APP_REGISTRY.calculator.name[language]}</span>
         </span>
       </WindowHeader>

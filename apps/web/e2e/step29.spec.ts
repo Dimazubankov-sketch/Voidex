@@ -28,10 +28,10 @@ async function dragBar(page: Page, dx: number, dy: number, steps = 12) {
   return { x: x + dx, y: y + dy };
 }
 
-test("desktop logo size: only the logo inside the white tile changes; saved with the account", async ({ page }) => {
+test("desktop logo size: only the logo changes (Update 4: the logo is the whole tile); saved with the account", async ({ page }) => {
   await signUpViaApi(page, "Логотип", "Размеров");
   const tile = page.getByTestId("app-mail").locator("[data-glyph-box]").first();
-  await expect(tile).toHaveAttribute("data-glyph-box", "52%");
+  await expect(tile).toHaveAttribute("data-glyph-box", "100%");
   // Layout size (not the on-screen box: hover / press scale the tile slightly).
   const tileSize = () => page.getByTestId("app-mail").locator("[data-system-ui]").first().evaluate((e: HTMLElement) => ({ width: e.offsetWidth, height: e.offsetHeight }));
   const tileBox = await tileSize();
@@ -41,17 +41,17 @@ test("desktop logo size: only the logo inside the white tile changes; saved with
   await page.getByTestId("settings-nav-desktop").last().click();
   await expect(page.getByTestId("glyph-scale-setting")).toBeVisible();
   await page.getByTestId("glyph-scale-l").click();
-  await expect(page.getByTestId("glyph-scale-setting").locator("[data-glyph-box]")).toHaveAttribute("data-glyph-box", "64%");
+  await expect(page.getByTestId("glyph-scale-setting").locator("[data-glyph-box]")).toHaveAttribute("data-glyph-box", "106%");
   if (isMobile(page)) await phoneHome(page);
   else await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
-  await expect(page.getByTestId("app-mail").locator("[data-glyph-box]").first()).toHaveAttribute("data-glyph-box", "64%");
-  // The white tile and the cell keep their size.
+  await expect(page.getByTestId("app-mail").locator("[data-glyph-box]").first()).toHaveAttribute("data-glyph-box", "106%");
+  // The tile place and the cell keep their size.
   expect(await tileSize()).toEqual(tileBox);
   expect(await cellWidth()).toBe(cell);
   // Saved with the account: a new start keeps it.
   await reloadUnlocked(page);
-  await expect(page.getByTestId("app-mail").locator("[data-glyph-box]").first()).toHaveAttribute("data-glyph-box", "64%");
+  await expect(page.getByTestId("app-mail").locator("[data-glyph-box]").first()).toHaveAttribute("data-glyph-box", "106%");
   await shot(page, `glyph-${isMobile(page) ? "phone" : "pc"}`);
 });
 

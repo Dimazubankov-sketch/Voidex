@@ -139,12 +139,12 @@ function NotificationCard({ n, onOpen, more = 0 }: { n: NotificationDto; onOpen:
           {n.actor ? (
             <Avatar name={n.actor.name} userId={n.actor.id} version={n.actor.avatarVersion} size={40} />
           ) : (
-            <span className="flex size-10 items-center justify-center rounded-[12px] bg-white shadow-tile">
+            <span className="vx-app-tile flex size-10 items-center justify-center rounded-[12px] bg-white shadow-tile">
               <r.Icon className="size-6" />
             </span>
           )}
           {n.actor && (
-            <span className="absolute -bottom-1 -right-1 flex size-[18px] items-center justify-center rounded-[6px] bg-white shadow-sm">
+            <span className="vx-app-tile absolute -bottom-1 -right-1 flex size-[18px] items-center justify-center rounded-[6px] bg-white shadow-sm">
               <r.Icon className="size-3" />
             </span>
           )}

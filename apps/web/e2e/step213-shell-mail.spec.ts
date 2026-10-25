@@ -63,22 +63,21 @@ test("switcher: the background is blurred the moment it opens, the cards are sha
   await expect(page.getByTestId("switcher-backdrop")).toHaveCount(0);
 });
 
-test("app marks: the optical size of each logo is normalised (Appex Store not smaller than the others)", async ({ page }) => {
+test("app logos (Update 4): each is a whole tile that fills its place: same size for every app, no white plate", async ({ page }) => {
   await signUpViaApi(page, "Ровные", "Иконки");
-  // Every built-in mark fills the same box (trimmed artwork) times its optical factor.
-  const marks = page.locator("[data-optical]");
-  await expect.poll(() => marks.count()).toBeGreaterThan(3);
-  const sizes = await marks.evaluateAll((els) =>
-    els
-      .map((el) => ({ app: el.getAttribute("data-logo") ?? "", optical: Number(el.getAttribute("data-optical")), box: el.getBoundingClientRect().width }))
-      .filter((m) => m.box > 20)
-      // The drawn mark: the box times its optical factor (the artwork is trimmed to the box).
-      .map((m) => ({ ...m, w: m.box * m.optical })),
-  );
-  const store = sizes.find((s) => s.app.includes("store"));
-  const notes = sizes.find((s) => s.app.includes("notes"));
-  if (store && notes) expect(store.w).toBeGreaterThanOrEqual(notes.w);
-  for (const s of sizes) expect(s.optical).toBeGreaterThan(0.85);
+  const logos = page.locator('[data-testid^="app-"] [data-tile-logo]');
+  await expect.poll(() => logos.count()).toBeGreaterThan(3);
+  const boxes = await logos.evaluateAll((els) => els.map((el) => {
+    const r = el.getBoundingClientRect();
+    const tile = el.closest(".vx-app-tile") as HTMLElement;
+    return { w: r.width, h: r.height, tile: tile.offsetWidth, bg: getComputedStyle(tile).backgroundColor };
+  }));
+  for (const b of boxes) {
+    expect(Math.abs(b.w - b.h)).toBeLessThan(1.5);
+    expect(Math.abs(b.w - boxes[0]!.w)).toBeLessThan(1.5);
+    expect(Math.abs(b.w - b.tile)).toBeLessThan(2);
+    expect(b.bg).toBe("rgba(0, 0, 0, 0)");
+  }
 });
 
 test("mail: http(s) addresses in a letter are links that open safely; a malformed one stays text", async ({ page, browser }) => {

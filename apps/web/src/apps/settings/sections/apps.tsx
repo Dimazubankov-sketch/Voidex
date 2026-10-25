@@ -3,13 +3,13 @@ import { create } from "zustand";
 import { RiDeleteBin6Line, RiHardDrive2Line, RiLock2Line, RiNotification3Line } from "@remixicon/react";
 import { APP_REGISTRY, DEFAULT_APP_PREFS, NOTIFICATION_APPS, type AppId } from "@voidex/shared";
 import { AppTile } from "@/brand/brand";
+import { AppGlyph } from "@/os/home/icons";
 import { useUpdatePreferences } from "@/lib/account";
 import { appBytes, canOffload, offloadApp } from "@/lib/app-storage";
 import { formatStorage } from "@/lib/bytes";
 import { useLanguage, useT } from "@/lib/i18n";
 import { useSecurityStatus } from "@/lib/security";
 import { useSession } from "@/lib/session";
-import { CLIENT_APPS } from "@/os/app-registry";
 import { useInstalledApps } from "@/os/home/layout";
 import { Skeleton, Switch } from "@/ui/controls";
 import { ConfirmDialog, toast } from "@/ui/overlays";
@@ -29,12 +29,9 @@ export const APPS_ICON = "/brand/settings-apps.webp";
 export const useAppSettingsTarget = create<{ id: AppId | null; set: (id: AppId) => void }>((set) => ({ id: null, set: (id) => set({ id }) }));
 
 export function AppIcon({ id, size = 36 }: { id: AppId; size?: number }) {
-  const { Icon } = CLIENT_APPS[id];
   return (
     <AppTile size={size} className="shrink-0">
-      <span className="flex items-center justify-center" style={{ width: "58%", height: "58%" }}>
-        <Icon className="size-full" />
-      </span>
+      <AppGlyph id={id} />
     </AppTile>
   );
 }

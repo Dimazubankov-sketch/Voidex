@@ -433,7 +433,7 @@ function BrandLine() {
 
 /** The violet icon tile of a section. */
 export function SectionIcon({ icon: Icon, danger, image }: { icon: ComponentType<{ className?: string }>; danger?: boolean; image?: string }) {
-  if (image) return <img src={image} alt="" draggable={false} className="size-9 shrink-0 select-none rounded-[11px] shadow-[0_1px_3px_rgba(60,40,160,0.18)]" data-system-asset />;
+  if (image) return <img src={image} alt="" draggable={false} className="size-9 shrink-0 select-none [filter:drop-shadow(0_1px_3px_rgba(60,40,160,0.18))]" data-system-asset />;
   return (
     <span className={cx("flex size-9 shrink-0 items-center justify-center rounded-[12px]", danger ? "bg-danger-soft text-danger" : "bg-primary/10 text-primary")}>
       <Icon className="size-[18px]" />

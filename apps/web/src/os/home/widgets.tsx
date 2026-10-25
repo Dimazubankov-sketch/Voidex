@@ -1222,7 +1222,7 @@ export function WidgetsPanel() {
               <IconButton label={t("common.back")} onClick={() => setChosen(null)} size="sm" data-testid="widget-config-back">
                 <RiArrowLeftSLine className="size-5" />
               </IconButton>
-              <span className="flex size-7 items-center justify-center rounded-[9px] bg-surface shadow-tile">
+              <span className="vx-app-tile flex size-7 items-center justify-center rounded-[9px] bg-surface shadow-tile">
                 <def.Icon className="size-[18px]" />
               </span>
               <span className="min-w-0 flex-1 truncate text-[15px] font-medium">{APP_REGISTRY[def.app].name[lang]}</span>

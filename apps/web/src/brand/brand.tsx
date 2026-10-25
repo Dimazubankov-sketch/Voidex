@@ -123,46 +123,56 @@ export const ICON_OPTICAL_SCALE = {
 
 /** Settings — hexagonal shutter. */
 export function SettingsGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-settings.png" className={className} optical={ICON_OPTICAL_SCALE.settings} />;
+  return <TileLogo src="/brand/logo-settings.webp" className={className} />;
 }
 
 /** VoidOps Mail (Step 2.13): the violet envelope, cut out of the delivered artwork without redrawing. */
 export function MailGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-mail.png" className={className} optical={ICON_OPTICAL_SCALE.mail} />;
+  return <TileLogo src="/brand/logo-mail.webp" className={className} />;
 }
 
 /** Vibex — the speech-bubble mark. */
 export function VibexGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-vibex.png" className={className} optical={ICON_OPTICAL_SCALE.vibex} />;
+  return <TileLogo src="/brand/logo-vibex.webp" className={className} />;
 }
 
 /** Calculator: the user's logo (Step 2.3), extracted from the delivered artwork without redrawing. */
 export function CalculatorGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-calculator.png" className={className} optical={ICON_OPTICAL_SCALE.calculator} />;
+  return <TileLogo src="/brand/logo-calculator.webp" className={className} />;
 }
 
 export function NotesGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-notes.png" className={className} optical={ICON_OPTICAL_SCALE.notes} />;
+  return <TileLogo src="/brand/logo-notes.webp" className={className} />;
 }
 
 /** Files: the user's folder logo (Step 2.7), cut out of the delivered artwork without redrawing. */
 export function FilesGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-files.png" className={className} optical={ICON_OPTICAL_SCALE.files} />;
+  return <TileLogo src="/brand/logo-files.webp" className={className} />;
 }
 
 /** Media: the user's picture logo (Step 2.7), cut out of the delivered artwork without redrawing. */
 export function MediaGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-media.png" className={className} optical={ICON_OPTICAL_SCALE.media} />;
+  return <TileLogo src="/brand/logo-media.webp" className={className} />;
 }
 
 /** Appex Store (Step 2.11): the mark delivered with the Store, cut out of its tile without redrawing. */
 export function StoreGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-store.png" className={className} optical={ICON_OPTICAL_SCALE.store} />;
+  return <TileLogo src="/brand/logo-appex.webp" className={className} />;
 }
 
 /** Step 2.14: Clock. A system icon only: never drawn inside the Clock app itself. */
 export function ClockGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-clock.png" className={className} optical={ICON_OPTICAL_SCALE.clock} />;
+  return <TileLogo src="/brand/logo-clock.webp" className={className} />;
+}
+
+/**
+ * Update 4: the app logos are whole tiles (the delivered artwork: its rounded square with its own soft
+ * surface; only the white page and the outer glow around it were cut away). A tile logo replaces the white
+ * system tile: inside AppTile it fills the tile (see `.vx-app-tile` in index.css) — no white plate, no
+ * outline, no filter on the artwork; only a soft violet shadow under it, as the artwork's own glow.
+ */
+export function TileLogo({ src, className }: { src: string; className?: string }) {
+  return <img src={src} alt="" draggable={false} className={cx("block select-none object-contain", className)} aria-hidden data-system-ui data-logo={src} data-tile-logo onContextMenu={(e) => e.preventDefault()} />;
 }
 
 /** Share of the tile the logo's content box fills — the same for every app. */
@@ -175,7 +185,7 @@ export function AppTile({ children, size = 72, className, glow }: { children: Re
       data-system-ui
       onContextMenu={(e) => e.preventDefault()}
       onDragStart={(e) => e.preventDefault()}
-      className={cx("relative inline-flex shrink-0 items-center justify-center bg-surface shadow-tile", className)}
+      className={cx("vx-app-tile relative inline-flex shrink-0 items-center justify-center bg-surface shadow-tile", className)}
       style={{ width: size, height: size, borderRadius: size * 0.3 }}
     >
       {glow && <span className="absolute inset-2 -z-10 rounded-[inherit] bg-primary/30 blur-xl" />}
@@ -238,5 +248,5 @@ export function Avatar({
 
 /** Forma: the user's ribbon F, cut out of the delivered artwork (white tile and glow removed, not redrawn). */
 export function FormaGlyph({ className }: { className?: string }) {
-  return <TrimmedLogo src="/brand/app-forma.png" className={className} optical={ICON_OPTICAL_SCALE.forma} />;
+  return <TileLogo src="/brand/logo-forma.webp" className={className} />;
 }

@@ -49,9 +49,9 @@ test("registry: Clock is installed with its own logo on the desktop, opens nativ
   await signUpViaApi(page, "Часовщик", "Первый");
   const icon = page.getByTestId("app-clock");
   await expect(icon).toBeVisible();
-  await expect(icon.locator('[data-logo="/brand/app-clock.png"]')).toHaveCount(1);
-  // Optically normalised like the other marks.
-  expect(Number(await icon.locator("[data-optical]").getAttribute("data-optical"))).toBeGreaterThan(1);
+  await expect(icon.locator('[data-logo="/brand/logo-clock.webp"]')).toHaveCount(1);
+  // Update 4: the logo is the whole tile.
+  await expect(icon.locator("[data-tile-logo]")).toHaveCount(1);
   const apps = (await apiAs(page, "GET", "/api/apps")).body as { id: string; manifest: { name: { ru: string }; category: string } }[];
   const entry = apps.filter((a) => a.id === "clock");
   expect(entry).toHaveLength(1);
@@ -313,7 +313,7 @@ test("Settings → Applications → Часы: lock, notifications (Clock sends t
   await expect(page.getByTestId("settings-app-notifications").last()).toBeVisible();
   await expect(page.getByTestId("settings-app-no-notifications")).toHaveCount(0);
   await expect(page.getByTestId("settings-app-offload").last()).toBeVisible();
-  await expect(page.getByTestId("settings-app-page").last().locator('[data-logo="/brand/app-clock.png"]')).toHaveCount(1);
+  await expect(page.getByTestId("settings-app-page").last().locator('[data-logo="/brand/logo-clock.webp"]')).toHaveCount(1);
 });
 
 test("Appex Store lists Clock with its logo, words, version and screenshots for both platforms", async ({ page }) => {
@@ -324,7 +324,7 @@ test("Appex Store lists Clock with its logo, words, version and screenshots for 
   await page.getByTestId("store-see-all").first().click();
   const row = page.locator('[data-testid="store-row"][data-app="clock"]');
   await expect(row).toBeVisible();
-  await expect(row.locator('[data-logo="/brand/app-clock.png"]')).toHaveCount(1);
+  await expect(row.locator('[data-logo="/brand/logo-clock.webp"]')).toHaveCount(1);
   await row.getByTestId("store-row-open").click();
   const app = page.getByTestId("store-app-page");
   await expect(app).toHaveAttribute("data-app", "clock");
