@@ -72,9 +72,10 @@ function pinText(t: ReturnType<typeof useT>, p: Pick<VibexPinDto, "kind" | "text
 
 /**
  * Update 3 · C2: the pinned messages, newest first. A tap goes to the one shown (the history scrolls to
- * it and highlights it briefly) and shows the next older one, always in the same direction: from the
- * newest to the very first. At the first pin a tap goes to it again; it never jumps back to the newest.
- * Reopening the chat (or a pin added / removed) starts from the newest again.
+ * it and highlights it briefly) and shows the next older one, always in the same direction.
+ * Update 5 · 8: in a circle — after the very first pin comes the newest again (4 → 3 → 2 → 1 → 4 …); a
+ * single pin is always the one. Reopening the chat starts from the newest; when a pin is added or removed
+ * the one shown stays (or, if it was the one removed, the next in line shows).
  *
  * Motion (SR525): the capsule answers the tap with a short pulse; the next pin's text rises in from below
  * while the shown one leaves upwards (≈220 ms).
@@ -85,16 +86,31 @@ function PinsBar({ chat, pins, onJump, nameOf }: { chat: VibexChatDto; pins: Pic
   const [index, setIndex] = useState(pins.length - 1);
   const bar = useRef<HTMLButtonElement>(null);
   const unpin = useRemovePin(chat.id);
-  // Pins added or removed: the newest shows again (a removed one never lingers).
+  // Pins added or removed: the one shown stays where it is now; a removed one never lingers.
   const sig = pins.map((p) => p.id).join(",");
-  useEffect(() => setIndex(pins.length - 1), [sig, pins.length]);
+  const shownId = useRef<string | null>(null);
+  const shownAt = useRef(pins.length - 1);
+  useEffect(() => {
+    const keep = shownId.current ? pins.findIndex((x) => x.id === shownId.current) : -1;
+    // Before any tap the newest is the one shown (a newly pinned message appears at once).
+    setIndex(!shownId.current ? pins.length - 1 : keep >= 0 ? keep : Math.min(shownAt.current, pins.length - 1));
+  }, [sig]);
   const i = Math.min(Math.max(0, index), pins.length - 1);
   const p = pins[i]!;
+  const lastTap = useRef(0);
   const go = () => {
+    // A double tap is one tap (no second jump while the first is landing).
+    const now = performance.now();
+    if (now - lastTap.current < 250) return;
+    lastTap.current = now;
     onJump(p.id);
     if (bar.current && !reduced) void animate(bar.current, { scale: [1, 1.025, 1] }, { duration: 0.22, ease: EASE });
-    // Towards the first pin; there it stays (no wrap to the newest).
-    if (i > 0) setIndex(i - 1);
+    // Towards the first pin, then round to the newest again. Remembered by id, so a list that changes
+    // meanwhile (even passing through an in-between state while it reloads) keeps the same pin in view.
+    const next = i > 0 ? i - 1 : pins.length - 1;
+    shownId.current = pins[next]!.id;
+    shownAt.current = next;
+    setIndex(next);
   };
   return (
     <>

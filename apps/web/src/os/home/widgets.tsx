@@ -176,26 +176,26 @@ function ClockFace({ zone, className, style }: { zone: string; className?: strin
       <defs>
         {/* The marks of the picture: deep violet at the centre side, lighter outwards. */}
         <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="30.7" x2="100" y2="14.2">
-          <stop offset="0" stopColor="#7754fd" />
-          <stop offset="1" stopColor="#b08cfc" />
+          <stop offset="0" stopColor="#a954fd" />
+          <stop offset="1" stopColor="#c78cfc" />
         </linearGradient>
         {/* The hands: a deep blue-violet at the centre, lavender at the tip (as in the picture). */}
         <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="22">
-          <stop offset="0" stopColor="#3b20ef" />
-          <stop offset="0.55" stopColor="#6f4dfb" />
-          <stop offset="1" stopColor="#ad97ff" />
+          <stop offset="0" stopColor="#8520ef" />
+          <stop offset="0.55" stopColor="#a44dfb" />
+          <stop offset="1" stopColor="#cb97ff" />
         </linearGradient>
         <radialGradient id={id("knobRing")} cx="0.42" cy="0.38" r="0.62">
-          <stop offset="0" stopColor="#d4c6fe" />
-          <stop offset="0.72" stopColor="#9374fc" />
-          <stop offset="1" stopColor="#b9a0fd" />
+          <stop offset="0" stopColor="#e3c6fe" />
+          <stop offset="0.72" stopColor="#b974fc" />
+          <stop offset="1" stopColor="#d0a0fd" />
         </radialGradient>
         <radialGradient id={id("knob")} cx="0.38" cy="0.32" r="0.7">
-          <stop offset="0" stopColor="#f1ecff" />
-          <stop offset="1" stopColor="#c3b0fd" />
+          <stop offset="0" stopColor="#f6ecff" />
+          <stop offset="1" stopColor="#d7b0fd" />
         </radialGradient>
         <filter id={id("sh")} filterUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
-          <feDropShadow dx="0" dy="1.6" stdDeviation="1.8" floodColor="#3a1fd6" floodOpacity="0.3" />
+          <feDropShadow dx="0" dy="1.6" stdDeviation="1.8" floodColor="#791fd6" floodOpacity="0.3" />
         </filter>
       </defs>
       {Array.from({ length: 12 }, (_, i) => (
@@ -208,7 +208,7 @@ function ClockFace({ zone, className, style }: { zone: string; className?: strin
         <line x1={100} y1={106} x2={100} y2={27} stroke={url("hand")} strokeWidth={8.5} strokeLinecap="round" filter={url("sh")} />
       </g>
       <g ref={second} data-testid="clock-widget-second">
-        <line x1={100} y1={124} x2={100} y2={10} stroke="#4526f0" strokeWidth={2.4} strokeLinecap="round" filter={url("sh")} />
+        <line x1={100} y1={124} x2={100} y2={10} stroke="#8926f0" strokeWidth={2.4} strokeLinecap="round" filter={url("sh")} />
       </g>
       <circle cx={100} cy={100} r={17} fill={url("knobRing")} filter={url("sh")} />
       <circle cx={100} cy={100} r={10.5} fill={url("knob")} />
@@ -291,7 +291,7 @@ function ClockWidget({ preview, size }: { preview?: boolean; size?: WidgetSize }
             <span className="truncate font-semibold leading-tight text-[#1d1b2b]" style={{ fontSize: "7.6em" }} data-testid="clock-widget-city">
               {city}
             </span>
-            <span className="bg-[linear-gradient(135deg,#8e6bff,#5a3ef2)] bg-clip-text font-bold leading-[1.02] tracking-[-0.02em] text-transparent tabular-nums" style={{ fontSize: "26em" }} data-testid="clock-widget-time">
+            <span className="bg-[linear-gradient(135deg,#b66bff,#973ef2)] bg-clip-text font-bold leading-[1.02] tracking-[-0.02em] text-transparent tabular-nums" style={{ fontSize: "26em" }} data-testid="clock-widget-time">
               {time}
             </span>
             <span className="truncate text-[#7a7690]" style={{ fontSize: "5.9em" }}>

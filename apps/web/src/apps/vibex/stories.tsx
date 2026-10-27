@@ -131,52 +131,79 @@ export function StoryHalo({
   );
 }
 
-/** Collapsed header: a few story avatars overlapping each other (people with stories, unseen first). */
-export function StackedStories({ groups, onClick }: { groups: VibexStoryGroupDto[]; onClick: () => void }) {
+/**
+ * Collapsed header: a few story avatars overlapping each other (people with stories, unseen first).
+ * Update 5 · 4 (SR5459): always there, left of «Чаты» — with nobody's stories it is my own avatar with a
+ * small «+». When the stories row opens under the title it folds away (shrinks and fades, the title
+ * glides to the middle) and comes back when the row folds up again.
+ */
+export function StackedStories({ groups, onClick, folded = false }: { groups: VibexStoryGroupDto[]; onClick: () => void; folded?: boolean }) {
   const t = useT();
+  const reduced = useReducedMotion();
+  const me = useSession((s) => s.user);
   const others = groups.filter((g) => !g.mine).slice(0, 3);
   const shown = others.length ? others : groups.slice(0, 1);
-  if (!shown.length) return null;
   return (
-    <button type="button" onClick={onClick} className="flex shrink-0 items-center" aria-label={t("vibex.stories.title")} data-testid="stories-stack">
-      {shown.map((g, i) => (
-        <span
-          key={g.person.id}
-          className={cx("rounded-full p-[2px]", g.seen ? "bg-border" : STORY_GRADIENT)}
-          style={{ marginLeft: i ? -10 : 0, zIndex: 10 - i }}
-        >
-          <span className="block rounded-full bg-surface p-[1.5px]">
-            <Avatar name={g.person.name} userId={g.person.id} version={g.person.avatarVersion} size={26} />
+    <motion.span
+      className="flex shrink-0 items-center"
+      initial={false}
+      animate={folded ? { width: 0, opacity: 0, scale: 0.55, marginRight: -8 } : { width: "auto", opacity: 1, scale: 1, marginRight: 0 }}
+      transition={reduced ? { duration: 0 } : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      style={{ transformOrigin: "50% 100%" }}
+      aria-hidden={folded || undefined}
+      data-folded={folded || undefined}
+    >
+      <button type="button" tabIndex={folded ? -1 : 0} onClick={onClick} className="flex shrink-0 items-center" aria-label={t("vibex.stories.title")} data-testid="stories-stack">
+        {shown.length ? (
+          shown.map((g, i) => (
+            <span key={g.person.id} className={cx("rounded-full p-[2px]", g.seen ? "bg-border" : STORY_GRADIENT)} style={{ marginLeft: i ? -10 : 0, zIndex: 10 - i }}>
+              <span className="block rounded-full bg-surface p-[1.5px]">
+                <Avatar name={g.person.name} userId={g.person.id} version={g.person.avatarVersion} size={26} />
+              </span>
+            </span>
+          ))
+        ) : me ? (
+          <span className="relative rounded-full bg-border p-[2px]" data-testid="stories-stack-mine">
+            <span className="block rounded-full bg-surface p-[1.5px]">
+              <Avatar name={`${me.firstName} ${me.lastName}`} userId={me.id} version={me.avatarVersion} size={26} />
+            </span>
+            <span className="absolute -bottom-0.5 -right-0.5 flex size-[13px] items-center justify-center rounded-full border-[1.5px] border-surface bg-primary text-white">
+              <RiAddLine className="size-[9px]" />
+            </span>
           </span>
-        </span>
-      ))}
-    </button>
+        ) : null}
+      </button>
+    </motion.span>
   );
 }
 
 /** Expanded header: «Моя история» (with +) first, then everyone's stories; swipe sideways. */
 export function StoriesStrip({ groups, onOpen, onCreate }: { groups: VibexStoryGroupDto[]; onOpen: (personId: string) => void; onCreate: () => void }) {
   const t = useT();
+  const reduced = useReducedMotion();
   const mine = groups.find((g) => g.mine) ?? null;
   const others = groups.filter((g) => !g.mine);
+  // Update 5 · 4: the small header avatars grow into the full-size rings as the row opens (one after another).
+  const grow = (i: number) =>
+    reduced ? {} : { initial: { scale: 0.45, opacity: 0, y: -14 }, animate: { scale: 1, opacity: 1, y: 0 }, transition: { duration: 0.32, delay: Math.min(i, 6) * 0.035, ease: [0.22, 1, 0.36, 1] as const } };
   return (
     <div className="scroll-area flex gap-3.5 overflow-x-auto overscroll-x-contain px-3 pb-1 pt-1 [scrollbar-width:none]" role="list" aria-label={t("vibex.stories.title")} data-testid="stories-strip">
       {/* Step 2.12: «Моя история +» always adds a story; once I posted one, my story has its own circle beside it. */}
-      <div className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
+      <motion.div {...grow(0)} className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
         <StoryRing group={null} size={62} onClick={onCreate} label={t("vibex.stories.add")} plus onPlus={onCreate} testId="story-mine" />
         <span className="w-full truncate text-center text-[12px] text-text-secondary">{t("vibex.stories.mine")}</span>
-      </div>
+      </motion.div>
       {mine && (
-        <div className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
+        <motion.div {...grow(1)} className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
           <StoryRing group={mine} size={62} onClick={() => onOpen(mine.person.id)} label={t("vibex.stories.yours")} testId="story-own" />
           <span className="w-full truncate text-center text-[12px] text-text-secondary">{t("vibex.stories.yours")}</span>
-        </div>
+        </motion.div>
       )}
-      {others.map((g) => (
-        <div key={g.person.id} className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
+      {others.map((g, i) => (
+        <motion.div {...grow(i + (mine ? 2 : 1))} key={g.person.id} className="flex w-[70px] shrink-0 flex-col items-center gap-1" role="listitem">
           <StoryRing group={g} size={62} onClick={() => onOpen(g.person.id)} testId="story-person" />
           <span className="w-full truncate text-center text-[12px] text-text-secondary">{g.person.firstName || g.person.name}</span>
-        </div>
+        </motion.div>
       ))}
     </div>
   );

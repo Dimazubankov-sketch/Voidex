@@ -21,7 +21,7 @@ import { useT, type MessageKey } from "@/lib/i18n";
 import { IconButton } from "@/ui/controls";
 import { WindowHeader, useWindow } from "@/os/window-context";
 import { Conversation } from "./chats";
-import { ChatsPane } from "./chat-home";
+import { ChatsEditButton, ChatsPane } from "./chat-home";
 import { NewChatFab } from "./groups";
 import { CommentsScreen } from "./comments";
 import { FeedEmpty, ComposerPrompt, PostComposer, PostList } from "./posts";
@@ -304,6 +304,7 @@ function DesktopVibex() {
   const stack = useVibex((s) => s.stack);
   const back = useVibex((s) => s.back);
   const chatId = useVibex((s) => s.chatId);
+  const chatEditing = useVibex((s) => s.chatEditing && s.section === "chats");
   // Step 2.5.1: a narrow window collapses the rail to icons by itself; the toggle still wins.
   const [manual, setManual] = useState<boolean | null>(null);
   const [host, setHost] = useState<HTMLElement | null>(null);
@@ -337,11 +338,12 @@ function DesktopVibex() {
                 <WindowHeader menu={false}>
                   <VibexTitle className="flex-1 justify-start pl-1.5">{t("vibex.nav.messages")}</VibexTitle>
                   {stories}
+                  <ChatsEditButton className="ml-1" />
                 </WindowHeader>
               )}
             />
             {/* The pencil: a new conversation (a person or a group), like the feed's "+" */}
-            <NewChatFab className="bottom-5 right-5" />
+            {!chatEditing && <NewChatFab className="bottom-5 right-5" />}
           </section>
           <section className="relative flex min-w-0 flex-1 flex-col bg-surface">
             {chatId ? (
@@ -387,6 +389,7 @@ function MobileVibex() {
   const stack = useVibex((s) => s.stack);
   const back = useVibex((s) => s.back);
   const chatId = useVibex((s) => s.chatId);
+  const chatEditing = useVibex((s) => s.chatEditing && s.section === "chats");
   const drawer = useVibex((s) => s.drawer);
   const setDrawer = useVibex((s) => s.setDrawer);
   const unread = (useChats().data ?? []).reduce((n, c) => n + c.unread, 0);
@@ -428,19 +431,19 @@ function MobileVibex() {
       {section === "chats" ? (
         // Step 2.9 (Telegram-like): stacked story avatars beside «Чаты»; pull down for the search, then the stories.
         <ChatsPane
-          header={(stories) => <VibexHeader title={t(SECTION_TITLE[section])} beside={stories} />}
+          header={(stories) => <VibexHeader title={t(SECTION_TITLE[section])} beside={stories} action={<ChatsEditButton />} />}
         />
       ) : (
           <div ref={scroller} className={cx("vx-tab-scroll scroll-area flex-1", section === "feed" && "pt-[112px]")} data-testid="vibex-scroll">
             <Column>{section === "feed" ? <Feed switcher={false} /> : <SectionBody section={section} />}</Column>
         </div>
       )}
-      {section === "chats" && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
+      {section === "chats" && !chatEditing && <NewChatFab className="right-4" style={{ bottom: 80 }} />}
       {(section === "feed" || section === "me") && <NewPostFab className="right-4 bottom-[84px]" />}
 
         {/* Step 2.13: the floating tab bar of the reference video (one capsule gliding between the tabs). The window
           frame already keeps the home-indicator area below the app; the content scrolls under the bar. */}
-        <VibexTabBar
+        {!chatEditing && <VibexTabBar
           items={tabs.map((tab) => ({
             ...tab,
             badge: tab.key === "chats" ? unread : tab.key === "activity" ? activityUnread : 0,
@@ -448,7 +451,7 @@ function MobileVibex() {
           }))}
           active={section}
           onSelect={go}
-        />
+        />}
 
 
 

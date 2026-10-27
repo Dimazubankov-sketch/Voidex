@@ -22,18 +22,19 @@ async function png(page: Page, color: string) {
   );
 }
 
-test("D1 / D2: new wallpapers are added (old ones kept); my own wallpapers stay in the catalogue and can be deleted; built-in ones can't", async ({ page }) => {
+test("Update 5 · 2: the Update 4 set is gone (old ones kept); my own wallpapers stay in the catalogue and can be deleted; built-in ones can't", async ({ page }) => {
   await signUpViaApi(page, "Обои", "Новые");
   await openApp(page, "settings");
   await openWallpapersTab(page, "home");
   const s = page.getByTestId("settings-wallpapers").last();
-  // The old built-ins are all still there, the new ones after them.
-  for (const id of ["white", "aura", "mist", "wave-light", "wave-milk", "wave-milk-violet", "wave-gray", "wave-gray-purple", "wave-milk-gray-purple", "v-glow", "v-silk", "v-dawn", "v-orbit", "v-prism"]) await expect(s.getByTestId(`wallpapers-option-${id}`)).toHaveCount(1);
-  // A new one applies like any other (and has no delete button).
-  await s.getByTestId("wallpapers-option-v-silk").click();
+  // The old built-ins are all still there; the Update 4 set is removed.
+  for (const id of ["white", "aura", "mist", "wave-light", "wave-milk", "wave-milk-violet", "wave-gray", "wave-gray-purple", "wave-milk-gray-purple"]) await expect(s.getByTestId(`wallpapers-option-${id}`)).toHaveCount(1);
+  for (const id of ["v-glow", "v-silk", "v-dawn", "v-orbit", "v-prism"]) await expect(s.getByTestId(`wallpapers-option-${id}`)).toHaveCount(0);
+  // A built-in applies (and has no delete button).
+  await s.getByTestId("wallpapers-option-wave-milk").click();
   await expect(s.getByTestId("wallpapers-delete")).toHaveCount(0);
   await s.getByTestId("wallpapers-apply").click();
-  await expect.poll(async () => (await layoutWallpaper(page)).id).toBe("v-silk");
+  await expect.poll(async () => (await layoutWallpaper(page)).id).toBe("wave-milk");
   // Two own pictures: both stay in the catalogue; the second is in use.
   await s.getByTestId("wallpapers-file").setInputFiles({ name: "a.png", mimeType: "image/png", buffer: await png(page, "#8a63ff") });
   await expect.poll(async () => (await layoutWallpaper(page)).version ?? "").toMatch(/^lib-/);

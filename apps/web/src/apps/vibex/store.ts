@@ -21,6 +21,9 @@ export interface VibexUiState {
   commentsFor: string | null;
   /** Phones: the side menu drawer. */
   drawer: boolean;
+  /** Update 5 · 4: «Изм.» — the chat list's edit mode (select, pin / unpin, delete, reorder the pinned). */
+  chatEditing: boolean;
+  setChatEditing: (on: boolean) => void;
   /** Step 2.13: the publications viewer (a person's publications as a feed, from this one on). */
   publication: { userId: string; postId: string; title: string } | null;
   openPublication: (p: { userId: string; postId: string; title: string } | null) => void;
@@ -49,6 +52,8 @@ export function createVibexStore() {
     sharing: null,
     commentsFor: null,
     drawer: false,
+    chatEditing: false,
+    setChatEditing: (chatEditing) => set({ chatEditing }),
     publication: null,
     openPublication: (publication) => set({ publication }),
     circleSpeed: 1,
@@ -65,6 +70,7 @@ export function createVibexStore() {
               commentsFor: null,
               drawer: false,
               publication: null,
+              chatEditing: false,
             }
           : {
               section,
@@ -73,6 +79,7 @@ export function createVibexStore() {
               commentsFor: null,
               drawer: false,
               publication: null,
+              chatEditing: false,
             },
       ),
     openChat: (chatId) => set({ section: "chats", chatId, stack: [] }),

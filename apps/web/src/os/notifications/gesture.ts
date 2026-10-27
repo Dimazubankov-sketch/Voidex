@@ -6,8 +6,42 @@ import { useNotificationCenter } from "./store";
 /** Pull progress of the phone Notification Center: 0 hidden … 1 open. */
 export const ncPull = motionValue(0);
 
+/**
+ * Update 5 · 6: the release speed of the last pull (progress per second), handed to the settling spring so the
+ * sheet carries on at the finger's speed — only after the finger is lifted, and bounded.
+ */
+export const ncFling = { v: 0 };
+const FLING_MAX = 4;
+/** Settles without overshoot (critically damped): the sheet never flies past where it stops. */
+export const NC_SPRING = { type: "spring", stiffness: 380, damping: 40, restDelta: 0.001 } as const;
+export const settleSpring = () => {
+  const velocity = Math.max(-FLING_MAX, Math.min(FLING_MAX, ncFling.v));
+  ncFling.v = 0;
+  return { ...NC_SPRING, velocity };
+};
+
+/** Finger speed over the last ~100 ms (px per ms), not the average of the whole gesture. */
+export function velocityTracker() {
+  const pts: { y: number; t: number }[] = [];
+  return {
+    add(y: number) {
+      const t = performance.now();
+      pts.push({ y, t });
+      while (pts.length > 2 && t - pts[0]!.t > 100) pts.shift();
+    },
+    get() {
+      if (pts.length < 2) return 0;
+      const a = pts[0]!;
+      const b = pts[pts.length - 1]!;
+      return performance.now() - b.t > 120 ? 0 : (b.y - a.y) / Math.max(1, b.t - a.t);
+    },
+  };
+}
+
 const ENGAGE_PX = 12;
-const OPEN_AT = 0.28;
+/** Open when the sheet came a third of the way down, or on a quick flick down. */
+const OPEN_AT = 0.33;
+const FLICK = 0.45;
 
 /**
  * Gesture priority on phones (Step 2.3) — one place decides who owns a touch:
@@ -26,12 +60,12 @@ const OPEN_AT = 0.28;
 export function useTopEdgeGesture(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
-    let active: { id: number; x: number; y: number; t: number; engaged: boolean } | null = null;
+    let active: { id: number; x: number; y: number; t: number; engaged: boolean; vt: ReturnType<typeof velocityTracker> } | null = null;
     let swallowClick = false;
 
     const down = (e: PointerEvent) => {
       if (e.button !== 0 || useNotificationCenter.getState().open || !inTopEdge(e.clientY)) return;
-      active = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), engaged: false };
+      active = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), engaged: false, vt: velocityTracker() };
     };
     const move = (e: PointerEvent) => {
       if (!active || e.pointerId !== active.id) return;
@@ -44,7 +78,9 @@ export function useTopEdgeGesture(enabled: boolean) {
         }
         active.engaged = true;
       }
-      ncPull.set(Math.max(0, Math.min(1, dy / (window.innerHeight * 0.55))));
+      active.vt.add(e.clientY);
+      // Update 5 · 6: 1 : 1 — the sheet's lower edge stays under the finger (it never runs ahead of it).
+      ncPull.set(Math.max(0, Math.min(1, e.clientY / window.innerHeight)));
     };
     const finish = (e: PointerEvent) => {
       if (!active || e.pointerId !== active.id) return;
@@ -53,10 +89,13 @@ export function useTopEdgeGesture(enabled: boolean) {
       if (!a.engaged) return;
       swallowClick = true;
       window.setTimeout(() => (swallowClick = false), 400);
-      const dy = e.clientY - a.y;
-      const v = dy / Math.max(1, performance.now() - a.t);
-      if (ncPull.get() > OPEN_AT || v > 0.8) useNotificationCenter.getState().setOpen(true);
-      else void animate(ncPull, 0, { duration: 0.22 });
+      a.vt.add(e.clientY);
+      const v = a.vt.get();
+      ncFling.v = (v * 1000) / window.innerHeight;
+      // A flick up cancels even past the threshold; a flick down opens even before it.
+      const open = v > FLICK || (ncPull.get() > OPEN_AT && v > -FLICK);
+      if (open) useNotificationCenter.getState().setOpen(true);
+      else void animate(ncPull, 0, settleSpring());
     };
     // While engaged the page must not scroll under the finger.
     const touchMove = (e: TouchEvent) => {

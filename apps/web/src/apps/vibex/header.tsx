@@ -15,7 +15,7 @@ import { useVibex } from "./store";
  * in the header). Step 2.12: on the left a round menu button (two bars, no
  * logo) opens the side menu; the edge swipe still does too.
  */
-export function VibexHeader({ title, search = false, beside, className }: { title: ReactNode; search?: boolean; beside?: ReactNode; className?: string }) {
+export function VibexHeader({ title, search = false, beside, action, className }: { title: ReactNode; search?: boolean; beside?: ReactNode; action?: ReactNode; className?: string }) {
   const t = useT();
   const setDrawer = useVibex((s) => s.setDrawer);
   return (
@@ -34,7 +34,7 @@ export function VibexHeader({ title, search = false, beside, className }: { titl
         <VibexTitle className="text-center">{title}</VibexTitle>
       </span>
       <span className="flex-1" />
-      {search ? <VibexSearchButton /> : <span className="size-11 shrink-0" aria-hidden />}
+      {action ?? (search ? <VibexSearchButton /> : <span className="size-11 shrink-0" aria-hidden />)}
     </WindowHeader>
   );
 }

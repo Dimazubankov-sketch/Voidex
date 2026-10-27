@@ -11,7 +11,7 @@ import { dockZone } from "../home/dock";
 import { useWorkspaceLayout } from "../home/layout";
 import { SYSTEM_BAR_H } from "../metrics";
 import { useWM } from "../window-manager";
-import { ncPull } from "./gesture";
+import { ncFling, ncPull, settleSpring, velocityTracker } from "./gesture";
 import { notificationActions, useNotificationCenter, useNotifications } from "./store";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -451,21 +451,28 @@ function MobileCenter() {
   const y = useTransform(ncPull, (p) => `${(p - 1) * 100}%`);
   const scrim = useTransform(ncPull, [0, 1], [0, 1]);
   // Step 2.7: always the whole screen (no half state). Up on the handle, or the close button, closes it.
+  // Update 5 · 6: the settle starts at the finger's release speed (critically damped, no overshoot).
   useEffect(() => {
-    void animate(ncPull, open ? 1 : 0, { type: "spring", stiffness: 380, damping: 38 });
+    void animate(ncPull, open ? 1 : 0, settleSpring());
   }, [open]);
 
-  const onPan = (_: unknown, info: PanInfo) => {
-    if (info.offset.y < 0) ncPull.set(Math.max(0, 1 + info.offset.y / (window.innerHeight * 0.8)));
+  // Closing on the handle: 1 : 1 with the finger as well.
+  const vt = useRef(velocityTracker());
+  const onPanStart = () => (vt.current = velocityTracker());
+  const onPan = (e: PointerEvent, info: PanInfo) => {
+    vt.current.add(e.clientY);
+    ncPull.set(Math.max(0, Math.min(1, 1 + info.offset.y / window.innerHeight)));
   };
-  const onPanEnd = (_: unknown, info: PanInfo) => {
-    const up = info.offset.y < -90 || info.velocity.y < -600;
+  const onPanEnd = (e: PointerEvent, info: PanInfo) => {
+    vt.current.add(e.clientY);
+    const v = vt.current.get();
+    ncFling.v = (v * 1000) / window.innerHeight;
+    const up = v < -0.45 || (info.offset.y < -90 && v < 0.45);
     if (up) {
       setOpen(false);
-      void animate(ncPull, 0, { type: "spring", stiffness: 380, damping: 38 });
       return;
     }
-    void animate(ncPull, 1, { type: "spring", stiffness: 380, damping: 38 });
+    void animate(ncPull, 1, settleSpring());
   };
 
   return (
@@ -487,7 +494,7 @@ function MobileCenter() {
         data-testid={open ? "notification-center" : undefined}
       >
         <Body onClose={close} titleId="nc-title-m" closeButton phone />
-        <motion.div className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center" onPan={onPan} onPanEnd={onPanEnd} data-testid="notification-handle">
+        <motion.div className="flex h-7 shrink-0 cursor-grab touch-none items-center justify-center" onPanStart={onPanStart} onPan={onPan} onPanEnd={onPanEnd} data-testid="notification-handle">
           <span className="h-[5px] w-10 rounded-full bg-text/35" />
         </motion.div>
       </motion.div>

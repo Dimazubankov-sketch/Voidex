@@ -20,7 +20,7 @@ import { useFormFactor } from "@/lib/form-factor";
 import { formatShortDate, useLanguage, useT, type MessageKey } from "@/lib/i18n";
 import { useSession } from "@/lib/session";
 import { Spinner } from "@/ui/controls";
-import { toast } from "@/ui/overlays";
+import { ConfirmDialog, toast } from "@/ui/overlays";
 import { VoidexSearchField } from "@/ui/search-field";
 import { ChatList, ChatPreviewMessages } from "./chats";
 import { openDirect, useChatSearch, useChats, useDeleteChat, useMuteChat, usePeople, useSetPins, useStories, useUpdateSettings, useVibexMe } from "./data";
@@ -79,6 +79,19 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
   const [menu, setMenu] = useState<{ chat: VibexChatDto; x: number; y: number } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const shown = Math.max(level, query || focused ? 1 : 0);
+  // Update 5 · 4: «Изм.» — select chats, pin / unpin them, delete them, rearrange the pinned.
+  const editing = useVibex((s) => s.chatEditing);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!editing) setSelected(new Set());
+  }, [editing]);
+  const toggle = (id: string) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const wheelAt = useRef(0);
   /** The list is too short to scroll: a scroll up can't fold the parts, so a move up does. */
   const cantScroll = () => {
@@ -148,10 +161,11 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
     onMenu: (chat: VibexChatDto, at: { x: number; y: number }) => (pc ? setMenu({ chat, ...at }) : setPreview(chat)),
   };
 
-  const stack = <StackedStories groups={groups} onClick={() => setLevel(2)} />;
   // Update 3 · H1 (SR4949): searching on a phone: the header folds away, the field rises to the top and
   // «Отмена» slides in beside it; the list below keeps its place. Cancel (or Esc) brings everything back.
   const searching = !pc && focused;
+  // Update 5 · 4: the small stack beside «Чаты» folds away while the full stories row is open under the title.
+  const stack = <StackedStories groups={groups} onClick={() => setLevel(2)} folded={shown >= 2 && !searching} />;
   // What was open when the search was tapped comes back on «Отмена» (the layout settling meanwhile is not a scroll).
   const levelAtFocus = useRef(0);
   const quietUntil = useRef(0);
@@ -261,9 +275,11 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
             </motion.div>
           )}
         </AnimatePresence>
-        {query.trim() ? <ChatSearchResults query={query} onDone={() => setQuery("")} /> : <ChatList actions={actions} order={order} />}
+        {query.trim() && !editing ? <ChatSearchResults query={query} onDone={() => setQuery("")} /> : <ChatList actions={actions} order={order} edit={editing ? { selected, toggle } : undefined} />}
         <div className="h-24" aria-hidden />
       </div>
+
+      <EditBar open={editing} selected={selected} onDone={() => setSelected(new Set())} />
 
       <StoryViewer groups={groups} startPerson={viewing} onClose={() => setViewing(null)} onArchive={() => (setViewing(null), setArchive(true))} />
       <StoryComposer open={creating} onClose={() => setCreating(false)} />
@@ -271,6 +287,110 @@ export function ChatsPane({ header }: { header?: (stack: ReactNode) => ReactNode
       <ChatPreview chat={preview} onClose={() => setPreview(null)} />
       <ChatContextMenu menu={menu} onClose={() => setMenu(null)} onPreview={(c) => setPreview(c)} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------- edit mode
+
+/** Update 5 · 4: «Изм.» / «Готово» at the top of the chat list. */
+export function ChatsEditButton({ className }: { className?: string }) {
+  const t = useT();
+  const editing = useVibex((s) => s.chatEditing);
+  const setEditing = useVibex((s) => s.setChatEditing);
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(!editing)}
+      className={cx(
+        "relative z-[1] flex h-9 shrink-0 items-center justify-center rounded-full bg-surface px-3.5 text-[15px] font-medium shadow-[0_0_0_1px_rgba(24,18,60,0.06),0_2px_10px_rgba(60,40,140,0.12)] transition hover:bg-surface-hover",
+        editing ? "text-primary" : "text-text",
+        className,
+      )}
+      aria-pressed={editing}
+      data-testid="chats-edit"
+    >
+      {editing ? t("common.done") : t("vibex.chats.edit")}
+    </button>
+  );
+}
+
+/**
+ * Update 5 · 4: the actions of the edit mode, floating at the bottom in place of the tab bar: pin or unpin
+ * the selected chats, delete them (asks first; only from my own list — the other side keeps the history).
+ */
+function EditBar({ open, selected, onDone }: { open: boolean; selected: Set<string>; onDone: () => void }) {
+  const t = useT();
+  const reduced = useReducedMotion();
+  const chats = useChats().data ?? [];
+  const setPins = useSetPins();
+  const del = useDeleteChat();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const n = selected.size;
+  const pinnedIds = chats.filter((c) => c.pinnedPosition !== null).sort((a, b) => a.pinnedPosition! - b.pinnedPosition!).map((c) => c.id);
+  const chosen = chats.filter((c) => selected.has(c.id)).map((c) => c.id);
+  const allPinned = chosen.length > 0 && chosen.every((id) => pinnedIds.includes(id));
+  const pin = () => {
+    const next = allPinned ? pinnedIds.filter((id) => !selected.has(id)) : [...chosen.filter((id) => !pinnedIds.includes(id)), ...pinnedIds];
+    setPins.mutate(next, { onError: (e) => toast({ title: errorMessage(t, e), tone: "danger" }) });
+    onDone();
+  };
+  const remove = async () => {
+    setBusy(true);
+    let done = 0;
+    try {
+      for (const id of chosen) {
+        await del.mutateAsync({ id, scope: "me" });
+        done++;
+      }
+      toast({ title: t("vibex.chats.deletedMany", { n: done }) });
+    } catch (e) {
+      toast({ title: errorMessage(t, e), tone: "danger" });
+    } finally {
+      setBusy(false);
+      setAsking(false);
+      onDone();
+    }
+  };
+  const btn = "flex h-10 min-w-0 items-center justify-center rounded-full px-3.5 text-[15px] font-medium transition disabled:opacity-40";
+  return (
+    <>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="vx-glass absolute inset-x-3 bottom-3 z-[25] flex items-center gap-1 rounded-[24px] p-1.5"
+            initial={{ y: 28, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 28, opacity: 0 }}
+            transition={reduced ? { duration: 0 } : { duration: 0.24, ease: EASE }}
+            data-testid="chats-edit-bar"
+          >
+            <button type="button" disabled={!n} onClick={pin} className={cx(btn, "text-text hover:bg-surface-hover")} data-testid={allPinned ? "chats-edit-unpin" : "chats-edit-pin"}>
+              {allPinned ? <RiUnpinLine className="mr-1.5 size-[18px]" /> : <RiPushpinLine className="mr-1.5 size-[18px]" />}
+              {t(allPinned ? "vibex.chats.unpin" : "vibex.chats.pin")}
+            </button>
+            <span className="min-w-0 flex-1 truncate text-center text-[13px] text-text-tertiary" data-testid="chats-edit-count">
+              {n ? t("vibex.chats.editSelected", { n }) : ""}
+            </span>
+            <button type="button" disabled={!n} onClick={() => setAsking(true)} className={cx(btn, "text-danger hover:bg-danger/10")} data-testid="chats-edit-delete">
+              <RiDeleteBinLine className="mr-1.5 size-[18px]" />
+              {t("vibex.chats.delete")}
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <ConfirmDialog
+        open={asking}
+        onClose={() => !busy && setAsking(false)}
+        onConfirm={() => void remove()}
+        title={t("vibex.chats.deleteManyTitle", { n })}
+        message={t("vibex.chats.deleteManyBody")}
+        confirmLabel={t("vibex.chats.deleteManyConfirm")}
+        danger
+        loading={busy}
+        testId="chats-delete-confirm"
+      />
+    </>
   );
 }
 
@@ -597,11 +717,25 @@ function ChatPreview({ chat, onClose }: { chat: VibexChatDto | null; onClose: ()
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [chat, onClose]);
+  const card = live && (
+    <>
+      <div className="flex shrink-0 items-center gap-3 border-b px-4 py-2.5">
+        <ChatAvatar chat={live} size={36} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-semibold">{chatTitle(live)}</span>
+          <span className="block truncate text-[12.5px] text-text-tertiary">{live.group ? t("vibex.group.members", { n: live.group.members.length }) : live.peer?.address}</span>
+        </span>
+      </div>
+      <PreviewScroller onOpen={() => (onClose(), openChat(live.id))}>
+        <ChatPreviewMessages chat={live} />
+      </PreviewScroller>
+    </>
+  );
   return createPortal(
     <AnimatePresence>
       {live && me && (
         <motion.div
-          className="fixed inset-0 z-[230] flex items-center justify-center p-3"
+          className="fixed inset-0 z-[230] flex items-center justify-center px-3 pb-[calc(var(--safe-bottom,0px)+12px)] pt-[calc(var(--safe-top,0px)+12px)]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -612,30 +746,48 @@ function ChatPreview({ chat, onClose }: { chat: VibexChatDto | null; onClose: ()
           data-testid="chat-preview"
           data-chat-id={live.id}
         >
-          <button type="button" className="absolute inset-0 bg-black/25 backdrop-blur-[6px]" aria-label={t("common.close")} onClick={onClose} data-testid="chat-preview-backdrop" />
-          <motion.div
-            className={cx("relative flex max-h-full w-full gap-3", ff === "desktop" ? "max-w-[760px] flex-row items-start" : "max-w-[440px] flex-col")}
-            initial={{ scale: 0.94, y: 12 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.96, y: 8 }}
-            transition={{ duration: 0.22, ease: EASE }}
-          >
-            <div className="flex h-[min(58dvh,520px)] min-w-0 flex-1 flex-col overflow-hidden rounded-[26px] bg-surface shadow-window">
-              <div className="flex items-center gap-3 border-b px-4 py-3">
-                <ChatAvatar chat={live} size={38} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15.5px] font-semibold">{chatTitle(live)}</span>
-                  <span className="block truncate text-[12.5px] text-text-tertiary">{live.group ? t("vibex.group.members", { n: live.group.members.length }) : live.peer?.address}</span>
-                </span>
+          <button type="button" className="absolute inset-0 bg-black/30 backdrop-blur-[8px]" aria-label={t("common.close")} onClick={onClose} data-testid="chat-preview-backdrop" />
+          {ff === "desktop" ? (
+            <motion.div
+              className="relative flex max-h-full w-full max-w-[760px] flex-row items-start gap-3"
+              initial={{ scale: 0.94, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 8 }}
+              transition={{ duration: 0.22, ease: EASE }}
+            >
+              <div className="flex h-[min(58dvh,520px)] min-w-0 flex-1 flex-col overflow-hidden rounded-[26px] bg-surface shadow-window">{card}</div>
+              <div className="w-[248px] shrink-0 rounded-[22px] bg-surface shadow-window">
+                <ChatActions chat={live} onDone={onClose} inPreview />
               </div>
-              <PreviewScroller onOpen={() => (onClose(), openChat(live.id))}>
-                <ChatPreviewMessages chat={live} />
-              </PreviewScroller>
+            </motion.div>
+          ) : (
+            // Update 5 · 5 (IMG_8030): a compact floating card — the chat's last messages, not a whole screen —
+            // with the menu under it at the right. The card gives up height first, so both always stay on screen.
+            <div className="relative flex max-h-full w-full max-w-[420px] flex-col items-stretch gap-2.5" data-testid="chat-preview-stack">
+              <motion.div
+                className="flex h-[min(44dvh,380px)] min-h-[150px] shrink flex-col overflow-hidden rounded-[24px] bg-surface shadow-window"
+                style={{ transformOrigin: "50% 100%" }}
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.94, opacity: 0, transition: { duration: 0.14 } }}
+                transition={{ duration: 0.22, ease: EASE }}
+                data-testid="chat-preview-card"
+              >
+                {card}
+              </motion.div>
+              <motion.div
+                className="w-[min(268px,78%)] shrink-0 self-end rounded-[20px] bg-surface shadow-window"
+                style={{ transformOrigin: "100% 0%" }}
+                initial={{ scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0, transition: { duration: 0.12 } }}
+                transition={{ duration: 0.2, delay: 0.03, ease: EASE }}
+                data-testid="chat-preview-menu"
+              >
+                <ChatActions chat={live} onDone={onClose} inPreview />
+              </motion.div>
             </div>
-            <div className={cx("shrink-0 rounded-[22px] bg-surface shadow-window", ff === "desktop" ? "w-[248px]" : "w-full")}>
-              <ChatActions chat={live} onDone={onClose} inPreview />
-            </div>
-          </motion.div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>,
