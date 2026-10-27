@@ -166,7 +166,7 @@ test("vibex: A posts, B likes, bookmarks privately, reposts and shares into a ch
   await expect(bPage.locator("[data-testid=post-card][data-kind=repost]").first().getByTestId("post-unavailable")).toBeVisible();
 });
 
-test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regular chats don't move by hand", async ({ page, request }) => {
+test("vibex: pinned chats reorder by their handle in «Изм.» and stay in order; a long press is the menu, never a drag (Update 5 · 4 / 7)", async ({ page, request }) => {
   const a = await signUpViaApi(page, "Алиса", "Закреп");
   await call(request, a.token, "POST", "/api/vibex/activate", { email: a.address, password: PASSWORD });
   const people = [];
@@ -187,32 +187,51 @@ test("vibex: pinned chats reorder by press-and-hold drag and stay in order; regu
   const order = () => pinned.evaluateAll((els) => els.map((e) => e.getAttribute("data-chat-id")));
   expect(await order()).toEqual(chats.slice(0, 3));
 
-  // Lift "Дина" (3rd) and drop it on top.
-  const from = (await pinned.nth(2).boundingBox())!;
+  // A press-and-hold on a pinned chat opens its preview / menu (with «Открепить»); nothing lifts or moves.
+  const menuOf = page.getByTestId(isMobile(page) ? "chat-preview" : "chat-context-menu");
+  const hold = async (row: ReturnType<typeof pinned.nth>) => {
+    const b = (await row.boundingBox())!;
+    const p = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    if (isMobile(page)) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [p] });
+      await page.waitForTimeout(500);
+      for (let i = 1; i <= 6; i++) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: p.x, y: p.y + i }] });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } else {
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await page.waitForTimeout(500);
+      await page.mouse.move(p.x, p.y - 60, { steps: 6 });
+      await page.mouse.up();
+    }
+  };
+  await hold(pinned.nth(2));
+  await expect(menuOf).toBeVisible();
+  await expect(menuOf.getByTestId("chat-action-unpin")).toBeVisible();
+  await expect(page.locator("[data-lifted]")).toHaveCount(0);
+  expect(await order()).toEqual(chats.slice(0, 3));
+  await page.keyboard.press("Escape");
+  await expect(menuOf).toHaveCount(0);
+
+  // «Изм.»: the pinned get a handle; dragging "Дина" (3rd) by it to the top.
+  await page.getByTestId("chats-edit").click();
+  await expect(page.getByTestId("chats-edit-bar")).toBeVisible();
+  const handle = pinned.nth(2).getByTestId("chat-drag-handle");
+  await expect(handle).toBeVisible();
+  const from = (await handle.boundingBox())!;
   const to = (await pinned.nth(0).boundingBox())!;
   const start = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
   const end = { x: start.x, y: to.y + 6 };
-  if (isMobile(page)) {
-    const cdp = await page.context().newCDPSession(page);
-    const touch = (type: "touchStart" | "touchMove" | "touchEnd", p?: { x: number; y: number }) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: p ? [p] : [] });
-    await touch("touchStart", start);
-    await page.waitForTimeout(500);
-    await expect(page.locator("[data-lifted]")).toHaveCount(1);
-    for (let i = 1; i <= 12; i++) {
-      await touch("touchMove", { x: start.x, y: start.y + ((end.y - start.y) * i) / 12 });
-      await page.waitForTimeout(24);
-    }
-    await touch("touchEnd");
-  } else {
-    await page.mouse.move(start.x, start.y);
-    await page.mouse.down();
-    await page.waitForTimeout(500);
-    await expect(page.locator("[data-lifted]")).toHaveCount(1);
-    await page.mouse.move(end.x, end.y, { steps: 12 });
-    await page.mouse.up();
-  }
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await expect(page.locator("[data-lifted]")).toHaveCount(1);
+  await page.mouse.move(end.x, end.y, { steps: 14 });
+  await page.mouse.up();
   await expect.poll(order).toEqual([chats[2], chats[0], chats[1]]);
   await expect(page.locator("[data-lifted]")).toHaveCount(0);
+  await page.getByTestId("chats-edit").click();
+  await expect(page.getByTestId("chats-edit-bar")).toHaveCount(0);
 
   // Saved on the server: a reload (or another device) shows the same order.
   await expect

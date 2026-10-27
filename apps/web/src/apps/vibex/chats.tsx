@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { AnimatePresence, Reorder, motion, useDragControls } from "motion/react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { AnimatePresence, Reorder, motion, useDragControls, useReducedMotion } from "motion/react";
 import {
   RiAttachment2,
   RiCheckDoubleLine,
@@ -8,6 +8,7 @@ import {
   RiDeleteBinLine,
   RiFileLine,
   RiImageLine,
+  RiMenuLine,
   RiMic2Fill,
   RiMoreFill,
   RiPushpin2Fill,
@@ -47,7 +48,7 @@ import { ChatTopPanel } from "./chat-top-panel";
 import { PresenceDot } from "./presence";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-/** Press-and-hold before a pinned chat lifts (touch and mouse alike). */
+/** Press-and-hold before a chat's preview / menu opens (touch and mouse alike). */
 const HOLD_MS = 320;
 const MOVE_TOLERANCE = 8;
 
@@ -184,44 +185,95 @@ export interface ChatRowActions {
   onMenu: (chat: VibexChatDto, at: { x: number; y: number }) => void;
 }
 
+/** Update 5 · 4: a row in the edit mode — a round check at the left; a tap selects instead of opening. */
+export interface ChatRowEdit {
+  selected: boolean;
+  toggle: () => void;
+}
+
+/** Update 5 · 4: the selection circle of the edit mode (slides in at the row's left). */
+function SelectCircle({ on }: { on: boolean }) {
+  return (
+    <span
+      className={cx("flex size-[22px] items-center justify-center rounded-full border-[1.5px] transition-colors duration-150", on ? "border-primary bg-primary text-white" : "border-text-tertiary/60 bg-transparent")}
+      data-testid="chat-select"
+      data-on={on || undefined}
+    >
+      {on && <RiCheckLine className="size-[15px]" />}
+    </span>
+  );
+}
+
 /**
- * A regular chat: a tap opens it; it never moves by hand (its place follows
- * activity). Step 2.9: a long press (touch) opens its preview; a right click
- * or the [...] button (mouse) its actions.
+ * A chat row: a tap opens it. Step 2.9: a long press (touch) opens its preview; a right click or the
+ * [...] button (mouse) its actions. Update 5 · 7: pinned chats behave the same — a long press is the
+ * menu (with «Открепить»), never a drag; the pinned are rearranged only in the edit mode, by the handle.
+ * Update 5 · 4: in the edit mode a tap selects the chat (the round check at the left).
  */
-function ChatRow({ chat, actions }: { chat: VibexChatDto; actions: ChatRowActions }) {
+function ChatRow({ chat, actions, edit, handle }: { chat: VibexChatDto; actions: ChatRowActions; edit?: ChatRowEdit; handle?: ReactNode }) {
   const t = useT();
   const openChat = useVibex((s) => s.openChat);
   const activeId = useVibex((s) => s.chatId);
-  const hold = useHold({ onHold: (e) => (e.pointerType === "mouse" ? actions.onMenu(chat, { x: e.clientX, y: e.clientY }) : actions.onPreview(chat)) });
+  const reduced = useReducedMotion();
+  const hold = useHold({ onHold: (e) => (edit ? undefined : e.pointerType === "mouse" ? actions.onMenu(chat, { x: e.clientX, y: e.clientY }) : actions.onPreview(chat)) });
+  const pinned = chat.pinnedPosition !== null;
   return (
-    <div className="group relative" data-testid="chat-row" data-chat-id={chat.id} data-pinned="false" data-kind={chat.kind}>
-      <button
-        type="button"
-        className={rowClass(activeId === chat.id)}
-        onClick={() => !hold.fired() && openChat(chat.id)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          actions.onMenu(chat, { x: e.clientX, y: e.clientY });
-        }}
-        {...hold.handlers}
-      >
-        <ChatRowBody chat={chat} active={activeId === chat.id} />
-      </button>
-      <AvatarTap chat={chat} actions={actions} hold={hold} />
-      <IconButton
-        label={t("vibex.post.more")}
-        size="sm"
-        // "!": IconButton is inline-flex itself; without it the button covered the time and unread badge on every row.
-        className="absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile [@media(hover:hover)]:group-hover:!inline-flex"
-        onClick={(e) => {
-          const r = e.currentTarget.getBoundingClientRect();
-          actions.onMenu(chat, { x: r.left, y: r.bottom });
-        }}
-        data-testid="chat-row-menu"
-      >
-        <RiMoreFill className="size-4" />
-      </IconButton>
+    <div className="group relative flex items-center" data-testid="chat-row" data-chat-id={chat.id} data-pinned={pinned ? "true" : "false"} data-kind={chat.kind} data-selected={edit?.selected || undefined}>
+      <AnimatePresence initial={false}>
+        {edit && (
+          <motion.button
+            key="select"
+            type="button"
+            className="flex shrink-0 items-center justify-start overflow-hidden"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 36, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={reduced ? { duration: 0 } : { duration: 0.24, ease: EASE }}
+            onClick={edit.toggle}
+            aria-label={t("vibex.chats.selectOne", { name: chatTitle(chat) })}
+            aria-pressed={edit.selected}
+          >
+            <span className="pl-1.5">
+              <SelectCircle on={edit.selected} />
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+      <div className="relative min-w-0 flex-1">
+        <button
+          type="button"
+          className={cx(rowClass(!edit && activeId === chat.id), "select-none", edit?.selected && "vx-chat-card-active")}
+          onClick={() => {
+            if (hold.fired()) return;
+            if (edit) edit.toggle();
+            else openChat(chat.id);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (!edit) actions.onMenu(chat, { x: e.clientX, y: e.clientY });
+          }}
+          {...hold.handlers}
+        >
+          <ChatRowBody chat={chat} active={!edit && activeId === chat.id} />
+        </button>
+        {!edit && <AvatarTap chat={chat} actions={actions} hold={hold} />}
+        {!edit && (
+          <IconButton
+            label={t("vibex.post.more")}
+            size="sm"
+            // "!": IconButton is inline-flex itself; without it the button covered the time and unread badge on every row.
+            className="absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile [@media(hover:hover)]:group-hover:!inline-flex"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              actions.onMenu(chat, { x: r.left, y: r.bottom });
+            }}
+            data-testid="chat-row-menu"
+          >
+            <RiMoreFill className="size-4" />
+          </IconButton>
+        )}
+      </div>
+      {handle}
     </div>
   );
 }
@@ -289,48 +341,13 @@ function useHold({ onHold, ms = HOLD_MS }: { onHold: (e: PointerEvent) => void; 
 }
 
 /**
- * A pinned chat. Press and hold lifts it (shadow, slight scale), the other
- * pinned chats fade back, and it can be dragged to a new place among the
- * pinned ones; the rest slide out of the way. Releasing settles it, and the
- * new order is saved to the account. Releasing without moving opens its
- * preview (touch) or its actions (mouse).
+ * Update 5 · 4 / 7: a pinned chat in the edit mode. Only its handle (≡ at the right) moves it: press
+ * the handle and drag it to a new place among the pinned; the rest slide out of the way, and the new
+ * order is saved to the account on release. A long press anywhere else never starts a drag.
  */
-function PinnedRow({
-  chat,
-  actions,
-  dragging,
-  onLift,
-  onDrop,
-}: {
-  chat: VibexChatDto;
-  actions: ChatRowActions;
-  dragging: string | null;
-  onLift: (id: string) => void;
-  onDrop: (moved: boolean) => void;
-}) {
+function EditPinnedRow({ chat, actions, edit, lifted, onLift, onDrop }: { chat: VibexChatDto; actions: ChatRowActions; edit: ChatRowEdit; lifted: boolean; onLift: () => void; onDrop: () => void }) {
   const t = useT();
-  const openChat = useVibex((s) => s.openChat);
-  const activeId = useVibex((s) => s.chatId);
   const controls = useDragControls();
-  const moved = useRef(false);
-  const last = useRef<{ x: number; y: number; mouse: boolean }>({ x: 0, y: 0, mouse: false });
-  const lifted = dragging === chat.id;
-  const stopScroll = useRef<(() => void) | null>(null);
-  const hold = useHold({
-    onHold: (e) => {
-      moved.current = false;
-      last.current = { x: e.clientX, y: e.clientY, mouse: e.pointerType === "mouse" };
-      onLift(chat.id);
-      if (navigator.vibrate) navigator.vibrate(8);
-      // While lifted, a finger moves the chat instead of scrolling the list.
-      const block = (ev: TouchEvent) => ev.cancelable && ev.preventDefault();
-      window.addEventListener("touchmove", block, { passive: false });
-      stopScroll.current = () => window.removeEventListener("touchmove", block);
-      controls.start(e, { snapToCursor: false });
-    },
-  });
-  useEffect(() => () => stopScroll.current?.(), []);
-
   return (
     <Reorder.Item
       value={chat.id}
@@ -339,56 +356,37 @@ function PinnedRow({
       layout="position"
       className="relative list-none"
       style={{ zIndex: lifted ? 5 : 0, position: "relative" }}
-      animate={{ opacity: dragging && !lifted ? 0.45 : 1, scale: lifted ? 1.03 : 1 }}
-      transition={{ duration: 0.22, ease: EASE }}
-      onDrag={(_, info) => {
-        if (Math.abs(info.offset.y) > 4) moved.current = true;
-      }}
-      onDragEnd={() => {
-        stopScroll.current?.();
-        stopScroll.current = null;
-        onDrop(moved.current);
-        if (!moved.current) {
-          if (last.current.mouse) actions.onMenu(chat, last.current);
-          else actions.onPreview(chat);
-        }
-      }}
-      data-testid="chat-row"
-      data-chat-id={chat.id}
-      data-pinned="true"
-      data-kind={chat.kind}
+      animate={{ scale: lifted ? 1.02 : 1 }}
+      transition={{ duration: 0.2, ease: EASE }}
+      onDragEnd={onDrop}
       data-lifted={lifted || undefined}
     >
       <motion.div
-        className={cx("group relative rounded-[18px]", lifted && "bg-surface")}
+        className={cx("rounded-[22px]", lifted && "bg-surface")}
         animate={{ boxShadow: lifted ? "0 18px 42px rgba(30, 20, 80, 0.20), 0 2px 6px rgba(30, 20, 80, 0.08)" : "0 0 0 rgba(0,0,0,0)" }}
-        transition={{ duration: 0.22 }}
+        transition={{ duration: 0.2 }}
       >
-        <button
-          type="button"
-          className={cx(rowClass(activeId === chat.id && !lifted), "touch-pan-y select-none")}
-          onClick={() => !hold.fired() && openChat(chat.id)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            actions.onMenu(chat, { x: e.clientX, y: e.clientY });
-          }}
-          {...hold.handlers}
-        >
-          <ChatRowBody chat={chat} active={activeId === chat.id} />
-        </button>
-        <AvatarTap chat={chat} actions={actions} hold={hold} />
-        <IconButton
-          label={t("vibex.post.more")}
-          size="sm"
-          className={cx("absolute right-3 top-1/2 !hidden -translate-y-1/2 bg-surface shadow-tile", !dragging && "[@media(hover:hover)]:group-hover:!inline-flex")}
-          onClick={(e) => {
-            const r = e.currentTarget.getBoundingClientRect();
-            actions.onMenu(chat, { x: r.left, y: r.bottom });
-          }}
-          data-testid="chat-row-menu"
-        >
-          <RiMoreFill className="size-4" />
-        </IconButton>
+        <ChatRow
+          chat={chat}
+          actions={actions}
+          edit={edit}
+          handle={
+            <button
+              type="button"
+              className="flex h-[58px] w-10 shrink-0 cursor-grab touch-none select-none items-center justify-center text-text-tertiary active:cursor-grabbing"
+              aria-label={t("vibex.chats.dragHandle", { name: chatTitle(chat) })}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                onLift();
+                controls.start(e);
+              }}
+              data-testid="chat-drag-handle"
+            >
+              <RiMenuLine className="size-5" />
+            </button>
+          }
+        />
       </motion.div>
     </Reorder.Item>
   );
@@ -402,12 +400,12 @@ const SECTION_LABEL: Record<"pinned" | "chats" | "groups" | "all", MessageKey | 
 };
 
 /**
- * Step 2.9 chat list: «Закреплённые» always first (their own order, press and
- * hold to rearrange), then «Чаты» and «Группы» in the order chosen with the
- * filter button, or one mixed list. Long press / right click: preview and
- * actions (see ChatsPane).
+ * Step 2.9 chat list: «Закреплённые» always first (their own order), then «Чаты» and «Группы» in the
+ * order chosen with the filter button, or one mixed list. Long press / right click: preview and actions
+ * (see ChatsPane). Update 5 · 4: with `edit`, every row can be selected and the pinned show a handle
+ * to rearrange them (saved to the account).
  */
-export function ChatList({ actions, order }: { actions: Omit<ChatRowActions, "pinnedIds">; order: VibexChatOrder }) {
+export function ChatList({ actions, order, edit }: { actions: Omit<ChatRowActions, "pinnedIds">; order: VibexChatOrder; edit?: { selected: Set<string>; toggle: (id: string) => void } }) {
   const t = useT();
   const chats = useChats();
   const go = useVibex((s) => s.go);
@@ -416,10 +414,12 @@ export function ChatList({ actions, order }: { actions: Omit<ChatRowActions, "pi
   const serverPinned = useMemo(() => list.filter((c) => c.pinnedPosition !== null).sort((a, b) => a.pinnedPosition! - b.pinnedPosition!).map((c) => c.id), [list]);
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
-  const pinnedIds = localOrder ?? serverPinned;
+  // While a new order is being saved, the list keeps showing it (no jump back and forth).
+  const pinnedIds = (localOrder ?? serverPinned).filter((id) => serverPinned.includes(id));
   const byId = useMemo(() => new Map(list.map((c) => [c.id, c])), [list]);
   const sections = useMemo(() => chatSections(list, order).filter((s) => s.key !== "pinned"), [list, order]);
   const rowActions: ChatRowActions = { ...actions, pinnedIds };
+  const editOf = (id: string): ChatRowEdit | undefined => (edit ? { selected: edit.selected.has(id), toggle: () => edit.toggle(id) } : undefined);
 
   if (chats.isPending) {
     return (
@@ -453,46 +453,55 @@ export function ChatList({ actions, order }: { actions: Omit<ChatRowActions, "pi
     );
 
   return (
-    <div className="flex flex-col gap-1.5 px-2.5 pb-2" data-testid="chat-list" data-order={order}>
+    <div className="flex flex-col gap-1.5 px-2.5 pb-2" data-testid="chat-list" data-order={order} data-editing={edit ? "true" : undefined}>
       {pinnedIds.length > 0 && (
         <section data-testid="chat-section" data-key="pinned">
           {header("pinned")}
-          <Reorder.Group axis="y" values={pinnedIds} onReorder={setLocalOrder} className="flex flex-col gap-1.5" data-testid="pinned-chats">
-            {pinnedIds.map((id) => {
-              const c = byId.get(id);
-              return c ? (
-                <PinnedRow
-                  key={id}
-                  chat={c}
-                  actions={rowActions}
-                  dragging={dragging}
-                  onLift={(x) => {
-                    setLocalOrder(pinnedIds);
-                    setDragging(x);
-                  }}
-                  onDrop={(moved) => {
-                    setDragging(null);
-                    const next = localOrder ?? pinnedIds;
-                    if (moved && next.join() !== serverPinned.join()) {
-                      setPins.mutate(next, { onSettled: () => setLocalOrder(null) });
-                    } else setLocalOrder(null);
-                  }}
-                />
-              ) : null;
-            })}
-          </Reorder.Group>
+          {edit ? (
+            <Reorder.Group axis="y" values={pinnedIds} onReorder={setLocalOrder} className="flex flex-col gap-1.5" data-testid="pinned-chats">
+              {pinnedIds.map((id) => {
+                const c = byId.get(id);
+                return c ? (
+                  <EditPinnedRow
+                    key={id}
+                    chat={c}
+                    actions={rowActions}
+                    edit={editOf(id)!}
+                    lifted={dragging === id}
+                    onLift={() => {
+                      setLocalOrder(pinnedIds);
+                      setDragging(id);
+                    }}
+                    onDrop={() => {
+                      setDragging(null);
+                      const next = localOrder ?? pinnedIds;
+                      if (next.join() !== serverPinned.join()) setPins.mutate(next, { onSettled: () => setLocalOrder(null) });
+                      else setLocalOrder(null);
+                    }}
+                  />
+                ) : null;
+              })}
+            </Reorder.Group>
+          ) : (
+            <div className="flex flex-col gap-1.5" data-testid="pinned-chats">
+              {pinnedIds.map((id) => {
+                const c = byId.get(id);
+                return c ? <ChatRow key={id} chat={c} actions={rowActions} /> : null;
+              })}
+            </div>
+          )}
         </section>
       )}
-      <motion.div className="flex flex-col" animate={{ opacity: dragging ? 0.45 : 1 }} transition={{ duration: 0.22 }}>
+      <div className="flex flex-col">
         {sections.map((sec) => (
           <section key={sec.key} className="flex flex-col gap-1.5" data-testid="chat-section" data-key={sec.key}>
             {header(sec.key)}
             {sec.items.map((c) => (
-              <ChatRow key={c.id} chat={c} actions={rowActions} />
+              <ChatRow key={c.id} chat={c} actions={rowActions} edit={editOf(c.id)} />
             ))}
           </section>
         ))}
-      </motion.div>
+      </div>
       {dragging && <span className="sr-only">{t("vibex.chats.dragHint")}</span>}
     </div>
   );
