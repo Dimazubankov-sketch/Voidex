@@ -87,7 +87,7 @@ test("C1: the chat header is three glass capsules; on phones the history scrolls
   await bp.context().close();
 });
 
-test("C2: pins go from the newest to the very first and stop there (no jump back); each tap lands on its message", async ({ page, browser }) => {
+test("C2 / Update 5 · 8: pins go from the newest to the very first, then round to the newest again; each tap lands on its message; a removed pin leaves the circle", async ({ page, browser }) => {
   const { bp, chat } = await pair(page, browser);
   const ids: string[] = [];
   for (let i = 1; i <= 3; i++) {
@@ -119,12 +119,26 @@ test("C2: pins go from the newest to the very first and stop there (no jump back
   await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 1");
   await bar.click();
   await expectJumped(ids[0]!);
-  // At the first pin: it stays the first (never back to the newest).
-  await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 1");
-  await expect(bar).toHaveAttribute("data-at-first", "true");
+  // Update 5 · 8: after the very first comes the newest again (3 → 2 → 1 → 3 …).
+  await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 3");
   await bar.click();
-  await expectJumped(ids[0]!);
-  await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 1");
+  await expectJumped(ids[2]!);
+  await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 2");
+  // A pin removed elsewhere: the circle is updated, the one shown stays.
+  await api(page, "DELETE", `/api/vibex/chats/${chat.id}/pins/${ids[0]}`);
+  await expect(bar).toHaveAttribute("data-count", "2");
+  await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 2");
+  await bar.click();
+  await expectJumped(ids[1]!);
+  await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 3");
+  // One pin left: a tap always goes to it.
+  await api(page, "DELETE", `/api/vibex/chats/${chat.id}/pins/${ids[1]}`);
+  await expect(bar).toHaveAttribute("data-count", "1");
+  for (let k = 0; k < 2; k++) {
+    await bar.click();
+    await expectJumped(ids[2]!);
+    await expect(page.getByTestId("pinned-text")).toHaveText("Закреп 3");
+  }
   await bp.context().close();
 });
 
