@@ -190,6 +190,19 @@ describe("workspace layout model", () => {
     expect(WorkspaceLayoutSchema.safeParse({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "<script>" } } }).success).toBe(false);
   });
 
+  it("Update 5 · 2: the Update 4 wallpapers are gone; a layout using one gets the standard wallpaper and keeps the rest", () => {
+    const l = norm(defaultLayout(APPS));
+    for (const id of ["v-glow", "v-silk", "v-dawn", "v-orbit", "v-prism"]) {
+      const next = norm({ ...l, appearance: { ...l.appearance, theme: "dark", glyphScale: "l", wallpaper: { kind: "preset", id }, lockWallpaper: { kind: "preset", id } } });
+      expect(next.appearance.wallpaper).toEqual({ kind: "default" });
+      expect(next.appearance.lockWallpaper).toEqual({ kind: "default" });
+      expect(next.appearance).toMatchObject({ theme: "dark", glyphScale: "l" });
+    }
+    // Own pictures and the old built-ins are untouched.
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "image", version: "lib-abc-1" } } as never }).appearance.wallpaper).toMatchObject({ kind: "image" });
+    expect(norm({ ...l, appearance: { ...l.appearance, wallpaper: { kind: "preset", id: "aura" } } }).appearance.wallpaper).toEqual({ kind: "preset", id: "aura" });
+  });
+
   it("PC dock: every app pinned by default (and for older layouts), pin / reorder / unpin, empty stays empty", () => {
     let l = norm(defaultLayout(APPS));
     expect(l.desktop.dock).toEqual(["mail", "settings"]);
