@@ -173,6 +173,10 @@ export const en = {
   "os.updateUnsaved": "Couldn't save your changes: update postponed",
   "os.loadFailed": "VOIDEX couldn't load",
   "os.reloadPage": "Reload",
+  "os.noConnection": "No connection to VOIDEX",
+  "os.noConnectionHint": "Your data is safe. We'll keep trying and open VOIDEX as soon as the connection returns.",
+  "os.serverDown": "VOIDEX isn't responding right now",
+  "os.serverDownHint": "The server is temporarily unavailable. Your data is safe. We'll try again automatically.",
 
   // home screen / desktop
   "home.saveFailed": "Couldn't save the desktop. Will retry.",

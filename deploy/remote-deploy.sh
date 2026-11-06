@@ -398,6 +398,24 @@ sms_aero_diag() {
   compose exec -T app node --input-type=module - <"$BASE/repo/deploy/netcheck.mjs" 2>&1 || echo "  netcheck failed to run"
 }
 
+# Start-up failures reported by browsers (POST /api/client-events, scrubbed; see docs/DEPLOYMENT.md).
+client_events() {
+  log "Client start-up events (last 3000 app log lines)"
+  local out
+  out=$(compose logs --no-log-prefix --tail 3000 app 2>/dev/null | grep -a "client event" | tail -n 25) || true
+  if [[ -n "$out" ]]; then printf '%s\n' "$out" | cut -c1-400 | sed 's/^/  /'; else echo "  (none)"; fi
+}
+
+# Read-only firewall / listener / TLS facts for the iPhone investigation (docs/IPHONE-DIAGNOSTICS.md).
+net_diag() {
+  log "Network (deploy/netdiag.sh state)"
+  if [[ -f "$BASE/repo/deploy/netdiag.sh" ]]; then
+    timeout 60 bash "$BASE/repo/deploy/netdiag.sh" state 2>&1 | sed 's/^/  /' || true
+  else
+    echo "  (netdiag.sh not on this checkout yet)"
+  fi
+}
+
 cmd_status() {
   local cur
   cur=$(current_version)
@@ -408,6 +426,8 @@ cmd_status() {
   compose ps
   [[ -n "$cur" ]] && health_check "$cur" || true
   sms_aero_diag
+  client_events
+  net_diag
   log "Server"
   echo "  $(uptime -p), load: $(cut -d' ' -f1-3 /proc/loadavg)"
   free -h | sed 's/^/  /'

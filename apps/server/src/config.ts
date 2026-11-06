@@ -59,6 +59,14 @@ const EnvSchema = z.object({
   WEBAUTHN_RP_ID: z.string().regex(/^[a-z0-9.-]+$/).default("voidex.su"),
   /** Built web client to serve in production (apps/web/dist). */
   WEB_DIST: z.string().optional(),
+  /**
+   * Directory (a Docker volume in production) that keeps the hashed /assets files of the last few releases.
+   * Every deploy replaces the image's own /assets; pages still running the previous build keep asking for the
+   * old chunks, which this directory still serves. Unset = no archive (the behaviour before this existed).
+   */
+  ASSET_ARCHIVE_DIR: z.string().optional(),
+  /** How many releases the archive keeps (the current one included). */
+  ASSET_ARCHIVE_KEEP: z.coerce.number().int().min(1).max(20).default(5),
   LOG_LEVEL: z.string().default("info"),
   /** Multiplies per-route IP rate limits. Development/e2e only (many fake users from one IP). */
   RATE_LIMIT_SCALE: z.coerce.number().min(1).max(1000).default(1),
@@ -152,6 +160,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     allowedOrigins: e.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean),
     webauthnRpId: e.WEBAUTHN_RP_ID,
     webDist: e.WEB_DIST,
+    assetArchiveDir: e.ASSET_ARCHIVE_DIR,
+    assetArchiveKeep: e.ASSET_ARCHIVE_KEEP,
     logLevel: e.LOG_LEVEL,
     rateLimitScale: e.RATE_LIMIT_SCALE,
     revision: e.VOIDEX_VERSION,

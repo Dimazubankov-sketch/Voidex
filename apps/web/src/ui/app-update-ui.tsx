@@ -3,19 +3,24 @@ import { AnimatePresence, motion } from "motion/react";
 import { RiCloseLine, RiRefreshLine } from "@remixicon/react";
 import { VoidexMark } from "@/brand/brand";
 import { useT } from "@/lib/i18n";
-import { applyUpdate, resetFailedChunks, startUpdateChecks, useAppUpdate } from "@/lib/app-update";
+import { applyUpdate, isChunkError, resetFailedChunks, startUpdateChecks, useAppUpdate } from "@/lib/app-update";
+import { freshReload, reportClientEvent } from "@/lib/boot";
 import { toast } from "@/ui/overlays";
 import { Button } from "@/ui/controls";
 
-/** A1: «Доступна новая версия» — a quiet pill under the status bar; the update waits for the person. */
+/**
+ * Updates apply by themselves when that is safe (lib/app-update.tsx). This pill is only the fallback for an update
+ * that has been waiting a long time (a note stayed unsaved, an upload never finished): then the person can decide.
+ */
 export function UpdateBanner() {
   const t = useT();
   const available = useAppUpdate((s) => s.available);
+  const stalled = useAppUpdate((s) => s.stalled);
   const dismissed = useAppUpdate((s) => s.dismissed);
   const dismiss = useAppUpdate((s) => s.dismiss);
   const [busy, setBusy] = useState(false);
   useEffect(() => startUpdateChecks(), []);
-  const show = !!available && !dismissed;
+  const show = !!available && stalled && !dismissed;
   return (
     <AnimatePresence>
       {show && (
@@ -60,14 +65,27 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
+  private failedAt = 0;
   override componentDidCatch(error: Error, info: ErrorInfo) {
+    this.failedAt = Date.now();
     console.error("VOIDEX crashed", error, info.componentStack);
+    // Name of the error and the component only: no props, no state, no user data.
+    reportClientEvent({ kind: "root_crashed", phase: "boundary", detail: `${error.name}: ${error.message}` });
   }
   override render() {
     if (this.state.error)
       return (
         <RootCrashed
           onRetry={() => {
+            // Browsers remember a failed import() of a module URL, so importing the chunk again in the same page
+            // fails the same way: for a chunk error the only real retry is a fresh page load (the person tapped it,
+            // so this cannot loop).
+            if (isChunkError(this.state.error)) {
+              // WebKit remembers the failed module for ~3 s (measured): reloading sooner fails the same way,
+              // so a quick tap waits out the remainder before it reloads.
+              window.setTimeout(freshReload, Math.max(0, 3500 - (Date.now() - this.failedAt)));
+              return;
+            }
             resetFailedChunks();
             this.setState({ error: null });
           }}
@@ -79,15 +97,24 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
 
 function RootCrashed({ onRetry }: { onRetry: () => void }) {
   const t = useT();
+  const [busy, setBusy] = useState(false);
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-background p-8 text-center" data-testid="root-crashed">
       <VoidexMark className="size-14 opacity-80" />
       <div className="text-[15px] font-semibold text-text">{t("os.loadFailed")}</div>
       <div className="flex gap-2">
-        <Button variant="secondary" onClick={onRetry}>
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            onRetry();
+            window.setTimeout(() => setBusy(false), 6000); // a failed non-chunk retry must not leave the button dead
+          }}
+        >
           {t("common.retry")}
         </Button>
-        <Button variant="secondary" onClick={() => window.location.reload()}>
+        <Button variant="secondary" disabled={busy} onClick={() => { setBusy(true); window.setTimeout(freshReload, 0); }}>
           {t("os.reloadPage")}
         </Button>
       </div>

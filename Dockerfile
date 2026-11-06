@@ -31,12 +31,16 @@ FROM node:22-slim
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=4000 \
-    WEB_DIST=/app/web
+    WEB_DIST=/app/web \
+    ASSET_ARCHIVE_DIR=/data/assets
 WORKDIR /app/server
 COPY --from=build --chown=node:node /app/apps/server/dist ./dist
 COPY --from=build --chown=node:node /app/apps/server/drizzle ./drizzle
 COPY --from=build --chown=node:node /app/apps/server/legal ./legal
 COPY --from=build --chown=node:node /app/apps/web/dist /app/web
+# Previous releases' hashed /assets files live here (a named volume in production, see deploy/docker-compose.prod.yml):
+# pages still running the old build keep finding their chunks after a deployment. Owned by `node` so a new volume is writable.
+RUN mkdir -p /data/assets && chown node:node /data/assets
 ARG VOIDEX_VERSION=dev
 # su.voidex.otpcom / su.voidex.smsaero tell the deploy script which SMS_PROVIDER values this build supports
 # (older builds refuse that value, so a rollback to them keeps SMS off instead).

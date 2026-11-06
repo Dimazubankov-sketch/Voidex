@@ -2,14 +2,14 @@
  * Cache rules for the built web client (A1: "a normal reload must show the new version").
  *
  * - `/assets/*` files carry a content hash in their name, so they never change: cached for a year.
- * - `index.html` (and the SPA routes that return it), `version.json`, the manifest and the boot guard
+ * - `index.html` (and the SPA routes that return it), `version.json`, `sw.js` (a cached worker would never update), the manifest and the boot guard
  *   are revalidated on every load (`no-cache` = "ask the server first", the ETag makes that a cheap 304).
  * - Everything else in `public/` (icons, wallpapers, store art) keeps a short cache.
  */
 export function webCacheControl(filePath: string): string {
   const p = filePath.replace(/\\/g, "/");
   if (/(^|\/)assets\//.test(p)) return "public, max-age=31536000, immutable";
-  if (/(^|\/)(index\.html|version\.json|manifest\.webmanifest|boot-guard\.js)$/.test(p)) return "no-cache";
+  if (/(^|\/)(index\.html|version\.json|sw\.js|manifest\.webmanifest|boot-guard\.js)$/.test(p)) return "no-cache";
   return "public, max-age=3600";
 }
 

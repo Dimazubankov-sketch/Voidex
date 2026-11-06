@@ -6,6 +6,8 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import { isSpaRoute, webCacheControl } from "./lib/web-cache.js";
+import { archiveAssets, archivedAsset } from "./lib/asset-archive.js";
+import { clientEventRoutes } from "./routes/client-events.js";
 import { ErrorCode, type ApiErrorBody } from "@voidex/shared";
 import type { Config } from "./config.js";
 import { createDb, type Db } from "./db/client.js";
@@ -244,6 +246,7 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
   await app.register(
     async (api) => {
       await api.register(systemRoutes);
+      await api.register(clientEventRoutes);
       await api.register(authRoutes, { prefix: "/auth" });
       await api.register(lockRoutes, { prefix: "/auth/lock" });
       await api.register(securityRoutes, { prefix: "/security" });
@@ -261,13 +264,34 @@ export async function buildApp({ config, sms, translator, db: providedDb, now }:
   // Production: serve the built web client (single origin => simple cookies & CSP).
   const webDist = config.webDist ? resolve(config.webDist) : null;
   if (webDist && existsSync(resolve(webDist, "index.html"))) {
+    // Keep the previous releases' hashed files so pages that are still running them don't meet missing chunks.
+    const archiveDir = config.assetArchiveDir ? resolve(config.assetArchiveDir) : null;
+    if (archiveDir) {
+      try {
+        const r = archiveAssets({ distDir: webDist, archiveDir, build: config.revision, keep: config.assetArchiveKeep });
+        app.log.info(r, "asset archive updated");
+      } catch (err) {
+        app.log.warn({ err }, "asset archive unavailable — previous releases' chunks will not be served");
+      }
+    }
     await app.register(fastifyStatic, {
       root: webDist,
       wildcard: false,
       index: ["index.html"],
-      setHeaders: (reply, path) => reply.header("Cache-Control", webCacheControl(path)),
+      setHeaders: (reply, path) =>
+        reply.header(
+          "Cache-Control",
+          // A file from the archive (sendFile with the archive root) is a hashed asset like any other.
+          archiveDir && path.replace(/\\/g, "/").startsWith(`${archiveDir.replace(/\\/g, "/")}/files/`) ? webCacheControl("assets/archived") : webCacheControl(path),
+        ),
     });
     app.setNotFoundHandler((req, reply) => {
+      if (archiveDir && (req.method === "GET" || req.method === "HEAD")) {
+        const name = archivedAsset(archiveDir, req.url);
+        if (name) {
+          return reply.sendFile(name, resolve(archiveDir, "files"));
+        }
+      }
       if ((req.method === "GET" || req.method === "HEAD") && isSpaRoute(req.url)) return reply.sendFile("index.html");
       reply.header("Cache-Control", "no-store");
       return reply.status(404).send({ error: { code: ErrorCode.NotFound, message: "Not found." } });

@@ -41,3 +41,9 @@ jobs:
           pnpm db:migrate
           npx --prefix apps/web playwright install --with-deps chromium
           RATE_LIMIT_SCALE=50 pnpm test:e2e
+      # The built client served by the built API (what the Docker image ships): boot guard, service worker,
+      # automatic updates, start-up resilience. WebKit = Safari's engine (not a real iPhone).
+      - name: Release-build end-to-end (Chromium desktop + Android, WebKit iPhone)
+        run: |
+          npx --prefix apps/web playwright install --with-deps webkit
+          pnpm --filter @voidex/web test:e2e:prod

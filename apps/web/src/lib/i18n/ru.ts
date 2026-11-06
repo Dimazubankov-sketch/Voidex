@@ -162,6 +162,10 @@ export const ru: Record<MessageKey, string> = {
   "os.updateUnsaved": "Не удалось сохранить изменения: обновление отложено",
   "os.loadFailed": "Не удалось загрузить VOIDEX",
   "os.reloadPage": "Перезагрузить",
+  "os.noConnection": "Нет связи с VOIDEX",
+  "os.noConnectionHint": "Ваши данные в безопасности. Мы продолжим попытки и откроем VOIDEX, как только связь вернётся.",
+  "os.serverDown": "VOIDEX сейчас не отвечает",
+  "os.serverDownHint": "Сервер временно недоступен. Данные в безопасности. Мы попробуем ещё раз автоматически.",
 
   // home screen / desktop
   "home.saveFailed": "Не удалось сохранить рабочий стол. Повторим позже.",
