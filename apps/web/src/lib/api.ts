@@ -1,5 +1,6 @@
 import { ErrorCode, type ApiErrorBody, type SessionResponse } from "@voidex/shared";
 import { useSession } from "./session";
+import { beginCriticalOperation } from "./critical-ops";
 
 export class ApiError extends Error {
   constructor(
@@ -15,8 +16,26 @@ export class ApiError extends Error {
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
 
-async function rawRequest(method: string, path: string, body?: unknown, token?: string | null, headers: Record<string, string> = {}) {
+/**
+ * Time to the response headers. A connection that stalls (the TLS handshake of some mobile paths, a dead
+ * radio) must end in an error the app can show, never in a spinner that lasts forever. Uploads (Blob bodies)
+ * are exempt: they legitimately take as long as the file does.
+ */
+const DEFAULT_TIMEOUT_MS = 25_000;
+
+/** True when the server could not be reached or is failing (as opposed to answering "no"). */
+export function isUnreachable(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  return err.code === "network" || err.status === 0 || err.status >= 500 || err.status === 429;
+}
+
+async function rawRequest(method: string, path: string, body?: unknown, token?: string | null, headers: Record<string, string> = {}, timeoutMs?: number) {
+  const ctrl = typeof AbortController === "undefined" ? null : new AbortController();
+  const limit = body instanceof Blob ? 0 : (timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  let timedOut = false;
+  const timer = ctrl && limit > 0 ? setTimeout(() => { timedOut = true; ctrl.abort(); }, limit) : null;
   const init: RequestInit = {
+    signal: ctrl?.signal,
     method,
     credentials: "same-origin",
     headers: {
@@ -32,7 +51,9 @@ async function rawRequest(method: string, path: string, body?: unknown, token?: 
   try {
     res = await fetch(`${BASE}${path}`, init);
   } catch {
-    throw new ApiError(0, "network", "Network error");
+    throw new ApiError(0, "network", timedOut ? "Request timed out" : "Network error", {}, timedOut ? { timeout: true } : {});
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   return res;
 }
@@ -53,12 +74,13 @@ async function toError(res: Response): Promise<ApiError> {
 // cookie rotates on every use, so two tabs must not refresh concurrently).
 
 let inflight: Promise<SessionResponse> | null = null;
+const REFRESH_TIMEOUT_MS = 15_000;
 
 async function doRefresh(lock: boolean): Promise<SessionResponse> {
   const run = async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
       // { lock: true } on app start: with a passcode set, a new start opens on the lock screen.
-      const res = await rawRequest("POST", "/api/auth/refresh", lock ? { lock: true } : {});
+      const res = await rawRequest("POST", "/api/auth/refresh", lock ? { lock: true } : {}, null, {}, REFRESH_TIMEOUT_MS);
       if (res.ok) return (await res.json()) as SessionResponse;
       const err = await toError(res);
       if (err.code === ErrorCode.RefreshRace) {
@@ -133,6 +155,17 @@ export function setStepUpHandler(h: (() => Promise<boolean>) | null) {
 const lockedError = () => new ApiError(423, ErrorCode.SessionLocked, "Locked");
 
 export async function request<T>(method: string, path: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
+  // A save/send/upload in flight is a critical operation: an automatic update waits until it is done.
+  if (method === "GET" || method === "HEAD") return requestInner<T>(method, path, body, opts);
+  const done = beginCriticalOperation();
+  try {
+    return await requestInner<T>(method, path, body, opts);
+  } finally {
+    done();
+  }
+}
+
+async function requestInner<T>(method: string, path: string, body?: unknown, opts: RequestOptions = {}): Promise<T> {
   // A locked session gets nothing from the server: don't even try (the lock screen is up).
   if (!opts.anonymous && useSession.getState().locked) throw lockedError();
   const res = await send(method, path, body, opts);
@@ -141,7 +174,7 @@ export async function request<T>(method: string, path: string, body?: unknown, o
     if (err.code === ErrorCode.SessionLocked) useSession.getState().lockLocal();
     // Sensitive change: confirm (code-password / Face ID) and repeat once.
     if (err.code === ErrorCode.StepUpRequired && !opts.noStepUp && stepUpHandler && (await stepUpHandler())) {
-      return request<T>(method, path, body, { ...opts, noStepUp: true });
+      return requestInner<T>(method, path, body, { ...opts, noStepUp: true });
     }
     throw err;
   }

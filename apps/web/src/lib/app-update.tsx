@@ -1,5 +1,7 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { create } from "zustand";
+import { BUILD_ID, reportClientEvent } from "./boot";
+import { criticalOperationsRunning, onCriticalOperationsIdle } from "./critical-ops";
 
 /**
  * A1 — staying on the current deployment.
@@ -9,17 +11,22 @@ import { create } from "zustand";
  * running when a deployment lands:
  *
  *  - it polls /version.json (never cached) on focus / return from background / every 10 min and, when the
- *    build differs, offers «Обновить» — saving open work first, never reloading by surprise;
+ *    build differs, applies it by itself — but only when that cannot lose anything (see `blocker()`): nothing
+ *    being saved or sent, no half-typed text, every registered saver flushed. Otherwise it waits (for the
+ *    operation to end, for the person to leave the app, for idle time). The «Обновить» pill appears only
+ *    when an update has been waiting for a long time;
  *  - a code-split chunk that fails to load (deleted by the new deployment, or a flaky network) is retried
  *    once; if a newer build exists the page reloads into it (once per build, so a broken server can never
  *    cause a reload loop), otherwise the error reaches an error boundary with «Повторить».
  */
 
-export const BUILD_ID: string = typeof __VOIDEX_BUILD__ === "string" ? __VOIDEX_BUILD__ : "dev";
+export { BUILD_ID };
 
 interface UpdateState {
   /** Build id of a newer deployment, once seen. */
   available: string | null;
+  /** The update has been waiting (unsafe to apply) for a long time: only then the manual pill is shown. */
+  stalled: boolean;
   dismissed: boolean;
   /** Bumped when failed lazy chunks are reset so their wrappers re-render with a fresh import. */
   lazyGen: number;
@@ -28,6 +35,7 @@ interface UpdateState {
 
 export const useAppUpdate = create<UpdateState>((set) => ({
   available: null,
+  stalled: false,
   dismissed: false,
   lazyGen: 0,
   dismiss: () => set({ dismissed: true }),
@@ -57,7 +65,12 @@ export function checkForUpdate(force = false): Promise<string | null> {
       if (!res.ok || !(res.headers.get("content-type") ?? "").includes("json")) return null;
       const remote = parseVersion(await res.json());
       if (!remote || remote === BUILD_ID) return null;
-      if (useAppUpdate.getState().available !== remote) useAppUpdate.setState({ available: remote, dismissed: false });
+      if (useAppUpdate.getState().available !== remote) {
+        useAppUpdate.setState({ available: remote, dismissed: false, stalled: false });
+        reportClientEvent({ kind: "update_found", phase: "poll", detail: `${BUILD_ID}>${remote}` });
+        armStallTimer();
+      }
+      queueMicrotask(() => void tryApplyAutomatically("found"));
       return remote;
     } catch {
       return null; // offline: nothing to say
@@ -112,7 +125,77 @@ export async function applyUpdate(): Promise<boolean> {
   return true;
 }
 
-function isChunkError(err: unknown): boolean {
+
+// ---------------------------------------------------------------------------------------------------------------
+// Applying an update by itself, without ever losing work.
+
+const IDLE_APPLY_MS = 90_000;
+const STALL_AFTER_MS = 20 * 60_000;
+const pageStart = Date.now();
+let lastInput = pageStart;
+let visibleSince = pageStart;
+let stallTimer: number | undefined;
+
+/** Why the page must NOT reload right now, or null when reloading is safe. */
+export function blocker(): string | null {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
+  if (criticalOperationsRunning() > 0) return "busy";
+  const el = typeof document === "undefined" ? null : document.activeElement;
+  if (el instanceof HTMLElement) {
+    const typing =
+      ((el instanceof HTMLInputElement && !["button", "checkbox", "radio", "submit", "range", "file"].includes(el.type)) || el instanceof HTMLTextAreaElement) && el.value.length > 0;
+    const editing = el.isContentEditable && (el.textContent ?? "").trim().length > 0;
+    if (typing || editing) return "typing";
+  }
+  return null;
+}
+
+function armStallTimer() {
+  window.clearTimeout(stallTimer);
+  stallTimer = window.setTimeout(() => {
+    if (useAppUpdate.getState().available) useAppUpdate.setState({ stalled: true });
+  }, STALL_AFTER_MS);
+}
+
+let applying = false;
+
+/**
+ * Reloads into the newest build if (and only if) nothing can be lost. Called when an update is found, when the
+ * person leaves or returns, when a save/upload finishes and while they are idle. Never loops: one automatic
+ * reload per target build per tab session.
+ */
+export async function tryApplyAutomatically(trigger: "found" | "hidden" | "return" | "idle" | "idle-ops" | "launch"): Promise<boolean> {
+  const build = useAppUpdate.getState().available;
+  if (!build || applying || alreadyReloadedFor(build)) return false;
+  const visible = document.visibilityState === "visible";
+  const quiet = Date.now() - lastInput > IDLE_APPLY_MS;
+  // While the person is actively using the app, only an idle moment, leaving the app, or the very start qualifies.
+  const startingUp = Date.now() - pageStart < 30_000 && lastInput === pageStart;
+  const allowed = trigger === "hidden" || trigger === "return" || startingUp || (visible ? quiet : true);
+  if (!allowed) return false;
+  const why = blocker();
+  if (why) {
+    reportClientEvent({ kind: "update_deferred", phase: trigger, detail: why });
+    return false;
+  }
+  applying = true;
+  try {
+    if (!(await saveBeforeReload())) return false;
+    if (blocker()) return false; // something started while saving
+    try {
+      sessionStorage.setItem(RELOADED_KEY, build);
+    } catch {
+      /* private mode: the once-per-build guard is then per page load only */
+    }
+    reportClientEvent({ kind: "update_applied", phase: trigger, detail: `${BUILD_ID}>${build}` });
+    window.location.reload();
+    return true;
+  } finally {
+    applying = false;
+  }
+}
+
+export function isChunkError(err: unknown): boolean {
   const msg = String((err as { message?: unknown })?.message ?? err ?? "");
   return /dynamically imported module|Importing a module script failed|error loading dynamically|Failed to fetch|module script|Unable to preload|expected a JavaScript/i.test(msg);
 }
@@ -145,6 +228,7 @@ export function lazyWithRecovery<T extends ComponentType<any>>(factory: () => Pr
           window.location.reload();
           return new Promise<never>(() => {}); // the page is going away
         }
+        reportClientEvent({ kind: "chunk_failed", phase: "lazy", detail: String((second as Error)?.message ?? second) });
         throw second;
       }
     }
@@ -193,18 +277,42 @@ export function startUpdateChecks() {
       /* ignore */
     }
   }, 15_000);
-  window.setTimeout(() => void checkForUpdate(true), 20_000);
+
+  const touch = () => {
+    lastInput = Date.now();
+  };
+  for (const ev of ["pointerdown", "keydown", "touchstart", "wheel"] as const) window.addEventListener(ev, touch, { passive: true, capture: true });
+
+  // An early look: a shell served from the offline cache or a slow network may be one release behind.
+  window.setTimeout(() => void checkForUpdate(true).then(() => tryApplyAutomatically("launch")), 4_000);
   window.setInterval(() => {
-    if (document.visibilityState === "visible") void checkForUpdate();
+    if (document.visibilityState === "visible") void checkForUpdate().then(() => tryApplyAutomatically("idle"));
   }, CHECK_EVERY_MS);
+  // Idle moments: the check above is slow, this one only looks at a version that is already known.
+  window.setInterval(() => void tryApplyAutomatically("idle"), 15_000);
+
+  let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void checkForUpdate();
+    if (document.visibilityState === "hidden") {
+      hiddenAt = Date.now();
+      void tryApplyAutomatically("hidden");
+      return;
+    }
+    visibleSince = Date.now();
+    const away = hiddenAt ? Date.now() - hiddenAt : 0;
+    // Coming back after a while: ask right away; reload before the person has touched anything.
+    void checkForUpdate(away > 30_000).then(() => (away > 30_000 && lastInput < visibleSince ? tryApplyAutomatically("return") : tryApplyAutomatically("idle")));
   });
   // iOS restores pages from the back/forward cache without running anything else.
   window.addEventListener("pageshow", (e) => {
-    if ((e as PageTransitionEvent).persisted) void checkForUpdate(true);
+    if ((e as PageTransitionEvent).persisted) void checkForUpdate(true).then(() => tryApplyAutomatically("return"));
   });
-  window.addEventListener("online", () => void checkForUpdate());
+  window.addEventListener("online", () => void checkForUpdate().then(() => tryApplyAutomatically("idle")));
+  // A save / send / upload finished: the update that was waiting for it may go now.
+  onCriticalOperationsIdle(() => void tryApplyAutomatically(document.visibilityState === "visible" ? "idle-ops" : "hidden"));
   // Vite's preload of a chunk's dependencies failed: same story as a failed import.
-  window.addEventListener("vite:preloadError", () => void checkForUpdate(true));
+  window.addEventListener("vite:preloadError", () => {
+    reportClientEvent({ kind: "chunk_failed", phase: "preload" });
+    void checkForUpdate(true);
+  });
 }

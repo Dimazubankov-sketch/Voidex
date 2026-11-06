@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import type { Plugin } from "vite";
 
 // A1: every build has an id. The client knows its own (__VOIDEX_BUILD__) and compares it with /version.json
@@ -14,6 +15,9 @@ function buildVersion(): Plugin {
     apply: "build",
     generateBundle() {
       this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ build: BUILD_ID }) });
+      // The service worker is a plain script (not bundled); the build id makes every release's sw.js different.
+      const sw = readFileSync(fileURLToPath(new URL("./sw/sw.template.js", import.meta.url)), "utf8");
+      this.emitFile({ type: "asset", fileName: "sw.js", source: sw.split("__VOIDEX_BUILD__").join(BUILD_ID) });
     },
   };
 }

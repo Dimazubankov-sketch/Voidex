@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
     "store:screens": "playwright test --config playwright.screens.config.ts",
-    "test": "node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs && vitest run",
+    "test:e2e:prod": "playwright test --config playwright.prod.config.ts",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@remixicon/react": "^4.9.0",
@@ -37,8 +39,10 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "5.9.3",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "vitest": "3.2.7"
   }
 }

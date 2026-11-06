@@ -131,6 +131,44 @@ docker compose -p voidex --env-file /opt/voidex/.env -f /opt/voidex/repo/deploy/
   exec -T db pg_restore -U voidex -d voidex --clean --if-exists < /opt/voidex/backups/<file>.dump
 ```
 
+## Start-up safety and automatic updates (web client)
+
+Why a page should never stay blank, and how a new release reaches people without a button.
+
+| Piece | Where | What it guarantees |
+|---|---|---|
+| Boot guard | `apps/web/public/boot-guard.js` | If the app does not report "first render committed" within 12 s (or a file fails / does not parse), a full-screen «Не удалось загрузить VOIDEX · Повторить» covers the page. ≤ 2 automatic retries per tab session, never a reload loop. |
+| Error boundary | `ui/app-update-ui.tsx` | A crash or a chunk that never loads shows «Повторить / Перезагрузить». |
+| Unreachable server | `app.tsx`, `lib/api.ts` | Network failure / timeout (15–25 s) / 5xx at start = «Нет связи с VOIDEX» with automatic retry. Never "signed out". 401 expired/revoked → sign-in; 423 → lock screen. |
+| Service worker | `apps/web/sw/sw.template.js` → `/sw.js` | Shell + last 4 builds' hashed files cached; home-screen launch offline opens the app. Navigations are network-first (4 s), so a normal open is always the newest `index.html`. `/api/*` is never touched. |
+| Version stamp | `VOIDEX_VERSION` → `/version.json`, bundle, `sw.js` | The running page compares its build with `/version.json` (never cached). |
+| Automatic apply | `lib/app-update.tsx` | Newer build found → the page reloads into it when nothing can be lost: no save/send/upload in flight (`lib/critical-ops.ts`, every non-GET request counts), no half-typed text, all registered savers (notes, mail composer, window layout) flushed. Applied on return from the background, on leaving, after ≥ 90 s idle, or right after launch. One reload per target build per tab session. The «Новая версия» pill appears only if an update has waited 20 min. |
+| Old chunks | `ASSET_ARCHIVE_DIR=/data/assets` (volume `voidex_assets`) | Each start copies the image's `/assets` into the volume and keeps the last 5 releases. Pages still running the previous build keep finding their chunks. Disposable: it holds no user data. |
+| Diagnostics | `POST /api/client-events` | Anonymous, rate-limited (20/min/IP), whitelisted fields, scrubbed text; written to the server log only (`client event: boot_failed …`). |
+
+Cache headers (`apps/server/src/lib/web-cache.ts`): `/assets/*` immutable for a year; `index.html`, `version.json`,
+`sw.js`, `manifest.webmanifest`, `boot-guard.js` `no-cache` (revalidated, cheap 304).
+
+**Seeing start-up failures:** Actions → Production → logs, look for `client event:` lines
+(`boot_failed`, `root_crashed`, `api_unreachable`, `update_deferred`, `sw_error`) with a coarse `ua` ("iOS 17 Safari").
+
+**Turning the service worker off for everyone** (if it ever misbehaves): ship a release whose `sw/sw.template.js` only
+contains `self.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(
+caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c)))).then(()=>self.registration.unregister())));`.
+For one device: open `https://voidex.su/?nosw`.
+
+**Release tests (run in CI, and locally):** `pnpm build && pnpm --filter @voidex/web test:e2e:prod` — the built client
+on the built server in Chromium (desktop, Android) and WebKit (iPhone). `pnpm test` runs unit tests incl. the
+web client's (`vitest`).
+
+**Staging before production:** run the exact image locally (`docker compose up --build` with `AUTH_ACCESS_SECRET`
+and `AUTH_TOKEN_PEPPER` set) or `node apps/server/dist/index.js` with `WEB_DIST`/`ASSET_ARCHIVE_DIR` as in
+`apps/web/playwright.prod.config.ts`; open it on a phone on the same network, then deploy. Rollback is unchanged
+(Actions → Production → rollback); the archive volume is ignored by older images and can stay.
+
+Network/TLS problems that happen *before* any of this runs (the iPhone that gets no ServerHello): see
+`docs/IPHONE-DIAGNOSTICS.md` and `deploy/netdiag.sh`.
+
 ## Rollback and the database
 
 Migrations are forward-only SQL (Drizzle), applied in a transaction before the

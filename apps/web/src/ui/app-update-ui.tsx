@@ -3,19 +3,24 @@ import { AnimatePresence, motion } from "motion/react";
 import { RiCloseLine, RiRefreshLine } from "@remixicon/react";
 import { VoidexMark } from "@/brand/brand";
 import { useT } from "@/lib/i18n";
-import { applyUpdate, resetFailedChunks, startUpdateChecks, useAppUpdate } from "@/lib/app-update";
+import { applyUpdate, isChunkError, resetFailedChunks, startUpdateChecks, useAppUpdate } from "@/lib/app-update";
+import { freshReload, reportClientEvent } from "@/lib/boot";
 import { toast } from "@/ui/overlays";
 import { Button } from "@/ui/controls";
 
-/** A1: «Доступна новая версия» — a quiet pill under the status bar; the update waits for the person. */
+/**
+ * Updates apply by themselves when that is safe (lib/app-update.tsx). This pill is only the fallback for an update
+ * that has been waiting a long time (a note stayed unsaved, an upload never finished): then the person can decide.
+ */
 export function UpdateBanner() {
   const t = useT();
   const available = useAppUpdate((s) => s.available);
+  const stalled = useAppUpdate((s) => s.stalled);
   const dismissed = useAppUpdate((s) => s.dismissed);
   const dismiss = useAppUpdate((s) => s.dismiss);
   const [busy, setBusy] = useState(false);
   useEffect(() => startUpdateChecks(), []);
-  const show = !!available && !dismissed;
+  const show = !!available && stalled && !dismissed;
   return (
     <AnimatePresence>
       {show && (
@@ -62,12 +67,21 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
   }
   override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("VOIDEX crashed", error, info.componentStack);
+    // Name of the error and the component only: no props, no state, no user data.
+    reportClientEvent({ kind: "root_crashed", phase: "boundary", detail: `${error.name}: ${error.message}` });
   }
   override render() {
     if (this.state.error)
       return (
         <RootCrashed
           onRetry={() => {
+            // Browsers remember a failed import() of a module URL, so importing the chunk again in the same page
+            // fails the same way: for a chunk error the only real retry is a fresh page load (the person tapped it,
+            // so this cannot loop).
+            if (isChunkError(this.state.error)) {
+              freshReload();
+              return;
+            }
             resetFailedChunks();
             this.setState({ error: null });
           }}
@@ -87,7 +101,7 @@ function RootCrashed({ onRetry }: { onRetry: () => void }) {
         <Button variant="secondary" onClick={onRetry}>
           {t("common.retry")}
         </Button>
-        <Button variant="secondary" onClick={() => window.location.reload()}>
+        <Button variant="secondary" onClick={freshReload}>
           {t("os.reloadPage")}
         </Button>
       </div>

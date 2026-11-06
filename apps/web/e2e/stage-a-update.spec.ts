@@ -38,17 +38,20 @@ test.describe("A1 updates", () => {
     cpSync(`${DIST}.orig`, DIST, { recursive: true });
   });
 
-  test("a normal reload gets the newest index.html; the banner offers the update", async ({ page }) => {
+  test("a normal reload gets the newest index.html; a new deployment is applied by itself (no button)", async ({ page }) => {
     await signUpViaApi(page);
     const res = await page.request.get("/");
     expect(res.headers()["cache-control"]).toBe("no-cache");
     deployNextBuild(DIST!, `next${Date.now().toString(36)}`);
     // Coming back to the tab asks the server which build it serves.
+    const reloaded = page.waitForEvent("load");
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
       window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
     });
-    await expect(page.getByTestId("update-banner")).toBeVisible();
+    // Since the automatic updater: coming back to the page applies the new build when nothing can be lost.
+    await reloaded;
+    await expect(page.getByTestId("update-banner")).toHaveCount(0);
   });
 
   test("an app whose chunk is gone reloads into the new build instead of a blank screen", async ({ page }) => {

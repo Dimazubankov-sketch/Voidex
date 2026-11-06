@@ -48,6 +48,9 @@ services:
       # Only Caddy can reach the app, so X-Forwarded-For from it is trusted.
       TRUST_PROXY: "true"
       NODE_OPTIONS: --max-old-space-size=384
+    volumes:
+      # Hashed web files of the last releases (ASSET_ARCHIVE_DIR=/data/assets in the image): see docs/DEPLOYMENT.md.
+      - assets:/data/assets
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +78,9 @@ networks:
   web: {}
 
 volumes:
+  # Disposable by design (rebuilt from the next release); never holds user data.
+  assets:
+    name: voidex_assets
   # Named explicitly so the data survives any container or compose change.
   pgdata:
     name: voidex_pgdata
