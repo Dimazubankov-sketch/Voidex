@@ -151,4 +151,18 @@ jobs:
           case "$code" in 30[18]\ https://voidex.su/*) echo "✔ HTTP → HTTPS ($code)" ;; *) fail "HTTP is not redirected to HTTPS: $code" ;; esac
           code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' https://www.voidex.su/)
           case "$code" in 30[18]\ https://voidex.su/*) echo "✔ www → voidex.su ($code)" ;; *) echo "::warning::www.voidex.su redirect not working yet: $code" ;; esac
+          # Start-up safety artifacts (P0 hotfix): the first paint must not depend on any external file, the old
+          # caching service worker must be retired, and the entry points must be revalidated.
+          case "$html" in *'id="vx-splash"'*) echo "✔ static splash in index.html" ;; *) fail "index.html has no static splash" ;; esac
+          case "$html" in *'<script async src="/boot-guard.js">'*) echo "✔ boot-guard.js is async" ;; *) fail "boot-guard.js is render-blocking again" ;; esac
+          sw=$(curl -fsS --max-time 10 "$SITE/sw.js") || fail "/sw.js did not load"
+          case "$sw" in *unregister*) echo "✔ /sw.js is the self-removing worker" ;; *) fail "/sw.js is not the retirement worker" ;; esac
+          ver=$(curl -fsS --max-time 10 "$SITE/version.json") || fail "/version.json did not load"
+          case "$ver" in *"\"build\":\"$GITHUB_SHA\""*) echo "✔ /version.json = ${GITHUB_SHA::7}" ;; *) fail "/version.json reports another build: $ver" ;; esac
+          for f in /sw.js /version.json /boot-guard.js /index.html; do
+            cc=$(curl -fsSI --max-time 10 "$SITE$f" | tr -d '\r' | grep -i '^cache-control:' | head -1)
+            case "$cc" in *no-cache*) echo "✔ $f $cc" ;; *) fail "$f is not revalidated: ${cc:-no Cache-Control}" ;; esac
+          done
+          gz=$(curl -fsS --max-time 15 -H 'Accept-Encoding: gzip' -o /dev/null -w '%{size_download}' "$SITE/boot-guard.js")
+          echo "• boot-guard.js on the wire: $gz bytes"
           echo "✅ https://voidex.su is live on ${GITHUB_SHA::7}"

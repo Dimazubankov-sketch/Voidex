@@ -65,9 +65,7 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
-  private failedAt = 0;
   override componentDidCatch(error: Error, info: ErrorInfo) {
-    this.failedAt = Date.now();
     console.error("VOIDEX crashed", error, info.componentStack);
     // Name of the error and the component only: no props, no state, no user data.
     reportClientEvent({ kind: "root_crashed", phase: "boundary", detail: `${error.name}: ${error.message}` });
@@ -81,9 +79,10 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
             // fails the same way: for a chunk error the only real retry is a fresh page load (the person tapped it,
             // so this cannot loop).
             if (isChunkError(this.state.error)) {
-              // WebKit remembers the failed module for ~3 s (measured): reloading sooner fails the same way,
-              // so a quick tap waits out the remainder before it reloads.
-              window.setTimeout(freshReload, Math.max(0, 3500 - (Date.now() - this.failedAt)));
+              // Observed under Playwright's WebKit: the TAB that saw a module fail keeps refusing that URL even after
+              // a reload (a new tab loads it fine). Chromium recovers in place. A fresh page load is still the best
+              // in-place retry available; if it fails again the screen stays and closing/reopening the app recovers.
+              freshReload();
               return;
             }
             resetFailedChunks();

@@ -124,10 +124,24 @@ Do not use `curl -k`/`--insecure` as a fix and do not weaken TLS settings; neith
    the app must recover. (Measured in WebKit: a module that just failed to load is refused again for ~3 s, so the
    app waits out that time before reloading; tapping immediately is fine, the reload simply happens a moment later.)
 
+## Working hypothesis (not proven): a path-MTU black hole
+
+Facts that fit it: the stall happens exactly where the server sends its first *full-size* packets (the TLS flight with the
+certificate; later the bigger scripts); small replies work (an iPhone completed TLS 1.3/h2 from 89.125.217.127 and then
+abandoned a script download); Cloudflare works (it clamps MSS); the server's own outbound TLS to `gate.smsaero.ru` (a
+Russian host) stalls the same way; disabling HTTP/3 changed nothing. The mitigation shipped in the P0 release lowers the
+MTU in the containers (see DEPLOYMENT.md, `net_tune`). **Two checks, no new tooling:**
+
+1. After the deploy, Actions → Production → status/the Deploy log: the line
+   `gate.smsaero.ru TLS from the app container … before: TIMEOUT; after: …`. `OK` after = the hypothesis holds for that path.
+2. **One check on the iPhone (the same one you already know):** `curl -v https://voidex.su/api/health` in a-Shell on the
+   network that failed. It either now prints `HTTP/2 200` (fixed on that path) or still stalls at the ClientHello/ServerHello
+   (then run Steps 0 and 1 above once and send me the verdict).
+
 ## What the app does when the network is bad (so a blank screen can't come back)
 
 * `boot-guard.js` shows «Не удалось загрузить VOIDEX» with «Повторить» if the app does not report a successful first
   render within 12 s — whether or not React partly mounted. At most two automatic retries (a failed file, or the network coming back), then it waits for the person.
-* Service Worker caches the app shell and the hashed files of the current and previous builds, so a home-screen launch
-  without a connection shows the app's own "no connection" screen instead of nothing.
+* `index.html` paints a static wordmark from inline CSS and nothing external blocks it; after 10 s a plain «Обновить» link appears.
+* The caching service worker of e94bf99 is retired (it is not part of this release).
 * Startup requests have timeouts; a network failure is reported as "no connection" and never as "signed out".

@@ -51,9 +51,7 @@ export default defineConfig({
     { name: "chromium-desktop", use: { viewport: { width: 1440, height: 900 }, browserName: "chromium" } },
     { name: "chromium-android", use: { ...devices["Pixel 7"], browserName: "chromium" } },
     // launchOptions of the chromium override must not leak into WebKit.
-    // retries: Playwright's WebKit sometimes starts a page without its service worker answering subresources right
-    // after a simulated network reset (seen in ~1 of 4 runs of the offline-launch test); not seen in Chromium.
-    { name: "webkit-iphone", retries: 2, use: { ...devices["iPhone 15"], launchOptions: {} } },
+    { name: "webkit-iphone", use: { ...devices["iPhone 15"], launchOptions: {} } },
   ],
   webServer: [
     {

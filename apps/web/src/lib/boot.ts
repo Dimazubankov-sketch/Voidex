@@ -28,6 +28,8 @@ export function bootMark(phase: string) {
 
 /** The first render has been committed: the page has started. Called from the root component's effect. */
 export function bootReady() {
+  // The guard script loads async and may arrive after this call: leave it a flag it checks on start.
+  if (typeof window !== "undefined") (window as unknown as { __vxBootOk?: boolean }).__vxBootOk = true;
   guard()?.ready?.();
 }
 

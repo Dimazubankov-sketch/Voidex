@@ -1,50 +1,17 @@
-import { checkForUpdate } from "./app-update";
-import { reportClientEvent } from "./boot";
-
 /**
- * Registers /sw.js (see apps/web/sw/sw.template.js for what it does and does not do). The page never reloads
- * because of the worker: a freshly activated worker only tells the page to look at /version.json, and the
- * updater applies the new build when it is safe.
+ * P0 hotfix: the caching service worker of release e94bf99 is retired. Pages no longer register one, and any worker
+ * that an earlier visit installed is unregistered here together with the caches it created (vx-*). The server also
+ * ships /sw.js as a self-removing worker, so devices that cannot run this code yet clean up on their next update check.
  */
-export function registerServiceWorker(): void {
-  if (import.meta.env.DEV || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-
-  // Kill switch: /?nosw removes the worker and its caches, then continues without it.
-  if (new URL(location.href).searchParams.has("nosw")) {
-    void unregisterAll();
-    return;
-  }
-
-  navigator.serviceWorker.addEventListener("message", (e: MessageEvent) => {
-    if ((e.data as { type?: string } | null)?.type === "sw-activated") void checkForUpdate(true);
-  });
-
-  const start = () => {
-    // Not during start-up: the first paint and the session restore come first.
-    window.setTimeout(() => {
-      navigator.serviceWorker
-        .register("/sw.js", { scope: "/", updateViaCache: "none" })
-        .then((reg) => {
-          let last = Date.now();
-          document.addEventListener("visibilitychange", () => {
-            if (document.visibilityState === "visible" && Date.now() - last > 5 * 60_000) {
-              last = Date.now();
-              void reg.update().catch(() => undefined);
-            }
-          });
-        })
-        .catch((err: unknown) => reportClientEvent({ kind: "sw_error", phase: "register", detail: String((err as Error)?.message ?? err) }));
-    }, 3000);
-  };
-  if (document.readyState === "complete") start();
-  else window.addEventListener("load", start, { once: true });
-}
-
-export async function unregisterAll(): Promise<void> {
+export async function retireServiceWorkers(): Promise<void> {
   try {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
     const regs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(regs.map((r) => r.unregister()));
-    if ("caches" in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)));
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.startsWith("vx-")).map((k) => caches.delete(k)));
+    }
   } catch {
     /* nothing to remove / blocked */
   }
