@@ -1,6 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { net } from "./net";
+import { openApp, signUpViaApi, unlock } from "../e2e/helpers";
 
 /**
  * Update delivery on the release build: service worker, offline launch, automatic reload into a new build,
@@ -11,7 +13,10 @@ const DIST = process.env.E2E_PROD_DIST!;
 const VERSION_FILE = join(DIST, "version.json");
 const ORIGINAL = readFileSync(VERSION_FILE, "utf8");
 
-test.afterEach(() => writeFileSync(VERSION_FILE, ORIGINAL));
+test.afterEach(async () => {
+  writeFileSync(VERSION_FILE, ORIGINAL);
+  await net("up");
+});
 
 const release = (build: string) => writeFileSync(VERSION_FILE, JSON.stringify({ build }));
 /** What iOS does when a suspended page comes back: pageshow(persisted). The updater checks and may apply. */
@@ -44,16 +49,29 @@ test.describe("service worker", () => {
     await workerReady(page);
   });
 
-  test("a home-screen launch without any connection opens the app and explains, instead of a blank window", async ({ page, context, browserName }) => {
-    test.skip(browserName === "webkit", "Playwright WebKit does not emulate offline for service-worker fetches; covered by the device checklist");
+  test("a home-screen launch while the server is unreachable opens the app and explains, instead of a blank window", async ({ page }) => {
+    test.setTimeout(90_000);
     await workerReady(page);
-    await context.setOffline(true);
-    await page.reload();
-    await expect(page.getByTestId("boot-unavailable")).toBeVisible({ timeout: 20_000 });
+    await net("down");
+    await page.reload(); // served by the worker from its cache
+    await expect(page.getByTestId("boot-unavailable")).toBeVisible({ timeout: 30_000 });
     await expect(page.getByTestId("boot-fallback")).toHaveCount(0);
-    await context.setOffline(false);
-    // The network is back: the app notices by itself and continues to the sign-in screens.
-    await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 30_000 });
+    await net("up");
+    // The app retries by itself with back-off and continues to the sign-in screens.
+    await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 40_000 });
+  });
+
+  test("a STALLED server (accepts, never answers: the iPhone symptom) still opens the cached app within seconds", async ({ page }) => {
+    test.setTimeout(120_000);
+    await workerReady(page);
+    await net("hang");
+    const t0 = Date.now();
+    await page.reload({ waitUntil: "commit" }); // navigation is network-first with a 4 s limit, then the cached shell
+    await expect(page.getByTestId("boot-unavailable")).toBeVisible({ timeout: 60_000 });
+    expect(Date.now() - t0).toBeLessThan(40_000);
+    await expect(page.getByTestId("boot-fallback")).toHaveCount(0);
+    await net("up");
+    await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 40_000 });
   });
 
   test("/?nosw removes the worker and its caches", async ({ page }) => {
@@ -128,18 +146,33 @@ test.describe("automatic updates", () => {
     await reloaded;
   });
 
-  test("offline: an update check that cannot reach the server changes nothing", async ({ page, context, browserName }) => {
-    test.skip(browserName === "webkit", "offline emulation differs in Playwright WebKit");
+  test("unreachable server: an update check changes nothing and breaks nothing", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByTestId("welcome-signin")).toBeVisible();
     await mark(page);
     release("e2e-build-5");
-    await context.setOffline(true);
+    await net("down");
     await comeBack(page);
     await page.waitForTimeout(1_500);
     expect(await marked(page)).toBe(true);
     await expect(page.getByTestId("welcome-signin")).toBeVisible();
-    await context.setOffline(false);
+  });
+
+  test("the signed-in session and the device's saved state survive the automatic update", async ({ page }) => {
+    await signUpViaApi(page);
+    await openApp(page, "notes");
+    const keys = () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("vx.")).sort());
+    // The layout is saved shortly after a change.
+    await expect.poll(async () => (await keys()).some((k) => k.startsWith("vx.wm."))).toBe(true);
+    const before = await keys();
+    release("e2e-build-8");
+    const reloaded = page.waitForEvent("load");
+    await comeBack(page);
+    await reloaded;
+    // Same account, restored through the refresh cookie (a new start opens on the lock screen: unchanged behaviour).
+    await unlock(page);
+    await expect(page.getByTestId("workspace")).toBeVisible();
+    expect(await keys()).toEqual(expect.arrayContaining(before));
   });
 
   test("a broken version.json (HTML error page from a proxy) is ignored", async ({ page }) => {

@@ -110,10 +110,22 @@ function cacheAssetsOf(htmlRes) {
     ).then(function () { return noteFiles(paths); });
   });
 }
+// Files the page needs before anything can run (boot-guard.js is a blocking script in <head>): they must be in the
+// cache, or a stalled network would leave the page blank while it waits for them.
+var CORE = ["/boot-guard.js", "/manifest.webmanifest"];
+function cacheCore() {
+  return caches.open(FILES).then(function (c) {
+    return Promise.all(
+      CORE.map(function (p) {
+        return fetch(p, { cache: "reload" }).then(function (r) { return r.ok ? c.put(p, r) : null; }).catch(function () {});
+      }),
+    );
+  });
+}
 function storeShell(res) {
   var forShell = res.clone();
   var forAssets = res.clone();
-  return caches.open(SHELL).then(function (c) { return c.put("/", forShell); }).then(function () { return cacheAssetsOf(forAssets); });
+  return caches.open(SHELL).then(function (c) { return c.put("/", forShell); }).then(function () { return Promise.all([cacheAssetsOf(forAssets), cacheCore()]); });
 }
 
 // ---- lifecycle ---------------------------------------------------------------------------------------------
@@ -211,7 +223,10 @@ function networkFirst(req, ms) {
   }).catch(function () {});
   var timeout = new Promise(function (_, reject) { setTimeout(function () { reject(new Error("slow")); }, ms); });
   return Promise.race([netP, timeout]).catch(function () {
-    return caches.open(FILES).then(function (c) { return c.match(path); }).then(function (hit) { return hit || netP; });
+    // Never wait on a stalled network for these: boot-guard.js blocks the parser. No copy yet = fail fast (504).
+    return caches.open(FILES).then(function (c) { return c.match(path); }).then(function (hit) {
+      return hit || new Response("", { status: 504, statusText: "stalled" });
+    });
   });
 }
 

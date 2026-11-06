@@ -65,7 +65,9 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
+  private failedAt = 0;
   override componentDidCatch(error: Error, info: ErrorInfo) {
+    this.failedAt = Date.now();
     console.error("VOIDEX crashed", error, info.componentStack);
     // Name of the error and the component only: no props, no state, no user data.
     reportClientEvent({ kind: "root_crashed", phase: "boundary", detail: `${error.name}: ${error.message}` });
@@ -79,7 +81,9 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
             // fails the same way: for a chunk error the only real retry is a fresh page load (the person tapped it,
             // so this cannot loop).
             if (isChunkError(this.state.error)) {
-              freshReload();
+              // WebKit remembers the failed module for ~3 s (measured): reloading sooner fails the same way,
+              // so a quick tap waits out the remainder before it reloads.
+              window.setTimeout(freshReload, Math.max(0, 3500 - (Date.now() - this.failedAt)));
               return;
             }
             resetFailedChunks();
@@ -93,15 +97,24 @@ export class RootBoundary extends Component<{ children: ReactNode }, { error: Er
 
 function RootCrashed({ onRetry }: { onRetry: () => void }) {
   const t = useT();
+  const [busy, setBusy] = useState(false);
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 bg-background p-8 text-center" data-testid="root-crashed">
       <VoidexMark className="size-14 opacity-80" />
       <div className="text-[15px] font-semibold text-text">{t("os.loadFailed")}</div>
       <div className="flex gap-2">
-        <Button variant="secondary" onClick={onRetry}>
+        <Button
+          variant="secondary"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            onRetry();
+            window.setTimeout(() => setBusy(false), 6000); // a failed non-chunk retry must not leave the button dead
+          }}
+        >
           {t("common.retry")}
         </Button>
-        <Button variant="secondary" onClick={freshReload}>
+        <Button variant="secondary" disabled={busy} onClick={() => { setBusy(true); window.setTimeout(freshReload, 0); }}>
           {t("os.reloadPage")}
         </Button>
       </div>

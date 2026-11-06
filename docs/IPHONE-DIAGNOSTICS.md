@@ -121,7 +121,8 @@ Do not use `curl -k`/`--insecure` as a fix and do not weaken TLS settings; neith
    text or a running upload is never cut off — the restart waits for it.
 7. Failed chunk (only worth testing once): Safari → open VOIDEX, turn on Airplane mode, open an app inside VOIDEX that
    was never opened before. The app shows its error screen with «Повторить»; turn Airplane mode off, tap «Повторить»:
-   the app must recover. (Playwright's WebKit could not reproduce the recovery — this is the check that settles it.)
+   the app must recover. (Measured in WebKit: a module that just failed to load is refused again for ~3 s, so the
+   app waits out that time before reloading; tapping immediately is fine, the reload simply happens a moment later.)
 
 ## What the app does when the network is bad (so a blank screen can't come back)
 

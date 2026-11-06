@@ -17,6 +17,8 @@ import { defineConfig, devices } from "@playwright/test";
  * service-worker behaviour) that Chromium cannot. It is NOT an iPhone: see docs/IPHONE-DIAGNOSTICS.md.
  */
 const PORT = Number(process.env.E2E_PROD_PORT ?? 4100);
+// Tests talk to the server through e2e-prod/proxy.mjs, which can reset or stall connections on demand.
+const PROXY_PORT = Number(process.env.E2E_PROXY_PORT ?? 4101);
 const ROOT = join(tmpdir(), "vx-e2e-prod");
 export const DIST = join(ROOT, "dist");
 export const ARCHIVE = join(ROOT, "archive");
@@ -40,7 +42,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: `http://127.0.0.1:${PORT}`,
+    baseURL: `http://127.0.0.1:${PROXY_PORT}`,
     locale: "ru-RU",
     trace: "off",
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
@@ -49,22 +51,33 @@ export default defineConfig({
     { name: "chromium-desktop", use: { viewport: { width: 1440, height: 900 }, browserName: "chromium" } },
     { name: "chromium-android", use: { ...devices["Pixel 7"], browserName: "chromium" } },
     // launchOptions of the chromium override must not leak into WebKit.
-    { name: "webkit-iphone", use: { ...devices["iPhone 15"], launchOptions: {} } },
+    // retries: Playwright's WebKit sometimes starts a page without its service worker answering subresources right
+    // after a simulated network reset (seen in ~1 of 4 runs of the offline-launch test); not seen in Chromium.
+    { name: "webkit-iphone", retries: 2, use: { ...devices["iPhone 15"], launchOptions: {} } },
   ],
-  webServer: {
-    command: "node ../server/dist/index.js",
-    url: `http://127.0.0.1:${PORT}/api/health`,
-    reuseExistingServer: false,
-    timeout: 60_000,
-    env: {
-      NODE_ENV: "test",
-      DATABASE_URL: process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL ?? "postgres://voidex:voidex@localhost:5432/voidex",
-      PORT: String(PORT),
-      HOST: "127.0.0.1",
-      WEB_DIST: DIST,
-      ASSET_ARCHIVE_DIR: ARCHIVE,
-      VOIDEX_VERSION: "e2e-build-1",
-      RATE_LIMIT_SCALE: "50",
+  webServer: [
+    {
+      command: "node ../server/dist/index.js",
+      url: `http://127.0.0.1:${PORT}/api/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: {
+        NODE_ENV: "test",
+        DATABASE_URL: process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL ?? "postgres://voidex:voidex@localhost:5432/voidex",
+        PORT: String(PORT),
+        HOST: "127.0.0.1",
+        WEB_DIST: DIST,
+        ASSET_ARCHIVE_DIR: ARCHIVE,
+        VOIDEX_VERSION: "e2e-build-1",
+        RATE_LIMIT_SCALE: "50",
+      },
     },
-  },
+    {
+      command: "node e2e-prod/proxy.mjs",
+      url: `http://127.0.0.1:${PROXY_PORT}/api/health`,
+      reuseExistingServer: false,
+      timeout: 30_000,
+      env: { E2E_PROXY_PORT: String(PROXY_PORT), E2E_PROD_PORT: String(PORT) },
+    },
+  ],
 });

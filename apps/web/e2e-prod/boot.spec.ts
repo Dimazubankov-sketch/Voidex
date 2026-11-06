@@ -1,9 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import { net } from "./net";
 
 /**
  * Start-up resilience on the RELEASE build (boot guard, error boundary, "can't reach the server" screen,
  * hostile local storage). Each test names the failure it stands for.
  */
+
+test.afterEach(() => net("up"));
 
 const started = (page: Page) => page.evaluate(() => (window as unknown as { __vxBoot?: { ok?: boolean } }).__vxBoot?.ok === true);
 const GUARD_PAGE = '<!doctype html><html><body><div id="root"><p id="partial">half-mounted UI</p></div><script src="/boot-guard.js"></script></body></html>';
@@ -94,22 +97,17 @@ for (const [name, handler] of [
 }
 
 test.describe("a code-split chunk that fails to load", () => {
-  test("shows the error screen (not blank) and recovers once the chunk is reachable again", async ({ page, browserName }) => {
-    const re = /\/assets\/auth-root-[^/]+\.js$/;
-    let broken = true;
-    // The route stays installed and decides per request (removing it mid-test is unreliable in WebKit).
-    await page.route(re, (r) => (broken ? r.fulfill({ status: 404, headers: { "cache-control": "no-store" }, body: "" }) : r.continue())); // like the real server: never cached
-    await page.goto("/");
-    await expect(page.getByTestId("root-crashed")).toBeVisible({ timeout: 20_000 });
-    broken = false;
-    // Recovery: Chromium retries the import through «Повторить». Under Playwright's WebKit the page that saw the failure
-    // keeps refusing the module even after the route is healthy (reload, a new URL and goto all re-fail there); that
-    // is recorded as an open item to verify on a real iPhone (docs/IPHONE-DIAGNOSTICS.md). The error screen above is
-    // the guarantee that matters here: never a blank page.
-    test.skip(browserName === "webkit", "recovery after a failed chunk is not reproducible under Playwright WebKit; verify on a device");
-    await page.getByTestId("root-crashed").getByRole("button").first().click();
-    await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 20_000 });
-  });
+  for (const failure of ["404", "reset"] as const) {
+    test(`(${failure}) shows the error screen, not a blank page, and recovers once the chunk is reachable again`, async ({ page }) => {
+      // The failure is made by the network layer (not by the browser-side interception), as it happens on a phone.
+      await net("up", { block: "/assets/auth-root-", status: failure });
+      await page.goto("/");
+      await expect(page.getByTestId("root-crashed")).toBeVisible({ timeout: 20_000 });
+      await net("up");
+      await page.getByTestId("root-crashed").getByRole("button").first().click();
+      await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 20_000 });
+    });
+  }
 });
 
 test.describe("the server cannot be reached while the app starts", () => {
@@ -140,11 +138,12 @@ test.describe("the server cannot be reached while the app starts", () => {
 
   test("a connection that never answers ends in the same screen instead of an endless splash", async ({ page }) => {
     test.setTimeout(90_000);
+    await page.goto("/");
+    await expect(page.getByTestId("welcome-signin")).toBeVisible();
     await page.route("**/api/auth/refresh", () => {
       /* never answered: the client's own 15 s limit must end the wait */
     });
-    await page.goto("/");
-    await expect(page.getByText("VOIDEX").first()).toBeVisible();
+    await page.reload();
     await expect(page.getByTestId("boot-unavailable")).toBeVisible({ timeout: 40_000 });
     await expect(page.getByTestId("boot-fallback")).toHaveCount(0); // the app is alive: the guard stays out of it
   });
