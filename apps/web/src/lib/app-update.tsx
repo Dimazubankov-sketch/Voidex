@@ -294,8 +294,8 @@ export function startUpdateChecks() {
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+      // Never reload while going to the background: iOS can freeze the page mid-navigation and bring it back blank.
       hiddenAt = Date.now();
-      void tryApplyAutomatically("hidden");
       return;
     }
     visibleSince = Date.now();
@@ -309,7 +309,9 @@ export function startUpdateChecks() {
   });
   window.addEventListener("online", () => void checkForUpdate().then(() => tryApplyAutomatically("idle")));
   // A save / send / upload finished: the update that was waiting for it may go now.
-  onCriticalOperationsIdle(() => void tryApplyAutomatically(document.visibilityState === "visible" ? "idle-ops" : "hidden"));
+  onCriticalOperationsIdle(() => {
+    if (document.visibilityState === "visible") void tryApplyAutomatically("idle-ops");
+  });
   // Vite's preload of a chunk's dependencies failed: same story as a failed import.
   window.addEventListener("vite:preloadError", () => {
     reportClientEvent({ kind: "chunk_failed", phase: "preload" });

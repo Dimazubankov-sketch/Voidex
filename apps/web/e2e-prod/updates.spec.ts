@@ -24,61 +24,52 @@ const comeBack = (page: Page) => page.evaluate(() => window.dispatchEvent(new Pa
 const mark = (page: Page) => page.evaluate(() => ((window as unknown as { __marker: number }).__marker = 1));
 const marked = (page: Page) => page.evaluate(() => (window as unknown as { __marker?: number }).__marker === 1);
 
-async function workerReady(page: Page) {
-  await page.goto("/");
-  await expect(page.getByTestId("welcome-signin")).toBeVisible();
-  // Registered a few seconds after load, then installed, activated and in control of this page.
-  await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, { timeout: 30_000 });
-  await page.waitForFunction(
-    async () => {
-      const shell = await caches.open("vx-shell-v1").then((c) => c.match("/"));
-      const keys = await caches.open("vx-files-v1").then((c) => c.keys());
-      return !!shell && keys.some((k) => /\/assets\/index-.*\.js$/.test(k.url));
-    },
-    undefined,
-    { timeout: 30_000 },
-  );
-}
-
-test.describe("service worker", () => {
-  test("sw.js is never cached, the worker takes control and stores the shell and the main files", async ({ page }) => {
+test.describe("service worker retirement and first paint", () => {
+  test("/sw.js is a no-cache, self-removing worker that cleans the caches of the old caching worker", async ({ page }) => {
     const res = await page.request.get("/sw.js");
     expect(res.headers()["cache-control"]).toBe("no-cache");
-    const build = (JSON.parse(ORIGINAL) as { build: string }).build;
-    expect(await res.text()).toContain(`var BUILD = "${build}"`); // the worker carries this release's id
-    await workerReady(page);
-  });
-
-  test("a home-screen launch while the server is unreachable opens the app and explains, instead of a blank window", async ({ page }) => {
-    test.setTimeout(90_000);
-    await workerReady(page);
-    await net("down");
-    await page.reload(); // served by the worker from its cache
-    await expect(page.getByTestId("boot-unavailable")).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("boot-fallback")).toHaveCount(0);
-    await net("up");
-    // The app retries by itself with back-off and continues to the sign-in screens.
-    await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 40_000 });
-  });
-
-  test("a STALLED server (accepts, never answers: the iPhone symptom) still opens the cached app within seconds", async ({ page }) => {
-    test.setTimeout(120_000);
-    await workerReady(page);
-    await net("hang");
-    const t0 = Date.now();
-    await page.reload({ waitUntil: "commit" }); // navigation is network-first with a 4 s limit, then the cached shell
-    await expect(page.getByTestId("boot-unavailable")).toBeVisible({ timeout: 60_000 });
-    expect(Date.now() - t0).toBeLessThan(40_000);
-    await expect(page.getByTestId("boot-fallback")).toHaveCount(0);
-    await net("up");
-    await expect(page.getByTestId("welcome-signin")).toBeVisible({ timeout: 40_000 });
-  });
-
-  test("/?nosw removes the worker and its caches", async ({ page }) => {
-    await workerReady(page);
-    await page.goto("/?nosw");
+    const body = await res.text();
+    expect(body).toContain("unregister");
+    expect(body).not.toContain("addEventListener(\"fetch\""); // never intercepts anything
+    await page.goto("/");
     await expect(page.getByTestId("welcome-signin")).toBeVisible();
-    await page.waitForFunction(async () => (await navigator.serviceWorker.getRegistrations()).length === 0 && (await caches.keys()).length === 0, undefined, { timeout: 15_000 });
+    // An old installation: a cache named like the old worker's and a registration of the worker script.
+    await page.evaluate(async () => {
+      await (await caches.open("vx-files-v1")).put("/x", new Response("x"));
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    });
+    await expect
+      .poll(() => page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length === 0 && !(await caches.keys()).includes("vx-files-v1")), { timeout: 20_000 })
+      .toBe(true);
+  });
+
+  test("pages retire a worker installed by an earlier visit (the app does this itself on start)", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("welcome-signin")).toBeVisible();
+    await page.evaluate(async () => {
+      await (await caches.open("vx-shell-v1")).put("/", new Response("old shell"));
+    });
+    expect(await page.evaluate(async () => (await caches.keys()).includes("vx-shell-v1"))).toBe(true); // precondition
+    await page.reload();
+    await expect(page.getByTestId("welcome-signin")).toBeVisible();
+    await expect.poll(() => page.evaluate(async () => (await caches.keys()).filter((k) => k.startsWith("vx-")).length), { timeout: 15_000 }).toBe(0);
+  });
+
+  // The regression of e94bf99: a render-blocking boot-guard.js and stylesheet. On a path where big files stall, the
+  // page stayed empty. Nothing external may block the first paint now.
+  test("with every external file stalled (guard, scripts, stylesheet) the page still paints and says what is going on", async ({ browser }) => {
+    test.setTimeout(60_000);
+    const ctx = await browser.newContext({ colorScheme: "dark" });
+    const page = await ctx.newPage();
+    await net("up", { status: "hang", only: ["/assets/", "/boot-guard.js"] });
+    await page.goto("/", { waitUntil: "commit" });
+    await page.waitForFunction(() => performance.getEntriesByName("first-contentful-paint").length > 0 || !!document.getElementById("vx-splash")?.getBoundingClientRect().width, undefined, { timeout: 8_000 });
+    await expect(page.locator("#vx-splash")).toBeVisible();
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe("rgb(18, 18, 24)"); // the dark paint, not an empty canvas
+    // after ~10 s the pure-CSS hint with the plain reload link appears (no script involved)
+    await expect(page.locator("#vx-splash small")).toHaveCSS("opacity", /0\.[1-9]/, { timeout: 15_000 });
+    await expect(page.locator("#vx-splash a")).toBeVisible();
+    await ctx.close();
   });
 });
 

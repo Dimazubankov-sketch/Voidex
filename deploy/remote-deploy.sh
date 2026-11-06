@@ -332,6 +332,44 @@ restore() {
 
 # ---------------------------------------------------------------- commands
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Path-MTU black-hole mitigation (hypothesis for the iPhones that get no ServerHello / stall on big files; evidence in
+# docs/IPHONE-DIAGNOSTICS.md). A client behind a path with a smaller MTU than 1500 whose ICMP "fragmentation needed"
+# never reaches us loses every full-size packet: small replies work, a TLS flight or a script stalls. Lowering the MTU
+# inside the Caddy (and app) container network namespace makes our TCP stack send, and advertise, smaller segments, and
+# tcp_mtu_probing lets it recover by itself. Runs AFTER the release passed its health checks and can never fail a
+# release. Tune: echo <n> > /opt/voidex/state/net-mtu (default 1280; "off" = leave the containers untouched).
+# Containers lose the setting when they are recreated; every deploy / rollback applies it again.
+tls_probe() { # $1 host: TLS handshake from inside the app container (the path of SmsAeroProvider)
+  docker exec voidex-app-1 node -e '
+    const tls = require("node:tls"); const t0 = Date.now();
+    const s = tls.connect({ host: process.argv[1], port: 443, servername: process.argv[1], timeout: 9000 });
+    s.once("secureConnect", () => { console.log("OK " + (Date.now() - t0) + " ms " + s.getProtocol()); process.exit(0); });
+    s.once("timeout", () => { console.log("TIMEOUT"); process.exit(1); });
+    s.once("error", (e) => { console.log("ERROR " + (e.code || e.message)); process.exit(1); });' "$1" 2>&1 | tail -1
+}
+
+net_tune() {
+  local mtu=1280 c out before after
+  [[ -r "$STATE/net-mtu" ]] && mtu=$(tr -d ' \n\r' <"$STATE/net-mtu")
+  if [[ "$mtu" == off ]]; then log "Network tuning: off"; return 0; fi
+  [[ "$mtu" =~ ^[0-9]{3,4}$ ]] || { bad "VOIDEX_NET_MTU=$mtu is not a number; skipped"; return 0; }
+  log "Network: MTU $mtu in the app and Caddy containers"
+  before=$(tls_probe gate.smsaero.ru || true)
+  for c in voidex-caddy-1 voidex-app-1; do
+    docker inspect "$c" >/dev/null 2>&1 || continue
+    out=$(docker run --rm --privileged --net="container:$c" --entrypoint sh caddy:2 -c '
+      dev=$(ip route show default | sed -n "s/.* dev \([^ ]*\).*/\1/p" | head -1)
+      [ -n "$dev" ] || exit 3
+      ip link set dev "$dev" mtu '"$mtu"' || exit 4
+      sysctl -qw net.ipv4.tcp_mtu_probing=1 || exit 5
+      echo "$dev mtu $(cat /sys/class/net/$dev/mtu), tcp_mtu_probing $(cat /proc/sys/net/ipv4/tcp_mtu_probing)"' 2>&1) \
+      && ok "$c: $out" || bad "$c: could not apply ($out); continuing"
+  done
+  after=$(tls_probe gate.smsaero.ru || true)
+  echo "  gate.smsaero.ru TLS from the app container (it stalled with the default MTU): before: ${before:-?}; after: ${after:-?}"
+}
+
 cmd_deploy() {
   local tag=$1 prev
   prev=$(current_version)
@@ -346,6 +384,7 @@ cmd_deploy() {
   if health_check "$tag"; then
     record_success "$tag"
     prune_images
+    net_tune || true
     log "✅ Deployed $(short "$tag")"
   else
     show_failure_logs
@@ -369,6 +408,7 @@ cmd_rollback() {
   switch_to "$target"
   if health_check "$target"; then
     record_success "$target"
+    net_tune || true
     log "✅ Now serving $(short "$target")"
   else
     show_failure_logs
@@ -406,6 +446,15 @@ client_events() {
   if [[ -n "$out" ]]; then printf '%s\n' "$out" | cut -c1-400 | sed 's/^/  /'; else echo "  (none)"; fi
 }
 
+container_mtus() {
+  log "Container MTU (net_tune applies it on deploy / rollback)"
+  local c
+  for c in voidex-caddy-1 voidex-app-1; do
+    printf '  %s: ' "$c"
+    docker exec "$c" sh -c 'for i in /sys/class/net/*; do n=$(basename $i); [ "$n" = lo ] || printf "%s mtu %s  " "$n" "$(cat $i/mtu)"; done; echo "tcp_mtu_probing $(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null)"' 2>&1 | tail -1
+  done
+}
+
 # Read-only firewall / listener / TLS facts for the iPhone investigation (docs/IPHONE-DIAGNOSTICS.md).
 net_diag() {
   log "Network (deploy/netdiag.sh state)"
@@ -427,6 +476,7 @@ cmd_status() {
   [[ -n "$cur" ]] && health_check "$cur" || true
   sms_aero_diag
   client_events
+  container_mtus
   net_diag
   log "Server"
   echo "  $(uptime -p), load: $(cut -d' ' -f1-3 /proc/loadavg)"

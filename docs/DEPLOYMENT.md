@@ -135,39 +135,41 @@ docker compose -p voidex --env-file /opt/voidex/.env -f /opt/voidex/repo/deploy/
 
 Why a page should never stay blank, and how a new release reaches people without a button.
 
+**P0 note (release after e94bf99).** e94bf99 put a 3.6 KB render-blocking `boot-guard.js` in `<head>` and a caching
+service worker. On the iPhones that stall on anything larger than a packet or two, that left an empty page (reproduced:
+`e2e-prod/updates.spec.ts` "with every external file stalled" fails on e94bf99 and passes now). The fixes: nothing
+external blocks the first paint any more, and the service worker is retired.
+
 | Piece | Where | What it guarantees |
 |---|---|---|
-| Boot guard | `apps/web/public/boot-guard.js` | If the app does not report "first render committed" within 12 s (or a file fails / does not parse), a full-screen «Не удалось загрузить VOIDEX · Повторить» covers the page. ≤ 2 automatic retries per tab session, never a reload loop. |
+| Static first paint | `apps/web/index.html` | Inline CSS (light/dark background) and a wordmark inside `#root`, so the first paint needs no external file. After 10 s a pure-CSS hint with a plain «Обновить» link fades in (no script involved). |
+| Non-blocking stylesheet | `vite.config.ts` (`nonBlockingCss`), `main.tsx` | The main CSS is `media="print"` until it has arrived; the app renders only then (max 6 s wait). It can no longer hold the first paint. |
+| Boot guard | `apps/web/boot/boot-guard.src.js` → minified `/boot-guard.js`, `<script async>` | If the app does not report "first render committed" within 12 s (or a file fails / does not parse), a full-screen «Не удалось загрузить VOIDEX · Повторить» covers the page. ≤ 2 automatic retries per tab session, never a loop. Order-independent: the bundle also sets `window.__vxBootOk`, which the guard checks when it arrives late. |
 | Error boundary | `ui/app-update-ui.tsx` | A crash or a chunk that never loads shows «Повторить / Перезагрузить». |
 | Unreachable server | `app.tsx`, `lib/api.ts` | Network failure / timeout (15–25 s) / 5xx at start = «Нет связи с VOIDEX» with automatic retry. Never "signed out". 401 expired/revoked → sign-in; 423 → lock screen. |
-| Service worker | `apps/web/sw/sw.template.js` → `/sw.js` | Shell + last 4 builds' hashed files cached; home-screen launch offline opens the app. Navigations are network-first (4 s), so a normal open is always the newest `index.html`. `/api/*` is never touched. |
-| Version stamp | `VOIDEX_VERSION` → `/version.json`, bundle, `sw.js` | The running page compares its build with `/version.json` (never cached). |
-| Automatic apply | `lib/app-update.tsx` | Newer build found → the page reloads into it when nothing can be lost: no save/send/upload in flight (`lib/critical-ops.ts`, every non-GET request counts), no half-typed text, all registered savers (notes, mail composer, window layout) flushed. Applied on return from the background, on leaving, after ≥ 90 s idle, or right after launch. One reload per target build per tab session. The «Новая версия» pill appears only if an update has waited 20 min. |
-| Old chunks | `ASSET_ARCHIVE_DIR=/data/assets` (volume `voidex_assets`) | Each start copies the image's `/assets` into the volume and keeps the last 5 releases. Pages still running the previous build keep finding their chunks. Disposable: it holds no user data. |
-| Diagnostics | `POST /api/client-events` | Anonymous, rate-limited (20/min/IP), whitelisted fields, scrubbed text; written to the server log only (`client event: boot_failed …`). |
+| Service worker | `apps/web/sw/sw-retire.js` → `/sw.js` | **Retired.** `/sw.js` is a 700-byte worker without a fetch handler that deletes `vx-*` caches and unregisters itself; the app also unregisters any worker on start (`lib/sw-register.ts`). The caching worker is kept in `sw/sw.full.disabled.js` for a later, device-verified return. |
+| Version stamp | `VOIDEX_VERSION` → `/version.json`, bundle | The running page compares its build with `/version.json` (never cached). |
+| Automatic apply | `lib/app-update.tsx` | Newer build found → reload into it when nothing can be lost: no save/send/upload in flight (`lib/critical-ops.ts`, every non-GET request counts), no half-typed text, all registered savers flushed. Applied on return from the background, after ≥ 90 s idle, or right after launch; **never while the page is going to the background** (iOS can freeze a navigation started then). One reload per target build per tab session. The «Новая версия» pill appears only if an update has waited 20 min. |
+| Old chunks | `ASSET_ARCHIVE_DIR=/data/assets` (volume `voidex_assets`) | Each start copies the image's `/assets` into the volume and keeps the last 5 releases, so pages still running the previous build keep finding their chunks. |
+| Diagnostics | `POST /api/client-events` | Anonymous, rate-limited, whitelisted fields, scrubbed text; written to the server log only (`client event: boot_failed …`). `Production → status` prints the latest ones. |
+| Network mitigation | `remote-deploy.sh` `net_tune` | After a healthy deploy / rollback the Caddy and app containers get MTU 1280 + `tcp_mtu_probing=1` (path-MTU black-hole hypothesis, see IPHONE-DIAGNOSTICS.md). The deploy log prints the `gate.smsaero.ru` TLS probe before and after: it stalled with the default MTU, so a flip to OK is direct evidence. Off: `echo off > /opt/voidex/state/net-mtu`; other value: `echo 1360 > …`. |
 
 Cache headers (`apps/server/src/lib/web-cache.ts`): `/assets/*` immutable for a year; `index.html`, `version.json`,
-`sw.js`, `manifest.webmanifest`, `boot-guard.js` `no-cache` (revalidated, cheap 304).
+`sw.js`, `manifest.webmanifest`, `boot-guard.js` `no-cache` (revalidated, cheap 304). The Deploy workflow now verifies
+these, the splash, the async guard, the retirement worker and `/version.json` against the live site.
 
-**Seeing start-up failures:** Actions → Production → logs, look for `client event:` lines
-(`boot_failed`, `root_crashed`, `api_unreachable`, `update_deferred`, `sw_error`) with a coarse `ua` ("iOS 17 Safari").
+**Seeing start-up failures:** Actions → Production → status (latest `client event:` lines) or logs.
 
-**Turning the service worker off for everyone** (if it ever misbehaves): ship a release whose `sw/sw.template.js` only
-contains `self.addEventListener("install",()=>self.skipWaiting());self.addEventListener("activate",e=>e.waitUntil(
-caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c)))).then(()=>self.registration.unregister())));`.
-For one device: open `https://voidex.su/?nosw`.
+**Release tests (CI, and locally):** `pnpm build && pnpm --filter @voidex/web test:e2e:prod`: the built client on the
+built server in Chromium (desktop, Android) and WebKit (iPhone), with a TCP-level fault-injection proxy (reset / stall /
+block a path). No test retries. `pnpm test` runs the unit tests (incl. the web client's, vitest).
 
-**Release tests (run in CI, and locally):** `pnpm build && pnpm --filter @voidex/web test:e2e:prod` — the built client
-on the built server in Chromium (desktop, Android) and WebKit (iPhone). `pnpm test` runs unit tests incl. the
-web client's (`vitest`).
+**Staging before production:** run the exact artifacts locally as in `apps/web/playwright.prod.config.ts`; open on a
+phone on the same network; then deploy. Rollback is unchanged (Actions → Production → rollback). Rolling back to a
+release without `/sw.js` is safe for devices that still hold the caching worker: it keeps serving from its cache only
+when the network fails and is replaced on the next successful update check.
 
-**Staging before production:** run the exact image locally (`docker compose up --build` with `AUTH_ACCESS_SECRET`
-and `AUTH_TOKEN_PEPPER` set) or `node apps/server/dist/index.js` with `WEB_DIST`/`ASSET_ARCHIVE_DIR` as in
-`apps/web/playwright.prod.config.ts`; open it on a phone on the same network, then deploy. Rollback is unchanged
-(Actions → Production → rollback); the archive volume is ignored by older images and can stay.
-
-Network/TLS problems that happen *before* any of this runs (the iPhone that gets no ServerHello): see
-`docs/IPHONE-DIAGNOSTICS.md` and `deploy/netdiag.sh`.
+Network/TLS problems that happen *before* any of this runs: `docs/IPHONE-DIAGNOSTICS.md`, `deploy/netdiag.sh`.
 
 ## Rollback and the database
 
