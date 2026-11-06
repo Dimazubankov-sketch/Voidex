@@ -1,0 +1,42 @@
+name: Availability (multi-region)
+
+# DRAFT: not active until merged to main and validated with a manual run ("Run workflow").
+# Probes https://voidex.su from Russia, Germany and the USA with a LARGE file (see deploy/probe/availability-probe.mjs)
+# and opens/updates one GitHub issue when Russian probes cannot load the site.
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: availability
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Probe
+        id: probe
+        continue-on-error: true
+        run: node deploy/probe/availability-probe.mjs | tee probe.log
+      - name: Report a problem as an issue
+        if: steps.probe.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body=$(printf 'Run: %s/%s/actions/runs/%s\n\n```\n%s\n```\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$(tail -n 40 probe.log)")
+          n=$(gh issue list --label availability --state open --json number --jq '.[0].number' || true)
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"
+          else gh issue create --title "voidex.su is not reachable from Russian networks" --label availability --body "$body" || gh issue create --title "voidex.su is not reachable from Russian networks" --body "$body"; fi
+      - name: Fail the run when the probe failed
+        if: steps.probe.outcome == 'failure'
+        run: exit 1
