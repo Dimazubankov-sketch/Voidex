@@ -17,16 +17,16 @@
   <ellipse cx="660" cy="330" rx="420" ry="330" fill="url(#blob1)"/>
   <ellipse cx="380" cy="800" rx="520" ry="300" fill="url(#blob2)" transform="rotate(-14 380 800)"/>
 </g>
-<g filter="url(#ds)">
-  <!-- stem -->
-  <rect x="268" y="214" width="196" height="600" rx="98" fill="url(#white)"/>
-  <rect x="268" y="214" width="196" height="600" rx="98" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.8"/>
-  <!-- top bar -->
-  <rect x="330" y="214" width="430" height="196" rx="98" fill="url(#violet)"/>
-  <path d="M430 232 H700 A80 80 0 0 1 760 262 C700 300 560 326 430 322 Z" fill="#fff" opacity="0.18"/>
+<g filter="url(#ds)" transform="translate(512 512) scale(0.86) translate(-528 -516)">
+  <!-- stem: deep violet ribbon -->
+  <rect x="262" y="196" width="206" height="640" rx="103" fill="url(#violet)"/>
+  <path d="M290 280 C290 232 322 214 356 214 C340 300 336 420 340 560 C310 540 290 500 290 440 Z" fill="#fff" opacity="0.2"/>
+  <!-- top bar: white glossy ribbon -->
+  <rect x="344" y="196" width="450" height="206" rx="103" fill="url(#white)"/>
+  <rect x="344" y="196" width="450" height="206" rx="103" fill="none" stroke="#fff" stroke-width="4" opacity="0.9"/>
+  <rect x="470" y="262" width="250" height="74" rx="37" fill="url(#violet2)" opacity="0.55"/>
   <!-- middle bar -->
-  <rect x="330" y="468" width="330" height="170" rx="85" fill="url(#white)"/>
-  <rect x="330" y="468" width="330" height="170" rx="85" fill="none" stroke="#e6d9fc" stroke-width="3"/>
-  <rect x="400" y="504" width="190" height="98" rx="49" fill="url(#violet2)" opacity="0.85"/>
+  <rect x="344" y="470" width="350" height="186" rx="93" fill="url(#violet2)"/>
+  <path d="M440 488 H620 A74 74 0 0 1 690 540 C620 566 520 572 440 560 Z" fill="#fff" opacity="0.25"/>
 </g>
 </svg>

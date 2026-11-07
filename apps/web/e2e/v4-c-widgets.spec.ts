@@ -19,12 +19,11 @@ const where = (page: Page, l: WorkspaceLayout, c: number, r: number) =>
 const uid = () => crypto.randomUUID();
 const noteBody = (text: string) => ({ kind: "note", format: "vertical", pages: [{ id: uid(), blocks: [{ id: uid(), kind: "text", text }] }] });
 
-test("C1: the Clock widget is the new logo: 4 marks, hour / minute / second hands at the real time; 4 × 2 adds the city, time and date", async ({ page }) => {
+test("C1: the Clock widget is the new logo: hour / minute / second hands at the real time; 4 × 2 adds the city, time and date", async ({ page }) => {
   await signUpViaApi(page, "Новые", "Часы");
   await saveLayout(page, (l) => addWidget(l, "clock", where(page, l, 0, 2), "w_clock0001"));
   const w = page.getByTestId("clock-widget");
   await expect(w).toHaveAttribute("data-size", "s");
-  await expect(w.getByTestId("clock-mark")).toHaveCount(4);
   for (const hand of ["hour", "minute", "second"]) await expect(w.getByTestId(`clock-widget-${hand}`)).toHaveCount(1);
   await expect(w.getByTestId("clock-widget-city")).toHaveCount(0);
   // The hands show the time of the shown zone.

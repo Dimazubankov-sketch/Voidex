@@ -151,8 +151,7 @@ function useSecond(active: boolean) {
 /** The Clock widget's analog face (SVG): its hands glide, driven per frame without React renders. */
 /**
  * The widget is the Clock logo's world, redrawn as a backdrop (brand-src/widget-art.mjs): the soft lavender
- * surface, the violet ring and the empty face. The live parts are drawn over it: the logo's four marks
- * (crisp), three hands (hour, minute, second) at the real time and the centre knob. `dial` is where the face is in the picture: its centre
+ * surface, the logo's own ring, face and four marks (brand-src/widget-art.py). The live parts are drawn over it: three hands (hour, minute, second) at the real time and the centre knob. `dial` is where the face is in the picture: its centre
  * (fractions of the picture's width / height) and radius (a fraction of its height).
  */
 const CLOCK_ART = {
@@ -173,11 +172,6 @@ function ClockFace({ zone, className, style }: { zone: string; className?: strin
   return (
     <svg viewBox="0 0 200 200" className={cx("pointer-events-none absolute overflow-visible", className)} style={style} aria-hidden data-testid="clock-face">
       <defs>
-        {/* The marks: the new logo's four violet bars, deep at the centre side, lighter outwards. */}
-        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="35" x2="100" y2="12">
-          <stop offset="0" stopColor="#8a45ff" />
-          <stop offset="1" stopColor="#b57bff" />
-        </linearGradient>
         <linearGradient id={id("hour")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="46">
           <stop offset="0" stopColor="#6a2cff" />
           <stop offset="1" stopColor="#a45cff" />
@@ -194,9 +188,6 @@ function ClockFace({ zone, className, style }: { zone: string; className?: strin
           <feDropShadow dx="0" dy="2" stdDeviation="2.2" floodColor="#4a12e0" floodOpacity="0.28" />
         </filter>
       </defs>
-      {[0, 3, 6, 9].map((i) => (
-        <line key={i} x1={100} y1={35} x2={100} y2={13} stroke={url("tick")} strokeWidth={8} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
-      ))}
       <g ref={hour} data-testid="clock-widget-hour">
         <line x1={100} y1={100} x2={100} y2={46} stroke={url("hour")} strokeWidth={13} strokeLinecap="round" filter={url("sh")} />
       </g>
