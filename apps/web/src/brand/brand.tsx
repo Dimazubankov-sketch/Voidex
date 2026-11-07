@@ -121,7 +121,7 @@ export const ICON_OPTICAL_SCALE = {
   desktops: 1.05,
 } as const;
 
-/** Settings — hexagonal shutter. */
+/** Settings — the gear. */
 export function SettingsGlyph({ className }: { className?: string }) {
   return <TileLogo src="/brand/logo-settings.webp" className={className} />;
 }
@@ -131,7 +131,7 @@ export function MailGlyph({ className }: { className?: string }) {
   return <TileLogo src="/brand/logo-mail.webp" className={className} />;
 }
 
-/** Vibex — the speech-bubble mark. */
+/** Vibex — the speech-bubble mark (drawn for the new tile set, brand-src/vibex.svg). */
 export function VibexGlyph({ className }: { className?: string }) {
   return <TileLogo src="/brand/logo-vibex.webp" className={className} />;
 }
@@ -160,10 +160,8 @@ export function StoreGlyph({ className }: { className?: string }) {
   return <TileLogo src="/brand/logo-appex.webp" className={className} />;
 }
 
-/** Step 2.14: Clock. A system icon only: never drawn inside the Clock app itself. */
-export function ClockGlyph({ className }: { className?: string }) {
-  return <TileLogo src="/brand/logo-clock.webp" className={className} />;
-}
+/** Clock: the delivered tile with live hands at the device's real time (see clock-glyph.tsx). A system icon only: never drawn inside the Clock app itself. */
+export { ClockGlyph } from "./clock-glyph";
 
 /**
  * Update 4: the app logos are whole tiles (the delivered artwork: its rounded square with its own soft
@@ -246,7 +244,7 @@ export function Avatar({
   );
 }
 
-/** Forma: the user's ribbon F, cut out of the delivered artwork (white tile and glow removed, not redrawn). */
+/** Forma: the ribbon F on a tile in the new set's style (brand-src/forma.svg). */
 export function FormaGlyph({ className }: { className?: string }) {
   return <TileLogo src="/brand/logo-forma.webp" className={className} />;
 }
