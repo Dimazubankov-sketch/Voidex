@@ -150,14 +150,13 @@ function useSecond(active: boolean) {
 
 /** The Clock widget's analog face (SVG): its hands glide, driven per frame without React renders. */
 /**
- * Update 4 · C1 (the owner's reference, 1 : 1): the widget is the reference picture itself — its ring,
- * glass rim, soft waves and the 12 marks — with its painted hands, knob and text taken out; the live
- * parts are drawn over it in the same places: the 12 marks again (crisp), three hands (hour, minute,
- * second) at the real time and the centre knob. `dial` is where the face is in the picture: its centre
+ * The widget is the Clock logo's world, redrawn as a backdrop (brand-src/widget-art.mjs): the soft lavender
+ * surface, the violet ring and the empty face. The live parts are drawn over it: the logo's four marks
+ * (crisp), three hands (hour, minute, second) at the real time and the centre knob. `dial` is where the face is in the picture: its centre
  * (fractions of the picture's width / height) and radius (a fraction of its height).
  */
 const CLOCK_ART = {
-  s: { src: "/widgets/clock-s.webp", ratio: 521 / 514, dial: { x: 0.5167, y: 0.5163, r: 0.3366 } },
+  s: { src: "/widgets/clock-s.webp", ratio: 521 / 514, dial: { x: 0.5167, y: 0.5163, r: 0.30 } },
   w: { src: "/widgets/clock-w.webp", ratio: 1028 / 514, dial: { x: 0.727, y: 0.5212, r: 0.3424 } },
 } as const;
 
@@ -174,44 +173,41 @@ function ClockFace({ zone, className, style }: { zone: string; className?: strin
   return (
     <svg viewBox="0 0 200 200" className={cx("pointer-events-none absolute overflow-visible", className)} style={style} aria-hidden data-testid="clock-face">
       <defs>
-        {/* The marks of the picture: deep violet at the centre side, lighter outwards. */}
-        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="30.7" x2="100" y2="14.2">
-          <stop offset="0" stopColor="#a954fd" />
-          <stop offset="1" stopColor="#c78cfc" />
+        {/* The marks: the new logo's four violet bars, deep at the centre side, lighter outwards. */}
+        <linearGradient id={id("tick")} gradientUnits="userSpaceOnUse" x1="100" y1="35" x2="100" y2="12">
+          <stop offset="0" stopColor="#8a45ff" />
+          <stop offset="1" stopColor="#b57bff" />
         </linearGradient>
-        {/* The hands: a deep blue-violet at the centre, lavender at the tip (as in the picture). */}
-        <linearGradient id={id("hand")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="22">
-          <stop offset="0" stopColor="#8520ef" />
-          <stop offset="0.55" stopColor="#a44dfb" />
-          <stop offset="1" stopColor="#cb97ff" />
+        <linearGradient id={id("hour")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="46">
+          <stop offset="0" stopColor="#6a2cff" />
+          <stop offset="1" stopColor="#a45cff" />
         </linearGradient>
-        <radialGradient id={id("knobRing")} cx="0.42" cy="0.38" r="0.62">
-          <stop offset="0" stopColor="#e3c6fe" />
-          <stop offset="0.72" stopColor="#b974fc" />
-          <stop offset="1" stopColor="#d0a0fd" />
-        </radialGradient>
-        <radialGradient id={id("knob")} cx="0.38" cy="0.32" r="0.7">
-          <stop offset="0" stopColor="#f6ecff" />
-          <stop offset="1" stopColor="#d7b0fd" />
+        <linearGradient id={id("minute")} gradientUnits="userSpaceOnUse" x1="100" y1="100" x2="100" y2="27">
+          <stop offset="0" stopColor="#4a12e0" />
+          <stop offset="1" stopColor="#6a2cff" />
+        </linearGradient>
+        <radialGradient id={id("knob")} cx="0.4" cy="0.35" r="0.7">
+          <stop offset="0" stopColor="#d9b8ff" />
+          <stop offset="1" stopColor="#9a5cff" />
         </radialGradient>
         <filter id={id("sh")} filterUnits="userSpaceOnUse" x="-20" y="-20" width="240" height="240">
-          <feDropShadow dx="0" dy="1.6" stdDeviation="1.8" floodColor="#791fd6" floodOpacity="0.3" />
+          <feDropShadow dx="0" dy="2" stdDeviation="2.2" floodColor="#4a12e0" floodOpacity="0.28" />
         </filter>
       </defs>
-      {Array.from({ length: 12 }, (_, i) => (
-        <line key={i} x1={100} y1={30.7} x2={100} y2={14.2} stroke={url("tick")} strokeWidth={7.1} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
+      {[0, 3, 6, 9].map((i) => (
+        <line key={i} x1={100} y1={35} x2={100} y2={13} stroke={url("tick")} strokeWidth={8} strokeLinecap="round" transform={`rotate(${i * 30} 100 100)`} data-testid="clock-mark" />
       ))}
       <g ref={hour} data-testid="clock-widget-hour">
-        <line x1={100} y1={106} x2={100} y2={46} stroke={url("hand")} strokeWidth={11.5} strokeLinecap="round" filter={url("sh")} />
+        <line x1={100} y1={100} x2={100} y2={46} stroke={url("hour")} strokeWidth={13} strokeLinecap="round" filter={url("sh")} />
       </g>
       <g ref={minute} data-testid="clock-widget-minute">
-        <line x1={100} y1={106} x2={100} y2={27} stroke={url("hand")} strokeWidth={8.5} strokeLinecap="round" filter={url("sh")} />
+        <line x1={100} y1={100} x2={100} y2={27} stroke={url("minute")} strokeWidth={11} strokeLinecap="round" filter={url("sh")} />
       </g>
       <g ref={second} data-testid="clock-widget-second">
-        <line x1={100} y1={124} x2={100} y2={10} stroke="#8926f0" strokeWidth={2.4} strokeLinecap="round" filter={url("sh")} />
+        <line x1={100} y1={114} x2={100} y2={20} stroke="#c58bff" strokeWidth={3} strokeLinecap="round" />
       </g>
-      <circle cx={100} cy={100} r={17} fill={url("knobRing")} filter={url("sh")} />
-      <circle cx={100} cy={100} r={10.5} fill={url("knob")} />
+      <circle cx={100} cy={100} r={14.5} fill={url("knob")} filter={url("sh")} />
+      <circle cx={100} cy={100} r={5} fill="#f1e6ff" />
     </svg>
   );
 }
